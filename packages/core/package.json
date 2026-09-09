@@ -2,6 +2,7 @@
   "name": "@homeostate/core",
   "version": "0.1.0",
   "description": "State-manager agnostic sync engine between a store adapter and a Yjs document",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -9,7 +10,9 @@
     ".": "./src/index.ts"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "publishConfig": {
     "main": "./dist/index.js",

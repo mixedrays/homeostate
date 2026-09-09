@@ -24,3 +24,10 @@ pnpm lint
 ```
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
+
+## Third-Party Notices
+
+`@homeostate/core` includes code derived from
+[zustand-middleware-yjs](https://github.com/joebobmiles/zustand-middleware-yjs),
+copyright (c) 2021 Joseph R Miles, under the MIT License. The complete notice
+is included in [packages/core/THIRD_PARTY_NOTICES.md](packages/core/THIRD_PARTY_NOTICES.md).
