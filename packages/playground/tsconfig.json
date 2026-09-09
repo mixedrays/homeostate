@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../adapter-zustand" },
+    { "path": "../adapter-mobx" },
+    { "path": "../adapter-redux" }
+  ]
+}
