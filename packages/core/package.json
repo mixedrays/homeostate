@@ -1,9 +1,25 @@
 {
   "name": "@homeostate/core",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "State-manager agnostic sync engine between a store adapter and a Yjs document",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mixedrays/homeostate.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/mixedrays/homeostate#readme",
+  "bugs": {
+    "url": "https://github.com/mixedrays/homeostate/issues"
+  },
+  "keywords": [
+    "yjs",
+    "crdt",
+    "sync",
+    "state-management",
+    "collaborative"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -11,10 +27,12 @@
   },
   "files": [
     "dist",
+    "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
