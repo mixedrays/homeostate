@@ -1,80 +1,70 @@
 import * as Y from 'yjs';
-import { ChangeType, getChanges, type Diffable } from '@homeostate/core';
-import { arrayToYArray, objectToYMap, stringToYText } from './mapping.js';
-
-type SharedType = Y.Map<unknown> | Y.Array<unknown> | Y.Text;
+import { ChangeType, getChanges, type Change, type Diffable } from '@homeostate/core';
+import { toSharedType, type SharedType } from './mapping.js';
 
 /**
- * Diffs sharedType and newState to create a list of changes for transforming
- * the contents of sharedType into that of newState. For every nested, 'pending'
- * change detected, this function recurses, as a nested object or array is
- * represented as a Y.Map or Y.Array.
+ * Diffs sharedType against newState once and applies the resulting changes, recursing
+ * into nested Y.Maps, Y.Arrays, and Y.Texts for every pending entry.
  *
  * @param sharedType The Yjs shared type to patch.
  * @param newState The new state to patch the shared type into.
  */
 export const patchSharedType = (sharedType: SharedType, newState: unknown): void => {
-  const changes = getChanges(sharedType.toJSON() as Diffable, newState as Diffable);
+  applyChanges(sharedType, getChanges(sharedType.toJSON() as Diffable, newState as Diffable));
+};
 
-  changes.forEach(([type, property, value]) => {
-    switch (type) {
-      case ChangeType.INSERT:
-      case ChangeType.UPDATE:
-        if (value instanceof Function === false) {
-          if (sharedType instanceof Y.Map) {
-            if (typeof value === 'string')
-              sharedType.set(property as string, stringToYText(value));
-            else if (value instanceof Array)
-              sharedType.set(property as string, arrayToYArray(value));
-            else if (value instanceof Object)
-              sharedType.set(property as string, objectToYMap(value as Record<string, unknown>));
-            else sharedType.set(property as string, value);
-          } else if (sharedType instanceof Y.Array) {
-            const index = property as number;
+const applyChanges = (sharedType: SharedType, changes: Change[]): void => {
+  for (const [type, key, value] of changes) {
+    if (sharedType instanceof Y.Map) applyToMap(sharedType, type, key as string, value);
+    else if (sharedType instanceof Y.Array) applyToArray(sharedType, type, key as number, value);
+    else applyToText(sharedType, type, key as number, value);
+  }
+};
 
-            if (type === ChangeType.UPDATE) sharedType.delete(index);
+const applyToMap = (map: Y.Map<unknown>, type: ChangeType, key: string, value: unknown): void => {
+  switch (type) {
+    case ChangeType.INSERT:
+    case ChangeType.UPDATE:
+      map.set(key, toSharedType(value));
+      break;
 
-            if (typeof value === 'string')
-              sharedType.insert(index, [stringToYText(value)]);
-            else if (value instanceof Array)
-              sharedType.insert(index, [arrayToYArray(value)]);
-            else if (value instanceof Object)
-              sharedType.insert(index, [objectToYMap(value as Record<string, unknown>)]);
-            else sharedType.insert(index, [value]);
-          } else if (sharedType instanceof Y.Text)
-            sharedType.insert(property as number, value as string);
-        }
-        break;
+    case ChangeType.DELETE:
+      map.delete(key);
+      break;
 
-      case ChangeType.DELETE:
-        if (sharedType instanceof Y.Map) sharedType.delete(property as string);
-        else if (sharedType instanceof Y.Array) {
-          const index = property as number;
-          sharedType.delete(
-            sharedType.length <= index ? sharedType.length - 1 : index
-          );
-        } else if (sharedType instanceof Y.Text)
-          // A delete operation for text is only ever for a single character.
-          sharedType.delete(property as number, 1);
+    case ChangeType.PENDING:
+      applyChanges(map.get(key) as SharedType, value as Change[]);
+      break;
+  }
+};
 
-        break;
+const applyToArray = (
+  array: Y.Array<unknown>,
+  type: ChangeType,
+  index: number,
+  value: unknown
+): void => {
+  switch (type) {
+    case ChangeType.INSERT:
+      array.insert(index, [toSharedType(value)]);
+      break;
 
-      case ChangeType.PENDING:
-        if (sharedType instanceof Y.Map) {
-          patchSharedType(
-            sharedType.get(property as string) as SharedType,
-            (newState as Record<string, unknown>)[property as string]
-          );
-        } else if (sharedType instanceof Y.Array) {
-          patchSharedType(
-            sharedType.get(property as number) as SharedType,
-            (newState as unknown[])[property as number]
-          );
-        }
-        break;
+    case ChangeType.UPDATE:
+      array.delete(index);
+      array.insert(index, [toSharedType(value)]);
+      break;
 
-      default:
-        break;
-    }
-  });
+    case ChangeType.DELETE:
+      array.delete(index);
+      break;
+
+    case ChangeType.PENDING:
+      applyChanges(array.get(index) as SharedType, value as Change[]);
+      break;
+  }
+};
+
+const applyToText = (text: Y.Text, type: ChangeType, index: number, value: unknown): void => {
+  if (type === ChangeType.INSERT) text.insert(index, value as string);
+  else if (type === ChangeType.DELETE) text.delete(index, 1);
 };

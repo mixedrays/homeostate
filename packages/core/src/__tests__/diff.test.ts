@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ChangeType, getChanges, type Diffable } from '../index.js';
+import { ChangeType, getChanges, type Change, type Diffable } from '../index.js';
 import { patchState } from '../patching.js';
 
 const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
@@ -9,6 +9,23 @@ const item = (id: string, done = false) => ({ id, done });
 const appliesCleanly = (a: Diffable, b: Diffable): void => {
   expect(patchState(a, b)).toEqual(b);
 };
+
+const applySequentially = (array: unknown[], changes: Change[]): unknown[] => {
+  const revised = [...array];
+  for (const [type, index, value] of changes) {
+    const i = index as number;
+    if (type === INSERT) revised.splice(i, 0, value);
+    else if (type === UPDATE) revised[i] = value;
+    else if (type === DELETE) revised.splice(i, 1);
+  }
+  return revised;
+};
+
+let seed = 42;
+const random = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+const randomArray = (): unknown[] =>
+  Array.from({ length: Math.floor(random() * 6) }, () => Math.floor(random() * 4));
+const randomPairs = Array.from({ length: 2000 }, () => [randomArray(), randomArray()] as const);
 
 describe('getChanges', () => {
   it('returns no changes when the root values are of different kinds', () => {
@@ -23,11 +40,8 @@ describe('getChanges', () => {
       expect(getChanges('', '')).toEqual([]);
     });
 
-    it('inserts every character when the old string is empty', () => {
-      expect(getChanges('', 'ab')).toEqual([
-        [INSERT, 0, 'a'],
-        [INSERT, 1, 'b'],
-      ]);
+    it('inserts the whole string at once when the old string is empty', () => {
+      expect(getChanges('', 'ab')).toEqual([[INSERT, 0, 'ab']]);
     });
 
     it('deletes at index 0 once per character when the new string is empty', () => {
@@ -41,23 +55,22 @@ describe('getChanges', () => {
       expect(getChanges('ab', 'cd')).toEqual([
         [DELETE, 0, undefined],
         [DELETE, 0, undefined],
-        [INSERT, 0, 'c'],
-        [INSERT, 1, 'd'],
+        [INSERT, 0, 'cd'],
       ]);
     });
 
-    it('emits appended characters at the end', () => {
-      expect(getChanges('Todo 1', 'Todo 1 A')).toEqual([
-        [INSERT, 6, ' '],
-        [INSERT, 7, 'A'],
-      ]);
+    it('appends a run of characters as one insert', () => {
+      expect(getChanges('Todo 1', 'Todo 1 A')).toEqual([[INSERT, 6, ' A']]);
     });
 
-    it('emits prepended characters at the start', () => {
-      expect(getChanges('Todo 1', 'B Todo 1')).toEqual([
-        [INSERT, 0, 'B'],
-        [INSERT, 1, ' '],
-      ]);
+    it('prepends a run of characters as one insert', () => {
+      expect(getChanges('Todo 1', 'B Todo 1')).toEqual([[INSERT, 0, 'B ']]);
+    });
+
+    it('inserts a pasted run of characters as one change', () => {
+      const paste = 'lorem ipsum dolor sit amet';
+
+      expect(getChanges('x', `x${paste}`)).toEqual([[INSERT, 1, paste]]);
     });
 
     it('emits deletions at their position in the progressively edited string', () => {
@@ -112,16 +125,16 @@ describe('getChanges', () => {
     it('deletes every item when the new array is empty', () => {
       expect(getChanges([1, 2], [])).toEqual([
         [DELETE, 0, undefined],
-        [DELETE, 1, undefined],
+        [DELETE, 0, undefined],
       ]);
     });
 
-    it('deletes trailing items', () => {
+    it('deletes trailing items at their progressively revised index', () => {
       expect(getChanges([1, 2, 3], [1, 2])).toEqual([[DELETE, 2, undefined]]);
       expect(getChanges([1, 2, 3, 4], [1])).toEqual([
         [DELETE, 1, undefined],
-        [DELETE, 2, undefined],
-        [DELETE, 3, undefined],
+        [DELETE, 1, undefined],
+        [DELETE, 1, undefined],
       ]);
     });
 
@@ -135,6 +148,17 @@ describe('getChanges', () => {
     it('inserts a primitive or an object at the start', () => {
       expect(getChanges([2, 3], [1, 2, 3])).toEqual([[INSERT, 0, 1]]);
       expect(getChanges([item('1')], [item('0'), item('1')])).toEqual([[INSERT, 0, item('0')]]);
+    });
+
+    it('removes a middle item with a single delete', () => {
+      expect(getChanges([item('1'), item('2'), item('3')], [item('1'), item('3')])).toEqual([
+        [DELETE, 1, undefined],
+      ]);
+
+      const many = Array.from({ length: 50 }, (_, i) => item(String(i + 1)));
+      expect(getChanges(many, many.filter((t) => t.id !== '25'))).toEqual([
+        [DELETE, 24, undefined],
+      ]);
     });
 
     it('updates changed primitives in place', () => {
@@ -174,18 +198,19 @@ describe('getChanges', () => {
       expect(getChanges([1, 2, 3], [0, 1])).toEqual([
         [INSERT, 0, 0],
         [DELETE, 2, undefined],
-        [DELETE, 3, undefined],
-      ]);
-    });
-
-    it('rewrites the tail when a middle item is removed (positional diff, known limitation)', () => {
-      expect(getChanges([item('1'), item('2'), item('3')], [item('1'), item('3')])).toEqual([
-        [PENDING, 1, [[PENDING, 'id', [[DELETE, 0, undefined], [INSERT, 0, '3']]]]],
         [DELETE, 2, undefined],
       ]);
     });
 
-    it.todo('matches items by identity so that removing a middle item is a single delete');
+    it('emits indices a sequential applier can use without sorting or clamping', () => {
+      for (const [a, b] of randomPairs) {
+        const changes = getChanges(a, b);
+        const indices = changes.map(([, index]) => index as number);
+
+        expect(indices).toEqual([...indices].sort((x, y) => x - y));
+        expect(applySequentially(a, changes)).toEqual(b);
+      }
+    });
 
     it.each([
       [[1, 2, 3], [0, 1]],
@@ -217,12 +242,9 @@ describe('getChanges', () => {
       expect(getChanges({}, { o: { x: 1 } })).toEqual([[INSERT, 'o', { x: 1 }]]);
     });
 
-    it('deletes removed keys', () => {
+    it('deletes removed keys, functions included', () => {
       expect(getChanges({ a: 1, b: 2 }, { a: 1 })).toEqual([[DELETE, 'b', undefined]]);
-    });
-
-    it('keeps functions that exist only on the old side', () => {
-      expect(getChanges({ a: 1, fn: () => {} }, { a: 1 })).toEqual([]);
+      expect(getChanges({ a: 1, fn: () => {} }, { a: 1 })).toEqual([[DELETE, 'fn', undefined]]);
     });
 
     it('updates changed primitives', () => {
@@ -269,5 +291,13 @@ describe('getChanges', () => {
       [{}, { a: { b: { c: [1, 'x'] } } }],
       [{ a: { b: { c: [1, 'x'] } } }, {}],
     ])('transforms %j into %j when applied', appliesCleanly);
+  });
+
+  describe('known limitations', () => {
+    it('does not look inside Date, Map, or Set values, so state must be plain JSON', () => {
+      expect(getChanges({ d: new Date(1) }, { d: new Date(2) })).toEqual([]);
+      expect(getChanges({ m: new Map([[1, 1]]) }, { m: new Map([[1, 2]]) })).toEqual([]);
+      expect(getChanges({ s: new Set([1]) }, { s: new Set([2]) })).toEqual([]);
+    });
   });
 });

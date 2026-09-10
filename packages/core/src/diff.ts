@@ -2,15 +2,15 @@ import { ChangeType, type Change } from './change.js';
 
 export type Diffable = Record<string, unknown> | Array<unknown> | string;
 
-const isDiffable = (v: unknown): v is Diffable =>
-  isArray(v) || isString(v) || (v !== null && typeof v === 'object');
+const isArray = (value: unknown): value is Array<unknown> => Array.isArray(value);
 
-const isArray = (d: unknown): d is Array<unknown> => d instanceof Array;
+const isString = (value: unknown): value is string => typeof value === 'string';
 
-const isString = (d: unknown): d is string => typeof d === 'string';
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
-const isRecord = (d: Diffable): d is Record<string, unknown> =>
-  !isArray(d) && !isString(d);
+const isDiffable = (value: unknown): value is Diffable =>
+  isArray(value) || isString(value) || isRecord(value);
 
 const isSameKind = (a: Diffable, b: Diffable): boolean =>
   isString(a) ? isString(b) : isArray(a) ? isArray(b) : isRecord(b);
@@ -18,231 +18,195 @@ const isSameKind = (a: Diffable, b: Diffable): boolean =>
 const nestedChanges = (a: unknown, b: unknown): Change[] | null =>
   isDiffable(a) && isDiffable(b) && isSameKind(a, b) ? getChanges(a, b) : null;
 
-const isEqual = (a: unknown, b: unknown): boolean => {
-  const nested = nestedChanges(a, b);
-  return nested ? nested.length === 0 : a === b;
+const deepEqual = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (isArray(a) && isArray(b))
+    return a.length === b.length && a.every((value, i) => deepEqual(value, b[i]));
+  if (isRecord(a) && isRecord(b)) {
+    const keys = Object.keys(a);
+    return (
+      keys.length === Object.keys(b).length &&
+      keys.every((key) => key in b && deepEqual(a[key], b[key]))
+    );
+  }
+  return false;
 };
 
 export const getChanges = (a: Diffable, b: Diffable): Change[] => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
-  else if (isArray(a) && isArray(b)) return getArrayChanges(a, b);
-  else if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b);
-  else return [];
+  if (isArray(a) && isArray(b)) return getArrayChanges(a, b);
+  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b);
+  return [];
+};
+
+const sharesCharacter = (a: string, b: string): boolean => {
+  const characters = new Set(a);
+  for (const character of b) if (characters.has(character)) return true;
+  return false;
 };
 
 const getStringChanges = (a: string, b: string): Change[] => {
   if (a === b) return [];
-  else if (a.length === 0) {
-    return b
-      .split('')
-      .map((character, index) => [ChangeType.INSERT, index, character]);
-  } else if (b.length === 0) {
-    return a.split('').map(() => [ChangeType.DELETE, 0, undefined]);
-  } else if (!hasCommonSubsequence(a, b)) {
-    const deletes = a
-      .split('')
-      .map<Change>(() => [ChangeType.DELETE, 0, undefined]);
-
-    const inserts = b
-      .split('')
-      .map<Change>((character, index) => [ChangeType.INSERT, index, character]);
-
-    return deletes.concat(inserts);
-  } else {
-    const m = a.length,
-      n = b.length;
-    const reverse = m >= n;
-
-    return reverse ? _diffText(b, a, reverse) : _diffText(a, b, reverse);
+  if (!sharesCharacter(a, b)) {
+    const deletes = Array.from(a, (): Change => [ChangeType.DELETE, 0, undefined]);
+    return b.length === 0 ? deletes : [...deletes, [ChangeType.INSERT, 0, b]];
   }
+
+  const changes: Change[] = [];
+  let index = 0;
+
+  for (const { step, b: position } of editScript(a, b, (x, y) => x === y)) {
+    if (step === 'eq') index++;
+    else if (step === 'del') changes.push([ChangeType.DELETE, index, undefined]);
+    else {
+      const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
+      if (
+        last !== undefined &&
+        last[0] === ChangeType.INSERT &&
+        (last[1] as number) + (last[2] as string).length === index
+      ) {
+        last[2] = (last[2] as string) + b[position];
+      } else changes.push([ChangeType.INSERT, index, b[position]]);
+      index++;
+    }
+  }
+
+  return changes;
 };
 
 const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
-  const changeList: Change[] = [];
+  const changes: Change[] = [];
+  let index = 0;
+  let deleted: number[] = [];
+  let inserted: number[] = [];
 
-  let bOffset = 0;
-
-  for (let index = 0; index < a.length; index++) {
-    const bIndex = index + bOffset;
-
-    if (bIndex >= b.length) {
-      changeList.push([ChangeType.DELETE, bIndex, undefined]);
-      continue;
+  const flush = (): void => {
+    const pairs = Math.min(deleted.length, inserted.length);
+    for (let i = 0; i < pairs; i++) {
+      const next = b[inserted[i]];
+      const nested = nestedChanges(a[deleted[i]], next);
+      if (nested === null) changes.push([ChangeType.UPDATE, index, next]);
+      else if (nested.length > 0) changes.push([ChangeType.PENDING, index, nested]);
+      index++;
     }
+    for (let i = pairs; i < deleted.length; i++) changes.push([ChangeType.DELETE, index, undefined]);
+    for (let i = pairs; i < inserted.length; i++) {
+      changes.push([ChangeType.INSERT, index, b[inserted[i]]]);
+      index++;
+    }
+    deleted = [];
+    inserted = [];
+  };
 
-    const value = a[index];
-    const next = b[bIndex];
-    const nested = nestedChanges(value, next);
-
-    if (nested ? nested.length === 0 : value === next) continue;
-
-    if (bIndex + 1 < b.length && isEqual(value, b[bIndex + 1])) {
-      changeList.push([ChangeType.INSERT, bIndex, next]);
-      bOffset++;
-    } else if (nested) changeList.push([ChangeType.PENDING, bIndex, nested]);
-    else changeList.push([ChangeType.UPDATE, bIndex, next]);
+  for (const { step, a: from, b: to } of editScript(a, b, deepEqual)) {
+    if (step === 'del') deleted.push(from);
+    else if (step === 'ins') inserted.push(to);
+    else {
+      flush();
+      index++;
+    }
   }
+  flush();
 
-  for (let bIndex = a.length + bOffset; bIndex < b.length; bIndex++)
-    changeList.push([ChangeType.INSERT, bIndex, b[bIndex]]);
-
-  return changeList;
+  return changes;
 };
 
 const getRecordChanges = (
   a: Record<string, unknown>,
   b: Record<string, unknown>
 ): Change[] => {
-  const changeList: Change[] = [];
+  const changes: Change[] = [];
 
-  Object.entries(a).forEach(([property, value]) => {
-    if (!(property in b) && !(value instanceof Function))
-      changeList.push([ChangeType.DELETE, property, undefined]);
-  });
+  for (const property of Object.keys(a))
+    if (!(property in b)) changes.push([ChangeType.DELETE, property, undefined]);
 
-  Object.entries(b).forEach(([property, value]) => {
-    if (!(property in a)) changeList.push([ChangeType.INSERT, property, value]);
+  for (const [property, value] of Object.entries(b)) {
+    if (!(property in a)) changes.push([ChangeType.INSERT, property, value]);
     else {
       const nested = nestedChanges(a[property], value);
-
-      if (nested) {
-        if (nested.length !== 0) changeList.push([ChangeType.PENDING, property, nested]);
-      } else if (a[property] !== value)
-        changeList.push([ChangeType.UPDATE, property, value]);
+      if (nested === null) {
+        if (a[property] !== value) changes.push([ChangeType.UPDATE, property, value]);
+      } else if (nested.length > 0) changes.push([ChangeType.PENDING, property, nested]);
     }
-  });
+  }
 
-  return changeList;
+  return changes;
 };
 
-const hasCommonSubsequence = (a: string, b: string) => {
-  const alphabetOfA = a.split('');
-  const alphabetOfB = b.split('');
-
-  let hasCommonSubsequence = false;
-  for (const c of alphabetOfA)
-    hasCommonSubsequence = hasCommonSubsequence || alphabetOfB.includes(c);
-
-  return hasCommonSubsequence;
-};
+interface EditOp {
+  step: 'eq' | 'ins' | 'del';
+  a: number;
+  b: number;
+}
 
 /**
- * An adaptation of Wu et al. O(NP) text diff. (See docs/text-diff)
- *
- * Credit to [this JavaScript implementation](https://github.com/cubicdaiya/onp/blob/master/javascript/onp.js).
- *
- * @param a The old string to transform.
- * @param b The new string to transform to.
- * @param isReversed Whether or not a or b have been swapped.
- * @returns A list of changes that that turn a into b.
+ * Shortest edit script from `a` to `b` by Wu et al.'s O(NP) algorithm. Adapted from
+ * https://github.com/cubicdaiya/onp/blob/master/javascript/onp.js.
  */
-const _diffText = (a: string, b: string, isReversed: boolean): Change[] => {
-  const m = a.length,
-    n = b.length;
-  const offset = m;
+const editScript = <T>(
+  a: ArrayLike<T>,
+  b: ArrayLike<T>,
+  equal: (x: T, y: T) => boolean
+): EditOp[] => {
+  const swapped = a.length > b.length;
+  const s = swapped ? b : a;
+  const t = swapped ? a : b;
+  const m = s.length;
+  const n = t.length;
   const delta = n - m;
-  const size = m + n + 1;
+  const offset = m + 1;
+  const furthest = new Array<number>(m + n + 3).fill(-1);
+  const pointAt = new Array<number>(m + n + 3).fill(-1);
+  const points: { x: number; y: number; prev: number }[] = [];
 
-  const frontierPoints: number[] = [];
-  for (let i = 0; i < size; i++) frontierPoints[i] = -1;
-
-  const path: number[] = [];
-  for (let i = 0; i < size; i++) path[i] = -1;
-
-  const pathPositions: { x: number; y: number; k: number }[] = [];
-
-  const snake = (k: number, p: number, q: number) => {
-    let y = Math.max(p, q);
+  const snake = (k: number): void => {
+    const fromBelow = furthest[k + offset - 1] + 1;
+    const fromAbove = furthest[k + offset + 1];
+    let y = Math.max(fromBelow, fromAbove);
     let x = y - k;
-
-    while (x < m && y < n && a[x] === b[y]) {
+    while (x < m && y < n && equal(s[x], t[y])) {
       x++;
       y++;
     }
-
-    path[k + offset] = pathPositions.length;
-    pathPositions[pathPositions.length] = {
-      x: x,
-      y: y,
-      k: p > q ? path[k + offset - 1] : path[k + offset + 1],
-    };
-
-    return y;
+    furthest[k + offset] = y;
+    pointAt[k + offset] = points.length;
+    points.push({
+      x,
+      y,
+      prev: fromBelow > fromAbove ? pointAt[k + offset - 1] : pointAt[k + offset + 1],
+    });
   };
 
-  let p = -1;
-  do {
-    p++;
-
-    for (let k = -p; k < delta; k++) {
-      frontierPoints[k + offset] = snake(
-        k,
-        frontierPoints[k + offset - 1] + 1,
-        frontierPoints[k + offset + 1]
-      );
-    }
-
-    for (let k = delta + p; k > delta; k--) {
-      frontierPoints[k + offset] = snake(
-        k,
-        frontierPoints[k + offset - 1] + 1,
-        frontierPoints[k + offset + 1]
-      );
-    }
-
-    frontierPoints[delta + offset] = snake(
-      delta,
-      frontierPoints[delta + offset - 1] + 1,
-      frontierPoints[delta + offset + 1]
-    );
-  } while (frontierPoints[delta + offset] !== n);
-
-  let k = path[delta + offset];
-
-  const editPath: { x: number; y: number }[] = [];
-  while (k !== -1) {
-    editPath[editPath.length] = {
-      x: pathPositions[k].x,
-      y: pathPositions[k].y,
-    };
-
-    k = pathPositions[k].k;
+  for (let p = 0; furthest[delta + offset] !== n; p++) {
+    for (let k = -p; k < delta; k++) snake(k);
+    for (let k = delta + p; k > delta; k--) snake(k);
+    snake(delta);
   }
 
-  const changeList: Change[] = [];
-  let x = 0,
-    y = 0,
-    index = -1;
+  const path: { x: number; y: number }[] = [];
+  for (let i = pointAt[delta + offset]; i !== -1; i = points[i].prev) path.push(points[i]);
 
-  for (let i = editPath.length - 1; i >= 0; i--) {
-    while (x <= editPath[i].x || y <= editPath[i].y) {
-      if (editPath[i].y - editPath[i].x > y - x) {
-        if (isReversed) {
-          changeList[changeList.length] = [ChangeType.DELETE, index, undefined];
-        } else {
-          changeList[changeList.length] = [ChangeType.INSERT, index, b[y - 1]];
+  const ops: EditOp[] = [];
+  let x = 0;
+  let y = 0;
+  const op = (step: EditOp['step']): EditOp =>
+    swapped ? { step, a: y, b: x } : { step, a: x, b: y };
 
-          index++;
-        }
-
-        y++;
-      } else if (editPath[i].y - editPath[i].x < y - x) {
-        if (isReversed) {
-          changeList[changeList.length] = [ChangeType.INSERT, index, a[x - 1]];
-
-          index++;
-        } else {
-          changeList[changeList.length] = [ChangeType.DELETE, index, undefined];
-        }
-
-        x++;
-      } else {
-        x++;
-        y++;
-        index++;
-      }
+  for (let i = path.length - 1; i >= 0; i--) {
+    const end = path[i];
+    if (end.y - end.x > y - x) {
+      ops.push(op(swapped ? 'del' : 'ins'));
+      y++;
+    } else if (end.y - end.x < y - x) {
+      ops.push(op(swapped ? 'ins' : 'del'));
+      x++;
+    }
+    while (x < end.x) {
+      ops.push(op('eq'));
+      x++;
+      y++;
     }
   }
 
-  return changeList;
+  return ops;
 };

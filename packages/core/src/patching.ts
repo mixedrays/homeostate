@@ -1,9 +1,6 @@
 import { ChangeType, type Change } from './change.js';
 import { getChanges, type Diffable } from './diff.js';
 
-const byIndex = ([, indexA]: Change, [, indexB]: Change): number =>
-  Math.sign((indexA as number) - (indexB as number));
-
 const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
   if (typeof state === 'string') return applyChangesToString(state, changes);
   if (Array.isArray(state)) return applyChangesToArray(state, changes);
@@ -13,7 +10,7 @@ const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
 const applyChangesToArray = (array: unknown[], changes: Change[]): unknown[] => {
   const revised = [...array];
 
-  for (const [type, index, value] of [...changes].sort(byIndex)) {
+  for (const [type, index, value] of changes) {
     const i = index as number;
 
     switch (type) {
@@ -30,11 +27,7 @@ const applyChangesToArray = (array: unknown[], changes: Change[]): unknown[] => 
         break;
 
       case ChangeType.DELETE:
-        revised.splice(Math.min(i, revised.length - 1), 1);
-        break;
-
-      case ChangeType.NONE:
-      default:
+        revised.splice(i, 1);
         break;
     }
   }
@@ -63,10 +56,6 @@ const applyChangesToObject = (
 
       case ChangeType.DELETE:
         delete revised[key];
-        break;
-
-      case ChangeType.NONE:
-      default:
         break;
     }
   }
