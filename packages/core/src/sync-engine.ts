@@ -1,50 +1,45 @@
-import * as Y from 'yjs';
 import type {
+  CrdtBackend,
   StoreAdapter,
   SyncEngine,
   SyncEngineConfig,
   Unsubscribe,
 } from './types.js';
 import { defaultSyncFilter } from './types.js';
-import { patchSharedType, patchState } from './patching.js';
+import { patchState } from './patching.js';
 
 /**
- * Creates a sync engine that manages bidirectional synchronization
- * between any store (via adapter) and a Yjs document.
- * 
- * This is the core abstraction that makes the sync logic state-manager agnostic.
- * 
+ * Creates a sync engine that keeps a store (via its adapter) and a CRDT backend
+ * in sync in both directions.
+ *
+ * This is the core abstraction that makes the sync logic state-manager and
+ * CRDT-library agnostic.
+ *
  * @example
  * ```typescript
- * const doc = new Y.Doc();
- * const adapter = new ZustandAdapter(store);
- * const engine = createSyncEngine(doc, adapter, { name: 'shared' });
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const adapter = new ZustandAdapter(store, initialState);
+ * const engine = createSyncEngine(backend, adapter);
  * engine.connect();
  * ```
  */
-export function createSyncEngine<S>(
-  doc: Y.Doc,
+export function createSyncEngine<S, Native = unknown>(
+  backend: CrdtBackend<Native>,
   adapter: StoreAdapter<S>,
-  config: SyncEngineConfig
-): SyncEngine {
-  const { name, filter = defaultSyncFilter } = config;
-  
-  // The root Y.Map that the store is written and read from
-  const yMap: Y.Map<unknown> = doc.getMap(name);
-  
+  config: SyncEngineConfig = {}
+): SyncEngine<Native> {
+  const { filter = defaultSyncFilter, seed = 'if-empty' } = config;
+
   let connected = false;
   let storeUnsubscribe: Unsubscribe | null = null;
-  let isUpdatingFromYjs = false;
-  let isUpdatingFromStore = false;
+  let backendUnsubscribe: Unsubscribe | null = null;
+  let applyingRemote = false;
 
-  /**
-   * Filter state to only include syncable properties
-   */
   const filterState = (state: S): Partial<S> => {
     if (typeof state !== 'object' || state === null) {
       return state;
     }
-    
+
     const filtered: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(state as Record<string, unknown>)) {
       if (filter(key, value)) {
@@ -54,121 +49,67 @@ export function createSyncEngine<S>(
     return filtered as Partial<S>;
   };
 
-  /**
-   * Sync store state to Yjs
-   */
-  const syncToYjs = (): void => {
-    if (isUpdatingFromYjs) return;
-    
-    isUpdatingFromStore = true;
-    try {
-      const state = adapter.getState();
-      const filteredState = filterState(state);
-
-      doc.transact(() => {
-        patchSharedType(yMap, filteredState);
-      });
-    } finally {
-      isUpdatingFromStore = false;
-    }
-  };
-
-  /**
-   * Sync Yjs state to store
-   */
-  const syncToStore = (): void => {
-    if (isUpdatingFromStore) return;
-    
-    isUpdatingFromYjs = true;
-    try {
-      const yjsState = yMap.toJSON() as S;
-      const currentState = adapter.getState();
-
-      // Merge Yjs state with current state (preserving functions and non-synced props)
-      const mergedState = mergeStates(currentState, yjsState);
-      adapter.setState(mergedState, true);
-    } finally {
-      isUpdatingFromYjs = false;
-    }
-  };
-
-  /**
-   * Merge Yjs state with current store state, preserving non-syncable properties
-   */
-  const mergeStates = (current: S, fromYjs: Partial<S>): S => {
+  const mergeStates = (current: S, remote: Partial<S>): S => {
     if (typeof current !== 'object' || current === null) {
-      return fromYjs as S;
+      return remote as S;
     }
 
     const currentObj = current as Record<string, unknown>;
-    const yjsObj = fromYjs as Record<string, unknown>;
-    
-    // Start with current state (preserves functions, etc.)
-    const merged: Record<string, unknown> = { ...currentObj };
-    
-    // Apply Yjs state using patching for proper deep merging
-    const patchedData = patchState(
-      { ...merged },
-      yjsObj
-    );
-    
-    // Restore non-syncable properties (like functions)
+    const patched = patchState(currentObj, remote as Record<string, unknown>);
+    if (patched === currentObj) return current;
+
+    const merged: Record<string, unknown> = { ...patched };
     for (const [key, value] of Object.entries(currentObj)) {
       if (!filter(key, value)) {
-        patchedData[key] = value;
+        merged[key] = value;
       }
     }
-    
-    return patchedData as S;
+    return merged as S;
   };
 
-  /**
-   * Handler for Yjs changes
-   */
-  const handleYjsChange = (): void => {
-    syncToStore();
+  const syncToBackend = (): void => {
+    if (applyingRemote) return;
+    backend.write(filterState(adapter.getState()));
+  };
+
+  const syncToStore = (): void => {
+    applyingRemote = true;
+    try {
+      const current = adapter.getState();
+      const merged = mergeStates(current, backend.read() as Partial<S>);
+      if (merged !== current) adapter.setState(merged, true);
+    } finally {
+      applyingRemote = false;
+    }
   };
 
   return {
     connect: (): void => {
       if (connected) return;
-      
-      // Initialize Yjs with current store state
-      const initialState = adapter.getInitialState();
-      const filteredInitial = filterState(initialState);
-      
-      doc.transact(() => {
-        patchSharedType(yMap, filteredInitial);
-      });
-      
-      // Subscribe to Yjs changes
-      yMap.observeDeep(handleYjsChange);
-      
-      // Subscribe to store changes
-      storeUnsubscribe = adapter.subscribe(() => {
-        syncToYjs();
-      });
-      
+
+      if (backend.isEmpty()) {
+        if (seed === 'if-empty') backend.write(filterState(adapter.getInitialState()));
+      } else {
+        syncToStore();
+      }
+
+      backendUnsubscribe = backend.subscribe(syncToStore);
+      storeUnsubscribe = adapter.subscribe(syncToBackend);
       connected = true;
     },
-    
+
     disconnect: (): void => {
       if (!connected) return;
-      
-      // Unsubscribe from Yjs
-      yMap.unobserveDeep(handleYjsChange);
-      
-      // Unsubscribe from store
-      if (storeUnsubscribe) {
-        storeUnsubscribe();
-        storeUnsubscribe = null;
-      }
-      
+
+      backendUnsubscribe?.();
+      backendUnsubscribe = null;
+      storeUnsubscribe?.();
+      storeUnsubscribe = null;
       connected = false;
     },
-    
-    getYMap: (): Y.Map<unknown> => yMap,
-    
+
+    getBackend: (): CrdtBackend<Native> => backend,
+
     isConnected: (): boolean => connected,
   };
 }

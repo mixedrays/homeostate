@@ -2,48 +2,30 @@ import type { Store, Unsubscribe as ReduxUnsubscribe } from 'redux';
 import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
 
 /**
- * Deep clones an object or array to ensure mutability.
- * This is necessary because Redux Toolkit uses Immer which freezes objects.
- */
-const deepClone = <T>(obj: T): T => {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(item => deepClone(item)) as T;
-  }
-  const cloned: Record<string, unknown> = {};
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      cloned[key] = deepClone((obj as Record<string, unknown>)[key]);
-    }
-  }
-  return cloned as T;
-};
-
-/**
  * Redux-specific store adapter that bridges Redux stores with the sync engine.
  * 
  * This adapter wraps a Redux store to conform to the StoreAdapter interface,
- * enabling Redux stores to sync with Yjs documents.
+ * enabling Redux stores to sync through any CRDT backend. Immer-frozen state
+ * is fine: the engine never mutates store state in place.
  * 
  * @example
  * ```typescript
  * import { configureStore, createSlice } from '@reduxjs/toolkit';
  * import * as Y from 'yjs';
+ * import { createYjsBackend } from '@homeostate/crdt-yjs';
  * 
  * const counterSlice = createSlice({
  *   name: 'counter',
  *   initialState: { count: 0 },
  *   reducers: {
  *     increment: (state) => { state.count++; },
+ *     setState: (_state, action) => action.payload,
  *   },
  * });
  * 
  * const store = configureStore({ reducer: counterSlice.reducer });
- * const doc = new Y.Doc();
- * const adapter = createReduxAdapter(store, { count: 0 });
- * const engine = createSyncEngine(doc, adapter, { name: 'shared' });
+ * const adapter = createReduxAdapter(store, { count: 0 }, counterSlice.actions.setState);
+ * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
  * engine.connect();
  * ```
  */
@@ -70,9 +52,7 @@ export class ReduxAdapter<S> implements StoreAdapter<S> {
   }
 
   getState(): S {
-    // Deep clone to ensure mutable state for patching
-    // Redux Toolkit uses Immer which freezes state objects
-    return deepClone(this.store.getState());
+    return this.store.getState();
   }
 
   setState(state: S, fromSync = false): void {

@@ -14,6 +14,7 @@
     "@homeostate/adapter-redux": "workspace:^",
     "@homeostate/adapter-zustand": "workspace:^",
     "@homeostate/core": "workspace:^",
+    "@homeostate/crdt-yjs": "workspace:^",
     "lucide-react": "^0.344.0",
     "mobx": "^6.15.0",
     "mobx-react-lite": "^4.1.1",

@@ -9,6 +9,7 @@
   "include": ["src"],
   "references": [
     { "path": "../core" },
+    { "path": "../crdt-yjs" },
     { "path": "../adapter-zustand" },
     { "path": "../adapter-mobx" },
     { "path": "../adapter-redux" }

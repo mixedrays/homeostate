@@ -2,6 +2,7 @@ import { createSlice, configureStore, PayloadAction } from '@reduxjs/toolkit';
 import { Todo, FilterStatus } from '../../types/todo';
 import * as Y from 'yjs';
 import { createSyncEngine } from '@homeostate/core';
+import { createYjsBackend } from '@homeostate/crdt-yjs';
 import { createReduxAdapter } from '@homeostate/adapter-redux';
 import { WebsocketProvider } from 'y-websocket';
 
@@ -85,7 +86,7 @@ const wsProvider = new WebsocketProvider(
 
 // Create adapter and sync engine
 const adapter = createReduxAdapter(store, initialState, setState);
-const syncEngine = createSyncEngine(ydoc, adapter, { name: 'shared-ydoc' });
+const syncEngine = createSyncEngine(createYjsBackend(ydoc, 'shared-ydoc'), adapter);
 
 // Start synchronization
 syncEngine.connect();

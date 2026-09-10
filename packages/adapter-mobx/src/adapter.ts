@@ -5,12 +5,13 @@ import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
  * MobX-specific store adapter that bridges MobX stores with the sync engine.
  * 
  * This adapter wraps a MobX store to conform to the StoreAdapter interface,
- * enabling MobX stores to sync with Yjs documents.
+ * enabling MobX stores to sync through any CRDT backend.
  * 
  * @example
  * ```typescript
  * import { makeAutoObservable } from 'mobx';
  * import * as Y from 'yjs';
+ * import { createYjsBackend } from '@homeostate/crdt-yjs';
  * 
  * class CounterStore {
  *   count = 0;
@@ -19,9 +20,8 @@ import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
  * }
  * 
  * const store = new CounterStore();
- * const doc = new Y.Doc();
  * const adapter = createMobxAdapter(store, ['count'], { count: 0 });
- * const engine = createSyncEngine(doc, adapter, { name: 'shared' });
+ * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
  * engine.connect();
  * ```
  */
@@ -98,7 +98,7 @@ export class MobxAdapter<S extends object> implements StoreAdapter<S> {
  * Factory function to create a MobX adapter
  * 
  * @param store - The MobX store instance
- * @param syncableKeys - Array of property keys that should be synced to Yjs
+ * @param syncableKeys - Array of property keys that should be synced
  * @param initialState - Initial state values for syncable properties
  * @returns StoreAdapter instance for the MobX store
  * 

@@ -1,19 +1,20 @@
 {
-  "name": "@homeostate/core",
+  "name": "@homeostate/crdt-yjs",
   "version": "0.0.0",
-  "description": "State-manager and CRDT-backend agnostic sync engine between a store adapter and a CrdtBackend",
+  "description": "Yjs CRDT backend for @homeostate/core",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mixedrays/homeostate.git",
-    "directory": "packages/core"
+    "directory": "packages/crdt-yjs"
   },
   "homepage": "https://github.com/mixedrays/homeostate#readme",
   "bugs": {
     "url": "https://github.com/mixedrays/homeostate/issues"
   },
   "keywords": [
+    "yjs",
     "crdt",
     "sync",
     "state-management",
@@ -43,5 +44,14 @@
   },
   "scripts": {
     "build": "tsc -b"
+  },
+  "dependencies": {
+    "@homeostate/core": "workspace:^"
+  },
+  "peerDependencies": {
+    "yjs": "^13.6.0"
+  },
+  "devDependencies": {
+    "yjs": "^13.6.23"
   }
 }

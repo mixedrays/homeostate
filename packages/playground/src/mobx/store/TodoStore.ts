@@ -2,6 +2,7 @@ import { makeAutoObservable } from 'mobx';
 import { Todo, FilterStatus } from '../../types/todo';
 import * as Y from 'yjs';
 import { createSyncEngine } from '@homeostate/core';
+import { createYjsBackend } from '@homeostate/crdt-yjs';
 import { createMobxAdapter } from '@homeostate/adapter-mobx';
 import { WebsocketProvider } from 'y-websocket';
 
@@ -85,7 +86,7 @@ const adapter = createMobxAdapter(
   ['todos', 'searchTerm', 'filterStatus'],
   initialState
 );
-const syncEngine = createSyncEngine(ydoc, adapter, { name: 'shared-ydoc' });
+const syncEngine = createSyncEngine(createYjsBackend(ydoc, 'shared-ydoc'), adapter);
 
 // Start synchronization
 syncEngine.connect();

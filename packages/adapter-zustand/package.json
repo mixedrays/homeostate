@@ -25,7 +25,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@homeostate/core": "workspace:^"
+    "@homeostate/core": "workspace:^",
+    "@homeostate/crdt-yjs": "workspace:^"
   },
   "peerDependencies": {
     "yjs": "^13.6.0",

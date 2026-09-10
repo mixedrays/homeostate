@@ -3,21 +3,31 @@
 > **Draft / placeholder release.** `0.0.0` reserves the name while the API is still
 > being designed. Nothing here is stable — do not depend on it yet.
 
-State-manager agnostic sync engine between a store adapter and a [Yjs](https://github.com/yjs/yjs) document.
+State-manager and CRDT-backend agnostic sync engine. It keeps a store, reached through a
+`StoreAdapter`, in sync with a `CrdtBackend` such as
+[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs).
 
 ## Install
 
 ```bash
-npm install @homeostate/core yjs
+npm install @homeostate/core @homeostate/crdt-yjs yjs
 ```
 
-`yjs` is a peer dependency.
+`@homeostate/core` has no runtime dependencies; pick a backend package for the CRDT library
+you use.
 
 ## Usage
 
 ```ts
 import { createSyncEngine } from '@homeostate/core';
+import { createYjsBackend } from '@homeostate/crdt-yjs';
+
+const engine = createSyncEngine(createYjsBackend(doc, 'shared'), adapter, { seed: 'if-empty' });
+engine.connect();
 ```
+
+`createMemoryBackend()` is a plain-JSON backend without replication, meant for tests.
+`getChanges` is exported so a backend can turn a `write(next)` into fine-grained operations.
 
 See the [repository](https://github.com/mixedrays/homeostate) for the full workspace,
 store adapters, and a runnable playground.

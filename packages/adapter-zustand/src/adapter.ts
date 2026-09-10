@@ -5,14 +5,13 @@ import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
  * Zustand-specific store adapter that bridges Zustand stores with the sync engine.
  * 
  * This adapter wraps a Zustand store API to conform to the StoreAdapter interface,
- * enabling Zustand stores to sync with Yjs documents.
+ * enabling Zustand stores to sync through any CRDT backend.
  * 
  * @example
  * ```typescript
- * const doc = new Y.Doc();
  * const zustandStore = create(() => ({ count: 0 }));
  * const adapter = createZustandAdapter(zustandStore, { count: 0 });
- * const engine = createSyncEngine(doc, adapter, { name: 'shared' });
+ * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
  * engine.connect();
  * ```
  */
@@ -28,7 +27,8 @@ export class ZustandAdapter<S> implements StoreAdapter<S> {
   }
 
   getState(): S {
-    return this.store.getState();
+    const state = this.store.getState();
+    return state === undefined ? this.initialState : state;
   }
 
   setState(state: S, fromSync = false): void {

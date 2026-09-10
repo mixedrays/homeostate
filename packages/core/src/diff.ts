@@ -1,6 +1,6 @@
 import { ChangeType, type Change } from './change.js';
 
-type Diffable = Record<string, unknown> | Array<unknown> | string;
+export type Diffable = Record<string, unknown> | Array<unknown> | string;
 
 const isDiffable = (v: unknown): v is Diffable =>
   isArray(v) || isString(v) || (v !== null && typeof v === 'object');
