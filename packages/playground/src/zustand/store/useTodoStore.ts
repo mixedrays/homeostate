@@ -1,15 +1,11 @@
 import { create } from 'zustand';
-import { Todo, FilterStatus } from '../../types/todo';
-import * as Y from 'yjs';
 import { createSyncEngine } from '@homeostate/core';
 import { createYjsBackend } from '@homeostate/crdt-yjs';
 import { createZustandAdapter } from '@homeostate/adapter-zustand';
-import { WebsocketProvider } from 'y-websocket';
+import type { FilterStatus, TodoState } from '../../types/todo';
+import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
 
-interface TodoStore {
-  todos: Todo[];
-  searchTerm: string;
-  filterStatus: FilterStatus;
+interface TodoStore extends TodoState {
   addTodo: (title: string) => void;
   toggleTodo: (id: string) => void;
   deleteTodo: (id: string) => void;
@@ -17,27 +13,14 @@ interface TodoStore {
   setFilterStatus: (status: FilterStatus) => void;
 }
 
-// Initial state (data only, no functions - these get synced via Yjs)
-const initialState = {
-  todos: [{ id: '1', title: 'asdlfjs', completed: false }] as Todo[],
-  searchTerm: '',
-  filterStatus: 'all' as FilterStatus,
-};
+const initialState = createInitialTodoState();
 
-// Create the Zustand store
 export const useTodoStore = create<TodoStore>((set) => ({
   ...initialState,
 
   addTodo: (title) =>
     set((state) => ({
-      todos: [
-        ...state.todos,
-        {
-          id: crypto.randomUUID(),
-          title,
-          completed: false,
-        },
-      ],
+      todos: [...state.todos, { id: crypto.randomUUID(), title, completed: false }],
     })),
 
   toggleTodo: (id) =>
@@ -56,22 +39,10 @@ export const useTodoStore = create<TodoStore>((set) => ({
   setFilterStatus: (filterStatus) => set({ filterStatus }),
 }));
 
-// Setup Yjs sync using the new state-manager agnostic approach
-const ydoc = new Y.Doc();
-
-// Connect to WebSocket provider for P2P sync
-const wsProvider = new WebsocketProvider(
-  'ws://localhost:9999',
-  'my-roomname',
-  ydoc
-);
-
-// Create adapter and sync engine
+const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createZustandAdapter(useTodoStore, initialState);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, 'shared-ydoc'), adapter);
+const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
 
-// Start synchronization
 syncEngine.connect();
 
-// Export for external access if needed
 export { syncEngine, ydoc, wsProvider };
