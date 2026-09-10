@@ -29,6 +29,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/benchmark/**/*.ts'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     files: ['packages/websocket-server/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {

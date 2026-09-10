@@ -13,6 +13,7 @@ adapters, its CRDT backends, and a demo playground.
 | `@homeostate/adapter-mobx` | `packages/adapter-mobx` | MobX adapter |
 | `@homeostate/adapter-redux` | `packages/adapter-redux` | Redux adapter |
 | `@homeostate/playground` | `packages/playground` | Vite app with Zustand, MobX, and Redux todo demos |
+| `@homeostate/benchmark` | `packages/benchmark` | Benchmarks of core across backends: latency, wire bytes, document growth, heap |
 | `@homeostate/websocket-server` | `packages/websocket-server` | y-websocket server used by the playground |
 
 ## Scripts
@@ -24,6 +25,7 @@ pnpm build      # builds every package
 pnpm typecheck  # tsc -b across the workspace, tests included via tsconfig.test.json
 pnpm lint
 pnpm test       # vitest across packages/*/src/__tests__
+pnpm bench      # benchmark matrix; pnpm bench -- --help for options
 ```
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
