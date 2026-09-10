@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { patchState } from '../patching.js';
-import { snapshot } from './helpers.js';
+import { deepFreeze, snapshot } from './helpers.js';
 
 describe('patchState', () => {
   it('returns the same reference when nothing changed', () => {
@@ -48,10 +48,9 @@ describe('patchState', () => {
   });
 
   it('patches frozen state', () => {
-    const oldState = Object.freeze({
-      list: Object.freeze([Object.freeze({ id: '1', done: false })]),
-    });
+    const oldState = deepFreeze({ list: [{ id: '1', done: false }] });
 
+    expect(Object.isFrozen(oldState.list[0])).toBe(true);
     expect(patchState(oldState, { list: [{ id: '1', done: true }] })).toEqual({
       list: [{ id: '1', done: true }],
     });
