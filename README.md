@@ -21,7 +21,7 @@ adapters, its CRDT backends, and a demo playground.
 pnpm install
 pnpm dev        # playground on http://localhost:5173 + websocket server on ws://localhost:9999
 pnpm build      # builds every package
-pnpm typecheck  # tsc -b across the workspace
+pnpm typecheck  # tsc -b across the workspace, tests included via tsconfig.test.json
 pnpm lint
 pnpm test       # vitest across packages/*/src/__tests__
 ```

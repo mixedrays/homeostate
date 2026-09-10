@@ -6,6 +6,7 @@
     { "path": "packages/adapter-zustand" },
     { "path": "packages/adapter-mobx" },
     { "path": "packages/adapter-redux" },
-    { "path": "packages/playground" }
+    { "path": "packages/playground" },
+    { "path": "tsconfig.test.json" }
   ]
 }
