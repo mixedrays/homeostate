@@ -30,7 +30,7 @@ const applyChangesToArray = (array: unknown[], changes: Change[]): unknown[] => 
         break;
 
       case ChangeType.DELETE:
-        revised.splice(i, 1);
+        revised.splice(Math.min(i, revised.length - 1), 1);
         break;
 
       case ChangeType.NONE:

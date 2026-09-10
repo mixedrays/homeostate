@@ -1,4 +1,4 @@
-import type { StoreAdapter } from '../src/index.js';
+import type { StoreAdapter } from '../index.js';
 
 export interface Todo {
   id: string;

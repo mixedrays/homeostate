@@ -12,6 +12,17 @@ const isString = (d: unknown): d is string => typeof d === 'string';
 const isRecord = (d: Diffable): d is Record<string, unknown> =>
   !isArray(d) && !isString(d);
 
+const isSameKind = (a: Diffable, b: Diffable): boolean =>
+  isString(a) ? isString(b) : isArray(a) ? isArray(b) : isRecord(b);
+
+const nestedChanges = (a: unknown, b: unknown): Change[] | null =>
+  isDiffable(a) && isDiffable(b) && isSameKind(a, b) ? getChanges(a, b) : null;
+
+const isEqual = (a: unknown, b: unknown): boolean => {
+  const nested = nestedChanges(a, b);
+  return nested ? nested.length === 0 : a === b;
+};
+
 export const getChanges = (a: Diffable, b: Diffable): Change[] => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
   else if (isArray(a) && isArray(b)) return getArrayChanges(a, b);
@@ -49,46 +60,31 @@ const getStringChanges = (a: string, b: string): Change[] => {
 const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
   const changeList: Change[] = [];
 
-  let finalIndices = 0;
   let bOffset = 0;
 
   for (let index = 0; index < a.length; index++) {
-    const value = a[index];
-
     const bIndex = index + bOffset;
 
-    if (b[bIndex] === undefined)
-      changeList.push([ChangeType.DELETE, index, undefined]);
-    else if (isDiffable(value) && isDiffable(b[bIndex])) {
-      const currentDiff = getChanges(value, b[bIndex] as Diffable);
-      const nextDiff =
-        typeof b[bIndex + 1] === 'undefined'
-          ? []
-          : getChanges(value, b[bIndex + 1] as Diffable);
+    if (bIndex >= b.length) {
+      changeList.push([ChangeType.DELETE, bIndex, undefined]);
+      continue;
+    }
 
-      if (typeof b[bIndex + 1] !== 'undefined' && nextDiff.length === 0) {
-        changeList.push([ChangeType.INSERT, index, b[bIndex]]);
-        finalIndices += 2;
-        bOffset++;
-      } else if (currentDiff.length !== 0) {
-        changeList.push([ChangeType.PENDING, index, currentDiff]);
-        finalIndices++;
-      } else finalIndices++;
-    } else if (value !== b[bIndex] && value === b[bIndex + 1]) {
-      changeList.push([ChangeType.INSERT, bIndex, b[bIndex]]);
-      finalIndices += 2;
+    const value = a[index];
+    const next = b[bIndex];
+    const nested = nestedChanges(value, next);
+
+    if (nested ? nested.length === 0 : value === next) continue;
+
+    if (bIndex + 1 < b.length && isEqual(value, b[bIndex + 1])) {
+      changeList.push([ChangeType.INSERT, bIndex, next]);
       bOffset++;
-    } else if (value !== b[bIndex] && value !== b[bIndex + 1]) {
-      changeList.push([ChangeType.UPDATE, bIndex, b[bIndex]]);
-      finalIndices++;
-    } else finalIndices++;
+    } else if (nested) changeList.push([ChangeType.PENDING, bIndex, nested]);
+    else changeList.push([ChangeType.UPDATE, bIndex, next]);
   }
 
-  if (finalIndices < b.length) {
-    b.slice(a.length).forEach((value, index) =>
-      changeList.push([ChangeType.INSERT, finalIndices + index, value])
-    );
-  }
+  for (let bIndex = a.length + bOffset; bIndex < b.length; bIndex++)
+    changeList.push([ChangeType.INSERT, bIndex, b[bIndex]]);
 
   return changeList;
 };
@@ -106,12 +102,14 @@ const getRecordChanges = (
 
   Object.entries(b).forEach(([property, value]) => {
     if (!(property in a)) changeList.push([ChangeType.INSERT, property, value]);
-    else if (isDiffable(a[property]) && isDiffable(value)) {
-      const d = getChanges(a[property] as Diffable, value as Diffable);
+    else {
+      const nested = nestedChanges(a[property], value);
 
-      if (d.length !== 0) changeList.push([ChangeType.PENDING, property, d]);
-    } else if (a[property] !== value)
-      changeList.push([ChangeType.UPDATE, property, value]);
+      if (nested) {
+        if (nested.length !== 0) changeList.push([ChangeType.PENDING, property, nested]);
+      } else if (a[property] !== value)
+        changeList.push([ChangeType.UPDATE, property, value]);
+    }
   });
 
   return changeList;

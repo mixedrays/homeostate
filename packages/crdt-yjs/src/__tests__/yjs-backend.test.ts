@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import { describe, expect, it, vi } from 'vitest';
 import { createSyncEngine, type SyncEngineConfig } from '@homeostate/core';
-import { createYjsBackend } from '../src/index.js';
+import { createYjsBackend } from '../index.js';
 import {
   addTodo,
   createTestStore,
@@ -13,7 +13,7 @@ import {
   todo,
   toggleTodo,
   type TodoState,
-} from '../../core/__tests__/helpers.js';
+} from '../../../core/src/__tests__/helpers.js';
 
 const NAME = 'shared';
 
@@ -78,6 +78,24 @@ describe('createYjsBackend', () => {
     backend.write({ count: 1 });
     expect(backend.isEmpty()).toBe(false);
     expect(backend.native()).toBe(doc.getMap(NAME));
+  });
+
+  it.each([
+    [{ list: [1, 2, 3] }, { list: [0, 1] }],
+    [{ list: [2, 3] }, { list: [1, 2, 3, 4] }],
+    [{ list: [1, 2] }, { list: [] }],
+    [{ list: [{ id: '1', done: false }, { id: '2', done: false }] }, { list: [{ id: '0', done: false }, { id: '1', done: false }, { id: '2', done: true }] }],
+    [{ list: [{ id: '1' }, { id: '2' }, { id: '3' }] }, { list: [{ id: '1' }, { id: '3' }] }],
+    [{ v: { a: 1 }, s: 'a' }, { v: [1], s: 1 }],
+    [{ v: 'a' }, { v: { b: 'c' } }],
+  ])('writes %j -> %j so that read() matches', (before, after) => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+
+    backend.write(before);
+    expect(backend.read()).toEqual(before);
+    backend.write(after);
+    expect(backend.read()).toEqual(after);
   });
 
   it('stops notifying after unsubscribe', () => {

@@ -23,7 +23,7 @@ pnpm dev        # playground on http://localhost:5173 + websocket server on ws:/
 pnpm build      # builds every package
 pnpm typecheck  # tsc -b across the workspace
 pnpm lint
-pnpm test       # vitest across packages/*/__tests__
+pnpm test       # vitest across packages/*/src/__tests__
 ```
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
