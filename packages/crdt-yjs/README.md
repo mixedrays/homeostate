@@ -28,7 +28,8 @@ const engine = createSyncEngine(createYjsBackend(doc, 'shared'), adapter);
 engine.connect();
 ```
 
-`engine.getBackend().native()` returns the underlying `Y.Map`.
+The synced state lives in `doc.getMap('shared')`; a middle-of-array delete, a toggle, or a
+keystroke each produce one small update.
 
 ## License
 

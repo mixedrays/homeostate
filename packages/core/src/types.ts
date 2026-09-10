@@ -11,33 +11,34 @@ export type Unsubscribe = () => void;
 /**
  * Adapter interface that bridges a specific state manager with the sync engine.
  * Implement this interface to add support for any state manager (Zustand, Redux, MobX, etc.)
+ *
+ * State must be plain JSON: objects, arrays, strings, numbers, booleans, and null.
+ * Functions are dropped by the default filter; other values such as Date, Map, or Set
+ * are neither diffed nor synced.
  */
-export interface StoreAdapter<S> {
+export interface StoreAdapter<S extends object> {
   /** Get the current state from the store */
   getState: () => S;
 
   /**
-   * Set state in the store.
-   * @param state - New state to set
-   * @param fromSync - If true, this update came from the backend and should not trigger a write back
+   * Replace the store state. Called only for changes coming from the backend; the
+   * engine ignores store notifications raised while it runs, so the adapter needs no
+   * echo suppression of its own.
    */
-  setState: (state: S, fromSync?: boolean) => void;
+  setState: (state: S) => void;
 
   /**
    * Subscribe to store changes that should be written to the backend.
    * @returns Unsubscribe function
    */
   subscribe: (onStoreChange: () => void) => Unsubscribe;
-
-  /** Get the initial state of the store */
-  getInitialState: () => S;
 }
 
 /**
  * Backend that holds the synced subtree in a CRDT or any other replicated store.
  * The engine only ever exchanges plain JSON with it.
  */
-export interface CrdtBackend<Native = unknown> {
+export interface CrdtBackend {
   /** Plain JSON snapshot of the synced subtree. Must not alias backend internals. */
   read: () => unknown;
 
@@ -52,16 +53,10 @@ export interface CrdtBackend<Native = unknown> {
    * @returns Unsubscribe function
    */
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
-
-  /** True while the synced subtree holds nothing; drives `seed: 'if-empty'` */
-  isEmpty: () => boolean;
-
-  /** The underlying native object for backend-specific access */
-  native: () => Native;
 }
 
 /**
- * When to write the store's initial state into the backend on connect.
+ * When to write the store's state into the backend on connect.
  * - `'if-empty'`: only when the backend holds nothing yet (default)
  * - `'never'`: leave seeding to the caller; a non-empty backend is still adopted
  */
@@ -72,7 +67,7 @@ export type SeedStrategy = 'if-empty' | 'never';
  */
 export interface SyncEngineConfig {
   /**
-   * Filter function to determine which state keys should be synced.
+   * Filter function to determine which state keys should be synced, in both directions.
    * Return true to sync the key, false to exclude it.
    * By default, functions are excluded from sync.
    */
@@ -84,13 +79,11 @@ export interface SyncEngineConfig {
 /**
  * The sync engine interface - manages bidirectional sync between a store and a backend
  */
-export interface SyncEngine<Native = unknown> {
+export interface SyncEngine {
   /** Start synchronization */
   connect: () => void;
   /** Stop synchronization and cleanup */
   disconnect: () => void;
-  /** Get the backend this engine writes to */
-  getBackend: () => CrdtBackend<Native>;
   /** Check if engine is connected */
   isConnected: () => boolean;
 }

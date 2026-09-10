@@ -40,7 +40,7 @@ export const useTodoStore = create<TodoStore>((set) => ({
 }));
 
 const { ydoc, wsProvider } = connectSharedDoc();
-const adapter = createZustandAdapter(useTodoStore, initialState);
+const adapter = createZustandAdapter(useTodoStore);
 const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
 
 syncEngine.connect();

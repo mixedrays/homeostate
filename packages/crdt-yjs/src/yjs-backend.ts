@@ -2,8 +2,6 @@ import * as Y from 'yjs';
 import type { CrdtBackend, Unsubscribe } from '@homeostate/core';
 import { patchSharedType } from './patching.js';
 
-export type YjsBackend = CrdtBackend<Y.Map<unknown>>;
-
 /**
  * Creates a CrdtBackend over the Y.Map called `name` inside `doc`.
  *
@@ -17,7 +15,7 @@ export type YjsBackend = CrdtBackend<Y.Map<unknown>>;
  * engine.connect();
  * ```
  */
-export const createYjsBackend = (doc: Y.Doc, name: string): YjsBackend => {
+export const createYjsBackend = (doc: Y.Doc, name: string): CrdtBackend => {
   const map = doc.getMap<unknown>(name);
   const origin = Symbol(`homeostate:${name}`);
 
@@ -35,9 +33,5 @@ export const createYjsBackend = (doc: Y.Doc, name: string): YjsBackend => {
       map.observeDeep(handler);
       return () => map.unobserveDeep(handler);
     },
-
-    isEmpty: () => map.size === 0,
-
-    native: () => map,
   };
 };

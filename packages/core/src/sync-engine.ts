@@ -8,6 +8,8 @@ import type {
 import { defaultSyncFilter } from './types.js';
 import { patchState } from './patching.js';
 
+type Plain = Record<string, unknown>;
+
 /**
  * Creates a sync engine that keeps a store (via its adapter) and a CRDT backend
  * in sync in both directions.
@@ -18,16 +20,16 @@ import { patchState } from './patching.js';
  * @example
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
- * const adapter = new ZustandAdapter(store, initialState);
+ * const adapter = new ZustandAdapter(store);
  * const engine = createSyncEngine(backend, adapter);
  * engine.connect();
  * ```
  */
-export function createSyncEngine<S, Native = unknown>(
-  backend: CrdtBackend<Native>,
+export function createSyncEngine<S extends object>(
+  backend: CrdtBackend,
   adapter: StoreAdapter<S>,
   config: SyncEngineConfig = {}
-): SyncEngine<Native> {
+): SyncEngine {
   const { filter = defaultSyncFilter, seed = 'if-empty' } = config;
 
   let connected = false;
@@ -35,34 +37,27 @@ export function createSyncEngine<S, Native = unknown>(
   let backendUnsubscribe: Unsubscribe | null = null;
   let applyingRemote = false;
 
-  const filterState = (state: S): Partial<S> => {
-    if (typeof state !== 'object' || state === null) {
-      return state;
+  const filterState = (state: object): Plain => {
+    const filtered: Plain = {};
+    for (const [key, value] of Object.entries(state)) {
+      if (filter(key, value)) filtered[key] = value;
     }
-
-    const filtered: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(state as Record<string, unknown>)) {
-      if (filter(key, value)) {
-        filtered[key] = value;
-      }
-    }
-    return filtered as Partial<S>;
+    return filtered;
   };
 
-  const mergeStates = (current: S, remote: Partial<S>): S => {
-    if (typeof current !== 'object' || current === null) {
-      return remote as S;
-    }
+  const readBackend = (): Plain => {
+    const value = backend.read();
+    return value !== null && typeof value === 'object' ? (value as Plain) : {};
+  };
 
-    const currentObj = current as Record<string, unknown>;
-    const patched = patchState(currentObj, remote as Record<string, unknown>);
-    if (patched === currentObj) return current;
+  const mergeStates = (current: S, remote: Plain): S => {
+    const synced = filterState(current);
+    const patched = patchState(synced, remote);
+    if (patched === synced) return current;
 
-    const merged: Record<string, unknown> = { ...patched };
-    for (const [key, value] of Object.entries(currentObj)) {
-      if (!filter(key, value)) {
-        merged[key] = value;
-      }
+    const merged: Plain = { ...current, ...patched };
+    for (const key of Object.keys(synced)) {
+      if (!(key in patched)) delete merged[key];
     }
     return merged as S;
   };
@@ -76,8 +71,8 @@ export function createSyncEngine<S, Native = unknown>(
     applyingRemote = true;
     try {
       const current = adapter.getState();
-      const merged = mergeStates(current, backend.read() as Partial<S>);
-      if (merged !== current) adapter.setState(merged, true);
+      const merged = mergeStates(current, filterState(readBackend()));
+      if (merged !== current) adapter.setState(merged);
     } finally {
       applyingRemote = false;
     }
@@ -87,8 +82,8 @@ export function createSyncEngine<S, Native = unknown>(
     connect: (): void => {
       if (connected) return;
 
-      if (backend.isEmpty()) {
-        if (seed === 'if-empty') backend.write(filterState(adapter.getInitialState()));
+      if (Object.keys(readBackend()).length === 0) {
+        if (seed === 'if-empty') syncToBackend();
       } else {
         syncToStore();
       }
@@ -107,8 +102,6 @@ export function createSyncEngine<S, Native = unknown>(
       storeUnsubscribe = null;
       connected = false;
     },
-
-    getBackend: (): CrdtBackend<Native> => backend,
 
     isConnected: (): boolean => connected,
   };

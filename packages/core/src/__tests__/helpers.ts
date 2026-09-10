@@ -61,14 +61,17 @@ export const deepFreeze = <T>(value: T): T => {
 
 export const snapshot = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
-export interface TestStore<S> {
+export interface TestStore<S extends object> {
   adapter: StoreAdapter<S>;
   getState: () => S;
   setState: (next: S) => void;
   update: (recipe: (state: S) => S) => void;
 }
 
-export const createTestStore = <S>(initial: S, prepare: (next: S) => S = (s) => s): TestStore<S> => {
+export const createTestStore = <S extends object>(
+  initial: S,
+  prepare: (next: S) => S = (s) => s
+): TestStore<S> => {
   let state = prepare(initial);
   const listeners = new Set<() => void>();
 
@@ -80,14 +83,13 @@ export const createTestStore = <S>(initial: S, prepare: (next: S) => S = (s) => 
   return {
     adapter: {
       getState: () => state,
-      setState: (next) => setState(next),
+      setState,
       subscribe: (onStoreChange) => {
         listeners.add(onStoreChange);
         return () => {
           listeners.delete(onStoreChange);
         };
       },
-      getInitialState: () => initial,
     },
     getState: () => state,
     setState,

@@ -3,22 +3,32 @@ import type * as Y from 'yjs';
 import {
   createSyncEngine,
   type CrdtBackend,
+  type SyncEngine,
   type SyncEngineConfig,
 } from '@homeostate/core';
 import { createYjsBackend } from '@homeostate/crdt-yjs';
 import { ZustandAdapter } from './adapter.js';
 
+type Write<T, U> = Omit<T, keyof U> & U;
+type WithHomeostate<S, A> = Write<S, { homeostate: A }>;
+
+declare module 'zustand/vanilla' {
+  interface StoreMutators<S, A> {
+    homeostate: WithHomeostate<S, A>;
+  }
+}
+
 export type HomeostateMiddleware = <
-  T,
+  T extends object,
   Mps extends [StoreMutatorIdentifier, unknown][] = [],
   Mcs extends [StoreMutatorIdentifier, unknown][] = []
 >(
   backend: CrdtBackend,
-  creator: StateCreator<T, Mps, Mcs>,
+  creator: StateCreator<T, [...Mps, ['homeostate', SyncEngine]], Mcs>,
   config?: SyncEngineConfig
-) => StateCreator<T, Mps, Mcs>;
+) => StateCreator<T, Mps, [['homeostate', SyncEngine], ...Mcs]>;
 
-type HomeostateMiddlewareImpl = <T>(
+type HomeostateMiddlewareImpl = <T extends object>(
   backend: CrdtBackend,
   creator: StateCreator<T, [], []>,
   config?: SyncEngineConfig
@@ -26,13 +36,16 @@ type HomeostateMiddlewareImpl = <T>(
 
 const homeostateImpl: HomeostateMiddlewareImpl = (backend, creator, config) => (set, get, api) => {
   const initialState = creator(set, get, api);
-  const engine = createSyncEngine(backend, new ZustandAdapter(api, initialState), config);
+  api.setState(initialState, true);
+  const engine = createSyncEngine(backend, new ZustandAdapter(api), config);
+  (api as unknown as { homeostate: SyncEngine }).homeostate = engine;
   engine.connect();
-  return api.getState() ?? initialState;
+  return api.getState();
 };
 
 /**
  * Zustand middleware that mirrors the store into a CRDT backend for peer-to-peer synchronization.
+ * The engine is exposed as `store.homeostate`, so `store.homeostate.disconnect()` stops syncing.
  *
  * @example
  * const useStore = create(
@@ -42,16 +55,16 @@ const homeostateImpl: HomeostateMiddlewareImpl = (backend, creator, config) => (
 export const homeostate = homeostateImpl as unknown as HomeostateMiddleware;
 
 export type YjsMiddleware = <
-  T,
+  T extends object,
   Mps extends [StoreMutatorIdentifier, unknown][] = [],
   Mcs extends [StoreMutatorIdentifier, unknown][] = []
 >(
   doc: Y.Doc,
   name: string,
-  creator: StateCreator<T, Mps, Mcs>
-) => StateCreator<T, Mps, Mcs>;
+  creator: StateCreator<T, [...Mps, ['homeostate', SyncEngine]], Mcs>
+) => StateCreator<T, Mps, [['homeostate', SyncEngine], ...Mcs]>;
 
-type YjsMiddlewareImpl = <T>(
+type YjsMiddlewareImpl = <T extends object>(
   doc: Y.Doc,
   name: string,
   creator: StateCreator<T, [], []>

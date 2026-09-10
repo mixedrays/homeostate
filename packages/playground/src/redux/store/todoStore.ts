@@ -44,7 +44,7 @@ export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
 const { ydoc, wsProvider } = connectSharedDoc();
-const adapter = createReduxAdapter(store, initialState, setState);
+const adapter = createReduxAdapter(store, setState);
 const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
 
 syncEngine.connect();

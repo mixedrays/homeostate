@@ -3,20 +3,7 @@ import { createMemoryBackend } from '../index.js';
 
 describe('createMemoryBackend', () => {
   it('starts as an empty object by default', () => {
-    const backend = createMemoryBackend();
-
-    expect(backend.isEmpty()).toBe(true);
-    expect(backend.read()).toEqual({});
-  });
-
-  it('is empty for empty containers and nullish values only', () => {
-    expect(createMemoryBackend({}).isEmpty()).toBe(true);
-    expect(createMemoryBackend([]).isEmpty()).toBe(true);
-    expect(createMemoryBackend(null).isEmpty()).toBe(true);
-    expect(createMemoryBackend({ a: 1 }).isEmpty()).toBe(false);
-    expect(createMemoryBackend([0]).isEmpty()).toBe(false);
-    expect(createMemoryBackend(0).isEmpty()).toBe(false);
-    expect(createMemoryBackend('').isEmpty()).toBe(false);
+    expect(createMemoryBackend().read()).toEqual({});
   });
 
   it('copies the initial value instead of aliasing it', () => {
@@ -46,7 +33,6 @@ describe('createMemoryBackend', () => {
     next.nested.c.push(2);
 
     expect(backend.read()).toEqual({ b: 3, nested: { c: [1] } });
-    expect(backend.isEmpty()).toBe(false);
   });
 
   it('does not notify subscribers about its own writes', () => {
@@ -85,15 +71,5 @@ describe('createMemoryBackend', () => {
 
     expect(onRemoteChange).not.toHaveBeenCalled();
     expect(backend.read()).toEqual({ a: 1 });
-  });
-
-  it('exposes the live state holder through native()', () => {
-    const backend = createMemoryBackend({ a: 1 });
-    const holder = backend.native();
-
-    backend.write({ a: 2 });
-
-    expect(holder.state).toEqual({ a: 2 });
-    expect(backend.native()).toBe(holder);
   });
 });

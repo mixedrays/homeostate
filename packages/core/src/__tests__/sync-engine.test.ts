@@ -28,7 +28,7 @@ describe('createSyncEngine', () => {
 
       createSyncEngine(backend, store.adapter, { seed: 'never' }).connect();
 
-      expect(backend.isEmpty()).toBe(true);
+      expect(backend.read()).toEqual({});
       expect(store.getState()).toEqual(threeTodos());
     });
 
@@ -72,12 +72,15 @@ describe('createSyncEngine', () => {
       expect(engine.isConnected()).toBe(true);
     });
 
-    it('exposes the backend', () => {
+    it('seeds an empty backend with what the store holds at connect time', () => {
       const backend = createMemoryBackend();
-      const engine = createSyncEngine(backend, createTestStore(threeTodos()).adapter);
+      const store = createTestStore(threeTodos());
+      store.update((s) => toggleTodo(s, '1'));
 
-      expect(engine.getBackend()).toBe(backend);
-      expect(engine.getBackend().native().state).toEqual({});
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(backend.read()).toEqual(toggleTodo(threeTodos(), '1'));
+      expect(backend.read()).toEqual(store.getState());
     });
   });
 
@@ -185,6 +188,15 @@ describe('createSyncEngine', () => {
       backend.receive({ ...toggleTodo(threeTodos(), '1'), searchTerm: 'remote' });
       expect(store.getState()).toEqual({ ...toggleTodo(threeTodos(), '1'), searchTerm: 'local' });
     });
+
+    it('ignores remote keys that the filter excludes, even when the store lacks them', () => {
+      const backend = createMemoryBackend({ ...threeTodos(), secret: 'remote' });
+      const store = createTestStore<object>(threeTodos());
+
+      createSyncEngine(backend, store.adapter, { filter: (key) => key !== 'secret' }).connect();
+
+      expect(store.getState()).toEqual(threeTodos());
+    });
   });
 
   describe('disconnect', () => {
@@ -222,4 +234,5 @@ describe('createSyncEngine', () => {
       expect(backend.read()).toEqual(toggleTodo(addTodo(threeTodos(), todo('4')), '2'));
     });
   });
+
 });

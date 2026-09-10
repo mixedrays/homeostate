@@ -1,6 +1,6 @@
 import type { CrdtBackend, Unsubscribe } from './types.js';
 
-export interface MemoryBackend extends CrdtBackend<{ state: unknown }> {
+export interface MemoryBackend extends CrdtBackend {
   /** Replace the held state as if a remote peer had written it, then notify subscribers */
   receive: (next: unknown) => void;
 }
@@ -8,24 +8,19 @@ export interface MemoryBackend extends CrdtBackend<{ state: unknown }> {
 const clone = <T>(value: T): T =>
   value === undefined ? value : JSON.parse(JSON.stringify(value));
 
-const isEmptyValue = (value: unknown): boolean =>
-  value === undefined ||
-  value === null ||
-  (typeof value === 'object' && Object.keys(value).length === 0);
-
 /**
  * Plain-JSON backend with no replication. It proves the engine has no
  * CRDT-library assumptions and gives tests a fast in-process peer.
  */
 export const createMemoryBackend = (initial: unknown = {}): MemoryBackend => {
-  const holder = { state: clone(initial) };
+  let state = clone(initial);
   const listeners = new Set<() => void>();
 
   return {
-    read: () => clone(holder.state),
+    read: () => clone(state),
 
     write: (next) => {
-      holder.state = clone(next);
+      state = clone(next);
     },
 
     subscribe: (onRemoteChange): Unsubscribe => {
@@ -35,12 +30,8 @@ export const createMemoryBackend = (initial: unknown = {}): MemoryBackend => {
       };
     },
 
-    isEmpty: () => isEmptyValue(holder.state),
-
-    native: () => holder,
-
     receive: (next) => {
-      holder.state = clone(next);
+      state = clone(next);
       listeners.forEach((listener) => listener());
     },
   };

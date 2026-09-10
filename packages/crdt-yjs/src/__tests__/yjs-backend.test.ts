@@ -5,6 +5,7 @@ import { createYjsBackend } from '../index.js';
 import {
   addTodo,
   createTestStore,
+  deleteTodo,
   manyTodos,
   renameTodo,
   setSearchTerm,
@@ -40,11 +41,11 @@ const link = (a: Y.Doc, b: Y.Doc): void => {
   });
 };
 
-const twoSyncedPeers = (initial: () => TodoState = threeTodos) => {
+const twoSyncedPeers = (initial: () => TodoState = threeTodos, idA = 1, idB = 2) => {
   const docA = new Y.Doc();
   const docB = new Y.Doc();
-  docA.clientID = 1;
-  docB.clientID = 2;
+  docA.clientID = idA;
+  docB.clientID = idB;
   const a = createPeer(docA, initial());
   exchange(docA, docB);
   const b = createPeer(docB, initial());
@@ -70,16 +71,6 @@ describe('createYjsBackend', () => {
     expect(backend.read()).toEqual({ count: 2, label: 'one' });
   });
 
-  it('reports emptiness and exposes the native map', () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME);
-
-    expect(backend.isEmpty()).toBe(true);
-    backend.write({ count: 1 });
-    expect(backend.isEmpty()).toBe(false);
-    expect(backend.native()).toBe(doc.getMap(NAME));
-  });
-
   it.each([
     [{ list: [1, 2, 3] }, { list: [0, 1] }],
     [{ list: [2, 3] }, { list: [1, 2, 3, 4] }],
@@ -96,6 +87,19 @@ describe('createYjsBackend', () => {
     expect(backend.read()).toEqual(before);
     backend.write(after);
     expect(backend.read()).toEqual(after);
+  });
+
+  it('deletes a middle todo without rewriting the items after it', () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write(threeTodos());
+    const todos = doc.getMap(NAME).get('todos') as Y.Array<Y.Map<unknown>>;
+    const third = todos.get(2);
+
+    backend.write(deleteTodo(threeTodos(), '2'));
+
+    expect(todos.toJSON()).toEqual(deleteTodo(threeTodos(), '2').todos);
+    expect(todos.get(1)).toBe(third);
   });
 
   it('stops notifying after unsubscribe', () => {
@@ -120,6 +124,21 @@ describe('two peers over Yjs', () => {
     exchange(a.doc, b.doc);
 
     const expected = addTodo(toggleTodo(threeTodos(), '1'), todo('4'));
+    expect(a.store.getState()).toEqual(expected);
+    expect(b.store.getState()).toEqual(expected);
+  });
+
+  it.each([
+    [1, 2],
+    [2, 1],
+  ])('keeps a delete of t2 on A and a toggle of t3 on B (clientIDs %i and %i)', (idA, idB) => {
+    const { a, b } = twoSyncedPeers(threeTodos, idA, idB);
+
+    a.store.update((s) => deleteTodo(s, '2'));
+    b.store.update((s) => toggleTodo(s, '3'));
+    exchange(a.doc, b.doc);
+
+    const expected = toggleTodo(deleteTodo(threeTodos(), '2'), '3');
     expect(a.store.getState()).toEqual(expected);
     expect(b.store.getState()).toEqual(expected);
   });
@@ -188,7 +207,7 @@ describe('two peers over Yjs', () => {
     expect(a.backend.read()).toEqual(threeTodos());
   });
 
-  it('sends one small update per toggle, add, and keystroke with 50 todos', () => {
+  it('sends one small update per toggle, add, keystroke, and middle delete with 50 todos', () => {
     const { a, b } = twoSyncedPeers(() => manyTodos(50));
     link(a.doc, b.doc);
     const sizes: number[] = [];
@@ -202,10 +221,10 @@ describe('two peers over Yjs', () => {
     expect(sizes).toHaveLength(2);
     a.store.update((s) => setSearchTerm(s, 'x'));
     expect(sizes).toHaveLength(3);
+    a.store.update((s) => deleteTodo(s, '10'));
+    expect(sizes).toHaveLength(4);
 
     expect(sizes.every((size) => size < 200)).toBe(true);
     expect(b.store.getState()).toEqual(a.store.getState());
   });
-
-  it.todo('keeps a delete of t2 on A and a toggle of t3 on B (positional array diff)');
 });
