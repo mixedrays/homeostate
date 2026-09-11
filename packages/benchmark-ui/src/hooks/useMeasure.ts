@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /** Width of the referenced element, kept current through a ResizeObserver. */
-export const useMeasure = <T extends HTMLElement>(): [RefObject<T>, number] => {
+export const useMeasure = <T extends HTMLElement>(): [RefObject<T | null>, number] => {
   const ref = useRef<T>(null);
   const [width, setWidth] = useState(0);
 
