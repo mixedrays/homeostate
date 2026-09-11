@@ -21,7 +21,7 @@ export function Segmented<T extends string | number>({ label, options, value, on
           className={cx(
             'rounded-md px-2.5 py-1 font-medium transition',
             option.value === value
-              ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+              ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200'
               : 'text-slate-500 hover:text-slate-900',
             focusRing
           )}
@@ -52,8 +52,8 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
     <select
       {...props}
       className={cx(
-        'rounded-lg border border-slate-300 bg-white py-1 pl-2.5 pr-8 text-sm text-slate-900 shadow-sm transition',
-        'focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/15',
+        'rounded-lg border border-slate-300 bg-white py-1 pl-2.5 pr-8 text-sm text-slate-900 shadow-xs transition',
+        'focus:border-blue-500 focus:outline-hidden focus:ring-4 focus:ring-blue-500/15',
         props.className
       )}
     />
@@ -70,7 +70,7 @@ interface CardProps {
 
 export function Card({ title, subtitle, actions, children, className }: CardProps) {
   return (
-    <section className={cx('rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5', className)}>
+    <section className={cx('rounded-2xl bg-white p-4 shadow-xs ring-1 ring-slate-200 sm:p-5', className)}>
       {(title || actions) && (
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -93,7 +93,7 @@ interface StatTileProps {
 
 export function StatTile({ label, value, detail }: StatTileProps) {
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <div className="rounded-xl bg-white p-4 shadow-xs ring-1 ring-slate-200">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
       {detail && <p className="mt-1 text-sm text-slate-500">{detail}</p>}

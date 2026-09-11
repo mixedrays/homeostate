@@ -71,7 +71,7 @@ export function CompareView({ current, runs, baselineId, onBaselineChange, slots
     return (
       <Card title="Compare two runs">
         <Note>
-          Load a second report to compare against: save one with <code className="rounded bg-slate-100 px-1 py-0.5 font-mono">pnpm bench -- --json results/before.json</code>{' '}
+          Load a second report to compare against: save one with <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono">pnpm bench -- --json results/before.json</code>{' '}
           or drop any report JSON onto this page. Rows are joined by backend, scenario, and size, so the runs should cover the same matrix.
         </Note>
       </Card>
@@ -134,14 +134,14 @@ export function CompareView({ current, runs, baselineId, onBaselineChange, slots
               step={1}
               value={thresholdPct}
               onChange={(event) => setThresholdPct(Number(event.target.value))}
-              className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/15"
+              className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm tabular-nums shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-4 focus:ring-blue-500/15"
               aria-label="Threshold in percent"
             />
             <span className="text-sm text-slate-500">%</span>
           </span>
         </Field>
         <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={onlySignificant} onChange={(event) => setOnlySignificant(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+          <input type="checkbox" checked={onlySignificant} onChange={(event) => setOnlySignificant(event.target.checked)} className="h-4 w-4 rounded-sm border-slate-300 text-blue-600 focus:ring-blue-500" />
           only rows with a significant change
         </label>
       </Controls>

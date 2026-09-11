@@ -151,7 +151,7 @@ function App() {
             type="button"
             onClick={() => fileInput.current?.click()}
             className={cx(
-              'inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700',
+              'inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-xs transition hover:bg-slate-700',
               focusRing
             )}
           >
@@ -255,7 +255,7 @@ function EmptyState({ onOpen }: { onOpen(): void }) {
       <Upload size={28} aria-hidden className="mx-auto text-slate-400" />
       <h2 className="mt-3 text-lg font-semibold tracking-tight">No benchmark reports yet</h2>
       <p className="mt-2 text-sm text-slate-600">
-        Save a run as JSON and this page picks it up from <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">packages/benchmark/results</code>:
+        Save a run as JSON and this page picks it up from <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-xs">packages/benchmark/results</code>:
       </p>
       <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900 p-4 text-left text-xs leading-relaxed text-slate-100">
         <code>{'pnpm bench -- --json results/main.json\npnpm bench -- --quick --json results/quick.json   # smoke run, under a minute'}</code>
@@ -264,7 +264,7 @@ function EmptyState({ onOpen }: { onOpen(): void }) {
       <button
         type="button"
         onClick={onOpen}
-        className={cx('mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700', focusRing)}
+        className={cx('mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-slate-700', focusRing)}
       >
         <FolderOpen size={16} aria-hidden />
         Open JSON

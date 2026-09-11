@@ -77,7 +77,7 @@ export function TodoFilters({
               onClick={() => onFilterChange(value)}
               className={cx(
                 'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition',
-                active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                active ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900',
                 focusRing
               )}
             >

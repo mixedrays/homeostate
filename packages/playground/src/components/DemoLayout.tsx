@@ -51,14 +51,14 @@ export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
 
         <section
           aria-label={`${demo.name} todo list`}
-          className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6"
+          className="rounded-2xl bg-white p-4 shadow-xs ring-1 ring-slate-200 sm:p-6"
         >
           <div className="space-y-6">{children}</div>
         </section>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
           Every demo joins the room{' '}
-          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-500">{SYNC_ROOM}</code>.
+          <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-slate-500">{SYNC_ROOM}</code>.
           Open another demo or a second tab to watch changes propagate.
         </p>
       </main>
@@ -78,7 +78,7 @@ function OfflineNotice() {
         <p className="mt-1 leading-relaxed">
           Tabs in this browser still sync with each other, but other browsers will not. Start the
           server with{' '}
-          <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">
+          <code className="rounded-sm bg-amber-100 px-1 py-0.5 font-mono text-xs">
             pnpm --filter @homeostate/websocket-server dev
           </code>
           . This page reconnects on its own.

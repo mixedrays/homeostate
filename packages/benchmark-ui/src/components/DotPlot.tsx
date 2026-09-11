@@ -152,7 +152,7 @@ export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fi
                   aria-label={`${row.label}: ${row.points
                     .map((p) => `${p.series} ${formatValue(unit, p.value, signed)}`)
                     .join(', ')}`}
-                  className="outline-none"
+                  className="outline-hidden"
                   onPointerMove={(event) => setHover(locate(event, index, cy))}
                   onPointerLeave={() => setHover(null)}
                   onFocus={(event) => setHover(locate(event, index, cy))}

@@ -31,7 +31,7 @@ export default function Home() {
                   <Link
                     to={demo.path}
                     className={cx(
-                      'group flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition',
+                      'group flex h-full flex-col rounded-2xl bg-white p-5 shadow-xs ring-1 ring-slate-200 transition',
                       'hover:-translate-y-0.5 hover:shadow-md hover:ring-accent-200',
                       focusRing
                     )}
@@ -70,7 +70,7 @@ export default function Home() {
               </div>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 The demos connect to{' '}
-                <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+                <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-xs">
                   {SYNC_SERVER_URL}
                 </code>
                 . From the repo root, run:
