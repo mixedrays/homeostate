@@ -87,6 +87,7 @@ figure includes it.
 | `memory` | `createMemoryBackend` from core; peers receive the whole state as a JSON string |
 | `yjs` | `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates |
 | `loro` | `createLoroBackend` over a `LoroMap`; peers exchange Loro updates; the document figure is a Loro snapshot |
+| `automerge` | `createAutomergeBackend` over an Automerge document; peers exchange encoded Automerge changes; the document figure is `A.save` |
 
 ## Scenarios
 

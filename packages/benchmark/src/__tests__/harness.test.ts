@@ -33,7 +33,7 @@ describe('runBenchmark', () => {
     expect(report.replicas.map((r) => r.backend)).toEqual(candidates.map((c) => c.name));
     expect(report.operations).toHaveLength(candidates.length * options.scenarios.length);
     expect(progress).toHaveLength(countTasks(options));
-    expect(progress[progress.length - 1]).toMatch(/^12\/12 8 todos · loro · remove$/);
+    expect(progress[progress.length - 1]).toMatch(/^15\/15 8 todos · automerge · remove$/);
 
     for (const replica of report.replicas) {
       expectTiming(replica.seed);
@@ -71,6 +71,12 @@ describe('runBenchmark', () => {
     expect(loro?.wireBytesPerOp).toBeLessThan(200);
     expect(loro?.docBytesPerOp).toBeGreaterThan(0);
     expect(replicas.get('loro')?.docBytes).toBeGreaterThan(0);
+
+    const automerge = byBackend.get('automerge');
+    expect(automerge?.wireBytesPerOp).toBeGreaterThan(0);
+    expect(automerge?.wireBytesPerOp).toBeLessThan(200);
+    expect(automerge?.docBytesPerOp).toBeGreaterThan(0);
+    expect(replicas.get('automerge')?.docBytes).toBeGreaterThan(0);
   }, 30_000);
 
   it('measures heap when asked', async () => {
@@ -96,6 +102,7 @@ describe('runBenchmark', () => {
     expect(meta.options).toEqual({ time: 2, minSamples: 2, operations: 3, sizes: [8] });
     expect(meta.versions.yjs).toMatch(/^\d+\.\d+\.\d+/);
     expect(meta.versions['loro-crdt']).toMatch(/^\d+\.\d+\.\d+/);
+    expect(meta.versions['@automerge/automerge']).toMatch(/^\d+\.\d+\.\d+/);
     expect(meta.commit === null || /^[0-9a-f]{7,}$/.test(meta.commit)).toBe(true);
   });
 });

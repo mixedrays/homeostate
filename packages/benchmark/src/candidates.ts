@@ -1,8 +1,15 @@
 import * as Y from 'yjs';
 import { LoroDoc } from 'loro-crdt';
+import * as A from '@automerge/automerge';
 import { createMemoryBackend, type MemoryBackend } from '@homeostate/core';
 import { createYjsBackend } from '@homeostate/crdt-yjs';
 import { createLoroBackend } from '@homeostate/crdt-loro';
+import {
+  createAutomergeBackend,
+  createAutomergeHandle,
+  type AutomergeHandle,
+  type AutomergeHandleEvent,
+} from '@homeostate/crdt-automerge';
 import type { BackendCandidate, Replica } from './types.js';
 
 const utf8Bytes = (text: string): number => Buffer.byteLength(text);
@@ -190,4 +197,47 @@ export const loro: BackendCandidate<LoroReplica> = {
   },
 };
 
-export const candidates: BackendCandidate[] = [passthrough, memory, yjs, loro];
+interface AutomergeReplica extends Replica {
+  handle: AutomergeHandle;
+}
+
+export const automerge: BackendCandidate<AutomergeReplica> = {
+  name: 'automerge',
+  description:
+    'createAutomergeBackend over an Automerge document; peers exchange encoded changes; the document is A.save',
+
+  createReplica() {
+    const handle = createAutomergeHandle();
+    return {
+      handle,
+      backend: createAutomergeBackend(handle, 'shared'),
+      encodedSize: () => A.save(handle.doc()).byteLength,
+      destroy: () => A.free(handle.doc()),
+    };
+  },
+
+  connect(a, b) {
+    let bytes = 0;
+    const forward =
+      (target: AutomergeHandle) =>
+      ({ doc, local }: AutomergeHandleEvent<Record<string, unknown>>): void => {
+        if (!local) return;
+        const change = A.getLastLocalChange(doc);
+        if (change === undefined) return;
+        bytes += change.byteLength;
+        target.update((current) => A.applyChanges(current, [change])[0]);
+      };
+    const unsubscribeA = a.handle.subscribe(forward(b.handle));
+    const unsubscribeB = b.handle.subscribe(forward(a.handle));
+
+    return {
+      bytes: () => bytes,
+      disconnect: () => {
+        unsubscribeA();
+        unsubscribeB();
+      },
+    };
+  },
+};
+
+export const candidates: BackendCandidate[] = [passthrough, memory, yjs, loro, automerge];

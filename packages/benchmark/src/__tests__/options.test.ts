@@ -61,7 +61,7 @@ describe('parseOptions', () => {
   });
 
   it('rejects unknown names and bad numbers with a helpful message', () => {
-    expect(() => parseOptions(['-b', 'automerge'])).toThrow(/Unknown backend "automerge"; available: passthrough, memory, yjs/);
+    expect(() => parseOptions(['-b', 'nope'])).toThrow(/Unknown backend "nope"; available: passthrough, memory, yjs/);
     expect(() => parseOptions(['-s', 'nope'])).toThrow(/Unknown scenario "nope"/);
     expect(() => parseOptions(['-n', '0'])).toThrow(/--size expects a positive integer/);
     expect(() => parseOptions(['--fail-on=-1'])).toThrow(/--fail-on expects a non-negative percentage/);

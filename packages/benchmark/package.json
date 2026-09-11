@@ -15,7 +15,9 @@
     "bench": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@automerge/automerge": "^3.4.1",
     "@homeostate/core": "workspace:^",
+    "@homeostate/crdt-automerge": "workspace:^",
     "@homeostate/crdt-loro": "workspace:^",
     "@homeostate/crdt-yjs": "workspace:^",
     "loro-crdt": "^1.16.1",

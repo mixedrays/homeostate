@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { candidates, loro, memory, passthrough, yjs } from '../candidates.js';
+import { automerge, candidates, loro, memory, passthrough, yjs } from '../candidates.js';
 import { makeState } from '../scenarios.js';
 import type { BackendCandidate } from '../types.js';
 
@@ -83,6 +83,24 @@ describe('wire and document accounting', () => {
     const a = loro.createReplica();
     const b = loro.createReplica();
     const wire = loro.connect(a, b);
+    a.backend.write(state);
+    const afterSeed = wire.bytes?.() ?? 0;
+    const seededDoc = a.encodedSize?.() ?? 0;
+    expect(afterSeed).toBeGreaterThan(0);
+
+    b.backend.write({ ...state, searchTerm: 'x' });
+    expect(wire.bytes?.()).toBeGreaterThan(afterSeed);
+    expect(a.backend.read()).toEqual({ ...state, searchTerm: 'x' });
+    expect(a.encodedSize?.()).toBeGreaterThan(seededDoc);
+    wire.disconnect();
+    a.destroy?.();
+    b.destroy?.();
+  });
+
+  it('automerge counts change bytes in both directions and grows the saved document', () => {
+    const a = automerge.createReplica();
+    const b = automerge.createReplica();
+    const wire = automerge.connect(a, b);
     a.backend.write(state);
     const afterSeed = wire.bytes?.() ?? 0;
     const seededDoc = a.encodedSize?.() ?? 0;

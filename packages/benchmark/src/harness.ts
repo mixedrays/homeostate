@@ -1,5 +1,7 @@
 import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { Bench, type Task } from 'tinybench';
 import { createSyncEngine, type SyncEngine } from '@homeostate/core';
 import { retainedHeap, settledHeap } from './memory.js';
@@ -350,8 +352,20 @@ const git = (args: string): string | null => {
 
 const dependencyVersion = (name: string): string | null => {
   try {
-    const require = createRequire(import.meta.url);
-    return (require(`${name}/package.json`) as { version: string }).version;
+    let directory = dirname(createRequire(import.meta.url).resolve(name));
+    while (true) {
+      const manifest = join(directory, 'package.json');
+      if (existsSync(manifest)) {
+        const { name: found, version } = JSON.parse(readFileSync(manifest, 'utf8')) as {
+          name?: string;
+          version?: string;
+        };
+        if (found === name && version !== undefined) return version;
+      }
+      const parent = dirname(directory);
+      if (parent === directory) return null;
+      directory = parent;
+    }
   } catch {
     return null;
   }
@@ -360,7 +374,7 @@ const dependencyVersion = (name: string): string | null => {
 export const collectMeta = (options: BenchmarkOptions): BenchmarkMeta => {
   const status = git('status --porcelain');
   const versions: Record<string, string> = {};
-  for (const name of ['yjs', 'loro-crdt', 'tinybench']) {
+  for (const name of ['yjs', 'loro-crdt', '@automerge/automerge', 'tinybench']) {
     const version = dependencyVersion(name);
     if (version !== null) versions[name] = version;
   }

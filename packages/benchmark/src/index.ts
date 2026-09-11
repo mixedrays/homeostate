@@ -1,5 +1,5 @@
 export { runBenchmark, collectMeta, countTasks } from './harness.js';
-export { candidates, passthrough, memory, yjs, loro } from './candidates.js';
+export { candidates, passthrough, memory, yjs, loro, automerge } from './candidates.js';
 export {
   scenarios,
   makeState,
