@@ -15,7 +15,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/playground/**/*.{ts,tsx}'],
+    files: ['packages/playground/**/*.{ts,tsx}', 'packages/benchmark-ui/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,

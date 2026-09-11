@@ -10,7 +10,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "lint": "eslint .",
-    "bench": "pnpm --filter @homeostate/benchmark bench"
+    "bench": "pnpm --filter @homeostate/benchmark bench",
+    "bench:ui": "pnpm --filter @homeostate/benchmark-ui dev"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

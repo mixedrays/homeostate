@@ -14,6 +14,7 @@ adapters, its CRDT backends, and a demo playground.
 | `@homeostate/adapter-redux` | `packages/adapter-redux` | Redux adapter |
 | `@homeostate/playground` | `packages/playground` | Vite app with Zustand, MobX, and Redux todo demos |
 | `@homeostate/benchmark` | `packages/benchmark` | Benchmarks of core across backends: latency, wire bytes, document growth, heap |
+| `@homeostate/benchmark-ui` | `packages/benchmark-ui` | Vite app that views saved benchmark reports: backends side by side, scaling, run comparison |
 | `@homeostate/websocket-server` | `packages/websocket-server` | y-websocket server used by the playground |
 
 ## Scripts
@@ -26,6 +27,7 @@ pnpm typecheck  # tsc -b across the workspace, tests included via tsconfig.test.
 pnpm lint
 pnpm test       # vitest across packages/*/src/__tests__
 pnpm bench      # benchmark matrix; pnpm bench -- --help for options
+pnpm bench:ui   # viewer for reports saved with pnpm bench -- --json, on http://localhost:5180
 ```
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.

@@ -19,6 +19,17 @@ pnpm bench -- --help
 Progress is written to stderr and the Markdown report to stdout, so `pnpm bench > report.md`
 leaves a pasteable document.
 
+## View in the browser
+
+```bash
+pnpm bench -- --json results/main.json
+pnpm bench:ui                               # http://localhost:5180
+```
+
+`@homeostate/benchmark-ui` picks up every `results/*.json`, draws the matrix as dot plots, scaling
+curves, and heatmaps, and compares two runs with the same significance rule as `--compare`. See
+[packages/benchmark-ui/README.md](../benchmark-ui/README.md).
+
 ## Compare a backend across core changes
 
 ```bash

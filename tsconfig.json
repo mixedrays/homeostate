@@ -7,6 +7,7 @@
     { "path": "packages/adapter-mobx" },
     { "path": "packages/adapter-redux" },
     { "path": "packages/benchmark" },
+    { "path": "packages/benchmark-ui" },
     { "path": "packages/playground" },
     { "path": "tsconfig.test.json" }
   ]
