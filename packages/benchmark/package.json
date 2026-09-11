@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@homeostate/core": "workspace:^",
+    "@homeostate/crdt-loro": "workspace:^",
     "@homeostate/crdt-yjs": "workspace:^",
+    "loro-crdt": "^1.16.1",
     "tinybench": "^6.1.4",
     "yjs": "^13.6.23"
   },

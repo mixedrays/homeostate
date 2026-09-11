@@ -86,6 +86,7 @@ figure includes it.
 | `passthrough` | keeps the state by reference, no cloning or encoding; the engine's own cost, a floor for the others |
 | `memory` | `createMemoryBackend` from core; peers receive the whole state as a JSON string |
 | `yjs` | `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates |
+| `loro` | `createLoroBackend` over a `LoroMap`; peers exchange Loro updates; the document figure is a Loro snapshot |
 
 ## Scenarios
 

@@ -1,6 +1,8 @@
 import * as Y from 'yjs';
+import { LoroDoc } from 'loro-crdt';
 import { createMemoryBackend, type MemoryBackend } from '@homeostate/core';
 import { createYjsBackend } from '@homeostate/crdt-yjs';
+import { createLoroBackend } from '@homeostate/crdt-loro';
 import type { BackendCandidate, Replica } from './types.js';
 
 const utf8Bytes = (text: string): number => Buffer.byteLength(text);
@@ -151,4 +153,41 @@ export const yjs: BackendCandidate<YjsReplica> = {
   },
 };
 
-export const candidates: BackendCandidate[] = [passthrough, memory, yjs];
+interface LoroReplica extends Replica {
+  doc: LoroDoc;
+}
+
+export const loro: BackendCandidate<LoroReplica> = {
+  name: 'loro',
+  description: 'createLoroBackend over a LoroMap; peers exchange Loro updates; the document is a snapshot',
+
+  createReplica() {
+    const doc = new LoroDoc();
+    return {
+      doc,
+      backend: createLoroBackend(doc, 'shared'),
+      encodedSize: () => doc.export({ mode: 'snapshot' }).byteLength,
+      destroy: () => doc.free(),
+    };
+  },
+
+  connect(a, b) {
+    let bytes = 0;
+    const forward = (target: LoroDoc) => (update: Uint8Array): void => {
+      bytes += update.byteLength;
+      target.import(update);
+    };
+    const unsubscribeA = a.doc.subscribeLocalUpdates(forward(b.doc));
+    const unsubscribeB = b.doc.subscribeLocalUpdates(forward(a.doc));
+
+    return {
+      bytes: () => bytes,
+      disconnect: () => {
+        unsubscribeA();
+        unsubscribeB();
+      },
+    };
+  },
+};
+
+export const candidates: BackendCandidate[] = [passthrough, memory, yjs, loro];

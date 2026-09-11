@@ -9,6 +9,7 @@ adapters, its CRDT backends, and a demo playground.
 | --- | --- | --- |
 | `@homeostate/core` | `packages/core` | `createSyncEngine`, the `StoreAdapter` and `CrdtBackend` contracts, `createMemoryBackend` |
 | `@homeostate/crdt-yjs` | `packages/crdt-yjs` | `createYjsBackend`: Yjs implementation of `CrdtBackend` |
+| `@homeostate/crdt-loro` | `packages/crdt-loro` | `createLoroBackend`: Loro implementation of `CrdtBackend` |
 | `@homeostate/adapter-zustand` | `packages/adapter-zustand` | Zustand adapter, `homeostate` and `yjs` middleware |
 | `@homeostate/adapter-mobx` | `packages/adapter-mobx` | MobX adapter |
 | `@homeostate/adapter-redux` | `packages/adapter-redux` | Redux adapter |
@@ -34,8 +35,9 @@ Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --f
 
 ## Third-Party Notices
 
-`@homeostate/core` and `@homeostate/crdt-yjs` include code derived from
+`@homeostate/core`, `@homeostate/crdt-yjs`, and `@homeostate/crdt-loro` include code derived from
 [zustand-middleware-yjs](https://github.com/joebobmiles/zustand-middleware-yjs),
 copyright (c) 2021 Joseph R Miles, under the MIT License. The complete notice
-is included in [packages/core/THIRD_PARTY_NOTICES.md](packages/core/THIRD_PARTY_NOTICES.md)
-and [packages/crdt-yjs/THIRD_PARTY_NOTICES.md](packages/crdt-yjs/THIRD_PARTY_NOTICES.md).
+is included in [packages/core/THIRD_PARTY_NOTICES.md](packages/core/THIRD_PARTY_NOTICES.md),
+[packages/crdt-yjs/THIRD_PARTY_NOTICES.md](packages/crdt-yjs/THIRD_PARTY_NOTICES.md), and
+[packages/crdt-loro/THIRD_PARTY_NOTICES.md](packages/crdt-loro/THIRD_PARTY_NOTICES.md).

@@ -5,7 +5,8 @@
 
 State-manager and CRDT-backend agnostic sync engine. It keeps a store, reached through a
 `StoreAdapter`, in sync with a `CrdtBackend` such as
-[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs).
+[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs) or
+[`@homeostate/crdt-loro`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-loro).
 
 ## Install
 

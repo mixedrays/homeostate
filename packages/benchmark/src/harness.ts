@@ -360,7 +360,7 @@ const dependencyVersion = (name: string): string | null => {
 export const collectMeta = (options: BenchmarkOptions): BenchmarkMeta => {
   const status = git('status --porcelain');
   const versions: Record<string, string> = {};
-  for (const name of ['yjs', 'tinybench']) {
+  for (const name of ['yjs', 'loro-crdt', 'tinybench']) {
     const version = dependencyVersion(name);
     if (version !== null) versions[name] = version;
   }

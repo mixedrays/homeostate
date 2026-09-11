@@ -6,5 +6,5 @@
   },
   "include": ["src"],
   "exclude": ["src/**/__tests__"],
-  "references": [{ "path": "../core" }, { "path": "../crdt-yjs" }]
+  "references": [{ "path": "../core" }, { "path": "../crdt-yjs" }, { "path": "../crdt-loro" }]
 }

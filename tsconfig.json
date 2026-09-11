@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/crdt-yjs" },
+    { "path": "packages/crdt-loro" },
     { "path": "packages/adapter-zustand" },
     { "path": "packages/adapter-mobx" },
     { "path": "packages/adapter-redux" },
