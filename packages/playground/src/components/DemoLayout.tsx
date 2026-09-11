@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Terminal } from 'lucide-react';
+import { ArrowLeft, CloudOff, Terminal } from 'lucide-react';
 import type { WebsocketProvider } from 'y-websocket';
 import { accentClass, type DemoMeta } from '../demos';
-import { useProviderStatus } from '../hooks/useProviderStatus';
+import { useSyncConnection } from '../hooks/useSyncConnection';
 import { SYNC_ROOM } from '../sync';
 import { SyncStatus } from './SyncStatus';
+import { SyncToggle } from './SyncToggle';
 import { cx, focusRing } from './ui/classes';
 
 interface DemoLayoutProps {
@@ -15,7 +16,7 @@ interface DemoLayoutProps {
 }
 
 export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
-  const status = useProviderStatus(provider);
+  const { status, online, toggle } = useSyncConnection(provider);
   const Icon = demo.icon;
 
   return (
@@ -32,7 +33,10 @@ export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
             <ArrowLeft size={16} aria-hidden />
             All demos
           </Link>
-          <SyncStatus status={status} />
+          <div className="flex items-center gap-2">
+            <SyncStatus status={status} />
+            <SyncToggle online={online} onToggle={toggle} />
+          </div>
         </div>
       </header>
 
@@ -48,6 +52,7 @@ export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
         </div>
 
         {status === 'offline' && <OfflineNotice />}
+        {status === 'unreachable' && <ServerDownNotice />}
 
         <section
           aria-label={`${demo.name} todo list`}
@@ -67,6 +72,24 @@ export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
 }
 
 function OfflineNotice() {
+  return (
+    <div
+      role="status"
+      className="mb-4 flex gap-3 rounded-xl border border-slate-300 bg-slate-100 p-4 text-sm text-slate-700"
+    >
+      <CloudOff size={18} aria-hidden className="mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="font-medium">Offline. This tab is disconnected from sync.</p>
+        <p className="mt-1 leading-relaxed">
+          Edits stay in this tab and other tabs keep going without them. Hit{' '}
+          <span className="font-medium">Go online</span> and both sides merge, no edits lost.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ServerDownNotice() {
   return (
     <div
       role="status"

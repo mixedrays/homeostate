@@ -90,7 +90,9 @@ export default function Home() {
               </div>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 Open a demo twice, or two different demos side by side, then add and toggle todos.
-                The header of each demo shows its connection state.
+                The header of each demo shows its connection state and a{' '}
+                <span className="font-medium">Go offline</span> button that cuts that tab off from
+                sync. Edit on both sides, then go back online and watch the two histories merge.
               </p>
             </li>
           </ol>
