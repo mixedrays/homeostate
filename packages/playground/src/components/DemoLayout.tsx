@@ -2,9 +2,11 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, CloudOff, Terminal } from 'lucide-react';
 import type { WebsocketProvider } from 'y-websocket';
+import type { Doc } from 'yjs';
 import { accentClass, type DemoMeta } from '../demos';
 import { useSyncConnection } from '../hooks/useSyncConnection';
-import { SYNC_ROOM } from '../sync';
+import { SYNC_MAP_NAME, SYNC_ROOM } from '../sync';
+import { SyncedStatePanel } from './inspector/SyncedStatePanel';
 import { SyncStatus } from './SyncStatus';
 import { SyncToggle } from './SyncToggle';
 import { cx, focusRing } from './ui/classes';
@@ -12,17 +14,18 @@ import { cx, focusRing } from './ui/classes';
 interface DemoLayoutProps {
   demo: DemoMeta;
   provider: WebsocketProvider;
+  doc: Doc;
   children: ReactNode;
 }
 
-export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
+export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
   const { status, online, toggle } = useSyncConnection(provider);
   const Icon = demo.icon;
 
   return (
     <div className={cx(accentClass[demo.accent], 'min-h-screen bg-slate-50 text-slate-900')}>
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4">
+        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4 lg:max-w-6xl">
           <Link
             to="/"
             className={cx(
@@ -40,7 +43,7 @@ export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:py-10">
+      <main className="mx-auto max-w-2xl px-4 py-8 sm:py-10 lg:max-w-6xl">
         <div className="mb-6 flex items-start gap-3">
           <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-100 text-accent-700">
             <Icon size={20} aria-hidden />
@@ -51,15 +54,23 @@ export function DemoLayout({ demo, provider, children }: DemoLayoutProps) {
           </div>
         </div>
 
-        {status === 'offline' && <OfflineNotice />}
-        {status === 'unreachable' && <ServerDownNotice />}
+        <div className="lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-6">
+          <div className="min-w-0">
+            {status === 'offline' && <OfflineNotice />}
+            {status === 'unreachable' && <ServerDownNotice />}
 
-        <section
-          aria-label={`${demo.name} todo list`}
-          className="rounded-2xl bg-white p-4 shadow-xs ring-1 ring-slate-200 sm:p-6"
-        >
-          <div className="space-y-6">{children}</div>
-        </section>
+            <section
+              aria-label={`${demo.name} todo list`}
+              className="rounded-2xl bg-white p-4 shadow-xs ring-1 ring-slate-200 sm:p-6"
+            >
+              <div className="space-y-6">{children}</div>
+            </section>
+          </div>
+
+          <aside className="mt-6 min-w-0 lg:sticky lg:top-20 lg:mt-0">
+            <SyncedStatePanel doc={doc} mapName={SYNC_MAP_NAME} />
+          </aside>
+        </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
           Every demo joins the room{' '}
