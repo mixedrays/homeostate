@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { formatBytes } from '@homeostate/benchmark/report';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ChoiceGroup, Controls, SelectField } from '../components/Controls';
 import { DotPlot, type DotRow } from '../components/DotPlot';
 import { Legend } from '../components/Legend';
-import { Card, Controls, Field, Note, Segmented, Select } from '../components/ui';
-import { cx, tableClass, tdClass, thClass } from '../components/classes';
+import { Note } from '../components/Note';
+import { SeriesLabel } from '../components/SeriesLabel';
 import { formatTiming, metricByKey, replicaMetrics } from '../lib/metrics';
 import { colorFor } from '../lib/palette';
 import { backendsOf, replicaAt, sizesOf } from '../lib/runs';
 import type { ScaleKind } from '../lib/scale';
-import { SCALE_OPTIONS, effectiveScale, finite, type ViewProps } from './shared';
+import { SCALE_OPTIONS, effectiveScale, finite, metricOptions, type ViewProps } from './shared';
+
+const COLUMNS = ['size', 'backend', 'seed', 'adopt', 'doc size', 'heap / replica'];
 
 export function ReplicasView({ report, slots }: ViewProps) {
   const sizes = sizesOf(report).filter((size) => report.replicas.some((r) => r.size === size));
@@ -39,75 +44,72 @@ export function ReplicasView({ report, slots }: ViewProps) {
   return (
     <div className="space-y-6">
       <Controls>
-        <Field label="Metric">
-          <Select value={metric.key} onChange={(event) => setMetricKey(event.target.value)}>
-            {replicaMetrics.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Segmented label="Axis scale" options={SCALE_OPTIONS} value={scaleChoice} onChange={setScaleChoice} />
+        <SelectField label="Metric" options={metricOptions(replicaMetrics)} value={metric.key} onChange={setMetricKey} />
+        <ChoiceGroup label="Axis scale" options={SCALE_OPTIONS} value={scaleChoice} onChange={setScaleChoice} />
       </Controls>
 
-      <Card title={`${metric.label} per state size`} subtitle={metric.description} actions={<Legend items={backends.map((b) => ({ label: b, color: colorFor(slots, b) }))} />}>
-        {rows.length === 0 ? (
-          <Note>This run has no replica results.</Note>
-        ) : (
-          <>
-            <DotPlot rows={rows} unit={metric.unit} kind={scale.kind} ariaLabel={`${metric.label} per state size, one dot per backend`} />
-            <div className="mt-3 space-y-1">
-              {metric.spread && <Note>Whiskers span the mean ± its relative margin of error.</Note>}
-              {scale.forced && <Note>Shown on a linear axis because the values include zero or negatives.</Note>}
-            </div>
-          </>
-        )}
+      <Card>
+        <CardHeader>
+          <CardTitle>{`${metric.label} per state size`}</CardTitle>
+          <CardDescription>{metric.description}</CardDescription>
+          <CardAction>
+            <Legend items={backends.map((b) => ({ label: b, color: colorFor(slots, b) }))} />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <Note>This run has no replica results.</Note>
+          ) : (
+            <>
+              <DotPlot rows={rows} unit={metric.unit} kind={scale.kind} ariaLabel={`${metric.label} per state size, one dot per backend`} />
+              <div className="mt-3 space-y-1">
+                {metric.spread && <Note>Whiskers span the mean ± its relative margin of error.</Note>}
+                {scale.forced && <Note>Shown on a linear axis because the values include zero or negatives.</Note>}
+              </div>
+            </>
+          )}
+        </CardContent>
       </Card>
 
-      <Card
-        title="Lifecycle of one replica"
-        subtitle="seed: connect() of a store holding N todos against an empty backend · adopt: connect() of an empty store against a replica that already holds them"
-      >
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead>
-              <tr>
-                {['size', 'backend', 'seed', 'adopt', 'doc size', 'heap / replica'].map((h) => (
-                  <th key={h} scope="col" className={thClass}>
-                    {h}
-                  </th>
+      <Card>
+        <CardHeader>
+          <CardTitle>Lifecycle of one replica</CardTitle>
+          <CardDescription>
+            seed: connect() of a store holding N todos against an empty backend · adopt: connect() of an empty store against a replica that already holds them
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table className="tabular-nums">
+            <TableHeader>
+              <TableRow>
+                {COLUMNS.map((column) => (
+                  <TableHead key={column} scope="col">
+                    {column}
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {sizes.map((size) =>
                 backends
                   .map((backend) => replicaAt(report, size, backend))
                   .filter((r): r is NonNullable<typeof r> => r !== undefined)
                   .map((replica, index) => (
-                    <tr key={`${size}:${replica.backend}`} className="hover:bg-slate-50">
-                      <td className={cx(tdClass, 'font-medium text-slate-900')}>{index === 0 ? `${size.toLocaleString('en-US')} todos` : ''}</td>
-                      <td className={tdClass}>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: colorFor(slots, replica.backend) }} aria-hidden />
-                          {replica.backend}
-                        </span>
-                      </td>
-                      <td className={tdClass} title={`${replica.seed.samples.toLocaleString('en-US')} samples`}>
-                        {formatTiming(replica.seed)}
-                      </td>
-                      <td className={tdClass} title={`${replica.adopt.samples.toLocaleString('en-US')} samples`}>
-                        {formatTiming(replica.adopt)}
-                      </td>
-                      <td className={tdClass}>{formatBytes(replica.docBytes)}</td>
-                      <td className={tdClass}>{formatBytes(replica.heapBytes)}</td>
-                    </tr>
+                    <TableRow key={`${size}:${replica.backend}`}>
+                      <TableCell className="font-medium">{index === 0 ? `${size.toLocaleString('en-US')} todos` : ''}</TableCell>
+                      <TableCell>
+                        <SeriesLabel color={colorFor(slots, replica.backend)}>{replica.backend}</SeriesLabel>
+                      </TableCell>
+                      <TableCell title={`${replica.seed.samples.toLocaleString('en-US')} samples`}>{formatTiming(replica.seed)}</TableCell>
+                      <TableCell title={`${replica.adopt.samples.toLocaleString('en-US')} samples`}>{formatTiming(replica.adopt)}</TableCell>
+                      <TableCell>{formatBytes(replica.docBytes)}</TableCell>
+                      <TableCell>{formatBytes(replica.heapBytes)}</TableCell>
+                    </TableRow>
                   ))
               )}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </CardContent>
       </Card>
     </div>
   );

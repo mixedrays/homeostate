@@ -17,3 +17,6 @@ export const effectiveScale = (kind: ScaleKind, values: number[]): { kind: Scale
 
 export const finite = (values: Array<number | null>): number[] =>
   values.filter((v): v is number => v !== null && Number.isFinite(v));
+
+export const metricOptions = (metrics: ReadonlyArray<{ key: string; label: string }>): Array<{ value: string; label: string }> =>
+  metrics.map((metric) => ({ value: metric.key, label: metric.label }));

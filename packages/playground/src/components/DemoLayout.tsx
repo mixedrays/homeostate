@@ -3,13 +3,17 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, CloudOff, Terminal } from 'lucide-react';
 import type { WebsocketProvider } from 'y-websocket';
 import type { Doc } from 'yjs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { accentClass, type DemoMeta } from '../demos';
 import { useSyncConnection } from '../hooks/useSyncConnection';
 import { SYNC_MAP_NAME, SYNC_ROOM } from '../sync';
+import { InlineCode } from './InlineCode';
 import { SyncedStatePanel } from './inspector/SyncedStatePanel';
 import { SyncStatus } from './SyncStatus';
 import { SyncToggle } from './SyncToggle';
-import { cx, focusRing } from './ui/classes';
 
 interface DemoLayoutProps {
   demo: DemoMeta;
@@ -23,19 +27,13 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
   const Icon = demo.icon;
 
   return (
-    <div className={cx(accentClass[demo.accent], 'min-h-screen bg-slate-50 text-slate-900')}>
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur">
+    <div className={cn(accentClass[demo.accent], 'min-h-screen bg-background text-foreground')}>
+      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4 lg:max-w-6xl">
-          <Link
-            to="/"
-            className={cx(
-              'inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900',
-              focusRing
-            )}
-          >
-            <ArrowLeft size={16} aria-hidden />
+          <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft aria-hidden />
             All demos
-          </Link>
+          </Button>
           <div className="flex items-center gap-2">
             <SyncStatus status={status} />
             <SyncToggle online={online} onToggle={toggle} />
@@ -45,26 +43,23 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
 
       <main className="mx-auto max-w-2xl px-4 py-8 sm:py-10 lg:max-w-6xl">
         <div className="mb-6 flex items-start gap-3">
-          <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-100 text-accent-700">
+          <span className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Icon size={20} aria-hidden />
           </span>
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{demo.title}</h1>
-            <p className="mt-1 text-sm text-slate-500">{demo.description}</p>
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">{demo.title}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{demo.description}</p>
           </div>
         </div>
 
         <div className="lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-6">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-4">
             {status === 'offline' && <OfflineNotice />}
             {status === 'unreachable' && <ServerDownNotice />}
 
-            <section
-              aria-label={`${demo.name} todo list`}
-              className="rounded-2xl bg-white p-4 shadow-xs ring-1 ring-slate-200 sm:p-6"
-            >
-              <div className="space-y-6">{children}</div>
-            </section>
+            <Card role="region" aria-label={`${demo.name} todo list`}>
+              <CardContent className="space-y-6 sm:px-6 sm:py-2">{children}</CardContent>
+            </Card>
           </div>
 
           <aside className="mt-6 min-w-0 lg:sticky lg:top-20 lg:mt-0">
@@ -72,10 +67,9 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
           </aside>
         </div>
 
-        <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
-          Every demo joins the room{' '}
-          <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-slate-500">{SYNC_ROOM}</code>.
-          Open another demo or a second tab to watch changes propagate.
+        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
+          Every demo joins the room <InlineCode>{SYNC_ROOM}</InlineCode>. Open another demo or a
+          second tab to watch changes propagate.
         </p>
       </main>
     </div>
@@ -84,40 +78,28 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
 
 function OfflineNotice() {
   return (
-    <div
-      role="status"
-      className="mb-4 flex gap-3 rounded-xl border border-slate-300 bg-slate-100 p-4 text-sm text-slate-700"
-    >
-      <CloudOff size={18} aria-hidden className="mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <p className="font-medium">Offline. This tab is disconnected from sync.</p>
-        <p className="mt-1 leading-relaxed">
-          Edits stay in this tab and other tabs keep going without them. Hit{' '}
-          <span className="font-medium">Go online</span> and both sides merge, no edits lost.
-        </p>
-      </div>
-    </div>
+    <Alert role="status">
+      <CloudOff />
+      <AlertTitle>Offline. This tab is disconnected from sync.</AlertTitle>
+      <AlertDescription>
+        Edits stay in this tab and other tabs keep going without them. Hit{' '}
+        <span className="font-medium text-foreground">Go online</span> and both sides merge, no
+        edits lost.
+      </AlertDescription>
+    </Alert>
   );
 }
 
 function ServerDownNotice() {
   return (
-    <div
-      role="status"
-      className="mb-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
-    >
-      <Terminal size={18} aria-hidden className="mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <p className="font-medium">Sync server unreachable.</p>
-        <p className="mt-1 leading-relaxed">
-          Tabs in this browser still sync with each other, but other browsers will not. Start the
-          server with{' '}
-          <code className="rounded-sm bg-amber-100 px-1 py-0.5 font-mono text-xs">
-            pnpm --filter @homeostate/websocket-server dev
-          </code>
-          . This page reconnects on its own.
-        </p>
-      </div>
-    </div>
+    <Alert role="status" variant="destructive">
+      <Terminal />
+      <AlertTitle>Sync server unreachable.</AlertTitle>
+      <AlertDescription>
+        Tabs in this browser still sync with each other, but other browsers will not. Start the
+        server with <InlineCode>pnpm --filter @homeostate/websocket-server dev</InlineCode>. This
+        page reconnects on its own.
+      </AlertDescription>
+    </Alert>
   );
 }

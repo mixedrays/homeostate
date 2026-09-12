@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 import Home from './pages/Home';
 
 const ZustandTodo = lazy(() => import('./pages/ZustandTodo'));
@@ -13,13 +13,8 @@ const MobxStateTreeTodo = lazy(() => import('./pages/MobxStateTreeTodo'));
 
 function RouteFallback() {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-400"
-    >
-      <Loader2 size={24} aria-hidden className="animate-spin" />
-      <span className="sr-only">Loading demo</span>
+    <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+      <Spinner aria-label="Loading demo" className="size-6" />
     </div>
   );
 }

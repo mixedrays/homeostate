@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { AlertTriangle, FolderOpen, Loader2, Upload, X } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Upload, X } from 'lucide-react';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MetaStrip } from './components/MetaStrip';
-import { Note, Select } from './components/ui';
-import { cx, focusRing } from './components/classes';
+import { Note } from './components/Note';
 import { discoverRuns } from './lib/discover';
 import { assignSlots, parseReport, runLabel, sortRuns, type Run } from './lib/runs';
 import { CompareView } from './views/CompareView';
@@ -107,6 +113,8 @@ function App() {
     if (baselineId === id) setBaselineId(null);
   };
 
+  const runOptions = runs.map((run) => ({ value: run.id, label: `${runLabel(run)} — ${run.name}` }));
+
   return (
     <div
       className="min-h-screen"
@@ -119,45 +127,50 @@ function App() {
       }}
       onDrop={onDrop}
     >
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-          <h1 className="mr-auto text-base font-semibold tracking-tight">
-            Homeostate <span className="text-slate-500">benchmark</span>
+          <h1 className="mr-auto font-heading text-base font-semibold tracking-tight">
+            Homeostate <span className="text-muted-foreground">benchmark</span>
           </h1>
           {runs.length > 0 && current && (
-            <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+            <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
               <span className="hidden sm:inline">Run</span>
-              <Select value={current.id} onChange={(event) => setCurrentId(event.target.value)} className="max-w-[60vw]">
-                {runs.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {runLabel(run)} — {run.name}
-                  </option>
-                ))}
+              <Select
+                value={current.id}
+                onValueChange={(id) => {
+                  if (id !== null) setCurrentId(id);
+                }}
+                items={runOptions}
+              >
+                <SelectTrigger size="sm" aria-label="Run" className="max-w-[60vw]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {runOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-            </label>
+            </div>
           )}
           {current && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => removeRun(current.id)}
-              className={cx('inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700', focusRing)}
               title="Remove this run from the list"
               aria-label="Remove this run from the list"
+              className="text-muted-foreground"
             >
-              <X size={16} aria-hidden />
-            </button>
+              <X aria-hidden />
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            className={cx(
-              'inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-xs transition hover:bg-slate-700',
-              focusRing
-            )}
-          >
-            <FolderOpen size={16} aria-hidden />
+          <Button onClick={() => fileInput.current?.click()}>
+            <FolderOpen aria-hidden />
             Open JSON
-          </button>
+          </Button>
           <input
             ref={fileInput}
             type="file"
@@ -174,26 +187,28 @@ function App() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {errors.length > 0 && (
-          <div role="alert" className="mb-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <AlertTriangle size={18} aria-hidden className="mt-0.5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">Some reports could not be loaded.</p>
-              <ul className="mt-1 list-inside list-disc">
+          <Alert className="mb-4">
+            <AlertTriangle />
+            <AlertTitle>Some reports could not be loaded.</AlertTitle>
+            <AlertDescription>
+              <ul className="list-inside list-disc">
                 {errors.map((error) => (
                   <li key={error}>{error}</li>
                 ))}
               </ul>
-            </div>
-            <button type="button" onClick={() => setErrors([])} className={cx('self-start rounded-md p-1 hover:bg-amber-100', focusRing)} aria-label="Dismiss">
-              <X size={16} aria-hidden />
-            </button>
-          </div>
+            </AlertDescription>
+            <AlertAction>
+              <Button variant="ghost" size="icon-xs" onClick={() => setErrors([])} aria-label="Dismiss">
+                <X aria-hidden />
+              </Button>
+            </AlertAction>
+          </Alert>
         )}
 
         {loading ? (
-          <div role="status" className="flex items-center justify-center gap-2 py-24 text-slate-400">
-            <Loader2 size={20} aria-hidden className="animate-spin" />
-            Loading reports
+          <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
+            <Spinner aria-label="Loading reports" className="size-5" />
+            <span aria-hidden>Loading reports</span>
           </div>
         ) : !current ? (
           <EmptyState onOpen={() => fileInput.current?.click()} />
@@ -201,45 +216,43 @@ function App() {
           <div className="space-y-6">
             <MetaStrip run={current} />
 
-            <nav role="tablist" aria-label="Views" className="flex flex-wrap gap-1 border-b border-slate-200">
-              {TABS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === item.key}
-                  title={item.hint}
-                  onClick={() => setTab(item.key)}
-                  className={cx(
-                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition',
-                    tab === item.key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800',
-                    focusRing
-                  )}
-                >
-                  {item.label}
-                  {item.key === 'compare' && runs.length > 1 && (
-                    <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] tabular-nums text-slate-600">{runs.length}</span>
-                  )}
-                </button>
-              ))}
-            </nav>
+            <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="gap-6">
+              <TabsList variant="line" aria-label="Views" className="h-auto w-full justify-start border-b">
+                {TABS.map((item) => (
+                  <TabsTrigger key={item.key} value={item.key} title={item.hint} className="flex-none py-1.5">
+                    {item.label}
+                    {item.key === 'compare' && runs.length > 1 && (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums">
+                        {runs.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
 
-            <div role="tabpanel">
-              {tab === 'overview' && <OverviewView report={current.report} slots={slots} />}
-              {tab === 'operations' && <OperationsView report={current.report} slots={slots} />}
-              {tab === 'scaling' && <ScalingView report={current.report} slots={slots} />}
-              {tab === 'replicas' && <ReplicasView report={current.report} slots={slots} />}
-              {tab === 'compare' && (
+              <TabsContent value="overview">
+                <OverviewView report={current.report} slots={slots} />
+              </TabsContent>
+              <TabsContent value="operations">
+                <OperationsView report={current.report} slots={slots} />
+              </TabsContent>
+              <TabsContent value="scaling">
+                <ScalingView report={current.report} slots={slots} />
+              </TabsContent>
+              <TabsContent value="replicas">
+                <ReplicasView report={current.report} slots={slots} />
+              </TabsContent>
+              <TabsContent value="compare">
                 <CompareView current={current} runs={runs} baselineId={baselineId} onBaselineChange={setBaselineId} slots={slots} />
-              )}
-            </div>
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </main>
 
       {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 p-6">
-          <div className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-white/80 bg-white/95 px-8 py-6 text-slate-800 shadow-xl">
+        <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-foreground/40 p-6">
+          <div className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-background/80 bg-background/95 px-8 py-6 text-foreground shadow-xl">
             <Upload size={22} aria-hidden />
             <span className="text-base font-medium">Drop benchmark JSON reports to open them</span>
           </div>
@@ -251,31 +264,34 @@ function App() {
 
 function EmptyState({ onOpen }: { onOpen(): void }) {
   return (
-    <section className="mx-auto mt-10 max-w-2xl rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center">
-      <Upload size={28} aria-hidden className="mx-auto text-slate-400" />
-      <h2 className="mt-3 text-lg font-semibold tracking-tight">No benchmark reports yet</h2>
-      <p className="mt-2 text-sm text-slate-600">
-        Save a run as JSON and this page picks it up from <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-xs">packages/benchmark/results</code>:
-      </p>
-      <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900 p-4 text-left text-xs leading-relaxed text-slate-100">
-        <code>{'pnpm bench -- --json results/main.json\npnpm bench -- --quick --json results/quick.json   # smoke run, under a minute'}</code>
-      </pre>
-      <p className="mt-4 text-sm text-slate-600">Or drop report files anywhere on this page.</p>
-      <button
-        type="button"
-        onClick={onOpen}
-        className={cx('mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-slate-700', focusRing)}
-      >
-        <FolderOpen size={16} aria-hidden />
-        Open JSON
-      </button>
-      <div className="mt-6 text-left">
-        <Note>
-          In development the results folder is watched, so a newly saved report appears without a reload. A production build bundles whatever is
-          in the folder at build time.
-        </Note>
-      </div>
-    </section>
+    <Empty className="mx-auto mt-10 max-w-2xl border-2 bg-card p-8">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Upload />
+        </EmptyMedia>
+        <EmptyTitle className="text-lg">No benchmark reports yet</EmptyTitle>
+        <EmptyDescription>
+          Save a run as JSON and this page picks it up from{' '}
+          <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">packages/benchmark/results</code>:
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent className="max-w-xl">
+        <pre className="w-full overflow-x-auto rounded-xl bg-foreground p-4 text-left text-xs leading-relaxed text-background">
+          <code>{'pnpm bench -- --json results/main.json\npnpm bench -- --quick --json results/quick.json   # smoke run, under a minute'}</code>
+        </pre>
+        <p className="text-sm text-muted-foreground">Or drop report files anywhere on this page.</p>
+        <Button onClick={onOpen}>
+          <FolderOpen aria-hidden />
+          Open JSON
+        </Button>
+        <div className="text-left">
+          <Note>
+            In development the results folder is watched, so a newly saved report appears without a reload. A production build bundles whatever is
+            in the folder at build time.
+          </Note>
+        </div>
+      </EmptyContent>
+    </Empty>
   );
 }
 

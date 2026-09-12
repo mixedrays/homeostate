@@ -1,4 +1,5 @@
 import { Calendar, Cpu, FileJson, Hash, Layers, Timer, type LucideIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatDate, type Run } from '../lib/runs';
 
 interface Chip {
@@ -27,20 +28,21 @@ export function MetaStrip({ run }: MetaStripProps) {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-600">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
       {chips.map((chip) => (
         <span key={chip.text} className="inline-flex items-center gap-1.5" title={chip.title}>
-          <chip.icon size={14} aria-hidden className="text-slate-400" />
+          <chip.icon size={14} aria-hidden className="text-muted-foreground/70" />
           {chip.text}
         </span>
       ))}
       {meta.dirty && (
-        <span
-          className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200"
+        <Badge
+          variant="outline"
+          className="border-amber-200 bg-amber-50 text-amber-900"
           title="The working tree had uncommitted changes when this run was made"
         >
           dirty tree
-        </span>
+        </Badge>
       )}
     </div>
   );

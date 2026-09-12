@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChangeType, getChanges } from '@homeostate/core';
 import { tokenizeJson, type JsonLine } from '../../lib/highlightJson';
-import { cx } from '../ui/classes';
+import { cn } from '@/lib/utils';
 
 interface Frame {
   code: string;
@@ -65,10 +65,10 @@ export function JsonView({ code, label, id, className }: JsonViewProps) {
       id={id}
       tabIndex={0}
       aria-label={label}
-      className={cx(
-        'relative overflow-auto py-3 font-mono text-[13px] leading-6 text-slate-700',
+      className={cn(
+        'relative overflow-auto py-3 font-mono text-[13px] leading-6 text-foreground/80',
         'whitespace-pre-wrap [overflow-wrap:anywhere]',
-        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500',
+        'outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset',
         className
       )}
     >
@@ -80,8 +80,8 @@ export function JsonView({ code, label, id, className }: JsonViewProps) {
             <span
               key={changed ? `${index}:${frame.version}` : index}
               data-changed={changed ? '' : undefined}
-              className={cx(
-                'block px-4 hover:bg-slate-50 sm:px-5',
+              className={cn(
+                'block px-4 hover:bg-muted/60 sm:px-5',
                 changed && 'animate-line-flash'
               )}
             >

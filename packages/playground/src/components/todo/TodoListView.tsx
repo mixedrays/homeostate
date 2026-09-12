@@ -25,9 +25,9 @@ export function TodoListView({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <p>
-          <span className="font-semibold tabular-nums text-slate-800">{counts.active}</span>{' '}
+          <span className="font-semibold tabular-nums text-foreground">{counts.active}</span>{' '}
           {counts.active === 1 ? 'todo' : 'todos'} left
         </p>
         {hiddenCount > 0 && <p className="tabular-nums">{hiddenCount} hidden by filters</p>}

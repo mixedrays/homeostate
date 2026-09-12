@@ -11,7 +11,7 @@ interface LegendProps {
 export function Legend({ items, mark = 'dot' }: LegendProps) {
   if (items.length < 2) return null;
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600" aria-label="Series">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground" aria-label="Series">
       {items.map((item) => (
         <li key={item.label} className="inline-flex items-center gap-1.5">
           {mark === 'dot' ? (

@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { formatBytes, formatDuration } from '@homeostate/benchmark/report';
 import type { OperationResult } from '@homeostate/benchmark/types';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SelectField } from '../components/Controls';
 import { Heatmap, type HeatCell } from '../components/Heatmap';
-import { Card, Field, Note, Select, StatTile } from '../components/ui';
+import { Note } from '../components/Note';
+import { StatTile } from '../components/StatTile';
 import { inkFor, mix } from '../lib/color';
 import { formatRatio, formatValue, metricByKey, operationMetrics } from '../lib/metrics';
 import { DIVERGING, SEQUENTIAL } from '../lib/palette';
 import { backendsOf, operationAt, scenariosOf, sizesOf } from '../lib/runs';
-import { finite, type ViewProps } from './shared';
+import { finite, metricOptions, type ViewProps } from './shared';
 
 interface Highlight {
   label: string;
@@ -121,56 +124,51 @@ export function OverviewView({ report }: ViewProps) {
         </div>
       )}
 
-      <Card
-        title="Every scenario, backend, and size"
-        subtitle={metric.description}
-        actions={
-          <Field label="Metric">
-            <Select value={metric.key} onChange={(event) => setMetricKey(event.target.value)}>
-              {operationMetrics.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        }
-      >
-        {scenarios.length === 0 ? (
-          <Note>This run has no operation results.</Note>
-        ) : (
-          <Heatmap
-            ariaLabel={`${metric.label} for every scenario, backend, and size`}
-            rows={scenarios.map((scenario) => ({ key: scenario, label: scenario }))}
-            groups={sizes.map((size) => ({
-              key: String(size),
-              label: `${size.toLocaleString('en-US')} todos`,
-              columns: backends.map((backend) => ({ key: backend, label: backend })),
-            }))}
-            cell={cell}
-            legend={
-              metric.signed ? (
-                <Note>
-                  Color shows direction and size of the change per operation: blue shrinks, red grows, gray is
-                  unchanged. A dash marks a cell the run did not measure, such as a scenario capped below that size.
-                </Note>
-              ) : (
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                  <span>{positive.length > 0 ? formatValue(metric.unit, Math.min(...positive)) : '—'}</span>
-                  <span
-                    className="h-2.5 w-40 rounded-full"
-                    style={{ background: `linear-gradient(to right, ${SEQUENTIAL[0]}, ${SEQUENTIAL[SEQUENTIAL.length - 1]})` }}
-                    aria-hidden
-                  />
-                  <span>{positive.length > 0 ? formatValue(metric.unit, Math.max(...positive)) : '—'}</span>
-                  <span className="text-slate-400">
-                    log scale across the whole grid; a dash marks a cell the run did not measure
-                  </span>
-                </div>
-              )
-            }
-          />
-        )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Every scenario, backend, and size</CardTitle>
+          <CardDescription>{metric.description}</CardDescription>
+          <CardAction>
+            <SelectField label="Metric" options={metricOptions(operationMetrics)} value={metric.key} onChange={setMetricKey} />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {scenarios.length === 0 ? (
+            <Note>This run has no operation results.</Note>
+          ) : (
+            <Heatmap
+              ariaLabel={`${metric.label} for every scenario, backend, and size`}
+              rows={scenarios.map((scenario) => ({ key: scenario, label: scenario }))}
+              groups={sizes.map((size) => ({
+                key: String(size),
+                label: `${size.toLocaleString('en-US')} todos`,
+                columns: backends.map((backend) => ({ key: backend, label: backend })),
+              }))}
+              cell={cell}
+              legend={
+                metric.signed ? (
+                  <Note>
+                    Color shows direction and size of the change per operation: blue shrinks, red grows, gray is
+                    unchanged. A dash marks a cell the run did not measure, such as a scenario capped below that size.
+                  </Note>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <span>{positive.length > 0 ? formatValue(metric.unit, Math.min(...positive)) : '—'}</span>
+                    <span
+                      className="h-2.5 w-40 rounded-full"
+                      style={{ background: `linear-gradient(to right, ${SEQUENTIAL[0]}, ${SEQUENTIAL[SEQUENTIAL.length - 1]})` }}
+                      aria-hidden
+                    />
+                    <span>{positive.length > 0 ? formatValue(metric.unit, Math.max(...positive)) : '—'}</span>
+                    <span className="text-muted-foreground/70">
+                      log scale across the whole grid; a dash marks a cell the run did not measure
+                    </span>
+                  </div>
+                )
+              }
+            />
+          )}
+        </CardContent>
       </Card>
     </div>
   );

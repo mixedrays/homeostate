@@ -1,6 +1,8 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
-import { buttonPrimary, cx, inputBase } from '../ui/classes';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface TodoComposerProps {
   onAdd: (title: string) => void;
@@ -20,10 +22,10 @@ export function TodoComposer({ onAdd }: TodoComposerProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2">
-      <label htmlFor={inputId} className="sr-only">
+      <Label htmlFor={inputId} className="sr-only">
         New todo
-      </label>
-      <input
+      </Label>
+      <Input
         id={inputId}
         type="text"
         value={title}
@@ -31,12 +33,12 @@ export function TodoComposer({ onAdd }: TodoComposerProps) {
         placeholder="What needs to be done?"
         autoComplete="off"
         maxLength={200}
-        className={cx(inputBase, 'h-11 flex-1 px-4')}
+        className="h-9 flex-1"
       />
-      <button type="submit" disabled={!trimmed} className={cx(buttonPrimary, 'h-11 shrink-0')}>
-        <Plus size={18} aria-hidden />
+      <Button type="submit" size="lg" disabled={!trimmed}>
+        <Plus aria-hidden />
         Add
-      </button>
+      </Button>
     </form>
   );
 }

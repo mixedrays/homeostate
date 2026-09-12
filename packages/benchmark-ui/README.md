@@ -54,7 +54,8 @@ Files are validated on load and a malformed one is reported by name instead of b
 
 ```
 src/lib/        pure modules: metrics, scales, palette, color math, run parsing, results discovery
-src/components/ DotPlot, LineChart, Heatmap, Legend, Tooltip, MetaStrip, form primitives
+src/components/ DotPlot, LineChart, Heatmap, Legend, Tooltip, MetaStrip, toolbar composites
+src/components/ui/ shadcn/ui components on Base UI, managed with `npx shadcn add`
 src/views/      one component per tab
 src/__tests__/  vitest specs for the pure modules and a render pass over every view
 ```

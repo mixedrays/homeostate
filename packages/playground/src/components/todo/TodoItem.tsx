@@ -1,6 +1,10 @@
-import { Check, Trash2 } from 'lucide-react';
+import { useId } from 'react';
+import { Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import type { Todo } from '../../types/todo';
-import { buttonIcon, cx } from '../ui/classes';
 
 interface TodoItemProps {
   todo: Todo;
@@ -9,45 +13,39 @@ interface TodoItemProps {
 }
 
 export function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
+  const checkboxId = useId();
+
   return (
-    <li className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-white pr-2 transition hover:border-slate-300">
-      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-2.5 pl-3">
-        <input
-          type="checkbox"
+    <li className="flex items-center gap-2 rounded-xl border bg-card pr-2 transition-colors hover:border-ring">
+      <Label
+        htmlFor={checkboxId}
+        className="min-w-0 flex-1 cursor-pointer gap-3 py-2.5 pl-3 font-normal leading-snug"
+      >
+        <Checkbox
+          id={checkboxId}
           checked={todo.completed}
-          onChange={() => onToggle(todo.id)}
-          className="peer sr-only"
+          onCheckedChange={() => onToggle(todo.id)}
+          className="size-5 rounded-full"
         />
         <span
-          aria-hidden
-          className={cx(
-            'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition',
-            'peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 peer-focus-visible:ring-offset-2',
-            todo.completed
-              ? 'border-accent-600 bg-accent-600 text-white'
-              : 'border-slate-300 text-transparent group-hover:border-accent-500'
-          )}
-        >
-          <Check size={12} strokeWidth={3} />
-        </span>
-        <span
-          className={cx(
+          className={cn(
             'min-w-0 flex-1 break-words text-sm sm:text-base',
-            todo.completed ? 'text-slate-400 line-through' : 'text-slate-800'
+            todo.completed ? 'text-muted-foreground line-through' : 'text-foreground'
           )}
         >
           {todo.title}
         </span>
-      </label>
+      </Label>
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onClick={() => onDelete(todo.id)}
         aria-label={`Delete "${todo.title}"`}
-        className={cx(buttonIcon, 'h-8 w-8 shrink-0 hover:bg-red-50 hover:text-red-600')}
+        className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       >
-        <Trash2 size={16} aria-hidden />
-      </button>
+        <Trash2 aria-hidden />
+      </Button>
     </li>
   );
 }

@@ -1,13 +1,16 @@
 import { useState } from 'react';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ChoiceGroup, Controls, SelectField } from '../components/Controls';
 import { Legend } from '../components/Legend';
 import { LineChart, type LineSeries } from '../components/LineChart';
-import { Card, Controls, Field, Note, Segmented, Select } from '../components/ui';
-import { cx, tableClass, tdClass, thClass } from '../components/classes';
+import { Note } from '../components/Note';
+import { SeriesLabel } from '../components/SeriesLabel';
 import { formatValue, metricByKey, operationMetrics } from '../lib/metrics';
 import { colorFor } from '../lib/palette';
 import { backendsOf, operationAt, scenariosOf, sizesOf } from '../lib/runs';
 import { logLogSlope, type ScaleKind } from '../lib/scale';
-import { SCALE_OPTIONS, effectiveScale, finite, type ViewProps } from './shared';
+import { SCALE_OPTIONS, effectiveScale, finite, metricOptions, type ViewProps } from './shared';
 
 const describeExponent = (k: number): string => {
   if (k < 0.25) return 'flat';
@@ -45,104 +48,90 @@ export function ScalingView({ report, slots }: ViewProps) {
   return (
     <div className="space-y-6">
       <Controls>
-        <Field label="Scenario">
-          <Select value={scenario ?? ''} onChange={(event) => setScenarioChoice(event.target.value)}>
-            {scenarios.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Metric">
-          <Select value={metric.key} onChange={(event) => setMetricKey(event.target.value)}>
-            {operationMetrics.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Segmented label="Axis scale" options={SCALE_OPTIONS} value={scaleChoice} onChange={setScaleChoice} />
+        <SelectField
+          label="Scenario"
+          options={scenarios.map((s) => ({ value: s, label: s }))}
+          value={scenario ?? null}
+          onChange={setScenarioChoice}
+        />
+        <SelectField label="Metric" options={metricOptions(operationMetrics)} value={metric.key} onChange={setMetricKey} />
+        <ChoiceGroup label="Axis scale" options={SCALE_OPTIONS} value={scaleChoice} onChange={setScaleChoice} />
       </Controls>
 
-      <Card
-        title={`${metric.label} against state size`}
-        subtitle={scenario ? `${scenario}: ${metric.description}` : metric.description}
-        actions={<Legend items={backends.map((b) => ({ label: b, color: colorFor(slots, b) }))} mark="line" />}
-      >
-        {measuredSizes.length === 0 ? (
-          <Note>This scenario has no measurements in the run.</Note>
-        ) : (
-          <>
-            <LineChart
-              series={series}
-              xs={measuredSizes}
-              xLabel="todos"
-              unit={metric.unit}
-              signed={metric.signed}
-              kind={scale.kind}
-              ariaLabel={`${metric.label} for ${scenario} against state size, one line per backend`}
-            />
-            <div className="mt-3 space-y-1">
-              {measuredSizes.length < 2 && <Note>Only one size was measured for this scenario, so there is no trend to draw.</Note>}
-              {scale.forced && <Note>Shown on a linear axis because the values include zero or negatives.</Note>}
-              {measuredSizes.length > 1 && (
-                <Note>Both axes are logarithmic when possible, so a straight line means a power law and its slope is the exponent below.</Note>
-              )}
-            </div>
-          </>
-        )}
+      <Card>
+        <CardHeader>
+          <CardTitle>{`${metric.label} against state size`}</CardTitle>
+          <CardDescription>{scenario ? `${scenario}: ${metric.description}` : metric.description}</CardDescription>
+          <CardAction>
+            <Legend items={backends.map((b) => ({ label: b, color: colorFor(slots, b) }))} mark="line" />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {measuredSizes.length === 0 ? (
+            <Note>This scenario has no measurements in the run.</Note>
+          ) : (
+            <>
+              <LineChart
+                series={series}
+                xs={measuredSizes}
+                xLabel="todos"
+                unit={metric.unit}
+                signed={metric.signed}
+                kind={scale.kind}
+                ariaLabel={`${metric.label} for ${scenario} against state size, one line per backend`}
+              />
+              <div className="mt-3 space-y-1">
+                {measuredSizes.length < 2 && <Note>Only one size was measured for this scenario, so there is no trend to draw.</Note>}
+                {scale.forced && <Note>Shown on a linear axis because the values include zero or negatives.</Note>}
+                {measuredSizes.length > 1 && (
+                  <Note>Both axes are logarithmic when possible, so a straight line means a power law and its slope is the exponent below.</Note>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
       </Card>
 
-      <Card
-        title="Growth per backend"
-        subtitle="The exponent k is the least-squares slope of log(value) against log(todos): 0 is flat, 1 linear, 2 quadratic. Indicative only with a few sizes."
-      >
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead>
-              <tr>
-                <th scope="col" className={thClass}>
-                  backend
-                </th>
+      <Card>
+        <CardHeader>
+          <CardTitle>Growth per backend</CardTitle>
+          <CardDescription>
+            The exponent k is the least-squares slope of log(value) against log(todos): 0 is flat, 1 linear, 2 quadratic. Indicative only with a few sizes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table className="tabular-nums">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">backend</TableHead>
                 {measuredSizes.map((size) => (
-                  <th key={size} scope="col" className={thClass}>
+                  <TableHead key={size} scope="col">
                     {size.toLocaleString('en-US')} todos
-                  </th>
+                  </TableHead>
                 ))}
-                <th scope="col" className={thClass}>
-                  exponent k
-                </th>
-                <th scope="col" className={thClass}>
-                  per ×10 todos
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                <TableHead scope="col">exponent k</TableHead>
+                <TableHead scope="col">per ×10 todos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {series.map((s) => {
                 const k = logLogSlope(s.points.filter((p): p is { x: number; y: number } => p.y !== null).map((p) => ({ x: p.x, y: p.y })));
                 return (
-                  <tr key={s.key} className="hover:bg-slate-50">
-                    <td className={cx(tdClass, 'font-medium text-slate-900')}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.color }} aria-hidden />
-                        {s.label}
-                      </span>
-                    </td>
+                  <TableRow key={s.key}>
+                    <TableCell className="font-medium">
+                      <SeriesLabel color={s.color}>{s.label}</SeriesLabel>
+                    </TableCell>
                     {s.points.map((p) => (
-                      <td key={p.x} className={tdClass}>
-                        {formatValue(metric.unit, p.y, metric.signed)}
-                      </td>
+                      <TableCell key={p.x}>{formatValue(metric.unit, p.y, metric.signed)}</TableCell>
                     ))}
-                    <td className={tdClass}>{k === null ? '—' : `${k.toFixed(2)} (${describeExponent(k)})`}</td>
-                    <td className={tdClass}>{k === null ? '—' : `×${(10 ** k).toFixed(10 ** k < 10 ? 1 : 0)}`}</td>
-                  </tr>
+                    <TableCell>{k === null ? '—' : `${k.toFixed(2)} (${describeExponent(k)})`}</TableCell>
+                    <TableCell>{k === null ? '—' : `×${(10 ** k).toFixed(10 ** k < 10 ? 1 : 0)}`}</TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </CardContent>
       </Card>
     </div>
   );

@@ -1,8 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import { Braces, Check, ChevronDown, Copy } from 'lucide-react';
 import type { Doc } from 'yjs';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { useSharedDocJson } from '../../hooks/useSharedDocJson';
-import { buttonIcon, cx, focusRing } from '../ui/classes';
+import { InlineCode } from '../InlineCode';
 import { JsonView } from './JsonView';
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' });
@@ -17,68 +21,65 @@ export function SyncedStatePanel({ doc, mapName }: SyncedStatePanelProps) {
   const [open, setOpen] = useState(true);
   const [updated, setUpdated] = useState(() => ({ json, at: new Date() }));
   const headingId = useId();
-  const bodyId = useId();
 
   if (updated.json !== json) setUpdated({ json, at: new Date() });
 
   return (
-    <section
+    <Card
+      role="region"
       aria-labelledby={headingId}
-      className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-xs ring-1 ring-slate-200 lg:max-h-[calc(100vh_-_7rem)]"
+      size="sm"
+      className="py-0 lg:max-h-[calc(100vh_-_7rem)]"
     >
-      <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-            <Braces size={18} aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <h2 id={headingId} className="text-sm font-semibold text-slate-900">
-              Synced state
-            </h2>
-            <p className="truncate text-xs text-slate-500">Live JSON of the Yjs document</p>
+      <Collapsible open={open} onOpenChange={setOpen} className="flex min-h-0 flex-col">
+        <div className="flex items-center justify-between gap-3 px-(--card-spacing) py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Braces size={18} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2 id={headingId} className="text-sm font-semibold text-foreground">
+                Synced state
+              </h2>
+              <p className="truncate text-xs text-muted-foreground">Live JSON of the Yjs document</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <CopyButton text={json} />
+            <CollapsibleTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={open ? 'Hide synced state' : 'Show synced state'}
+                />
+              }
+            >
+              <ChevronDown
+                aria-hidden
+                className={cn('transition-transform', open && 'rotate-180')}
+              />
+            </CollapsibleTrigger>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <CopyButton text={json} />
-          <button
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            aria-expanded={open}
-            aria-controls={open ? bodyId : undefined}
-            aria-label={open ? 'Hide synced state' : 'Show synced state'}
-            className={cx(buttonIcon, 'h-8 w-8')}
-          >
-            <ChevronDown
-              size={16}
-              aria-hidden
-              className={cx('transition-transform', open && 'rotate-180')}
-            />
-          </button>
-        </div>
-      </div>
 
-      {open && (
-        <>
+        <CollapsibleContent className="flex min-h-0 flex-col">
           <JsonView
-            id={bodyId}
             code={json}
             label="Synced state as JSON"
-            className="max-h-96 min-h-0 flex-1 border-t border-slate-200 lg:max-h-none"
+            className="max-h-96 min-h-0 flex-1 border-t lg:max-h-none"
           />
-          <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-2 text-xs text-slate-400 sm:px-5">
+          <div className="flex items-center justify-between gap-3 border-t px-(--card-spacing) py-2 text-xs text-muted-foreground">
             <span className="truncate">
-              Y.Map{' '}
-              <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-slate-500">
-                {mapName}
-              </code>
+              Y.Map <InlineCode>{mapName}</InlineCode>
             </span>
             <span className="shrink-0 tabular-nums">
               Updated <time dateTime={updated.at.toISOString()}>{timeFormat.format(updated.at)}</time>
             </span>
           </div>
-        </>
-      )}
-    </section>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
   );
 }
 
@@ -102,18 +103,15 @@ function CopyButton({ text }: { text: string }) {
   const Icon = copied ? Check : Copy;
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={copy}
       title="Copy JSON to clipboard"
-      className={cx(
-        'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition',
-        copied ? 'text-emerald-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-        focusRing
-      )}
+      className={cn(copied ? 'text-emerald-700 hover:text-emerald-700' : 'text-muted-foreground')}
     >
-      <Icon size={14} aria-hidden />
+      <Icon aria-hidden />
       {copied ? 'Copied' : 'Copy'}
-    </button>
+    </Button>
   );
 }

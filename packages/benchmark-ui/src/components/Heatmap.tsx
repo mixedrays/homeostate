@@ -63,7 +63,7 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
                   key={group.key}
                   colSpan={group.columns.length}
                   scope="colgroup"
-                  className="px-2 pb-1 text-center text-xs font-semibold text-slate-700"
+                  className="px-2 pb-1 text-center text-xs font-semibold text-foreground"
                 >
                   {group.label}
                 </th>
@@ -76,7 +76,7 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
                   <th
                     key={`${group.key}:${column.key}`}
                     scope="col"
-                    className="px-2 pb-1 text-center text-xs font-medium text-slate-500"
+                    className="px-2 pb-1 text-center text-xs font-medium text-muted-foreground"
                   >
                     {column.label}
                   </th>
@@ -87,7 +87,7 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
           <tbody>
             {rows.map((row) => (
               <tr key={row.key}>
-                <th scope="row" className="whitespace-nowrap pr-3 text-right text-xs font-medium text-slate-600">
+                <th scope="row" className="whitespace-nowrap pr-3 text-right text-xs font-medium text-muted-foreground">
                   {row.label}
                 </th>
                 {groups.flatMap((group) =>
@@ -97,7 +97,7 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
                     return value === null ? (
                       <td
                         key={`${group.key}:${column.key}`}
-                        className="rounded-md bg-slate-50 px-2 py-1.5 text-center text-xs text-slate-400"
+                        className="rounded-md bg-muted px-2 py-1.5 text-center text-xs text-muted-foreground"
                         aria-label={`${title}: not measured`}
                       >
                         —
@@ -105,7 +105,7 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
                     ) : (
                       <td
                         key={`${group.key}:${column.key}`}
-                        className="rounded-md px-2 py-1.5 text-center text-xs font-medium transition hover:ring-2 hover:ring-slate-900/30"
+                        className="rounded-md px-2 py-1.5 text-center text-xs font-medium transition hover:ring-2 hover:ring-foreground/30"
                         style={{ background: value.fill, color: value.ink }}
                         aria-label={`${title}: ${value.text}`}
                         onPointerMove={(event) => onMove(event, title, value.rows)}

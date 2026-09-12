@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
 import { formatBytes, formatDuration } from '@homeostate/benchmark/report';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+import { ChoiceGroup, Controls, SelectField } from '../components/Controls';
 import { DotPlot, type DotRow } from '../components/DotPlot';
 import { Legend } from '../components/Legend';
-import { Card, Controls, Field, Note, Segmented, Select } from '../components/ui';
-import { cx, tableClass, tdClass, thClass } from '../components/classes';
+import { Note } from '../components/Note';
+import { SeriesLabel } from '../components/SeriesLabel';
 import { formatRatio, formatTiming, metricByKey, operationMetrics } from '../lib/metrics';
 import { colorFor } from '../lib/palette';
 import { backendsOf, operationAt, scenariosOf, sizesOf } from '../lib/runs';
 import type { ScaleKind } from '../lib/scale';
-import { SCALE_OPTIONS, effectiveScale, finite, type ViewProps } from './shared';
+import { SCALE_OPTIONS, effectiveScale, finite, metricOptions, type ViewProps } from './shared';
+
+const COLUMNS = ['scenario', 'backend', 'write', 'p50', 'p99', 'vs best', 'roundtrip', 'wire / op', 'doc Δ / op', 'heap Δ / op'];
 
 export function OperationsView({ report, slots }: ViewProps) {
   const sizes = sizesOf(report);
@@ -49,57 +56,62 @@ export function OperationsView({ report, slots }: ViewProps) {
   return (
     <div className="space-y-6">
       <Controls>
-        <Segmented
+        <ChoiceGroup
           label="State size"
           options={sizes.map((s) => ({ value: s, label: `${s.toLocaleString('en-US')} todos` }))}
           value={size}
           onChange={setSizeChoice}
         />
-        <Field label="Metric">
-          <Select value={metric.key} onChange={(event) => setMetricKey(event.target.value)}>
-            {operationMetrics.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Segmented label="Axis scale" options={SCALE_OPTIONS} value={scaleChoice} onChange={setScaleChoice} />
+        <SelectField label="Metric" options={metricOptions(operationMetrics)} value={metric.key} onChange={setMetricKey} />
+        <ChoiceGroup label="Axis scale" options={SCALE_OPTIONS} value={scaleChoice} onChange={setScaleChoice} />
       </Controls>
 
-      <Card title={`${metric.label} per scenario`} subtitle={metric.description} actions={<Legend items={backends.map((b) => ({ label: b, color: colorFor(slots, b) }))} />}>
-        {rows.length === 0 ? (
-          <Note>No scenario was measured at this size.</Note>
-        ) : (
-          <>
-            <DotPlot
-              rows={rows}
-              unit={metric.unit}
-              signed={metric.signed}
-              kind={scale.kind}
-              ariaLabel={`${metric.label} per scenario at ${size} todos, one dot per backend`}
-            />
-            <div className="mt-3 space-y-1">
-              {metric.spread && <Note>Whiskers span the mean ± its relative margin of error.</Note>}
-              {scale.forced && <Note>Shown on a linear axis because the values include zero or negatives.</Note>}
-            </div>
-          </>
-        )}
+      <Card>
+        <CardHeader>
+          <CardTitle>{`${metric.label} per scenario`}</CardTitle>
+          <CardDescription>{metric.description}</CardDescription>
+          <CardAction>
+            <Legend items={backends.map((b) => ({ label: b, color: colorFor(slots, b) }))} />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <Note>No scenario was measured at this size.</Note>
+          ) : (
+            <>
+              <DotPlot
+                rows={rows}
+                unit={metric.unit}
+                signed={metric.signed}
+                kind={scale.kind}
+                ariaLabel={`${metric.label} per scenario at ${size} todos, one dot per backend`}
+              />
+              <div className="mt-3 space-y-1">
+                {metric.spread && <Note>Whiskers span the mean ± its relative margin of error.</Note>}
+                {scale.forced && <Note>Shown on a linear axis because the values include zero or negatives.</Note>}
+              </div>
+            </>
+          )}
+        </CardContent>
       </Card>
 
-      <Card title={`All figures at ${size.toLocaleString('en-US')} todos`} subtitle="The fastest write per scenario is marked; “vs best” is the write mean relative to it.">
-        <div className="overflow-x-auto">
-          <table className={tableClass}>
-            <thead>
-              <tr>
-                {['scenario', 'backend', 'write', 'p50', 'p99', 'vs best', 'roundtrip', 'wire / op', 'doc Δ / op', 'heap Δ / op'].map((h) => (
-                  <th key={h} scope="col" className={thClass}>
-                    {h}
-                  </th>
+      <Card>
+        <CardHeader>
+          <CardTitle>{`All figures at ${size.toLocaleString('en-US')} todos`}</CardTitle>
+          <CardDescription>The fastest write per scenario is marked; “vs best” is the write mean relative to it.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table className="tabular-nums">
+            <TableHeader>
+              <TableRow>
+                {COLUMNS.map((column) => (
+                  <TableHead key={column} scope="col">
+                    {column}
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {scenarios.map((scenario) => {
                 const group = backends
                   .map((backend) => operationAt(report, size, scenario, backend))
@@ -108,38 +120,33 @@ export function OperationsView({ report, slots }: ViewProps) {
                 return group.map((operation, index) => {
                   const isBest = operation.write.mean === best;
                   return (
-                    <tr key={`${scenario}:${operation.backend}`} className="hover:bg-slate-50">
-                      <td className={cx(tdClass, 'font-medium text-slate-900')}>{index === 0 ? scenario : ''}</td>
-                      <td className={tdClass}>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: colorFor(slots, operation.backend) }} aria-hidden />
+                    <TableRow key={`${scenario}:${operation.backend}`}>
+                      <TableCell className="font-medium">{index === 0 ? scenario : ''}</TableCell>
+                      <TableCell>
+                        <SeriesLabel color={colorFor(slots, operation.backend)}>
                           {operation.backend}
-                          {isBest && (
-                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
-                              best
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className={cx(tdClass, isBest && 'font-semibold text-slate-900')} title={`${operation.write.samples.toLocaleString('en-US')} samples`}>
+                          {isBest && <Badge variant="secondary">best</Badge>}
+                        </SeriesLabel>
+                      </TableCell>
+                      <TableCell className={cn(isBest && 'font-semibold')} title={`${operation.write.samples.toLocaleString('en-US')} samples`}>
                         {formatTiming(operation.write)}
-                      </td>
-                      <td className={tdClass}>{formatDuration(operation.write.p50)}</td>
-                      <td className={tdClass}>{formatDuration(operation.write.p99)}</td>
-                      <td className={tdClass}>{formatRatio(operation.write.mean, best)}</td>
-                      <td className={tdClass} title={`${operation.roundtrip.samples.toLocaleString('en-US')} samples`}>
+                      </TableCell>
+                      <TableCell>{formatDuration(operation.write.p50)}</TableCell>
+                      <TableCell>{formatDuration(operation.write.p99)}</TableCell>
+                      <TableCell>{formatRatio(operation.write.mean, best)}</TableCell>
+                      <TableCell title={`${operation.roundtrip.samples.toLocaleString('en-US')} samples`}>
                         {formatTiming(operation.roundtrip)}
-                      </td>
-                      <td className={tdClass}>{formatBytes(operation.wireBytesPerOp)}</td>
-                      <td className={tdClass}>{formatBytes(operation.docBytesPerOp, true)}</td>
-                      <td className={tdClass}>{formatBytes(operation.heapBytesPerOp, true)}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell>{formatBytes(operation.wireBytesPerOp)}</TableCell>
+                      <TableCell>{formatBytes(operation.docBytesPerOp, true)}</TableCell>
+                      <TableCell>{formatBytes(operation.heapBytesPerOp, true)}</TableCell>
+                    </TableRow>
                   );
                 });
               })}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </CardContent>
       </Card>
     </div>
   );
