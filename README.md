@@ -14,6 +14,7 @@ adapters, its CRDT backends, and a demo playground.
 | `@homeostate/adapter-zustand` | `packages/adapter-zustand` | Zustand adapter, `homeostate` and `yjs` middleware |
 | `@homeostate/adapter-mobx` | `packages/adapter-mobx` | MobX adapter |
 | `@homeostate/adapter-redux` | `packages/adapter-redux` | Redux adapter |
+| `@homeostate/adapter-jotai` | `packages/adapter-jotai` | Jotai adapter |
 | `@homeostate/playground` | `packages/playground` | Vite app with Zustand, MobX, and Redux todo demos |
 | `@homeostate/benchmark` | `packages/benchmark` | Benchmarks of core across backends: latency, wire bytes, document growth, heap |
 | `@homeostate/benchmark-ui` | `packages/benchmark-ui` | Vite app that views saved benchmark reports: backends side by side, scaling, run comparison |

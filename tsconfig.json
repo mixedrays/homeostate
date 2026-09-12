@@ -8,6 +8,7 @@
     { "path": "packages/adapter-zustand" },
     { "path": "packages/adapter-mobx" },
     { "path": "packages/adapter-redux" },
+    { "path": "packages/adapter-jotai" },
     { "path": "packages/benchmark" },
     { "path": "packages/benchmark-ui" },
     { "path": "packages/playground" },
