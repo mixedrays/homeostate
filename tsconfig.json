@@ -9,6 +9,7 @@
     { "path": "packages/adapter-mobx" },
     { "path": "packages/adapter-redux" },
     { "path": "packages/adapter-jotai" },
+    { "path": "packages/adapter-valtio" },
     { "path": "packages/benchmark" },
     { "path": "packages/benchmark-ui" },
     { "path": "packages/playground" },
