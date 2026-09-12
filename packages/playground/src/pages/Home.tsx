@@ -14,8 +14,9 @@ export default function Home() {
           </span>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Homeostate Playground</h1>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-slate-600">
-            One shared todo list, three state managers. Every demo joins the same Yjs room, so a
-            change made in any of them shows up in the others and in every other open tab.
+            One shared todo list, {demoList.length} state managers. Every demo joins the same Yjs
+            room, so a change made in any of them shows up in the others and in every other open
+            tab.
           </p>
         </header>
 

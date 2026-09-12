@@ -12,6 +12,10 @@
     { "path": "../crdt-yjs" },
     { "path": "../adapter-zustand" },
     { "path": "../adapter-mobx" },
-    { "path": "../adapter-redux" }
+    { "path": "../adapter-redux" },
+    { "path": "../adapter-jotai" },
+    { "path": "../adapter-valtio" },
+    { "path": "../adapter-tanstack-store" },
+    { "path": "../adapter-mobx-state-tree" }
   ]
 }

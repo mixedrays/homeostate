@@ -28,7 +28,7 @@
     "@homeostate/core": "workspace:^"
   },
   "peerDependencies": {
-    "mobx": "^6.0.0"
+    "mobx": "^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
     "mobx": "^6.15.0"

@@ -1,7 +1,14 @@
-import { Atom, Box, Layers, type LucideIcon } from 'lucide-react';
+import { Atom, Box, Layers, Orbit, Package, TreePine, Waves, type LucideIcon } from 'lucide-react';
 
-export type DemoId = 'zustand' | 'mobx' | 'redux';
-export type DemoAccent = 'blue' | 'violet' | 'emerald';
+export type DemoId =
+  | 'zustand'
+  | 'mobx'
+  | 'redux'
+  | 'jotai'
+  | 'valtio'
+  | 'tanstack-store'
+  | 'mobx-state-tree';
+export type DemoAccent = 'blue' | 'violet' | 'emerald' | 'cyan' | 'rose' | 'orange' | 'fuchsia';
 
 export interface DemoMeta {
   id: DemoId;
@@ -45,12 +52,64 @@ export const demos: Record<DemoId, DemoMeta> = {
     accent: 'emerald',
     icon: Layers,
   },
+  jotai: {
+    id: 'jotai',
+    path: '/jotai',
+    name: 'Jotai',
+    title: 'Jotai Todo',
+    description: 'Atoms composed into one writable root atom kept in sync through createJotaiAdapter.',
+    adapter: '@homeostate/adapter-jotai',
+    accent: 'cyan',
+    icon: Orbit,
+  },
+  valtio: {
+    id: 'valtio',
+    path: '/valtio',
+    name: 'Valtio',
+    title: 'Valtio Todo',
+    description: 'A mutable proxy state kept in sync through createValtioAdapter.',
+    adapter: '@homeostate/adapter-valtio',
+    accent: 'rose',
+    icon: Waves,
+  },
+  'tanstack-store': {
+    id: 'tanstack-store',
+    path: '/tanstack-store',
+    name: 'TanStack Store',
+    title: 'TanStack Store Todo',
+    description: 'A Store with an actions factory kept in sync through createTanStackStoreAdapter.',
+    adapter: '@homeostate/adapter-tanstack-store',
+    accent: 'orange',
+    icon: Package,
+  },
+  'mobx-state-tree': {
+    id: 'mobx-state-tree',
+    path: '/mobx-state-tree',
+    name: 'MobX-State-Tree',
+    title: 'MobX-State-Tree Todo',
+    description: 'A typed model tree kept in sync through its snapshots with createMobxStateTreeAdapter.',
+    adapter: '@homeostate/adapter-mobx-state-tree',
+    accent: 'fuchsia',
+    icon: TreePine,
+  },
 };
 
-export const demoList: readonly DemoMeta[] = [demos.zustand, demos.mobx, demos.redux];
+export const demoList: readonly DemoMeta[] = [
+  demos.zustand,
+  demos.mobx,
+  demos.redux,
+  demos.jotai,
+  demos.valtio,
+  demos['tanstack-store'],
+  demos['mobx-state-tree'],
+];
 
 export const accentClass: Record<DemoAccent, string> = {
   blue: 'theme-blue',
   violet: 'theme-violet',
   emerald: 'theme-emerald',
+  cyan: 'theme-cyan',
+  rose: 'theme-rose',
+  orange: 'theme-orange',
+  fuchsia: 'theme-fuchsia',
 };
