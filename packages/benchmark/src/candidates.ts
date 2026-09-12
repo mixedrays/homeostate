@@ -12,7 +12,7 @@ import {
 } from '@homeostate/crdt-automerge';
 import type { BackendCandidate, Replica } from './types.js';
 
-const utf8Bytes = (text: string): number => Buffer.byteLength(text);
+export const utf8Bytes = (text: string): number => Buffer.byteLength(text);
 
 interface PassthroughReplica extends Replica {
   peers: Set<PassthroughReplica>;

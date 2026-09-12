@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { automerge, candidates, loro, memory, passthrough, yjs } from '../candidates.js';
+import {
+  automerge,
+  candidates,
+  loro,
+  memory,
+  passthrough,
+  utf8Bytes,
+  yjs,
+} from '../candidates.js';
 import { makeState } from '../scenarios.js';
 import type { BackendCandidate } from '../types.js';
 
@@ -56,7 +64,7 @@ describe('wire and document accounting', () => {
     const b = memory.createReplica();
     const wire = memory.connect(a, b);
     a.backend.write(state);
-    const json = Buffer.byteLength(JSON.stringify(state));
+    const json = utf8Bytes(JSON.stringify(state));
     expect(wire.bytes?.()).toBe(json);
     expect(a.encodedSize?.()).toBe(json);
     expect(b.encodedSize?.()).toBe(json);
