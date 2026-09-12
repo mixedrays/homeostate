@@ -69,6 +69,16 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1
 
+  packages/adapter-tanstack-store:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@tanstack/store':
+        specifier: ^0.11.1
+        version: 0.11.1
+
   packages/adapter-valtio:
     dependencies:
       '@homeostate/core':
@@ -750,6 +760,9 @@ packages:
     resolution: {integrity: sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tanstack/store@0.11.1':
+    resolution: {integrity: sha512-mzTOBhypOuDJAy/D8n2MfUZ1HFkXnmSETviRyhqEC8LUE7/IZQExOTxMANj3KjTofYTkFNpBY67qaVrT41YccA==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -2307,6 +2320,8 @@ snapshots:
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
       vite: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
+
+  '@tanstack/store@0.11.1': {}
 
   '@types/chai@5.2.3':
     dependencies:
