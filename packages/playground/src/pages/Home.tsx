@@ -67,21 +67,16 @@ export default function Home() {
             <li className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-2">
                 <Terminal size={18} aria-hidden className="text-slate-500" />
-                <h3 className="font-semibold">1. Start the sync server</h3>
+                <h3 className="font-semibold">1. Start the playground</h3>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                The demos connect to{' '}
-                <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-xs">
-                  {SYNC_SERVER_URL}
-                </code>
-                . From the repo root, run:
-              </p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">From the repo root, run:</p>
               <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100">
-                <code>pnpm --filter @homeostate/websocket-server dev</code>
+                <code>pnpm playground</code>
               </pre>
               <p className="mt-2 text-xs text-slate-500">
-                Or run <code className="font-mono">pnpm dev</code> to start the server and this app
-                together.
+                This starts the app together with the WebSocket sync server the demos connect to at{' '}
+                <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono">{SYNC_SERVER_URL}</code>
+                . No separate terminal is needed.
               </p>
             </li>
             <li className="rounded-2xl border border-slate-200 bg-white p-5">
