@@ -59,6 +59,19 @@ importers:
         specifier: ^6.15.0
         version: 6.15.0
 
+  packages/adapter-mobx-state-tree:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      mobx:
+        specifier: ^7.0.3
+        version: 7.0.3
+      mobx-state-tree:
+        specifier: ^8.0.0
+        version: 8.0.0(mobx@7.0.3)(typescript@5.9.3)
+
   packages/adapter-redux:
     dependencies:
       '@homeostate/core':
@@ -1505,8 +1518,16 @@ packages:
       react-native:
         optional: true
 
+  mobx-state-tree@8.0.0:
+    resolution: {integrity: sha512-3ekhwG9KkPtrzzsp9vJu8JEpctoXeCADk1O1G4s+36JDqLug/AVsdW2JXT+rrAfWtPXopaoCER/sJs6qPK5oTg==}
+    peerDependencies:
+      mobx: ^7.0.0
+
   mobx@6.15.0:
     resolution: {integrity: sha512-UczzB+0nnwGotYSgllfARAqWCJ5e/skuV2K/l+Zyck/H6pJIhLXuBnz+6vn2i211o7DtbE78HQtsYEKICHGI+g==}
+
+  mobx@7.0.3:
+    resolution: {integrity: sha512-KopyyzqZ8xT1fqxFNl8ItKKMpGifRe2ySaNAHs80/cx0mL1bpJtJ46S+FSyzXKRjW0TODWj5zwq/Y9hUdJUy4w==}
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -1750,6 +1771,14 @@ packages:
     engines: {node: '>=18.12'}
     peerDependencies:
       typescript: '>=4.8.4'
+
+  ts-essentials@9.4.2:
+    resolution: {integrity: sha512-mB/cDhOvD7pg3YCLk2rOtejHjjdSi9in/IBYE13S+8WA5FBSraYf4V/ws55uvs0IvQ/l0wBOlXy5yBNZ9Bl8ZQ==}
+    peerDependencies:
+      typescript: '>=4.1.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   tsx@4.23.13:
     resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
@@ -3077,7 +3106,16 @@ snapshots:
     optionalDependencies:
       react-dom: 19.3.0(react@19.3.0)
 
+  mobx-state-tree@8.0.0(mobx@7.0.3)(typescript@5.9.3):
+    dependencies:
+      mobx: 7.0.3
+      ts-essentials: 9.4.2(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
   mobx@6.15.0: {}
+
+  mobx@7.0.3: {}
 
   ms@2.1.3: {}
 
@@ -3301,6 +3339,10 @@ snapshots:
 
   ts-api-utils@2.1.0(typescript@5.9.3):
     dependencies:
+      typescript: 5.9.3
+
+  ts-essentials@9.4.2(typescript@5.9.3):
+    optionalDependencies:
       typescript: 5.9.3
 
   tsx@4.23.13:

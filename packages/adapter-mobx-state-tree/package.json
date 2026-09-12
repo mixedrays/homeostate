@@ -1,0 +1,38 @@
+{
+  "name": "@homeostate/adapter-mobx-state-tree",
+  "version": "0.1.0",
+  "description": "MobX-State-Tree adapter for @homeostate/core",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@homeostate/core": "workspace:^"
+  },
+  "peerDependencies": {
+    "mobx": "^6.0.0 || ^7.0.0",
+    "mobx-state-tree": "^7.0.0 || ^8.0.0"
+  },
+  "devDependencies": {
+    "mobx": "^7.0.3",
+    "mobx-state-tree": "^8.0.0"
+  }
+}

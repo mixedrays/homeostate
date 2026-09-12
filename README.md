@@ -17,6 +17,7 @@ adapters, its CRDT backends, and a demo playground.
 | `@homeostate/adapter-jotai` | `packages/adapter-jotai` | Jotai adapter |
 | `@homeostate/adapter-valtio` | `packages/adapter-valtio` | Valtio adapter |
 | `@homeostate/adapter-tanstack-store` | `packages/adapter-tanstack-store` | TanStack Store adapter |
+| `@homeostate/adapter-mobx-state-tree` | `packages/adapter-mobx-state-tree` | MobX-State-Tree adapter |
 | `@homeostate/playground` | `packages/playground` | Vite app with Zustand, MobX, and Redux todo demos |
 | `@homeostate/benchmark` | `packages/benchmark` | Benchmarks of core across backends: latency, wire bytes, document growth, heap |
 | `@homeostate/benchmark-ui` | `packages/benchmark-ui` | Vite app that views saved benchmark reports: backends side by side, scaling, run comparison |

@@ -11,6 +11,7 @@
     { "path": "packages/adapter-jotai" },
     { "path": "packages/adapter-valtio" },
     { "path": "packages/adapter-tanstack-store" },
+    { "path": "packages/adapter-mobx-state-tree" },
     { "path": "packages/benchmark" },
     { "path": "packages/benchmark-ui" },
     { "path": "packages/playground" },
