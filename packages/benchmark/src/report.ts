@@ -22,6 +22,10 @@ export const formatBytes = (bytes: number | null, signed = false): string => {
   return `${sign}${(value / 1024 ** 2).toFixed(2)} MB`;
 };
 
+/** Render counts are integers; a report written before the metric existed carries `null`. */
+export const formatCount = (count: number | null): string =>
+  count === null || !Number.isFinite(count) ? '—' : String(count);
+
 export const formatPercent = (ratio: number): string => {
   if (!Number.isFinite(ratio)) return '—';
   const percent = ratio * 100;
@@ -97,6 +101,8 @@ const renderOperations = (operations: OperationResult[], size: number): string =
         formatDuration(operation.write.p99),
         formatRatio(operation.write.mean, best),
         formatTiming(operation.roundtrip),
+        formatCount(operation.rendersPerOp),
+        formatCount(operation.wastedPerOp),
         formatBytes(operation.wireBytesPerOp),
         formatBytes(operation.docBytesPerOp, true),
         formatBytes(operation.heapBytesPerOp, true),
@@ -105,7 +111,19 @@ const renderOperations = (operations: OperationResult[], size: number): string =
   }
 
   return table(
-    ['scenario', 'backend', 'write', 'p99', 'vs best', 'roundtrip', 'wire / op', 'doc Δ / op', 'heap Δ / op'],
+    [
+      'scenario',
+      'backend',
+      'write',
+      'p99',
+      'vs best',
+      'roundtrip',
+      'renders / op',
+      'wasted / op',
+      'wire / op',
+      'doc Δ / op',
+      'heap Δ / op',
+    ],
     rows
   );
 };
@@ -136,6 +154,8 @@ export interface MetricDelta {
   /**
    * Beyond the threshold and, for timings, beyond both margins of error; byte metrics must
    * also move by more than a small absolute floor, since encodings and heap snapshots jitter.
+   * Render counts have neither a threshold nor a floor: they are exact integers, so any change
+   * at all is significant.
    */
   significant: boolean;
   format: (value: number) => string;
@@ -194,6 +214,27 @@ const bytesDelta = (
   };
 };
 
+/**
+ * Render counts do not jitter: the same change produces the same integer on every machine and
+ * in every run, so any difference is reported, with no threshold and no margin-of-error test.
+ */
+const countDelta = (
+  metric: string,
+  before: number | null,
+  after: number | null
+): MetricDelta | null => {
+  if (before === null || after === null) return null;
+  const change = before === 0 ? (after === 0 ? 0 : NaN) : (after - before) / Math.abs(before);
+  return {
+    metric,
+    before,
+    after,
+    change,
+    significant: after !== before,
+    format: (value) => formatCount(value),
+  };
+};
+
 /** Bytes a metric must move before its change can count; encodings and heap snapshots jitter. */
 const FLOORS = {
   docSize: 64,
@@ -204,7 +245,15 @@ const FLOORS = {
 };
 
 const REPLICA_METRICS = ['seed', 'adopt', 'doc size', 'heap / replica'];
-const OPERATION_METRICS = ['write', 'roundtrip', 'wire / op', 'doc Δ / op', 'heap Δ / op'];
+const OPERATION_METRICS = [
+  'write',
+  'roundtrip',
+  'renders / op',
+  'wasted / op',
+  'wire / op',
+  'doc Δ / op',
+  'heap Δ / op',
+];
 
 const replicaKey = (r: ReplicaResult): string => `${r.size}|${r.backend}`;
 const operationKey = (o: OperationResult): string => `${o.size}|${o.scenario}|${o.backend}`;
@@ -245,6 +294,8 @@ export const compareReports = (
       deltas: [
         timingDelta('write', before.write, after.write, threshold),
         timingDelta('roundtrip', before.roundtrip, after.roundtrip, threshold),
+        countDelta('renders / op', before.rendersPerOp, after.rendersPerOp),
+        countDelta('wasted / op', before.wastedPerOp, after.wastedPerOp),
         bytesDelta('wire / op', before.wireBytesPerOp, after.wireBytesPerOp, threshold, FLOORS.wirePerOp),
         bytesDelta('doc Δ / op', before.docBytesPerOp, after.docBytesPerOp, threshold, FLOORS.docPerOp),
         bytesDelta('heap Δ / op', before.heapBytesPerOp, after.heapBytesPerOp, threshold, FLOORS.heapPerOp),
@@ -258,7 +309,7 @@ export const compareReports = (
 const isRegression = (delta: MetricDelta): boolean =>
   delta.significant && (Number.isNaN(delta.change) || delta.change > 0);
 
-/** True when any timing or byte metric grew beyond the comparison threshold. */
+/** True when any timing or byte metric grew beyond the threshold, or a render count grew. */
 export const hasRegression = (comparison: Comparison): boolean =>
   comparison.rows.some((row) => row.deltas.some(isRegression));
 

@@ -13,6 +13,7 @@
     { "path": "packages/adapter-tanstack-store" },
     { "path": "packages/adapter-mobx-state-tree" },
     { "path": "packages/benchmark" },
+    { "path": "packages/benchmark-render" },
     { "path": "packages/benchmark-ui" },
     { "path": "packages/benchmark-ui/tsconfig.test.json" },
     { "path": "packages/playground" },

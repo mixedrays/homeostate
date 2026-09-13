@@ -68,6 +68,14 @@ export interface OperationResult {
   write: Timing;
   /** Store change on one replica until the linked replica's store holds it. */
   roundtrip: Timing;
+  /**
+   * Rows of the receiving store that survived the operation and came back as a new object,
+   * matched by `id`: the upper bound on the memoized row components a UI re-renders.
+   * `null` in a report written before the metric existed.
+   */
+  rendersPerOp: number | null;
+  /** Of `rendersPerOp`, the rows whose data is deep-equal, so the re-render bought nothing. */
+  wastedPerOp: number | null;
   wireBytesPerOp: number | null;
   docBytesPerOp: number | null;
   heapBytesPerOp: number | null;

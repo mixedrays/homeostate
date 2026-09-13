@@ -28,6 +28,8 @@ const operation = (backend: string, scenario: string, size: number, write: numbe
   size,
   write: timing(write),
   roundtrip: timing(write * 3),
+  rendersPerOp: 1,
+  wastedPerOp: 0,
   wireBytesPerOp: backend === 'yjs' ? 30 : null,
   docBytesPerOp: backend === 'yjs' ? 30 : null,
   heapBytesPerOp: -512,

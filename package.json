@@ -12,6 +12,7 @@
     "test": "vitest run",
     "lint": "eslint .",
     "bench": "pnpm --filter @homeostate/benchmark bench",
+    "bench:render": "pnpm --filter @homeostate/benchmark-render bench",
     "bench:ui": "pnpm --filter @homeostate/benchmark-ui dev"
   },
   "devDependencies": {
@@ -21,6 +22,7 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
+    "jsdom": "^30.0.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
     "vite": "^8.3.0",

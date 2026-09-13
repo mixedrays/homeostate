@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { candidates } from '../candidates.js';
 import { collectMeta, countTasks, runBenchmark } from '../harness.js';
-import { remove, replace, toggle } from '../scenarios.js';
+import { move, remove, replace, toggle } from '../scenarios.js';
 import type { BenchmarkOptions, Timing } from '../types.js';
 
 const options: BenchmarkOptions = {
@@ -77,6 +77,26 @@ describe('runBenchmark', () => {
     expect(automerge?.wireBytesPerOp).toBeLessThan(200);
     expect(automerge?.docBytesPerOp).toBeGreaterThan(0);
     expect(replicas.get('automerge')?.docBytes).toBeGreaterThan(0);
+  }, 30_000);
+
+  it('counts the rows a memoized list re-renders, identically on every backend', async () => {
+    const report = await runBenchmark({ ...options, scenarios: [toggle, move] });
+    const counts = new Map(
+      report.operations.map((o) => [
+        `${o.backend}/${o.scenario}`,
+        { renders: o.rendersPerOp, wasted: o.wastedPerOp },
+      ])
+    );
+
+    for (const candidate of candidates) {
+      // One row changed, and it changed for a reason.
+      expect(counts.get(`${candidate.name}/toggle`)).toEqual({ renders: 1, wasted: 0 });
+      // The moved row is rebuilt with identical data: the one wasted render in the set.
+      // `passthrough` is the exception, and not because core does better there — it hands the
+      // peer the very same objects, so the moved row survives by identity without any patching.
+      if (candidate.name !== 'passthrough')
+        expect(counts.get(`${candidate.name}/move`)).toEqual({ renders: 1, wasted: 1 });
+    }
   }, 30_000);
 
   it('measures heap when asked', async () => {

@@ -41,6 +41,19 @@ export default tseslint.config(
     },
   },
   {
+    // Fixtures render React in jsdom and the CLI drives them from Node, so both sets apply.
+    files: ['packages/benchmark-render/**/*.{ts,tsx}'],
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+    },
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+  },
+  {
     files: ['packages/websocket-server/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {

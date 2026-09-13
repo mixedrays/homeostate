@@ -44,8 +44,9 @@ run options. The comparison joins rows by backend, scenario, and size, prints
 `before → after (Δ%)`, and marks ▲ regressions and ▼ improvements that exceed `--threshold`
 (default 5 %) and, for timings, both runs' margins of error. Byte metrics must also move by a
 small absolute amount (8 B per operation, 64 B of document, 512 B of heap per operation, 4 KB
-of heap per replica), because Yjs encodings and heap snapshots jitter by a few bytes.
-`results/` is ignored by git; numbers are machine specific, so compare runs from the same
+of heap per replica), because Yjs encodings and heap snapshots jitter by a few bytes. The
+render counts are exempt from both rules: they are exact integers, so any change in them is
+reported. `results/` is ignored by git; numbers are machine specific, so compare runs from the same
 machine.
 
 ## What is measured
@@ -71,6 +72,8 @@ Per backend, scenario, and size:
 | p99 | 99th percentile of write |
 | vs best | write mean relative to the fastest backend for that scenario and size |
 | roundtrip | store change on peer A until peer B's store holds it: B's `read`, `patchState`, `setState` included |
+| renders / op | rows of peer B that survived the operation and came back as a new object, matched by `id` |
+| wasted / op | of those, the rows whose data is deep-equal, so the new object carried nothing new |
 | wire / op | bytes over the wire per operation |
 | doc Δ / op | growth of the encoded document per operation |
 | heap Δ / op | retained heap growth of one writing peer per operation, over up to 200 operations or one second; coarse |
@@ -78,6 +81,40 @@ Per backend, scenario, and size:
 Scenarios that drift in size (`add`, `remove`, `keystroke`) restore the steady size before
 each iteration. The restore is untimed and excluded from wire and document figures; the heap
 figure includes it.
+
+### Where the write path ends
+
+Every timing here stops at `adapter.setState`. The store is deliberately the smallest thing
+that satisfies `StoreAdapter`, so that it adds nothing to the numbers, which also means
+nothing downstream of it is measured: no state manager, no adapter, no React. Two changes with
+the same `roundtrip` can still differ by a factor of a thousand in the work a UI does
+afterwards.
+
+`renders / op` and `wasted / op` are the exception, and they are counts rather than timings.
+They are read from a separate deterministic pass over one operation, outside every timed path,
+by matching the receiving store's rows before and after **by `id`** — the way React reconciles
+a keyed list. `applyChangesToArray` splices, which moves existing references, so matching by
+index would report a change for most of the list after an insert or a delete even though no
+component's data moved.
+
+The counts are the strict upper bound on how many memoized row components any correct UI
+re-renders, so a core change that stops sharing unchanged subtrees shows up here even though
+every byte and every millisecond stays the same. They are integers that do not vary between
+machines or runs, so `--compare` reports any change in them as significant, with no threshold
+and no margin-of-error test. Today core is optimal on every backend: one row per `toggle`,
+`keystroke` and `paste`, none for `search`, `add` or `remove`, and one wasted row for `move`,
+which is inherent to pairing a delete with an insert in the array diff.
+
+Rows a scenario added are not counted — they have to mount whatever core does — and neither
+are rows it removed. What is counted is a surviving row handed to the store as a new object.
+That is why `replace`, which swaps every todo for one with a fresh `id`, reports zero: no row
+survives it, so there is nothing a memoized list could have kept. `toggle-all`, which changes
+all N rows in place, reports N. `packages/benchmark/src/__tests__/identity.test.ts` asserts the
+whole table as a gate.
+
+What none of this covers is the adapter: whether a given state manager preserves that identity
+on its way into components. That is measured against real React trees in
+[`@homeostate/benchmark-render`](../benchmark-render/README.md).
 
 ## Backends
 
@@ -88,6 +125,17 @@ figure includes it.
 | `yjs` | `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates |
 | `loro` | `createLoroBackend` over a `LoroMap`; peers exchange Loro updates; the document figure is a Loro snapshot |
 | `automerge` | `createAutomergeBackend` over an Automerge document; peers exchange encoded Automerge changes; the document figure is `A.save` |
+
+Backends disagree on the order of object keys after a roundtrip: `passthrough`, `memory` and
+`yjs` return a todo with the order it was authored in (`id, title, completed`), while `loro`
+and `automerge` alphabetize it (`completed, id, title`). The values are the same, so the
+difference only matters to code that compares serialized state — `JSON.stringify` reports a
+divergence where there is none. Use the structural `deepEqual` the package exports, which is
+what convergence checks and `wasted / op` use.
+
+`passthrough` also hands the peer the very same objects instead of a copy of them, so it is a
+floor for `renders / op` as well as for the timings: its `move` costs no render at all, where
+every encoding backend rebuilds the moved row.
 
 ## Scenarios
 

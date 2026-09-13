@@ -20,6 +20,7 @@ adapters, its CRDT backends, and a demo playground.
 | `@homeostate/adapter-mobx-state-tree` | `packages/adapter-mobx-state-tree` | MobX-State-Tree adapter |
 | `@homeostate/playground` | `packages/playground` | Vite app with a todo demo per store adapter: Zustand, MobX, Redux, Jotai, Valtio, TanStack Store, MobX-State-Tree |
 | `@homeostate/benchmark` | `packages/benchmark` | Benchmarks of core across backends: latency, wire bytes, document growth, heap |
+| `@homeostate/benchmark-render` | `packages/benchmark-render` | Counts the React components each adapter re-renders when a change arrives from a peer |
 | `@homeostate/benchmark-ui` | `packages/benchmark-ui` | Vite app that views saved benchmark reports: backends side by side, scaling, run comparison |
 | `@homeostate/websocket-server` | `packages/websocket-server` | y-websocket server used by the playground |
 
@@ -33,6 +34,7 @@ pnpm typecheck  # tsc -b across the workspace, tests included via tsconfig.test.
 pnpm lint
 pnpm test       # vitest across packages/*/src/__tests__
 pnpm bench      # benchmark matrix; pnpm bench -- --help for options
+pnpm bench:render # render counts per adapter; pnpm bench:render -- --help for options
 pnpm bench:ui   # viewer for reports saved with pnpm bench -- --json, on http://localhost:5180
 ```
 

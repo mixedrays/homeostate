@@ -31,6 +31,8 @@ const operation = (backend: string, scenario: string, size: number): OperationRe
   size,
   write: timing(0.5),
   roundtrip: timing(1),
+  rendersPerOp: 1,
+  wastedPerOp: 0,
   wireBytesPerOp: 30,
   docBytesPerOp: 12,
   heapBytesPerOp: null,

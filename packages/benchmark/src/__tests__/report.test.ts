@@ -28,6 +28,8 @@ const operation = (backend: string, write: number, wire: number | null = 27): Op
   size: 100,
   write: timing(write),
   roundtrip: timing(write * 2),
+  rendersPerOp: 1,
+  wastedPerOp: 0,
   wireBytesPerOp: wire,
   docBytesPerOp: wire,
   heapBytesPerOp: 512,
@@ -111,7 +113,7 @@ describe('compareReports', () => {
     expect(write?.change).toBeCloseTo(-0.2);
     expect(write?.significant).toBe(true);
     expect(wire?.change).toBeCloseTo(-7 / 27);
-    expect(comparison.rows.find((row) => row.backend === 'passthrough' && row.scenario === 'toggle')?.deltas.map((d) => d.metric)).toEqual(['write', 'roundtrip', 'heap Δ / op']);
+    expect(comparison.rows.find((row) => row.backend === 'passthrough' && row.scenario === 'toggle')?.deltas.map((d) => d.metric)).toEqual(['write', 'roundtrip', 'renders / op', 'wasted / op', 'heap Δ / op']);
     expect(hasRegression(comparison)).toBe(true);
   });
 
@@ -137,6 +139,26 @@ describe('compareReports', () => {
     expect(hasRegression(compareReports(baseline, current))).toBe(false);
   });
 
+  it('marks any change in a render count, with no threshold and no margin of error', () => {
+    const baseline = report({ operations: [operation('yjs', 1)] });
+    const current = report({ operations: [{ ...operation('yjs', 1), rendersPerOp: 2 }] });
+    const [row] = compareReports(baseline, current, 10).rows.filter((r) => r.scenario !== null);
+    const byMetric = new Map(row.deltas.map((delta) => [delta.metric, delta]));
+
+    expect(byMetric.get('renders / op')?.significant).toBe(true);
+    expect(byMetric.get('wasted / op')?.significant).toBe(false);
+    expect(hasRegression(compareReports(baseline, current, 10))).toBe(true);
+  });
+
+  it('drops the render columns for a report written before the metric existed', () => {
+    const legacy = { ...operation('yjs', 1), rendersPerOp: null, wastedPerOp: null };
+    const [row] = compareReports(report({ operations: [legacy] }), report()).rows.filter(
+      (r) => r.scenario !== null
+    );
+
+    expect(row.deltas.map((delta) => delta.metric)).not.toContain('renders / op');
+  });
+
   it('keeps comparison columns aligned when some backends lack byte metrics', () => {
     const text = renderComparison(compareReports(report(), report()));
     const widths = new Set(
@@ -145,7 +167,7 @@ describe('compareReports', () => {
         .filter((line) => line.startsWith('| ') && !line.startsWith('| scenario') && !line.startsWith('| backend'))
         .map((line) => line.split(' | ').length)
     );
-    expect(widths).toEqual(new Set([5, 7]));
+    expect(widths).toEqual(new Set([5, 9]));
     expect(text).toMatch(/\| passthrough \| [^|]+\| [^|]+\| —\s+\| [^|]+\|$/m);
   });
 

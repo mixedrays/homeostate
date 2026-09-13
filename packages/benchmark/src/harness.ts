@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { Bench, type Task } from 'tinybench';
 import { createSyncEngine, type SyncEngine } from '@homeostate/core';
 import { retainedHeap, settledHeap } from './memory.js';
+import { countRenders, deepEqual, type RenderCount } from './renders.js';
 import { emptyState, makeState } from './scenarios.js';
 import { createStore, type BenchStore } from './store.js';
 import type {
@@ -68,19 +69,6 @@ const createPair = <R extends Replica>(candidate: BackendCandidate<R>, size: num
       wire.disconnect();
     },
   };
-};
-
-const deepEqual = (x: unknown, y: unknown): boolean => {
-  if (x === y) return true;
-  if (Array.isArray(x) && Array.isArray(y))
-    return x.length === y.length && x.every((value, i) => deepEqual(value, y[i]));
-  if (x !== null && y !== null && typeof x === 'object' && typeof y === 'object') {
-    const a = x as Record<string, unknown>;
-    const b = y as Record<string, unknown>;
-    const keys = Object.keys(a);
-    return keys.length === Object.keys(b).length && keys.every((key) => deepEqual(a[key], b[key]));
-  }
-  return false;
 };
 
 const assertConverged = (pair: Pair<Replica>, label: string): void => {
@@ -252,19 +240,56 @@ const measureFootprint = <R extends Replica>(
   };
 };
 
+/** Lets a backend that delivers on a macrotask, such as `loro` or `automerge`, catch up. */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * Deterministic pass over a single operation: the counts are integers that depend only on the
+ * shape of the change, so one operation settles them and repeating it would only average the
+ * same number. It runs outside every timed path because it allocates a map of the rows.
+ */
+const measureRenders = async <R extends Replica>(
+  candidate: BackendCandidate<R>,
+  scenario: Scenario,
+  size: number
+): Promise<RenderCount> => {
+  const label = `${candidate.name}/${scenario.name}@${size}`;
+  const pair = createPair(candidate, size);
+  await settle();
+
+  const before = pair.b.store.getState();
+  if (before.todos.length !== size)
+    throw new Error(`${label}: the receiving peer adopted ${before.todos.length} of ${size} todos`);
+
+  pair.a.store.setState(prepare(pair.a.store, scenario, size, 0));
+  await settle();
+
+  const after = pair.b.store.getState();
+  assertConverged(pair, label);
+  pair.destroy();
+
+  return countRenders(before, after);
+};
+
 const runOperation = async <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
   scenario: Scenario,
   size: number
-): Promise<OperationResult> => ({
-  backend: candidate.name,
-  scenario: scenario.name,
-  size,
-  write: await measureWrite(options, candidate, scenario, size),
-  roundtrip: await measureRoundtrip(options, candidate, scenario, size),
-  ...measureFootprint(options, candidate, scenario, size),
-});
+): Promise<OperationResult> => {
+  const { renders, wasted } = await measureRenders(candidate, scenario, size);
+
+  return {
+    backend: candidate.name,
+    scenario: scenario.name,
+    size,
+    write: await measureWrite(options, candidate, scenario, size),
+    roundtrip: await measureRoundtrip(options, candidate, scenario, size),
+    rendersPerOp: renders,
+    wastedPerOp: wasted,
+    ...measureFootprint(options, candidate, scenario, size),
+  };
+};
 
 const measureSeed = <R extends Replica>(
   options: BenchmarkOptions,

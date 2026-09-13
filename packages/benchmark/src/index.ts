@@ -18,6 +18,8 @@ export {
 } from './scenarios.js';
 export { createStore } from './store.js';
 export type { BenchStore } from './store.js';
+export { countRenders, deepEqual } from './renders.js';
+export type { RenderCount } from './renders.js';
 export { garbageCollector, retainedHeap, settledHeap } from './memory.js';
 export {
   compareReports,
@@ -25,6 +27,7 @@ export {
   renderComparison,
   renderReport,
   formatBytes,
+  formatCount,
   formatDuration,
   formatPercent,
   table,

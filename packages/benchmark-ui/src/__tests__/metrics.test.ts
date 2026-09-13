@@ -16,6 +16,8 @@ const operation: OperationResult = {
   size: 1000,
   write: { mean: 0.48, p50: 0.45, p99: 0.9, rme: 5, samples: 100 },
   roundtrip: { mean: 1.2, p50: 1.1, p99: 2, rme: 2, samples: 50 },
+  rendersPerOp: 1,
+  wastedPerOp: 0,
   wireBytesPerOp: 30,
   docBytesPerOp: -12,
   heapBytesPerOp: null,
