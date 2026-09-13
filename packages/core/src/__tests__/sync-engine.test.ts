@@ -72,6 +72,60 @@ describe('createSyncEngine', () => {
       expect(engine.isConnected()).toBe(true);
     });
 
+    it('keeps synced keys the backend lacks and seeds them', () => {
+      const backend = createMemoryBackend({ todos: [todo('remote')] });
+      const store = createTestStore(threeTodos());
+
+      createSyncEngine(backend, store.adapter).connect();
+
+      const expected = { ...threeTodos(), todos: [todo('remote')] };
+      expect(store.getState()).toEqual(expected);
+      expect(backend.read()).toEqual(expected);
+    });
+
+    it("keeps synced keys the backend lacks without writing them with seed 'never'", () => {
+      const backend = createMemoryBackend({ todos: [todo('remote')] });
+      const store = createTestStore(threeTodos());
+
+      createSyncEngine(backend, store.adapter, { seed: 'never' }).connect();
+
+      expect(store.getState()).toEqual({ ...threeTodos(), todos: [todo('remote')] });
+      expect(backend.read()).toEqual({ todos: [todo('remote')] });
+    });
+
+    it('seeds a backend that holds only keys the filter excludes', () => {
+      const backend = createMemoryBackend({ secret: 'remote' });
+      const store = createTestStore(threeTodos());
+
+      createSyncEngine(backend, store.adapter, { filter: (key) => key !== 'secret' }).connect();
+
+      expect(store.getState()).toEqual(threeTodos());
+      expect(backend.read()).toEqual(threeTodos());
+    });
+
+    it('writes the seed once, leaving the adopted keys untouched', () => {
+      const backend = createMemoryBackend({ todos: [todo('remote')] });
+      const store = createTestStore(threeTodos());
+      const write = vi.spyOn(backend, 'write');
+
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith({ ...threeTodos(), todos: [todo('remote')] });
+    });
+
+    it('leaves the store object untouched when every backend key already matches', () => {
+      const backend = createMemoryBackend({ todos: threeTodos().todos });
+      const store = createTestStore(threeTodos());
+      const before = store.getState();
+      const setState = vi.spyOn(store.adapter, 'setState');
+
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(setState).not.toHaveBeenCalled();
+      expect(store.getState()).toBe(before);
+    });
+
     it('seeds an empty backend with what the store holds at connect time', () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
@@ -196,6 +250,16 @@ describe('createSyncEngine', () => {
       createSyncEngine(backend, store.adapter, { filter: (key) => key !== 'secret' }).connect();
 
       expect(store.getState()).toEqual(threeTodos());
+    });
+
+    it('still deletes keys removed from the backend after connect', () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore<Record<string, unknown>>({ a: 1, b: 2 });
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive({ a: 1 });
+
+      expect(store.getState()).toEqual({ a: 1 });
     });
   });
 

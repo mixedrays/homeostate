@@ -28,3 +28,6 @@ dist-ssr
 
 # Benchmark results
 packages/benchmark/results
+
+# Temporary files
+.tmp

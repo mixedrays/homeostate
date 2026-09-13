@@ -56,9 +56,11 @@ export interface CrdtBackend {
 }
 
 /**
- * When to write the store's state into the backend on connect.
- * - `'if-empty'`: only when the backend holds nothing yet (default)
- * - `'never'`: leave seeding to the caller; a non-empty backend is still adopted
+ * Whether `connect()` may write the store's synced keys that the backend does not hold.
+ * Reconciliation is per key over the filtered view: a key the backend holds always wins
+ * over the store's value, a key only the store holds always stays in the store.
+ * - `'if-empty'`: seed the keys the backend lacks, in one write (default)
+ * - `'never'`: leave seeding to the caller; the keys are written on the next local change
  */
 export type SeedStrategy = 'if-empty' | 'never';
 

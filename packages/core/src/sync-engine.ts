@@ -17,6 +17,12 @@ type Plain = Record<string, unknown>;
  * This is the core abstraction that makes the sync logic state-manager and
  * CRDT-library agnostic.
  *
+ * On `connect()` the two sides are reconciled per key over the filtered view: a key the
+ * backend holds wins over the store's value, and a synced key the backend lacks stays in
+ * the store and is seeded into the backend unless `seed` is `'never'`. Afterwards the
+ * backend owns the synced document: every write replaces it with the store's filtered
+ * state, and a key removed from the backend is removed from the store.
+ *
  * @example
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
@@ -50,9 +56,15 @@ export function createSyncEngine<S extends object>(
     return value !== null && typeof value === 'object' ? (value as Plain) : {};
   };
 
-  const mergeStates = (current: S, remote: Plain): S => {
+  /**
+   * Builds the next store state from `remote`. With `keepLocalOnly`, a synced key the
+   * backend does not hold is left in place instead of being deleted; that is the
+   * connect-time reconciliation. Otherwise `remote` is the whole synced state.
+   */
+  const mergeStates = (current: S, remote: Plain, keepLocalOnly: boolean): S => {
     const synced = filterState(current);
-    const patched = patchState(synced, remote);
+    const target = keepLocalOnly ? { ...synced, ...remote } : remote;
+    const patched = patchState(synced, target);
     if (patched === synced) return current;
 
     const merged: Plain = { ...current, ...patched };
@@ -67,26 +79,37 @@ export function createSyncEngine<S extends object>(
     backend.write(filterState(adapter.getState()));
   };
 
-  const syncToStore = (): void => {
+  const applyRemote = (remote: Plain, keepLocalOnly: boolean): void => {
     applyingRemote = true;
     try {
       const current = adapter.getState();
-      const merged = mergeStates(current, filterState(readBackend()));
+      const merged = mergeStates(current, remote, keepLocalOnly);
       if (merged !== current) adapter.setState(merged);
     } finally {
       applyingRemote = false;
     }
   };
 
+  const syncToStore = (): void => {
+    applyRemote(filterState(readBackend()), false);
+  };
+
   return {
     connect: (): void => {
       if (connected) return;
 
-      if (Object.keys(readBackend()).length === 0) {
-        if (seed === 'if-empty') syncToBackend();
-      } else {
-        syncToStore();
+      const remote = filterState(readBackend());
+      const local = filterState(adapter.getState());
+      const remoteKeys = new Set(Object.keys(remote));
+      const missing = Object.keys(local).filter((key) => !remoteKeys.has(key));
+
+      if (seed === 'if-empty' && missing.length > 0) {
+        const seeded: Plain = { ...remote };
+        for (const key of missing) seeded[key] = local[key];
+        backend.write(seeded);
       }
+
+      applyRemote(remote, true);
 
       backendUnsubscribe = backend.subscribe(syncToStore);
       storeUnsubscribe = adapter.subscribe(syncToBackend);
