@@ -8,14 +8,16 @@ import { SYNC_SERVER_URL } from '../sync';
 export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+      <main className="mx-auto max-w-3xl px-4 py-10">
         <header className="mb-10">
-          <span className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-            <Waypoints size={24} aria-hidden />
-          </span>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-            Homeostate Playground
-          </h1>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+              <Waypoints size={24} aria-hidden />
+            </span>
+            <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+              Homeostate Playground
+            </h1>
+          </div>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
             One shared todo list, {demoList.length} state managers. Every demo joins the same Yjs
             room, so a change made in any of them shows up in the others and in every other open
