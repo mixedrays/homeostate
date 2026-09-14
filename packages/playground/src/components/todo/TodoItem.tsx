@@ -1,7 +1,6 @@
-import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import { memo } from 'react';
+import { Circle, CircleCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { Todo } from '../../types/todo';
@@ -17,102 +16,60 @@ export interface TodoItemProps {
  * The row itself, unmemoized. Exported for `observer()`, which applies its own `memo` and
  * throws on a component that already carries one — see the MobX demo's `TodoList`.
  *
- * The checkbox and the title are separate targets: the checkbox toggles `completed`, the title
- * opens an inline editor over the row. Enter commits, Escape reverts, and clicking away commits
- * whatever is in the field — a blank or unchanged title just closes the editor.
+ * The check and the title are separate targets: the check toggles `completed`, the title
+ * is a field you type straight into. It is always a field — borderless until you touch it —
+ * rather than text that swaps for an input on click, because swapping two differently sized
+ * boxes is what made the row change height and the list jump. There is one box, so there is
+ * nothing to jump. Every keystroke goes to the store, which is also what puts each keystroke
+ * on the wire for the other tabs.
  */
 export function TodoItemRow({ todo, onToggle, onEdit, onDelete }: TodoItemProps) {
-  // One piece of state for both questions: `null` is "not editing", a string is the draft.
-  const [draft, setDraft] = useState<string | null>(null);
-  const editing = draft !== null;
-
-  const titleRef = useRef<HTMLButtonElement>(null);
-  // Guards the commit on blur: Escape unmounts a focused input, and whether that also fires
-  // `onBlur` is the browser's business, so closing the editor has to be idempotent.
-  const editingRef = useRef(false);
-  // Enter and Escape put focus back on the title; clicking away deliberately does not.
-  const restoreFocusRef = useRef(false);
-
-  useEffect(() => {
-    if (!editing && restoreFocusRef.current) {
-      restoreFocusRef.current = false;
-      titleRef.current?.focus();
-    }
-  }, [editing]);
-
-  const startEditing = () => {
-    editingRef.current = true;
-    setDraft(todo.title);
-  };
-
-  const close = () => {
-    editingRef.current = false;
-    setDraft(null);
-  };
-
-  const commit = () => {
-    if (!editingRef.current) return;
-    const title = draft?.trim() ?? '';
-    if (title && title !== todo.title) onEdit(todo.id, title);
-    close();
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      restoreFocusRef.current = true;
-      commit();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      restoreFocusRef.current = true;
-      close();
-    }
-  };
+  // The field is free to be empty while it is being retyped, so labels need a fallback.
+  const label = todo.title.trim() || 'Untitled todo';
 
   return (
-    <li className="flex items-center gap-3 rounded-xl border bg-card py-2.5 pl-3 pr-2 transition-colors hover:border-ring">
-      <Checkbox
-        checked={todo.completed}
-        onCheckedChange={() => onToggle(todo.id)}
-        aria-label={`Mark "${todo.title}" as ${todo.completed ? 'not completed' : 'completed'}`}
-        className="size-5 shrink-0 rounded-full"
-      />
+    <li className="flex items-center gap-2 rounded-xl border bg-card px-2 py-2.5 transition-colors hover:border-ring">
+      {/* A toggle button rather than a checkbox, to match the delete button across the row.
+          `aria-pressed` is what tells a screen reader it is a two-state control. */}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => onToggle(todo.id)}
+        aria-pressed={todo.completed}
+        aria-label={`Mark "${label}" as ${todo.completed ? 'not completed' : 'completed'}`}
+        className={cn(
+          // Done, it picks up whichever accent the demo is themed with.
+          'shrink-0 hover:bg-primary/10 hover:text-primary',
+          todo.completed ? 'text-primary' : 'text-muted-foreground'
+        )}
+      >
+        {/* The two icons draw the same r=10 ring, so the state change reads as a check
+            appearing inside it rather than as one shape swapping for another. */}
+        {todo.completed ? <CircleCheck aria-hidden /> : <Circle aria-hidden />}
+      </Button>
 
-      {editing ? (
-        <Input
-          type="text"
-          // Mounted only while editing, so autoFocus runs on the way in rather than on a render.
-          autoFocus
-          onFocus={(event) => event.currentTarget.select()}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={commit}
-          aria-label={`Edit "${todo.title}"`}
-          autoComplete="off"
-          maxLength={200}
-          className="h-8 min-w-0 flex-1 text-sm sm:text-base"
-        />
-      ) : (
-        <button
-          ref={titleRef}
-          type="button"
-          onClick={startEditing}
-          aria-label={`Edit "${todo.title}"`}
-          className={cn(
-            'min-w-0 flex-1 cursor-text break-words rounded-md text-left text-sm leading-snug outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-base',
-            todo.completed ? 'text-muted-foreground line-through' : 'text-foreground'
-          )}
-        >
-          {todo.title}
-        </button>
-      )}
+      <Input
+        type="text"
+        value={todo.title}
+        onChange={(event) => onEdit(todo.id, event.target.value)}
+        placeholder="Untitled todo"
+        // The field carries its value, so the accessible name stays put as the title changes.
+        aria-label="Todo title"
+        autoComplete="off"
+        maxLength={200}
+        className={cn(
+          // Reads as plain text until it is hovered or focused, where the border it already
+          // reserves becomes visible. Nothing here changes the box, only its colours.
+          'min-w-0 flex-1 border-transparent px-2 hover:border-input dark:bg-transparent',
+          todo.completed && 'text-muted-foreground line-through'
+        )}
+      />
 
       <Button
         variant="ghost"
         size="icon-sm"
         onClick={() => onDelete(todo.id)}
-        aria-label={`Delete "${todo.title}"`}
+        aria-label={`Delete "${label}"`}
         className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       >
         <Trash2 aria-hidden />
@@ -122,7 +79,7 @@ export function TodoItemRow({ todo, onToggle, onEdit, onDelete }: TodoItemProps)
 }
 
 /**
- * The row the list renders by default. Memoized, so toggling or editing one todo re-renders one
+ * The row the list renders by default. Memoized, so editing or toggling one todo re-renders one
  * row instead of the whole list — which only holds while the demo above hands down todo objects
  * and callbacks whose identity survives an unrelated change. Every demo but MobX does that
  * already: its store is immutable, so an untouched todo is the same object it was.

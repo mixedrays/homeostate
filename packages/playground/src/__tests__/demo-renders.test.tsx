@@ -201,17 +201,26 @@ afterEach(async () => {
   for (const unmount of mounted.splice(0)) await unmount();
 });
 
-/** The checkbox, the title button and the inline editor of one rendered row. */
+/** The toggle button and the title field of one rendered row. */
 const rowParts = (row: Element) => {
-  const checkbox = row.querySelector<HTMLElement>('[data-slot="checkbox"]')!;
+  // Both controls are buttons now, so they are told apart by what they say they do.
+  const toggle = row.querySelector<HTMLElement>('button[aria-label^="Mark"]')!;
   return {
-    checkbox,
-    title: row.querySelector<HTMLElement>('button[aria-label^="Edit"]'),
-    editor: row.querySelector<HTMLInputElement>('input[type="text"]'),
-    // Not the strikethrough: that lives on the title, which the editor replaces.
-    completed: checkbox.getAttribute('aria-checked') === 'true',
+    toggle,
+    title: row.querySelector<HTMLInputElement>('input[type="text"]')!,
+    // Read off the toggle, not the strikethrough: the title is a field, so its `value` and its
+    // classes are what carry the state, and only the toggle states it outright.
+    completed: toggle.getAttribute('aria-pressed') === 'true',
   };
 };
+
+/**
+ * True when the toggle is drawing the checked ring rather than the empty one. `classList`
+ * matches whole tokens, which is what keeps `lucide-circle` from matching the checked icon's
+ * `lucide-circle-check`.
+ */
+const showsDone = (row: Element) =>
+  rowParts(row).toggle.querySelector('svg')!.classList.contains('lucide-circle-check');
 
 const click = (el: Element) =>
   act(async () => void el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
@@ -223,9 +232,6 @@ const type = (input: HTMLInputElement, value: string) =>
     setter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-
-const press = (el: Element, key: string) =>
-  act(async () => void el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })));
 
 /** Mounts a demo over five todos and leaves the render log empty and ready to read. */
 const mount = async (demo: Demo) => {
@@ -263,7 +269,6 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
     expect(rendered).toHaveLength(demo.rowRenders);
     // And it is not stale: the third row now reads as completed.
     expect(container.querySelectorAll('li')[2].querySelector('.line-through')).not.toBeNull();
-
   });
 
   it('re-renders only the rows it has to when one todo is renamed, and shows the change', async () => {
@@ -275,62 +280,51 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
 
     expect(rendered).toContain(target);
     expect(rendered).toHaveLength(demo.rowRenders);
-    expect(container.querySelectorAll('li')[2].textContent).toContain('renamed by the store');
-
+    expect(rowParts(container.querySelectorAll('li')[2]).title.value).toBe('renamed by the store');
   });
 
-  it('toggles completion from the checkbox, which no longer covers the title', async () => {
+  it('toggles completion from the check button alone, not from the title next to it', async () => {
     const { container } = await mount(demo);
 
     const row = () => container.querySelectorAll('li')[2];
     const before = rowParts(row()).completed;
 
-    await click(rowParts(row()).checkbox);
+    // The icon draws whichever state the button reports, here and after every click.
+    expect(showsDone(row())).toBe(before);
+
+    await click(rowParts(row()).toggle);
     expect(rowParts(row()).completed).toBe(!before);
+    expect(showsDone(row())).toBe(!before);
+    // The title went with it, so the row is not showing one state and reporting the other.
+    expect(row().querySelector('.line-through') === null).toBe(before);
 
-    await click(rowParts(row()).checkbox);
+    await click(rowParts(row()).toggle);
     expect(rowParts(row()).completed).toBe(before);
-
+    expect(showsDone(row())).toBe(before);
   });
 
-  it('edits a title inline: the title opens an editor and Enter commits the new text', async () => {
-    const { titles, container } = await mount(demo);
+  it('saves every keystroke typed into a title, re-rendering only that row', async () => {
+    const { ids, titles, container } = await mount(demo);
 
     const row = () => container.querySelectorAll('li')[2];
+    const target = ids()[2];
     const completedBefore = rowParts(row()).completed;
 
-    await click(rowParts(row()).title!);
+    // The field shows the row's own title and is ready to type into without opening anything.
+    expect(rowParts(row()).title.value).toBe(titles()[2]);
 
-    // The editor opened on the row's own title, and the click did not toggle the todo.
-    const editor = rowParts(row()).editor;
-    expect(editor).not.toBeNull();
-    expect(editor!.value).toBe(titles()[2]);
+    for (const value of ['t', 'ty', 'typ', 'type', 'typed']) {
+      await type(rowParts(row()).title, value);
+      // Every keystroke is in the store already — there is nothing to commit.
+      expect(titles()[2]).toBe(value);
+    }
+
+    expect(rowParts(row()).title.value).toBe('typed');
+    // Typing a title is not a way to complete a todo.
     expect(rowParts(row()).completed).toBe(completedBefore);
-
-    await type(editor!, 'renamed inline');
-    await press(editor!, 'Enter');
-
-    // The store took the new title and the row closed back down to plain text.
-    expect(titles()[2]).toBe('renamed inline');
-    expect(rowParts(row()).editor).toBeNull();
-    expect(row().textContent).toContain('renamed inline');
-
-  });
-
-  it('leaves the title alone when an inline edit is cancelled with Escape', async () => {
-    const { titles, container } = await mount(demo);
-
-    const row = () => container.querySelectorAll('li')[2];
-    const original = titles()[2];
-
-    await click(rowParts(row()).title!);
-    await type(rowParts(row()).editor!, 'discarded');
-    await press(rowParts(row()).editor!, 'Escape');
-
-    expect(titles()[2]).toBe(original);
-    expect(rowParts(row()).editor).toBeNull();
-    expect(row().textContent).toContain(original);
-
+    // Five keystrokes re-rendered the one row five times, and left the other rows alone.
+    expect(new Set(rendered)).toEqual(new Set([target]));
+    expect(rendered).toHaveLength(5 * demo.rowRenders);
   });
 
   it('drops a deleted todo without re-rendering or reading the survivors', async () => {
