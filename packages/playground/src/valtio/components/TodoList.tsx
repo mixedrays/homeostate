@@ -13,6 +13,7 @@ export function TodoList() {
       searchTerm={searchTerm}
       filterStatus={filterStatus}
       onToggle={todoActions.toggleTodo}
+      onEdit={todoActions.editTodo}
       onDelete={todoActions.deleteTodo}
     />
   );

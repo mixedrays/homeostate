@@ -19,6 +19,13 @@ export const todoActions = {
     }
   },
 
+  editTodo(id: string, title: string) {
+    const todo = todoState.todos.find((t) => t.id === id);
+    if (todo) {
+      todo.title = title;
+    }
+  },
+
   deleteTodo(id: string) {
     todoState.todos = todoState.todos.filter((t) => t.id !== id);
   },

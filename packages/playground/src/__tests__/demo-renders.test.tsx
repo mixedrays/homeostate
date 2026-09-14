@@ -2,7 +2,7 @@
 import { memo, type ReactNode } from 'react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The gate on every demo's render behaviour: toggling one todo must re-render that todo's row
@@ -46,7 +46,9 @@ interface Demo {
     ids: () => string[];
     add: (title: string) => void;
     toggle: (id: string) => void;
+    edit: (id: string, title: string) => void;
     remove: (id: string) => void;
+    titles: () => string[];
   }>;
 }
 
@@ -55,7 +57,9 @@ const demos: Record<string, Demo> = {
     rowRenders: 1,
     setup: async () => {
       const { Provider } = await import('react-redux');
-      const { store, addTodo, deleteTodo, toggleTodo } = await import('../redux/store/todoStore');
+      const { store, addTodo, deleteTodo, editTodo, toggleTodo } = await import(
+        '../redux/store/todoStore'
+      );
       const { TodoList } = await import('../redux/components/TodoList');
       return {
         tree: (
@@ -66,7 +70,9 @@ const demos: Record<string, Demo> = {
         ids: () => store.getState().todos.map((todo) => todo.id),
         add: (title) => void store.dispatch(addTodo(title)),
         toggle: (id) => void store.dispatch(toggleTodo(id)),
+        edit: (id, title) => void store.dispatch(editTodo({ id, title })),
         remove: (id) => void store.dispatch(deleteTodo(id)),
+        titles: () => store.getState().todos.map((todo) => todo.title),
       };
     },
   },
@@ -81,7 +87,9 @@ const demos: Record<string, Demo> = {
         ids: () => todoStore.todos.map((todo) => todo.id),
         add: (title) => todoStore.addTodo(title),
         toggle: (id) => todoStore.toggleTodo(id),
+        edit: (id, title) => todoStore.editTodo(id, title),
         remove: (id) => todoStore.deleteTodo(id),
+        titles: () => todoStore.todos.map((todo) => todo.title),
       };
     },
   },
@@ -96,7 +104,9 @@ const demos: Record<string, Demo> = {
         ids: () => todoStore.todos.map((todo) => todo.id),
         add: (title) => todoStore.addTodo(title),
         toggle: (id) => todoStore.toggleTodo(id),
+        edit: (id, title) => todoStore.editTodo(id, title),
         remove: (id) => todoStore.deleteTodo(id),
+        titles: () => todoStore.todos.map((todo) => todo.title),
       };
     },
   },
@@ -111,7 +121,9 @@ const demos: Record<string, Demo> = {
         ids: () => todoState.todos.map((todo) => todo.id),
         add: (title) => todoActions.addTodo(title),
         toggle: (id) => todoActions.toggleTodo(id),
+        edit: (id, title) => todoActions.editTodo(id, title),
         remove: (id) => todoActions.deleteTodo(id),
+        titles: () => todoState.todos.map((todo) => todo.title),
       };
     },
   },
@@ -126,7 +138,9 @@ const demos: Record<string, Demo> = {
         ids: () => useTodoStore.getState().todos.map((todo) => todo.id),
         add: (title) => useTodoStore.getState().addTodo(title),
         toggle: (id) => useTodoStore.getState().toggleTodo(id),
+        edit: (id, title) => useTodoStore.getState().editTodo(id, title),
         remove: (id) => useTodoStore.getState().deleteTodo(id),
+        titles: () => useTodoStore.getState().todos.map((todo) => todo.title),
       };
     },
   },
@@ -146,7 +160,9 @@ const demos: Record<string, Demo> = {
         ids: () => atoms.store.get(atoms.todosAtom).map((todo) => todo.id),
         add: (title) => atoms.store.set(atoms.addTodoAtom, title),
         toggle: (id) => atoms.store.set(atoms.toggleTodoAtom, id),
+        edit: (id, title) => atoms.store.set(atoms.editTodoAtom, id, title),
         remove: (id) => atoms.store.set(atoms.deleteTodoAtom, id),
+        titles: () => atoms.store.get(atoms.todosAtom).map((todo) => todo.title),
       };
     },
   },
@@ -161,7 +177,9 @@ const demos: Record<string, Demo> = {
         ids: () => todoStore.state.todos.map((todo) => todo.id),
         add: (title) => todoStore.actions.addTodo(title),
         toggle: (id) => todoStore.actions.toggleTodo(id),
+        edit: (id, title) => todoStore.actions.editTodo(id, title),
         remove: (id) => todoStore.actions.deleteTodo(id),
+        titles: () => todoStore.state.todos.map((todo) => todo.title),
       };
     },
   },
@@ -172,9 +190,42 @@ beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
+/** Roots mounted by the current test, unmounted whether it passes or fails. */
+const mounted: Array<() => Promise<void>> = [];
+
 beforeEach(() => {
   rendered.length = 0;
 });
+
+afterEach(async () => {
+  for (const unmount of mounted.splice(0)) await unmount();
+});
+
+/** The checkbox, the title button and the inline editor of one rendered row. */
+const rowParts = (row: Element) => {
+  const checkbox = row.querySelector<HTMLElement>('[data-slot="checkbox"]')!;
+  return {
+    checkbox,
+    title: row.querySelector<HTMLElement>('button[aria-label^="Edit"]'),
+    editor: row.querySelector<HTMLInputElement>('input[type="text"]'),
+    // Not the strikethrough: that lives on the title, which the editor replaces.
+    completed: checkbox.getAttribute('aria-checked') === 'true',
+  };
+};
+
+const click = (el: Element) =>
+  act(async () => void el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+/** Types into a controlled input the way a user would, past React's value tracker. */
+const type = (input: HTMLInputElement, value: string) =>
+  act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+const press = (el: Element, key: string) =>
+  act(async () => void el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })));
 
 /** Mounts a demo over five todos and leaves the render log empty and ready to read. */
 const mount = async (demo: Demo) => {
@@ -182,6 +233,10 @@ const mount = async (demo: Demo) => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
+  mounted.push(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
 
   await act(async () => {
     for (const title of ['first', 'second', 'third', 'fourth']) parts.add(title);
@@ -192,19 +247,12 @@ const mount = async (demo: Demo) => {
   expect(rendered).toHaveLength(parts.ids().length);
   rendered.length = 0;
 
-  return {
-    ...parts,
-    container,
-    teardown: async () => {
-      await act(async () => root.unmount());
-      container.remove();
-    },
-  };
+  return { ...parts, container };
 };
 
 describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
   it('re-renders only the rows it has to when one todo is toggled, and shows the change', async () => {
-    const { ids, toggle, container, teardown } = await mount(demo);
+    const { ids, toggle, container } = await mount(demo);
 
     const target = ids()[2];
 
@@ -216,14 +264,80 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
     // And it is not stale: the third row now reads as completed.
     expect(container.querySelectorAll('li')[2].querySelector('.line-through')).not.toBeNull();
 
-    await teardown();
+  });
+
+  it('re-renders only the rows it has to when one todo is renamed, and shows the change', async () => {
+    const { ids, edit, container } = await mount(demo);
+
+    const target = ids()[2];
+
+    await act(async () => edit(target, 'renamed by the store'));
+
+    expect(rendered).toContain(target);
+    expect(rendered).toHaveLength(demo.rowRenders);
+    expect(container.querySelectorAll('li')[2].textContent).toContain('renamed by the store');
+
+  });
+
+  it('toggles completion from the checkbox, which no longer covers the title', async () => {
+    const { container } = await mount(demo);
+
+    const row = () => container.querySelectorAll('li')[2];
+    const before = rowParts(row()).completed;
+
+    await click(rowParts(row()).checkbox);
+    expect(rowParts(row()).completed).toBe(!before);
+
+    await click(rowParts(row()).checkbox);
+    expect(rowParts(row()).completed).toBe(before);
+
+  });
+
+  it('edits a title inline: the title opens an editor and Enter commits the new text', async () => {
+    const { titles, container } = await mount(demo);
+
+    const row = () => container.querySelectorAll('li')[2];
+    const completedBefore = rowParts(row()).completed;
+
+    await click(rowParts(row()).title!);
+
+    // The editor opened on the row's own title, and the click did not toggle the todo.
+    const editor = rowParts(row()).editor;
+    expect(editor).not.toBeNull();
+    expect(editor!.value).toBe(titles()[2]);
+    expect(rowParts(row()).completed).toBe(completedBefore);
+
+    await type(editor!, 'renamed inline');
+    await press(editor!, 'Enter');
+
+    // The store took the new title and the row closed back down to plain text.
+    expect(titles()[2]).toBe('renamed inline');
+    expect(rowParts(row()).editor).toBeNull();
+    expect(row().textContent).toContain('renamed inline');
+
+  });
+
+  it('leaves the title alone when an inline edit is cancelled with Escape', async () => {
+    const { titles, container } = await mount(demo);
+
+    const row = () => container.querySelectorAll('li')[2];
+    const original = titles()[2];
+
+    await click(rowParts(row()).title!);
+    await type(rowParts(row()).editor!, 'discarded');
+    await press(rowParts(row()).editor!, 'Escape');
+
+    expect(titles()[2]).toBe(original);
+    expect(rowParts(row()).editor).toBeNull();
+    expect(row().textContent).toContain(original);
+
   });
 
   it('drops a deleted todo without re-rendering or reading the survivors', async () => {
     // The case a reactive row can get wrong: MST's `deleteTodo` destroys the node, and a row
     // still subscribed to it would read a node that is no longer in the tree. MST reports that
     // through `console.warn` rather than by throwing, so the console is part of the assertion.
-    const { ids, remove, container, teardown } = await mount(demo);
+    const { ids, remove, container } = await mount(demo);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -240,6 +354,5 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
 
     warn.mockRestore();
     error.mockRestore();
-    await teardown();
   });
 });

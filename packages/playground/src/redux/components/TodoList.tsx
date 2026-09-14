@@ -7,7 +7,7 @@ import {
   selectTodoCounts,
   selectVisibleTodos,
 } from '../store/selectors';
-import { deleteTodo, toggleTodo } from '../store/todoStore';
+import { deleteTodo, editTodo, toggleTodo } from '../store/todoStore';
 
 export function TodoList() {
   const dispatch = useAppDispatch();
@@ -19,6 +19,10 @@ export function TodoList() {
   // The rows are memoized, and an inline arrow would be a new prop on every render and defeat
   // that. `dispatch` is stable for the life of the store, so these are too.
   const onToggle = useCallback((id: string) => dispatch(toggleTodo(id)), [dispatch]);
+  const onEdit = useCallback(
+    (id: string, title: string) => dispatch(editTodo({ id, title })),
+    [dispatch]
+  );
   const onDelete = useCallback((id: string) => dispatch(deleteTodo(id)), [dispatch]);
 
   return (
@@ -28,6 +32,7 @@ export function TodoList() {
       searchTerm={searchTerm}
       filterStatus={filterStatus}
       onToggle={onToggle}
+      onEdit={onEdit}
       onDelete={onDelete}
     />
   );

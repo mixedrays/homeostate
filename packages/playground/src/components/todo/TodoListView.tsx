@@ -11,6 +11,7 @@ interface TodoListViewProps {
   searchTerm: string;
   filterStatus: FilterStatus;
   onToggle: (id: string) => void;
+  onEdit: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   /**
    * The row component, memoized by default. A store that mutates its todos in place instead
@@ -26,6 +27,7 @@ export function TodoListView({
   searchTerm,
   filterStatus,
   onToggle,
+  onEdit,
   onDelete,
   itemComponent: Item = TodoItem,
 }: TodoListViewProps) {
@@ -46,7 +48,13 @@ export function TodoListView({
       ) : (
         <ul className="space-y-2">
           {todos.map((todo) => (
-            <Item key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} />
+            <Item
+              key={todo.id}
+              todo={todo}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
           ))}
         </ul>
       )}

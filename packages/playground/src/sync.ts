@@ -9,7 +9,7 @@ export const SYNC_ROOM = 'my-roomname';
 export const SYNC_MAP_NAME = 'shared-ydoc';
 
 export const createInitialTodoState = (): TodoState => ({
-  todos: [{ id: '1', title: 'Open a second tab and toggle me', completed: false }],
+  todos: [{ id: '1', title: 'Open a second tab, then click my text to edit me', completed: false }],
   searchTerm: '',
   filterStatus: 'all',
 });

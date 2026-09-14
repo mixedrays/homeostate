@@ -18,6 +18,7 @@ export const TodoList = observer(function TodoList() {
       searchTerm={todoStore.searchTerm}
       filterStatus={todoStore.filterStatus}
       onToggle={todoStore.toggleTodo}
+      onEdit={todoStore.editTodo}
       onDelete={todoStore.deleteTodo}
       itemComponent={ObservedTodoItem}
     />

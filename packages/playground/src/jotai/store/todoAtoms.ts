@@ -42,6 +42,13 @@ export const toggleTodoAtom = atom(null, (get, set, id: string) => {
   );
 });
 
+export const editTodoAtom = atom(null, (get, set, id: string, title: string) => {
+  set(
+    todosAtom,
+    get(todosAtom).map((todo) => (todo.id === id ? { ...todo, title } : todo))
+  );
+});
+
 export const deleteTodoAtom = atom(null, (get, set, id: string) => {
   set(
     todosAtom,

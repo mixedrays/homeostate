@@ -8,6 +8,7 @@ import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../s
 interface TodoStore extends TodoState {
   addTodo: (title: string) => void;
   toggleTodo: (id: string) => void;
+  editTodo: (id: string, title: string) => void;
   deleteTodo: (id: string) => void;
   setSearchTerm: (term: string) => void;
   setFilterStatus: (status: FilterStatus) => void;
@@ -28,6 +29,11 @@ export const useTodoStore = create<TodoStore>((set) => ({
       todos: state.todos.map((todo) =>
         todo.id === id ? { ...todo, completed: !todo.completed } : todo
       ),
+    })),
+
+  editTodo: (id, title) =>
+    set((state) => ({
+      todos: state.todos.map((todo) => (todo.id === id ? { ...todo, title } : todo)),
     })),
 
   deleteTodo: (id) =>

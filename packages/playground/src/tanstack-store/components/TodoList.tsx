@@ -15,6 +15,7 @@ export function TodoList() {
       searchTerm={searchTerm}
       filterStatus={filterStatus}
       onToggle={todoStore.actions.toggleTodo}
+      onEdit={todoStore.actions.editTodo}
       onDelete={todoStore.actions.deleteTodo}
     />
   );

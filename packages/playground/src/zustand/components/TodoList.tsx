@@ -4,12 +4,13 @@ import { countTodos, filterTodos } from '../../lib/todos';
 import { useTodoStore } from '../store/useTodoStore';
 
 export function TodoList() {
-  const { todos, searchTerm, filterStatus, toggleTodo, deleteTodo } = useTodoStore(
+  const { todos, searchTerm, filterStatus, toggleTodo, editTodo, deleteTodo } = useTodoStore(
     useShallow((state) => ({
       todos: state.todos,
       searchTerm: state.searchTerm,
       filterStatus: state.filterStatus,
       toggleTodo: state.toggleTodo,
+      editTodo: state.editTodo,
       deleteTodo: state.deleteTodo,
     }))
   );
@@ -21,6 +22,7 @@ export function TodoList() {
       searchTerm={searchTerm}
       filterStatus={filterStatus}
       onToggle={toggleTodo}
+      onEdit={editTodo}
       onDelete={deleteTodo}
     />
   );

@@ -42,6 +42,12 @@ const TodoStore = types
         todo.completed = !todo.completed;
       }
     },
+    editTodo(id: string, title: string) {
+      const todo = self.todos.find((t) => t.id === id);
+      if (todo) {
+        todo.title = title;
+      }
+    },
     deleteTodo(id: string) {
       const todo = self.todos.find((t) => t.id === id);
       if (todo) {

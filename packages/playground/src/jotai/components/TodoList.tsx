@@ -2,6 +2,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { TodoListView } from '../../components/todo/TodoListView';
 import {
   deleteTodoAtom,
+  editTodoAtom,
   filterStatusAtom,
   searchTermAtom,
   todoCountsAtom,
@@ -15,6 +16,7 @@ export function TodoList() {
   const searchTerm = useAtomValue(searchTermAtom);
   const filterStatus = useAtomValue(filterStatusAtom);
   const toggleTodo = useSetAtom(toggleTodoAtom);
+  const editTodo = useSetAtom(editTodoAtom);
   const deleteTodo = useSetAtom(deleteTodoAtom);
 
   return (
@@ -24,6 +26,7 @@ export function TodoList() {
       searchTerm={searchTerm}
       filterStatus={filterStatus}
       onToggle={toggleTodo}
+      onEdit={editTodo}
       onDelete={deleteTodo}
     />
   );

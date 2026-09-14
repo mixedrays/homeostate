@@ -23,6 +23,12 @@ export const todoStore = createStore<TodoState, TodoActions>(
         ),
       })),
 
+    editTodo: (id, title) =>
+      setState((state) => ({
+        ...state,
+        todos: state.todos.map((todo) => (todo.id === id ? { ...todo, title } : todo)),
+      })),
+
     deleteTodo: (id) =>
       setState((state) => ({
         ...state,
@@ -37,6 +43,7 @@ export const todoStore = createStore<TodoState, TodoActions>(
 type TodoActions = {
   addTodo: (title: string) => void;
   toggleTodo: (id: string) => void;
+  editTodo: (id: string, title: string) => void;
   deleteTodo: (id: string) => void;
   setSearchTerm: (term: string) => void;
   setFilterStatus: (status: FilterStatus) => void;

@@ -28,6 +28,13 @@ class TodoStore implements TodoState {
     }
   }
 
+  editTodo(id: string, title: string) {
+    const todo = this.todos.find((t) => t.id === id);
+    if (todo) {
+      todo.title = title;
+    }
+  }
+
   deleteTodo(id: string) {
     this.todos = this.todos.filter((t) => t.id !== id);
   }
