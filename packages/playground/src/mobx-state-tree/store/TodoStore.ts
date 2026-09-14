@@ -1,4 +1,4 @@
-import { destroy, getSnapshot, types, type Instance } from 'mobx-state-tree';
+import { destroy, types, type Instance } from 'mobx-state-tree';
 import { createSyncEngine } from '@homeostate/core';
 import { createYjsBackend } from '@homeostate/crdt-yjs';
 import { createMobxStateTreeAdapter } from '@homeostate/adapter-mobx-state-tree';
@@ -19,8 +19,14 @@ const TodoStore = types
     filterStatus: types.enumeration<FilterStatus>('FilterStatus', ['all', 'active', 'completed']),
   })
   .views((self) => ({
+    /**
+     * The nodes, not `getSnapshot(self).todos`. MST rebuilds every child snapshot object on
+     * any change, so snapshots gave the memoized row a new prop each time and re-rendered the
+     * whole list; a node keeps its identity for as long as it is in the tree. The row reads
+     * the node through `observer` — see this demo's `TodoList`.
+     */
     get visibleTodos(): Todo[] {
-      return filterTodos(getSnapshot(self).todos, self.searchTerm, self.filterStatus);
+      return filterTodos(self.todos, self.searchTerm, self.filterStatus);
     },
     get counts() {
       return countTodos(self.todos);
