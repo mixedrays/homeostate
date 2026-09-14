@@ -1,5 +1,6 @@
 import { Calendar, Cpu, FileJson, Hash, Layers, Timer, type LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import type { RenderRun } from '../lib/render-runs';
 import { formatDate, type Run } from '../lib/runs';
 
 interface Chip {
@@ -9,8 +10,13 @@ interface Chip {
 }
 
 interface MetaStripProps {
-  run: Run;
+  run: Run | RenderRun;
 }
+
+const FOLDER = {
+  backend: 'packages/benchmark/results',
+  render: 'packages/benchmark-render/results',
+} as const;
 
 export function MetaStrip({ run }: MetaStripProps) {
   const { meta } = run.report;
@@ -19,12 +25,21 @@ export function MetaStrip({ run }: MetaStripProps) {
     { icon: Hash, text: meta.commit ?? 'unknown commit', title: 'git commit the run was made at' },
     { icon: Cpu, text: `node ${meta.node}` },
     ...Object.entries(meta.versions).map(([name, version]) => ({ icon: Layers, text: `${name} ${version}` })),
+    // Only the backend matrix has tinybench settings to report.
+    ...('options' in meta
+      ? [
+          {
+            icon: Timer,
+            text: `${meta.options.time} ms/task · ≥${meta.options.minSamples} samples · ${meta.options.operations} ops/pass`,
+            title: 'tinybench time per task, minimum samples, operations per footprint pass',
+          },
+        ]
+      : []),
     {
-      icon: Timer,
-      text: `${meta.options.time} ms/task · ≥${meta.options.minSamples} samples · ${meta.options.operations} ops/pass`,
-      title: 'tinybench time per task, minimum samples, operations per footprint pass',
+      icon: FileJson,
+      text: run.name,
+      title: run.source === 'results' ? `from ${FOLDER[run.kind]}` : 'opened from a file',
     },
-    { icon: FileJson, text: run.name, title: run.source === 'results' ? 'from packages/benchmark/results' : 'opened from a file' },
   ];
 
   return (

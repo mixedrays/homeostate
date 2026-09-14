@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OperationResult, ReplicaResult } from '@homeostate/benchmark/types';
+import type { RenderResult } from '@homeostate/benchmark-render/types';
 import {
   formatRatio,
   formatTick,
@@ -7,6 +8,7 @@ import {
   formatValue,
   metricByKey,
   operationMetrics,
+  renderMetrics,
   replicaMetrics,
 } from '../lib/metrics';
 
@@ -32,7 +34,43 @@ const replica: ReplicaResult = {
   heapBytes: null,
 };
 
+const renderResult: RenderResult = {
+  adapter: 'mobx',
+  scenario: 'toggle',
+  size: 1000,
+  rowRenders: 1000,
+  listRenders: 1,
+  searchBoxRenders: 0,
+  footerRenders: 0,
+  appRenders: 0,
+  applyMs: 7.5,
+  commitMs: 13.6,
+  mountMs: 20.4,
+};
+
 describe('metrics', () => {
+  it('reads the render counts, which have no spread behind them', () => {
+    const rows = metricByKey(renderMetrics, 'row-renders');
+    expect(rows.unit).toBe('count');
+    expect(rows.value(renderResult)).toBe(1000);
+    expect(rows.spread).toBeUndefined();
+    expect(metricByKey(renderMetrics, 'apply').unit).toBe('duration');
+  });
+
+  it('carries the per-operation render counts on the backend metrics', () => {
+    expect(metricByKey(operationMetrics, 'renders').value(operation)).toBe(1);
+    expect(metricByKey(operationMetrics, 'wasted').value(operation)).toBe(0);
+    expect(metricByKey(operationMetrics, 'renders').unit).toBe('count');
+  });
+
+  it('formats counts as integers and leaves a missing one as a dash', () => {
+    expect(formatValue('count', 1000)).toBe('1,000');
+    expect(formatValue('count', 0)).toBe('0');
+    expect(formatValue('count', null)).toBe('—');
+    expect(formatTick('count', 250)).toBe('250');
+    expect(formatTick('count', 2.5)).toBe('2.5');
+  });
+
   it('reads operation figures and their spread', () => {
     const write = metricByKey(operationMetrics, 'write');
     expect(write.value(operation)).toBe(0.48);

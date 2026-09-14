@@ -8,6 +8,8 @@ import type {
 export type RunSource = 'results' | 'file';
 
 export interface Run {
+  /** Which benchmark produced it; the render benchmark's runs are `RenderRun`. */
+  kind: 'backend';
   id: string;
   /** File name the report came from. */
   name: string;

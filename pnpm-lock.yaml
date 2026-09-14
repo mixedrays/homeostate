@@ -218,6 +218,9 @@ importers:
       '@homeostate/benchmark':
         specifier: workspace:^
         version: link:../benchmark
+      '@homeostate/benchmark-render':
+        specifier: workspace:^
+        version: link:../benchmark-render
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

@@ -2,12 +2,15 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { BenchmarkReport, OperationResult, ReplicaResult, Timing } from '@homeostate/benchmark/types';
+import type { RenderReport, RenderResult } from '@homeostate/benchmark-render/types';
 import { DotPlot } from '../components/DotPlot';
 import { LineChart } from '../components/LineChart';
+import { assignAdapterSlots, type RenderRun } from '../lib/render-runs';
 import { assignSlots, type Run } from '../lib/runs';
 import { CompareView } from '../views/CompareView';
 import { OperationsView } from '../views/OperationsView';
 import { OverviewView } from '../views/OverviewView';
+import { RendersView } from '../views/RendersView';
 import { ReplicasView } from '../views/ReplicasView';
 import { ScalingView } from '../views/ScalingView';
 
@@ -55,9 +58,39 @@ const report = (yjsToggleAtThousand = 1): BenchmarkReport => ({
   ],
 });
 
-const run = (id: string, r: BenchmarkReport): Run => ({ id, name: `${id}.json`, source: 'file', report: r });
+const run = (id: string, r: BenchmarkReport): Run => ({ kind: 'backend', id, name: `${id}.json`, source: 'file', report: r });
 
 const current = run('current', report());
+
+const renderResult = (adapter: string, size: number, rowRenders: number): RenderResult => ({
+  adapter,
+  scenario: 'toggle',
+  size,
+  rowRenders,
+  listRenders: 1,
+  searchBoxRenders: 0,
+  footerRenders: 0,
+  appRenders: 0,
+  applyMs: 1.5,
+  commitMs: 4,
+  mountMs: 20,
+});
+
+const renderRun: RenderRun = {
+  kind: 'render',
+  id: 'render',
+  name: 'render.json',
+  source: 'file',
+  report: {
+    meta: { date: '2026-09-13T11:00:00.000Z', node: 'v25.0.0', commit: 'abc1234', dirty: false, versions: { react: '19.3.0' } },
+    results: [
+      renderResult('redux', 200, 1),
+      renderResult('mobx', 200, 200),
+      renderResult('redux', 1000, 1),
+      renderResult('mobx', 1000, 1000),
+    ],
+  } satisfies RenderReport,
+};
 const slots = assignSlots([current]);
 const render = (element: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(element);
 const count = (html: string, needle: string): number => html.split(needle).length - 1;
@@ -115,6 +148,35 @@ describe('views', () => {
     expect(html).toContain('+100%');
     expect(html).toContain('500 µs');
     expect(html).toContain('regression beyond the threshold');
+  });
+});
+
+describe('renders view', () => {
+  const html = render(
+    createElement(RendersView, {
+      run: renderRun,
+      runs: [renderRun],
+      onRunChange: () => {},
+      slots: assignAdapterSlots([renderRun]),
+    })
+  );
+
+  it('leads with the largest size and both adapters', () => {
+    expect(html).toContain('All figures at 1,000 rows');
+    expect(html).toContain('redux');
+    expect(html).toContain('mobx');
+  });
+
+  it('calls out the best and the worst row count against the ideal of one', () => {
+    expect(html).toContain('Best row renders');
+    expect(html).toContain('Worst row renders');
+    expect(html).toContain('one change from a peer should re-render one row');
+    expect(html).toContain('100% of the list');
+  });
+
+  it('shows the run it is reading', () => {
+    expect(html).toContain('render.json');
+    expect(html).toContain('react 19.3.0');
   });
 });
 

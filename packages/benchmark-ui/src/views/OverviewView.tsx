@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatBytes, formatDuration } from '@homeostate/benchmark/report';
+import { formatBytes, formatCount, formatDuration } from '@homeostate/benchmark/report';
 import type { OperationResult } from '@homeostate/benchmark/types';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SelectField } from '../components/Controls';
@@ -105,6 +105,8 @@ export function OverviewView({ report }: ViewProps) {
         { label: 'write', value: `${formatDuration(operation.write.mean)} ±${operation.write.rme.toFixed(1)}%` },
         { label: 'write p99', value: formatDuration(operation.write.p99) },
         { label: 'roundtrip', value: `${formatDuration(operation.roundtrip.mean)} ±${operation.roundtrip.rme.toFixed(1)}%` },
+        { label: 'renders / op', value: formatCount(operation.rendersPerOp) },
+        { label: 'wasted / op', value: formatCount(operation.wastedPerOp) },
         { label: 'wire / op', value: formatBytes(operation.wireBytesPerOp) },
         { label: 'doc Δ / op', value: formatBytes(operation.docBytesPerOp, true) },
         { label: 'heap Δ / op', value: formatBytes(operation.heapBytesPerOp, true) },

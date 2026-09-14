@@ -56,7 +56,7 @@ const report = (date: string, commit: string | null = 'abc1234'): BenchmarkRepor
   ],
 });
 
-const run = (id: string, date: string): Run => ({ id, name: `${id}.json`, source: 'file', report: report(date) });
+const run = (id: string, date: string): Run => ({ kind: 'backend', id, name: `${id}.json`, source: 'file', report: report(date) });
 
 describe('parseReport', () => {
   it('accepts a report written by the CLI', () => {

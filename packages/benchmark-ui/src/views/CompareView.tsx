@@ -26,7 +26,15 @@ interface CompareViewProps {
 }
 
 const REPLICA_METRICS = ['seed', 'adopt', 'doc size', 'heap / replica'];
-const OPERATION_METRICS = ['write', 'roundtrip', 'wire / op', 'doc Δ / op', 'heap Δ / op'];
+const OPERATION_METRICS = [
+  'write',
+  'roundtrip',
+  'renders / op',
+  'wasted / op',
+  'wire / op',
+  'doc Δ / op',
+  'heap Δ / op',
+];
 
 const isRegression = (delta: MetricDelta): boolean => delta.significant && (Number.isNaN(delta.change) || delta.change > 0);
 const isImprovement = (delta: MetricDelta): boolean => delta.significant && delta.change < 0;

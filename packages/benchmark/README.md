@@ -27,7 +27,9 @@ pnpm bench:ui                               # http://localhost:5180
 ```
 
 `@homeostate/benchmark-ui` picks up every `results/*.json`, draws the matrix as dot plots, scaling
-curves, and heatmaps, and compares two runs with the same significance rule as `--compare`. See
+curves, and heatmaps, and compares two runs with the same significance rule as `--compare`. The
+render counts are one of the metrics it plots, and it reads the render benchmark's own reports
+from `packages/benchmark-render/results` in a tab of their own. See
 [packages/benchmark-ui/README.md](../benchmark-ui/README.md).
 
 ## Compare a backend across core changes

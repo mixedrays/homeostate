@@ -21,7 +21,7 @@ adapters, its CRDT backends, and a demo playground.
 | `@homeostate/playground` | `packages/playground` | Vite app with a todo demo per store adapter: Zustand, MobX, Redux, Jotai, Valtio, TanStack Store, MobX-State-Tree |
 | `@homeostate/benchmark` | `packages/benchmark` | Benchmarks of core across backends: latency, wire bytes, document growth, heap |
 | `@homeostate/benchmark-render` | `packages/benchmark-render` | Counts the React components each adapter re-renders when a change arrives from a peer |
-| `@homeostate/benchmark-ui` | `packages/benchmark-ui` | Vite app that views saved benchmark reports: backends side by side, scaling, run comparison |
+| `@homeostate/benchmark-ui` | `packages/benchmark-ui` | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter |
 | `@homeostate/websocket-server` | `packages/websocket-server` | y-websocket server used by the playground |
 
 ## Scripts

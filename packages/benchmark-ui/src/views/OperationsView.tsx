@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { formatBytes, formatDuration } from '@homeostate/benchmark/report';
+import { formatBytes, formatCount, formatDuration } from '@homeostate/benchmark/report';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,7 +15,20 @@ import { backendsOf, operationAt, scenariosOf, sizesOf } from '../lib/runs';
 import type { ScaleKind } from '../lib/scale';
 import { SCALE_OPTIONS, effectiveScale, finite, metricOptions, type ViewProps } from './shared';
 
-const COLUMNS = ['scenario', 'backend', 'write', 'p50', 'p99', 'vs best', 'roundtrip', 'wire / op', 'doc Δ / op', 'heap Δ / op'];
+const COLUMNS = [
+  'scenario',
+  'backend',
+  'write',
+  'p50',
+  'p99',
+  'vs best',
+  'roundtrip',
+  'renders / op',
+  'wasted / op',
+  'wire / op',
+  'doc Δ / op',
+  'heap Δ / op',
+];
 
 export function OperationsView({ report, slots }: ViewProps) {
   const sizes = sizesOf(report);
@@ -137,6 +150,10 @@ export function OperationsView({ report, slots }: ViewProps) {
                       <TableCell title={`${operation.roundtrip.samples.toLocaleString('en-US')} samples`}>
                         {formatTiming(operation.roundtrip)}
                       </TableCell>
+                      <TableCell title={`${operation.size.toLocaleString('en-US')} rows in the list`}>
+                        {formatCount(operation.rendersPerOp)}
+                      </TableCell>
+                      <TableCell>{formatCount(operation.wastedPerOp)}</TableCell>
                       <TableCell>{formatBytes(operation.wireBytesPerOp)}</TableCell>
                       <TableCell>{formatBytes(operation.docBytesPerOp, true)}</TableCell>
                       <TableCell>{formatBytes(operation.heapBytesPerOp, true)}</TableCell>

@@ -22,6 +22,13 @@ pnpm bench:render -- --help
 Progress goes to stderr and the Markdown report to stdout. `pnpm test` runs the same
 measurements as assertions.
 
+A report saved into `results/` also shows up in the viewer, under its own tab:
+
+```bash
+pnpm bench:render -- --json results/quick.json
+pnpm bench:ui                                    # http://localhost:5180, Renders tab
+```
+
 ## What it reports
 
 One remote `toggle` at 1000 rows, on this machine:
