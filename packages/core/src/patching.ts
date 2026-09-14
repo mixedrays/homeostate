@@ -1,8 +1,9 @@
+import { applyStringChanges } from './apply.js';
 import { ChangeType, type Change } from './change.js';
 import { getChanges, type Diffable } from './diff.js';
 
 const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
-  if (typeof state === 'string') return applyChangesToString(state, changes);
+  if (typeof state === 'string') return applyStringChanges(state, changes);
   if (Array.isArray(state)) return applyChangesToArray(state, changes);
   return applyChangesToObject(state, changes);
 };
@@ -62,27 +63,6 @@ const applyChangesToObject = (
 
   return revised;
 };
-
-const applyChangesToString = (string: string, changes: Change[]): string =>
-  changes.reduce((revised, [type, index, value]) => {
-    switch (type) {
-      case ChangeType.INSERT: {
-        const left = revised.slice(0, index as number);
-        const right = revised.slice(index as number);
-        return left + (value as string) + right;
-      }
-
-      case ChangeType.DELETE: {
-        const left = revised.slice(0, index as number);
-        const right = revised.slice((index as number) + 1);
-        return left + right;
-      }
-
-      default: {
-        return revised;
-      }
-    }
-  }, string);
 
 /**
  * Returns a value identical to newState, built from oldState by copying every

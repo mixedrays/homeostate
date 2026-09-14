@@ -31,45 +31,42 @@ pnpm bench:ui                                    # http://localhost:5180, Render
 
 ## What it reports
 
-One remote `toggle` at 1000 rows, on this machine:
+One remote `toggle` at 200 rows, on this machine:
 
 | adapter | row renders | list | apply | commit | mount |
 | --- | --- | --- | --- | --- | --- |
-| redux | 1 | 1 | 1.7 ms | 8.5 ms | 34.2 ms |
-| zustand | 1 | 1 | 1.5 ms | 3.1 ms | 32.7 ms |
-| mobx-state-tree | 1 | **0** | 6.4 ms | 1.1 ms | 43.7 ms |
-| **mobx** | **1000** | 1 | 7.3 ms | 14.3 ms | 20.9 ms |
+| redux | 1 | 1 | 1.5 ms | 3.8 ms | 22.4 ms |
+| zustand | 1 | 1 | 0.7 ms | 2.3 ms | 14.0 ms |
+| mobx-state-tree | 1 | **0** | 2.5 ms | 0.6 ms | 18.5 ms |
+| mobx | 1 | **0** | 1.3 ms | 0.5 ms | 7.2 ms |
 
-Three of the four re-render the one row that changed, at every size. The whole matrix, at 200
-rows, is where they separate:
+All four re-render the one row that changed. The whole matrix, at 200 rows, is where they
+separate:
 
 | scenario, 200 rows | redux | zustand | mobx-state-tree | mobx |
 | --- | --- | --- | --- | --- |
-| toggle | 1 | 1 | 1 | **200** |
-| keystroke | 1 | 1 | 1 | **200** |
-| add | 1 (the new row mounts) | 1 | 1 | **201** |
-| remove | 0 | 0 | 0 | **199** |
-| move | 1 | 1 | **200** | **200** |
-| search (a top-level string) | 0, and the list does not render either | 0 | 0 | **200** |
+| toggle | 1 | 1 | 1 | 1 |
+| keystroke | 1 | 1 | 1 | 1 |
+| add | 1 (the new row mounts) | 1 | 1 | 1 |
+| remove | 0 | 0 | 0 | 0 |
+| move | 1 | 1 | **200** | 1 |
+| search (a top-level string) | 0, and the list does not render either | 0 | 0 | 0 |
 
-Two findings live in that table.
-
-**`adapter-mobx` re-renders every row of the list on every change**, at every size, including a
-change that touches no todo at all. The cause is
-`packages/adapter-mobx/src/adapter.ts:48-52`: `setState` assigns whole plain arrays into
-observable fields, so every row becomes a new observable object, whatever core handed the
-adapter. Core's side is optimal — the write-path benchmark's `renders / op` column reports
-1, 1, 0, 0 and 1 for the same scenarios — so the whole difference is the adapter's. Reconciling
-in place instead of assigning is what would fix it, and this benchmark is the acceptance test
-for that change.
+One finding is left in that table.
 
 **`adapter-mobx-state-tree` is the best of the four until the list is reordered.** Because
 `applySnapshot` reconciles a node carrying an identifier in place, a toggle re-renders the one
-row and not even the list container — the only fixture here that leaves the container alone. A
-`move` is the exception: an array is reconciled by position, so shifting every element rewrites
-every node. It is also the most expensive to apply, and the gap widens with the list: 39 ms of
-apply and 154 ms of commit for a move at 1000 rows, against 1 ms and 2 ms for the immutable
-stores.
+row and not even the list container. A `move` is the exception: an array is reconciled by
+position, so shifting every element rewrites every node. It is also the most expensive to
+apply, and the gap widens with the list: 39 ms of apply and 154 ms of commit for a move at
+1000 rows, against 1 ms and 2 ms for the immutable stores.
+
+`adapter-mobx` used to be the headline here: it re-rendered **every** row on **every** change,
+at every size, including a change that touched no todo at all, because `setState` assigned
+whole plain arrays into observable fields. It now applies core's edit script to the observable
+tree in place, which is why it joins MST in leaving the list container alone on an edit — and
+why it keeps the Redux column on `move`, where MST does not. This benchmark was the acceptance
+test for that change; the numbers above are what it now asserts.
 
 ### Columns
 

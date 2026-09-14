@@ -46,24 +46,25 @@ interface Expectation {
  * that carries an identifier rather than rebuilding it. `move` is where that stops — an array
  * is reconciled by position, so shifting every element rewrites every node.
  *
- * `mobx` re-renders the whole list on every change, including one that touches no todo at all,
- * because `setState` assigns whole plain arrays into observable fields
- * (`packages/adapter-mobx/src/adapter.ts:48-52`). Reconciling in place would bring each of
- * these down to the `redux` column, and these expectations are then the thing to update.
+ * `mobx` matches them too, and for the same reason MST does: `setState` applies core's edit
+ * script to the observable tree in place (`packages/adapter-mobx/src/adapter.ts`) instead of
+ * assigning whole plain arrays into observable fields. A node the edit script does not name
+ * keeps its identity, and in MobX identity is the unit of reactivity.
  */
 const expectations: Expectation[] = [
-  { scenario: toggle, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: SIZE } },
-  { scenario: keystroke, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: SIZE } },
-  // The added row has to mount whatever the adapter does; MobX rebuilds the other 200 too.
-  { scenario: add, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: SIZE + 1 } },
+  { scenario: toggle, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: 1 } },
+  { scenario: keystroke, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: 1 } },
+  // The added row has to mount whatever the adapter does.
+  { scenario: add, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: 1 } },
   // Deleting a row costs nothing: the survivors keep their references.
-  { scenario: remove, rows: { redux: 0, zustand: 0, 'mobx-state-tree': 0, mobx: SIZE - 1 } },
-  // Core rebuilds the moved row and nothing else, which is its one wasted render. MST rebuilds
-  // the list because it pairs snapshot to node by index rather than by identifier.
-  { scenario: move, rows: { redux: 1, zustand: 1, 'mobx-state-tree': SIZE, mobx: SIZE } },
-  // A top-level string that no row reads. This is the case that shows the MobX cost is not
-  // about the change being large: nothing in the list changed at all.
-  { scenario: search, rows: { redux: 0, zustand: 0, 'mobx-state-tree': 0, mobx: SIZE } },
+  { scenario: remove, rows: { redux: 0, zustand: 0, 'mobx-state-tree': 0, mobx: 0 } },
+  // Core rebuilds the moved row and nothing else, which is its one wasted render: the edit
+  // script pairs the delete with an insert, and the inserted todo is a fresh node. MST rebuilds
+  // the whole list because it pairs snapshot to node by index rather than by identifier.
+  { scenario: move, rows: { redux: 1, zustand: 1, 'mobx-state-tree': SIZE, mobx: 1 } },
+  // A top-level string that no row reads. Both fine-grained adapters skip the list entirely:
+  // the incoming `todos` is the same array core was handed, and one `Object.is` settles it.
+  { scenario: search, rows: { redux: 0, zustand: 0, 'mobx-state-tree': 0, mobx: 0 } },
 ];
 
 const cases = expectations.flatMap(({ scenario, rows }) =>
@@ -101,11 +102,19 @@ describe(`one remote change over Yjs, ${SIZE} rows`, () => {
     expect(result.searchBoxRenders).toBe(1);
   });
 
-  it('does not even re-render the list container when MST reconciles a row in place', async () => {
-    // The array node itself is untouched by `applySnapshot`, so only the row that changed
-    // re-renders. The immutable stores hand the list a new array and re-render the container.
+  it('does not even re-render the list container when a row is reconciled in place', async () => {
+    // The array itself is untouched, so only the row that changed re-renders. The immutable
+    // stores hand the list a new array and re-render the container.
     expect((await measure(mobxStateTree, toggle, SIZE)).listRenders).toBe(0);
+    expect((await measure(mobx, toggle, SIZE)).listRenders).toBe(0);
     expect((await measure(redux, toggle, SIZE)).listRenders).toBe(1);
+  });
+
+  it('leaves the MobX list untouched when only a top-level string changed', async () => {
+    const result = await measure(mobx, search, SIZE);
+
+    expect(result.listRenders).toBe(0);
+    expect(result.searchBoxRenders).toBe(1);
   });
 
   it('reports the advisory timings alongside the counts', async () => {
