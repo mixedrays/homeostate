@@ -6,5 +6,5 @@
     "jsx": "react-jsx"
   },
   "include": ["packages/*/src/__tests__/**/*.ts", "packages/*/src/__tests__/**/*.tsx"],
-  "exclude": ["packages/benchmark-ui/**"]
+  "exclude": ["packages/benchmark-ui/**", "packages/playground/**"]
 }

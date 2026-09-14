@@ -17,6 +17,7 @@
     { "path": "packages/benchmark-ui" },
     { "path": "packages/benchmark-ui/tsconfig.test.json" },
     { "path": "packages/playground" },
+    { "path": "packages/playground/tsconfig.test.json" },
     { "path": "tsconfig.test.json" }
   ]
 }

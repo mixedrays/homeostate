@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { TodoListView } from '../../components/todo/TodoListView';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
@@ -15,14 +16,19 @@ export function TodoList() {
   const searchTerm = useAppSelector(selectSearchTerm);
   const filterStatus = useAppSelector(selectFilterStatus);
 
+  // The rows are memoized, and an inline arrow would be a new prop on every render and defeat
+  // that. `dispatch` is stable for the life of the store, so these are too.
+  const onToggle = useCallback((id: string) => dispatch(toggleTodo(id)), [dispatch]);
+  const onDelete = useCallback((id: string) => dispatch(deleteTodo(id)), [dispatch]);
+
   return (
     <TodoListView
       todos={todos}
       counts={counts}
       searchTerm={searchTerm}
       filterStatus={filterStatus}
-      onToggle={(id) => dispatch(toggleTodo(id))}
-      onDelete={(id) => dispatch(deleteTodo(id))}
+      onToggle={onToggle}
+      onDelete={onDelete}
     />
   );
 }

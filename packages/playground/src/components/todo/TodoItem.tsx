@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { memo, useId } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -6,13 +6,17 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { Todo } from '../../types/todo';
 
-interface TodoItemProps {
+export interface TodoItemProps {
   todo: Todo;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
+/**
+ * The row itself, unmemoized. Exported for `observer()`, which applies its own `memo` and
+ * throws on a component that already carries one — see the MobX demo's `TodoList`.
+ */
+export function TodoItemRow({ todo, onToggle, onDelete }: TodoItemProps) {
   const checkboxId = useId();
 
   return (
@@ -49,3 +53,11 @@ export function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
     </li>
   );
 }
+
+/**
+ * The row the list renders by default. Memoized, so toggling one todo re-renders one row
+ * instead of the whole list — which only holds while the demo above hands down todo objects
+ * and callbacks whose identity survives an unrelated change. Every demo but MobX does that
+ * already: its store is immutable, so an untouched todo is the same object it was.
+ */
+export const TodoItem = memo(TodoItemRow);

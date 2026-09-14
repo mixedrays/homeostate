@@ -1,8 +1,9 @@
+import type { ComponentType } from 'react';
 import { CheckCheck, CircleDashed, Inbox, SearchX } from 'lucide-react';
 import type { FilterStatus, Todo } from '../../types/todo';
 import type { TodoCounts } from '../../lib/todos';
 import { EmptyState, type EmptyStateProps } from './EmptyState';
-import { TodoItem } from './TodoItem';
+import { TodoItem, type TodoItemProps } from './TodoItem';
 
 interface TodoListViewProps {
   todos: readonly Todo[];
@@ -11,6 +12,12 @@ interface TodoListViewProps {
   filterStatus: FilterStatus;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  /**
+   * The row component, memoized by default. A store that mutates its todos in place instead
+   * of replacing them hands its own reactive row here, so the row subscribes to the todo it
+   * was given rather than waiting for a new object to arrive as a prop.
+   */
+  itemComponent?: ComponentType<TodoItemProps>;
 }
 
 export function TodoListView({
@@ -20,6 +27,7 @@ export function TodoListView({
   filterStatus,
   onToggle,
   onDelete,
+  itemComponent: Item = TodoItem,
 }: TodoListViewProps) {
   const hiddenCount = counts.all - todos.length;
 
@@ -38,7 +46,7 @@ export function TodoListView({
       ) : (
         <ul className="space-y-2">
           {todos.map((todo) => (
-            <TodoItem key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} />
+            <Item key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} />
           ))}
         </ul>
       )}
