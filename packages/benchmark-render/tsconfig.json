@@ -12,6 +12,8 @@
     { "path": "../core" },
     { "path": "../crdt-yjs" },
     { "path": "../adapter-mobx" },
-    { "path": "../adapter-redux" }
+    { "path": "../adapter-mobx-state-tree" },
+    { "path": "../adapter-redux" },
+    { "path": "../adapter-zustand" }
   ]
 }

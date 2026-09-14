@@ -14,7 +14,7 @@ import type { Scenario } from '@homeostate/benchmark';
 import { createCounters } from '../counters.js';
 import { enableActEnvironment } from '../dom.js';
 import { measure } from '../driver.js';
-import { mobx, redux } from '../fixtures/index.js';
+import { fixtures, mobx, mobxStateTree, redux } from '../fixtures/index.js';
 import type { Fixture } from '../types.js';
 
 /**
@@ -30,43 +30,65 @@ const SIZE = 200;
 
 beforeAll(enableActEnvironment);
 
+/** Row renders per adapter for one remote change, keyed by fixture name. */
+type Rows = Record<string, number>;
+
 interface Expectation {
   scenario: Scenario;
-  /** What a store that preserves the identity core hands it re-renders. */
-  redux: number;
-  /**
-   * What `adapter-mobx` re-renders: every row, on every change, because `setState` assigns
-   * whole plain arrays into observable fields (`packages/adapter-mobx/src/adapter.ts:48-52`).
-   * Reconciling in place would make each of these match the redux column, and these
-   * expectations are then the thing to update.
-   */
-  mobx: number;
+  rows: Rows;
 }
 
+/**
+ * `redux` and `zustand` hand React the objects core gave them, so they re-render what core
+ * changed and nothing else.
+ *
+ * `mobx-state-tree` matches them on every change in place: `applySnapshot` reconciles a node
+ * that carries an identifier rather than rebuilding it. `move` is where that stops — an array
+ * is reconciled by position, so shifting every element rewrites every node.
+ *
+ * `mobx` re-renders the whole list on every change, including one that touches no todo at all,
+ * because `setState` assigns whole plain arrays into observable fields
+ * (`packages/adapter-mobx/src/adapter.ts:48-52`). Reconciling in place would bring each of
+ * these down to the `redux` column, and these expectations are then the thing to update.
+ */
 const expectations: Expectation[] = [
-  { scenario: toggle, redux: 1, mobx: SIZE },
-  { scenario: keystroke, redux: 1, mobx: SIZE },
+  { scenario: toggle, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: SIZE } },
+  { scenario: keystroke, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: SIZE } },
   // The added row has to mount whatever the adapter does; MobX rebuilds the other 200 too.
-  { scenario: add, redux: 1, mobx: SIZE + 1 },
+  { scenario: add, rows: { redux: 1, zustand: 1, 'mobx-state-tree': 1, mobx: SIZE + 1 } },
   // Deleting a row costs nothing: the survivors keep their references.
-  { scenario: remove, redux: 0, mobx: SIZE - 1 },
-  // The moved row is rebuilt with identical data, which is core's one wasted render.
-  { scenario: move, redux: 1, mobx: SIZE },
+  { scenario: remove, rows: { redux: 0, zustand: 0, 'mobx-state-tree': 0, mobx: SIZE - 1 } },
+  // Core rebuilds the moved row and nothing else, which is its one wasted render. MST rebuilds
+  // the list because it pairs snapshot to node by index rather than by identifier.
+  { scenario: move, rows: { redux: 1, zustand: 1, 'mobx-state-tree': SIZE, mobx: SIZE } },
   // A top-level string that no row reads. This is the case that shows the MobX cost is not
   // about the change being large: nothing in the list changed at all.
-  { scenario: search, redux: 0, mobx: SIZE },
+  { scenario: search, rows: { redux: 0, zustand: 0, 'mobx-state-tree': 0, mobx: SIZE } },
 ];
 
-describe(`one remote change over Yjs, ${SIZE} rows`, () => {
-  it.each(expectations)('redux re-renders $redux rows on $scenario.name', async ({ scenario, redux: rows }) => {
-    const result = await measure(redux, scenario, SIZE);
+const cases = expectations.flatMap(({ scenario, rows }) =>
+  fixtures.map((fixture) => ({
+    adapter: fixture.name,
+    scenario: scenario.name,
+    fixture,
+    step: scenario,
+    rows: rows[fixture.name],
+  }))
+);
 
-    expect(result.rowRenders).toBe(rows);
-    expect(result.appRenders).toBe(0);
+describe(`one remote change over Yjs, ${SIZE} rows`, () => {
+  it('covers every registered fixture', () => {
+    expect(fixtures.map((fixture) => fixture.name)).toEqual([
+      'redux',
+      'zustand',
+      'mobx-state-tree',
+      'mobx',
+    ]);
+    expect(cases.every((one) => one.rows !== undefined)).toBe(true);
   });
 
-  it.each(expectations)('mobx re-renders $mobx rows on $scenario.name', async ({ scenario, mobx: rows }) => {
-    const result = await measure(mobx, scenario, SIZE);
+  it.each(cases)('$adapter re-renders $rows rows on $scenario', async ({ fixture, step, rows }) => {
+    const result = await measure(fixture, step, SIZE);
 
     expect(result.rowRenders).toBe(rows);
     expect(result.appRenders).toBe(0);
@@ -79,8 +101,15 @@ describe(`one remote change over Yjs, ${SIZE} rows`, () => {
     expect(result.searchBoxRenders).toBe(1);
   });
 
+  it('does not even re-render the list container when MST reconciles a row in place', async () => {
+    // The array node itself is untouched by `applySnapshot`, so only the row that changed
+    // re-renders. The immutable stores hand the list a new array and re-render the container.
+    expect((await measure(mobxStateTree, toggle, SIZE)).listRenders).toBe(0);
+    expect((await measure(redux, toggle, SIZE)).listRenders).toBe(1);
+  });
+
   it('reports the advisory timings alongside the counts', async () => {
-    const result = await measure(redux, toggle, SIZE);
+    const result = await measure(mobx, toggle, SIZE);
 
     expect(result.mountMs).toBeGreaterThan(0);
     expect(result.applyMs).toBeGreaterThan(0);

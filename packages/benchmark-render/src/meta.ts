@@ -24,7 +24,18 @@ const version = (name: string): string | null => {
 export const collectMeta = (): RenderMeta => {
   const status = git('status --porcelain');
   const versions: Record<string, string> = {};
-  for (const name of ['react', 'react-dom', 'mobx', 'mobx-react-lite', '@reduxjs/toolkit', 'react-redux', 'yjs']) {
+  const named = [
+    'react',
+    'react-dom',
+    'mobx',
+    'mobx-react-lite',
+    'mobx-state-tree',
+    '@reduxjs/toolkit',
+    'react-redux',
+    'zustand',
+    'yjs',
+  ];
+  for (const name of named) {
     const found = version(name);
     if (found !== null) versions[name] = found;
   }
