@@ -60,25 +60,7 @@ Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --f
 
 ## Releasing
 
-Each package under `packages/` is versioned and published on its own with
-[Changesets](https://changesets.dev), and gets its own `CHANGELOG.md`, tag
-(`@homeostate/core@0.1.0`) and GitHub release.
-
-1. In the PR with the change, run `pnpm changeset`, pick the changed packages and bump types, and
-   write the summary that goes into the changelog. Commit the generated `.changeset/*.md` file.
-2. On merge to `main`, the Version Packages workflow opens (or updates) a
-   `chore(release): version packages` PR that bumps versions and writes the changelogs. Packages
-   that depend on a bumped package get a patch bump when the new version leaves their range.
-3. Merge that PR, then locally:
-
-   ```bash
-   git switch main && git pull
-   pnpm release
-   ```
-
-   `pnpm release` needs `npm login` and `gh auth login`. It builds and tests the packages,
-   publishes every version not yet on npm, pushes the tags and creates a GitHub release per
-   published package with its changelog entry as notes. It is safe to rerun after a failure.
+Packages are versioned and published one by one with Changesets; see [RELEASE.md](RELEASE.md).
 
 ## Third-Party Notices
 
