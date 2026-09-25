@@ -42,102 +42,23 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
-  packages/adapter-jotai:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      jotai:
-        specifier: ^3.0.0
-        version: 3.0.0(@types/react@19.3.0)(react@19.3.0)
-
-  packages/adapter-mobx:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      mobx:
-        specifier: ^7.0.3
-        version: 7.0.3
-
-  packages/adapter-mobx-state-tree:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      mobx:
-        specifier: ^7.0.3
-        version: 7.0.3
-      mobx-state-tree:
-        specifier: ^8.0.0
-        version: 8.0.0(mobx@7.0.3)(typescript@5.9.3)
-
-  packages/adapter-redux:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      redux:
-        specifier: ^5.0.1
-        version: 5.0.1
-
-  packages/adapter-tanstack-store:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      '@tanstack/store':
-        specifier: ^0.11.1
-        version: 0.11.1
-
-  packages/adapter-valtio:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      valtio:
-        specifier: ^2.3.2
-        version: 2.3.2(@types/react@19.3.0)(react@19.3.0)
-
-  packages/adapter-zustand:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-      '@homeostate/crdt-yjs':
-        specifier: workspace:^
-        version: link:../crdt-yjs
-    devDependencies:
-      yjs:
-        specifier: ^13.6.23
-        version: 13.6.27
-      zustand:
-        specifier: ^4.5.2
-        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
-
-  packages/benchmark:
+  apps/benchmark-crdt:
     dependencies:
       '@automerge/automerge':
         specifier: ^3.4.1
         version: 3.4.1
       '@homeostate/core':
         specifier: workspace:^
-        version: link:../core
+        version: link:../../packages/core
       '@homeostate/crdt-automerge':
         specifier: workspace:^
-        version: link:../crdt-automerge
+        version: link:../../packages/crdt-automerge
       '@homeostate/crdt-loro':
         specifier: workspace:^
-        version: link:../crdt-loro
+        version: link:../../packages/crdt-loro
       '@homeostate/crdt-yjs':
         specifier: workspace:^
-        version: link:../crdt-yjs
+        version: link:../../packages/crdt-yjs
       loro-crdt:
         specifier: ^1.16.1
         version: 1.16.1
@@ -152,29 +73,29 @@ importers:
         specifier: ^4.23.13
         version: 4.23.13
 
-  packages/benchmark-render:
+  apps/benchmark-store:
     dependencies:
-      '@homeostate/adapter-mobx':
+      '@homeostate/benchmark-crdt':
         specifier: workspace:^
-        version: link:../adapter-mobx
-      '@homeostate/adapter-mobx-state-tree':
-        specifier: workspace:^
-        version: link:../adapter-mobx-state-tree
-      '@homeostate/adapter-redux':
-        specifier: workspace:^
-        version: link:../adapter-redux
-      '@homeostate/adapter-zustand':
-        specifier: workspace:^
-        version: link:../adapter-zustand
-      '@homeostate/benchmark':
-        specifier: workspace:^
-        version: link:../benchmark
+        version: link:../benchmark-crdt
       '@homeostate/core':
         specifier: workspace:^
-        version: link:../core
+        version: link:../../packages/core
       '@homeostate/crdt-yjs':
         specifier: workspace:^
-        version: link:../crdt-yjs
+        version: link:../../packages/crdt-yjs
+      '@homeostate/store-mobx':
+        specifier: workspace:^
+        version: link:../../packages/store-mobx
+      '@homeostate/store-mobx-state-tree':
+        specifier: workspace:^
+        version: link:../../packages/store-mobx-state-tree
+      '@homeostate/store-redux':
+        specifier: workspace:^
+        version: link:../../packages/store-redux
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../../packages/store-zustand
       '@reduxjs/toolkit':
         specifier: ^2.11.0
         version: 2.11.0(react-redux@9.2.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)
@@ -219,7 +140,7 @@ importers:
         specifier: ^4.23.13
         version: 4.23.13
 
-  packages/benchmark-ui:
+  apps/benchmark-ui:
     dependencies:
       '@base-ui/react':
         specifier: ^1.8.0
@@ -227,12 +148,12 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
-      '@homeostate/benchmark':
+      '@homeostate/benchmark-crdt':
         specifier: workspace:^
-        version: link:../benchmark
-      '@homeostate/benchmark-render':
+        version: link:../benchmark-crdt
+      '@homeostate/benchmark-store':
         specifier: workspace:^
-        version: link:../benchmark-render
+        version: link:../benchmark-store
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -277,39 +198,7 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
 
-  packages/core: {}
-
-  packages/crdt-automerge:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      '@automerge/automerge':
-        specifier: ^3.4.1
-        version: 3.4.1
-
-  packages/crdt-loro:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      loro-crdt:
-        specifier: ^1.16.1
-        version: 1.16.1
-
-  packages/crdt-yjs:
-    dependencies:
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../core
-    devDependencies:
-      yjs:
-        specifier: ^13.6.23
-        version: 13.6.27
-
-  packages/playground:
+  apps/playground:
     dependencies:
       '@base-ui/react':
         specifier: ^1.8.0
@@ -317,33 +206,33 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
-      '@homeostate/adapter-jotai':
-        specifier: workspace:^
-        version: link:../adapter-jotai
-      '@homeostate/adapter-mobx':
-        specifier: workspace:^
-        version: link:../adapter-mobx
-      '@homeostate/adapter-mobx-state-tree':
-        specifier: workspace:^
-        version: link:../adapter-mobx-state-tree
-      '@homeostate/adapter-redux':
-        specifier: workspace:^
-        version: link:../adapter-redux
-      '@homeostate/adapter-tanstack-store':
-        specifier: workspace:^
-        version: link:../adapter-tanstack-store
-      '@homeostate/adapter-valtio':
-        specifier: workspace:^
-        version: link:../adapter-valtio
-      '@homeostate/adapter-zustand':
-        specifier: workspace:^
-        version: link:../adapter-zustand
       '@homeostate/core':
         specifier: workspace:^
-        version: link:../core
+        version: link:../../packages/core
       '@homeostate/crdt-yjs':
         specifier: workspace:^
-        version: link:../crdt-yjs
+        version: link:../../packages/crdt-yjs
+      '@homeostate/store-jotai':
+        specifier: workspace:^
+        version: link:../../packages/store-jotai
+      '@homeostate/store-mobx':
+        specifier: workspace:^
+        version: link:../../packages/store-mobx
+      '@homeostate/store-mobx-state-tree':
+        specifier: workspace:^
+        version: link:../../packages/store-mobx-state-tree
+      '@homeostate/store-redux':
+        specifier: workspace:^
+        version: link:../../packages/store-redux
+      '@homeostate/store-tanstack':
+        specifier: workspace:^
+        version: link:../../packages/store-tanstack
+      '@homeostate/store-valtio':
+        specifier: workspace:^
+        version: link:../../packages/store-valtio
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../../packages/store-zustand
       '@reduxjs/toolkit':
         specifier: ^2.11.0
         version: 2.11.0(react-redux@9.2.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1))(react@19.3.0)
@@ -430,7 +319,7 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)
 
-  packages/websocket-server:
+  apps/websocket-server-yjs:
     dependencies:
       ws:
         specifier: ^8.18.0
@@ -441,6 +330,111 @@ importers:
       yjs:
         specifier: ^13.6.23
         version: 13.6.27
+
+  packages/core: {}
+
+  packages/crdt-automerge:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@automerge/automerge':
+        specifier: ^3.4.1
+        version: 3.4.1
+
+  packages/crdt-loro:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      loro-crdt:
+        specifier: ^1.16.1
+        version: 1.16.1
+
+  packages/crdt-yjs:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+
+  packages/store-jotai:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      jotai:
+        specifier: ^3.0.0
+        version: 3.0.0(@types/react@19.3.0)(react@19.3.0)
+
+  packages/store-mobx:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      mobx:
+        specifier: ^7.0.3
+        version: 7.0.3
+
+  packages/store-mobx-state-tree:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      mobx:
+        specifier: ^7.0.3
+        version: 7.0.3
+      mobx-state-tree:
+        specifier: ^8.0.0
+        version: 8.0.0(mobx@7.0.3)(typescript@5.9.3)
+
+  packages/store-redux:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      redux:
+        specifier: ^5.0.1
+        version: 5.0.1
+
+  packages/store-tanstack:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@tanstack/store':
+        specifier: ^0.11.1
+        version: 0.11.1
+
+  packages/store-valtio:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      valtio:
+        specifier: ^2.3.2
+        version: 2.3.2(@types/react@19.3.0)(react@19.3.0)
+
+  packages/store-zustand:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
 
 packages:
 
@@ -2883,9 +2877,6 @@ packages:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
-  reselect@5.1.1:
-    resolution: {integrity: sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==}
-
   reselect@5.3.0:
     resolution: {integrity: sha512-XGoLeRAVzUTcJ1qkxPQhDJyIZ5d6zzZD9nT7AEZOaaU9UbWclhycElmhO+VD5bFeLuzhPBaOV2oXC8uG35ZSpg==}
 
@@ -4001,7 +3992,7 @@ snapshots:
       immer: 11.0.1
       redux: 5.0.1
       redux-thunk: 3.1.0(redux@5.0.1)
-      reselect: 5.1.1
+      reselect: 5.3.0
     optionalDependencies:
       react: 19.3.0
       react-redux: 9.2.0(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1)
@@ -5814,8 +5805,6 @@ snapshots:
       regex-utilities: 2.3.0
 
   require-from-string@2.0.2: {}
-
-  reselect@5.1.1: {}
 
   reselect@5.3.0: {}
 

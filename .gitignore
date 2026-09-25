@@ -27,8 +27,8 @@ dist-ssr
 *.tsbuildinfo
 
 # Benchmark results
-packages/benchmark/results
-packages/benchmark-render/results
+apps/benchmark-crdt/results
+apps/benchmark-store/results
 
 # Temporary files
 .tmp

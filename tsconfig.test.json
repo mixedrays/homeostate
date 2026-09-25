@@ -5,6 +5,11 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx"
   },
-  "include": ["packages/*/src/__tests__/**/*.ts", "packages/*/src/__tests__/**/*.tsx"],
-  "exclude": ["packages/benchmark-ui/**", "packages/playground/**"]
+  "include": [
+    "packages/*/src/__tests__/**/*.ts",
+    "packages/*/src/__tests__/**/*.tsx",
+    "apps/*/src/__tests__/**/*.ts",
+    "apps/*/src/__tests__/**/*.tsx"
+  ],
+  "exclude": ["apps/benchmark-ui/**", "apps/playground/**"]
 }

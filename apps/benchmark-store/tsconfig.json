@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["src/**/__tests__"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/crdt-yjs" },
+    { "path": "../../packages/store-mobx" },
+    { "path": "../../packages/store-mobx-state-tree" },
+    { "path": "../../packages/store-redux" },
+    { "path": "../../packages/store-zustand" }
+  ]
+}

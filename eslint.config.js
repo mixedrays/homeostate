@@ -15,7 +15,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/playground/**/*.{ts,tsx}', 'packages/benchmark-ui/**/*.{ts,tsx}'],
+    files: ['apps/playground/**/*.{ts,tsx}', 'apps/benchmark-ui/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
@@ -29,20 +29,20 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/*/src/components/ui/**/*.tsx'],
+    files: ['apps/*/src/components/ui/**/*.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },
   },
   {
-    files: ['packages/benchmark/**/*.ts'],
+    files: ['apps/benchmark-crdt/**/*.ts'],
     languageOptions: {
       globals: globals.node,
     },
   },
   {
     // Fixtures render React in jsdom and the CLI drives them from Node, so both sets apply.
-    files: ['packages/benchmark-render/**/*.{ts,tsx}'],
+    files: ['apps/benchmark-store/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
     },
@@ -54,7 +54,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/websocket-server/**/*.js'],
+    files: ['apps/websocket-server-yjs/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       globals: globals.node,
