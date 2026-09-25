@@ -1,6 +1,10 @@
-import { useAtom, useAtomValue } from 'jotai';
-import { TodoFilters } from '../../components/todo/TodoFilters';
-import { filterStatusAtom, searchTermAtom, todoCountsAtom } from '../store/todoAtoms';
+import { useAtom, useAtomValue } from "jotai";
+import { TodoFilters } from "../../components/todo/TodoFilters";
+import {
+  filterStatusAtom,
+  searchTermAtom,
+  todoCountsAtom,
+} from "../store/todoAtoms";
 
 export function FilterControls() {
   const [searchTerm, setSearchTerm] = useAtom(searchTermAtom);

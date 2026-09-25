@@ -1,4 +1,4 @@
-import type { CrdtBackend } from '@homeostate/core';
+import type { CrdtBackend } from "@homeostate/core";
 
 export interface Todo {
   id: string;
@@ -9,7 +9,7 @@ export interface Todo {
 export interface TodoState {
   todos: Todo[];
   searchTerm: string;
-  filterStatus: 'all' | 'active' | 'completed';
+  filterStatus: "all" | "active" | "completed";
 }
 
 /** One instance of a backend, the unit that a peer in the benchmark owns. */
@@ -113,7 +113,10 @@ export interface BenchmarkMeta {
   commit: string | null;
   dirty: boolean | null;
   versions: Record<string, string>;
-  options: Pick<BenchmarkOptions, 'time' | 'minSamples' | 'operations' | 'sizes'>;
+  options: Pick<
+    BenchmarkOptions,
+    "time" | "minSamples" | "operations" | "sizes"
+  >;
 }
 
 export interface BenchmarkReport {

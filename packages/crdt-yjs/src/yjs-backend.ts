@@ -1,6 +1,6 @@
-import * as Y from 'yjs';
-import type { CrdtBackend, Unsubscribe } from '@homeostate/core';
-import { patchSharedType } from './patching.js';
+import * as Y from "yjs";
+import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import { patchSharedType } from "./patching.js";
 
 /**
  * Creates a CrdtBackend over the Y.Map called `name` inside `doc`.

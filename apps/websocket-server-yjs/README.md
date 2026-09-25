@@ -27,11 +27,15 @@ PORT=8080 pnpm --filter @homeostate/websocket-server-yjs start
 ## Connecting from clients
 
 ```typescript
-import { WebsocketProvider } from 'y-websocket';
-import * as Y from 'yjs';
+import { WebsocketProvider } from "y-websocket";
+import * as Y from "yjs";
 
 const ydoc = new Y.Doc();
-const wsProvider = new WebsocketProvider('ws://localhost:9999', 'my-room-name', ydoc);
+const wsProvider = new WebsocketProvider(
+  "ws://localhost:9999",
+  "my-room-name",
+  ydoc,
+);
 ```
 
 Different room names sync to different documents.

@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
-import { memo, type ReactNode } from 'react';
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { memo, type ReactNode } from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 /**
  * The gate on every demo's render behaviour: toggling one todo must re-render that todo's row
@@ -18,16 +26,22 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 /** Every row render, in order, identified by the todo it rendered. */
 const rendered: string[] = [];
 
-vi.mock('../sync', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../sync')>();
-  const Y = await import('yjs');
+vi.mock("../sync", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../sync")>();
+  const Y = await import("yjs");
   // The demos open a websocket at module scope; the tests only need the Yjs document.
-  return { ...actual, connectSharedDoc: () => ({ ydoc: new Y.Doc(), wsProvider: null }) };
+  return {
+    ...actual,
+    connectSharedDoc: () => ({ ydoc: new Y.Doc(), wsProvider: null }),
+  };
 });
 
-vi.mock('../components/todo/TodoItem', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../components/todo/TodoItem')>();
-  const TodoItemRow = (props: import('../components/todo/TodoItem').TodoItemProps) => {
+vi.mock("../components/todo/TodoItem", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../components/todo/TodoItem")>();
+  const TodoItemRow = (
+    props: import("../components/todo/TodoItem").TodoItemProps,
+  ) => {
     rendered.push(props.todo.id);
     return actual.TodoItemRow(props);
   };
@@ -56,11 +70,10 @@ const demos: Record<string, Demo> = {
   redux: {
     rowRenders: 1,
     setup: async () => {
-      const { Provider } = await import('react-redux');
-      const { store, addTodo, deleteTodo, editTodo, toggleTodo } = await import(
-        '../redux/store/todoStore'
-      );
-      const { TodoList } = await import('../redux/components/TodoList');
+      const { Provider } = await import("react-redux");
+      const { store, addTodo, deleteTodo, editTodo, toggleTodo } =
+        await import("../redux/store/todoStore");
+      const { TodoList } = await import("../redux/components/TodoList");
       return {
         tree: (
           <Provider store={store}>
@@ -80,8 +93,8 @@ const demos: Record<string, Demo> = {
   mobx: {
     rowRenders: 1,
     setup: async () => {
-      const { todoStore } = await import('../mobx/store/TodoStore');
-      const { TodoList } = await import('../mobx/components/TodoList');
+      const { todoStore } = await import("../mobx/store/TodoStore");
+      const { TodoList } = await import("../mobx/components/TodoList");
       return {
         tree: <TodoList />,
         ids: () => todoStore.todos.map((todo) => todo.id),
@@ -94,11 +107,12 @@ const demos: Record<string, Demo> = {
     },
   },
 
-  'mobx-state-tree': {
+  "mobx-state-tree": {
     rowRenders: 1,
     setup: async () => {
-      const { todoStore } = await import('../mobx-state-tree/store/TodoStore');
-      const { TodoList } = await import('../mobx-state-tree/components/TodoList');
+      const { todoStore } = await import("../mobx-state-tree/store/TodoStore");
+      const { TodoList } =
+        await import("../mobx-state-tree/components/TodoList");
       return {
         tree: <TodoList />,
         ids: () => todoStore.todos.map((todo) => todo.id),
@@ -114,8 +128,9 @@ const demos: Record<string, Demo> = {
   valtio: {
     rowRenders: 1,
     setup: async () => {
-      const { todoActions, todoState } = await import('../valtio/store/todoState');
-      const { TodoList } = await import('../valtio/components/TodoList');
+      const { todoActions, todoState } =
+        await import("../valtio/store/todoState");
+      const { TodoList } = await import("../valtio/components/TodoList");
       return {
         tree: <TodoList />,
         ids: () => todoState.todos.map((todo) => todo.id),
@@ -131,8 +146,8 @@ const demos: Record<string, Demo> = {
   zustand: {
     rowRenders: 1,
     setup: async () => {
-      const { useTodoStore } = await import('../zustand/store/useTodoStore');
-      const { TodoList } = await import('../zustand/components/TodoList');
+      const { useTodoStore } = await import("../zustand/store/useTodoStore");
+      const { TodoList } = await import("../zustand/components/TodoList");
       return {
         tree: <TodoList />,
         ids: () => useTodoStore.getState().todos.map((todo) => todo.id),
@@ -148,9 +163,9 @@ const demos: Record<string, Demo> = {
   jotai: {
     rowRenders: 1,
     setup: async () => {
-      const { Provider } = await import('jotai');
-      const atoms = await import('../jotai/store/todoAtoms');
-      const { TodoList } = await import('../jotai/components/TodoList');
+      const { Provider } = await import("jotai");
+      const atoms = await import("../jotai/store/todoAtoms");
+      const { TodoList } = await import("../jotai/components/TodoList");
       return {
         tree: (
           <Provider store={atoms.store}>
@@ -162,16 +177,18 @@ const demos: Record<string, Demo> = {
         toggle: (id) => atoms.store.set(atoms.toggleTodoAtom, id),
         edit: (id, title) => atoms.store.set(atoms.editTodoAtom, id, title),
         remove: (id) => atoms.store.set(atoms.deleteTodoAtom, id),
-        titles: () => atoms.store.get(atoms.todosAtom).map((todo) => todo.title),
+        titles: () =>
+          atoms.store.get(atoms.todosAtom).map((todo) => todo.title),
       };
     },
   },
 
-  'tanstack-store': {
+  "tanstack-store": {
     rowRenders: 1,
     setup: async () => {
-      const { todoStore } = await import('../tanstack-store/store/todoStore');
-      const { TodoList } = await import('../tanstack-store/components/TodoList');
+      const { todoStore } = await import("../tanstack-store/store/todoStore");
+      const { TodoList } =
+        await import("../tanstack-store/components/TodoList");
       return {
         tree: <TodoList />,
         ids: () => todoStore.state.todos.map((todo) => todo.id),
@@ -210,7 +227,7 @@ const rowParts = (row: Element) => {
     title: row.querySelector<HTMLInputElement>('input[type="text"]')!,
     // Read off the toggle, not the strikethrough: the title is a field, so its `value` and its
     // classes are what carry the state, and only the toggle states it outright.
-    completed: toggle.getAttribute('aria-pressed') === 'true',
+    completed: toggle.getAttribute("aria-pressed") === "true",
   };
 };
 
@@ -220,23 +237,31 @@ const rowParts = (row: Element) => {
  * `lucide-circle-check`.
  */
 const showsDone = (row: Element) =>
-  rowParts(row).toggle.querySelector('svg')!.classList.contains('lucide-circle-check');
+  rowParts(row)
+    .toggle.querySelector("svg")!
+    .classList.contains("lucide-circle-check");
 
 const click = (el: Element) =>
-  act(async () => void el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  act(
+    async () =>
+      void el.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+  );
 
 /** Types into a controlled input the way a user would, past React's value tracker. */
 const type = (input: HTMLInputElement, value: string) =>
   act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
     setter.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
 /** Mounts a demo over five todos and leaves the render log empty and ready to read. */
 const mount = async (demo: Demo) => {
   const parts = await demo.setup();
-  const container = document.createElement('div');
+  const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted.push(async () => {
@@ -245,7 +270,8 @@ const mount = async (demo: Demo) => {
   });
 
   await act(async () => {
-    for (const title of ['first', 'second', 'third', 'fourth']) parts.add(title);
+    for (const title of ["first", "second", "third", "fourth"])
+      parts.add(title);
   });
   await act(async () => root.render(parts.tree));
 
@@ -256,8 +282,8 @@ const mount = async (demo: Demo) => {
   return { ...parts, container };
 };
 
-describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
-  it('re-renders only the rows it has to when one todo is toggled, and shows the change', async () => {
+describe.each(Object.entries(demos))("the %s demo", (_name, demo) => {
+  it("re-renders only the rows it has to when one todo is toggled, and shows the change", async () => {
     const { ids, toggle, container } = await mount(demo);
 
     const target = ids()[2];
@@ -268,25 +294,29 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
     expect(rendered).toContain(target);
     expect(rendered).toHaveLength(demo.rowRenders);
     // And it is not stale: the third row now reads as completed.
-    expect(container.querySelectorAll('li')[2].querySelector('.line-through')).not.toBeNull();
+    expect(
+      container.querySelectorAll("li")[2].querySelector(".line-through"),
+    ).not.toBeNull();
   });
 
-  it('re-renders only the rows it has to when one todo is renamed, and shows the change', async () => {
+  it("re-renders only the rows it has to when one todo is renamed, and shows the change", async () => {
     const { ids, edit, container } = await mount(demo);
 
     const target = ids()[2];
 
-    await act(async () => edit(target, 'renamed by the store'));
+    await act(async () => edit(target, "renamed by the store"));
 
     expect(rendered).toContain(target);
     expect(rendered).toHaveLength(demo.rowRenders);
-    expect(rowParts(container.querySelectorAll('li')[2]).title.value).toBe('renamed by the store');
+    expect(rowParts(container.querySelectorAll("li")[2]).title.value).toBe(
+      "renamed by the store",
+    );
   });
 
-  it('toggles completion from the check button alone, not from the title next to it', async () => {
+  it("toggles completion from the check button alone, not from the title next to it", async () => {
     const { container } = await mount(demo);
 
-    const row = () => container.querySelectorAll('li')[2];
+    const row = () => container.querySelectorAll("li")[2];
     const before = rowParts(row()).completed;
 
     // The icon draws whichever state the button reports, here and after every click.
@@ -296,30 +326,30 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
     expect(rowParts(row()).completed).toBe(!before);
     expect(showsDone(row())).toBe(!before);
     // The title went with it, so the row is not showing one state and reporting the other.
-    expect(row().querySelector('.line-through') === null).toBe(before);
+    expect(row().querySelector(".line-through") === null).toBe(before);
 
     await click(rowParts(row()).toggle);
     expect(rowParts(row()).completed).toBe(before);
     expect(showsDone(row())).toBe(before);
   });
 
-  it('saves every keystroke typed into a title, re-rendering only that row', async () => {
+  it("saves every keystroke typed into a title, re-rendering only that row", async () => {
     const { ids, titles, container } = await mount(demo);
 
-    const row = () => container.querySelectorAll('li')[2];
+    const row = () => container.querySelectorAll("li")[2];
     const target = ids()[2];
     const completedBefore = rowParts(row()).completed;
 
     // The field shows the row's own title and is ready to type into without opening anything.
     expect(rowParts(row()).title.value).toBe(titles()[2]);
 
-    for (const value of ['t', 'ty', 'typ', 'type', 'typed']) {
+    for (const value of ["t", "ty", "typ", "type", "typed"]) {
       await type(rowParts(row()).title, value);
       // Every keystroke is in the store already — there is nothing to commit.
       expect(titles()[2]).toBe(value);
     }
 
-    expect(rowParts(row()).title.value).toBe('typed');
+    expect(rowParts(row()).title.value).toBe("typed");
     // Typing a title is not a way to complete a todo.
     expect(rowParts(row()).completed).toBe(completedBefore);
     // Five keystrokes re-rendered the one row five times, and left the other rows alone.
@@ -327,20 +357,20 @@ describe.each(Object.entries(demos))('the %s demo', (_name, demo) => {
     expect(rendered).toHaveLength(5 * demo.rowRenders);
   });
 
-  it('drops a deleted todo without re-rendering or reading the survivors', async () => {
+  it("drops a deleted todo without re-rendering or reading the survivors", async () => {
     // The case a reactive row can get wrong: MST's `deleteTodo` destroys the node, and a row
     // still subscribed to it would read a node that is no longer in the tree. MST reports that
     // through `console.warn` rather than by throwing, so the console is part of the assertion.
     const { ids, remove, container } = await mount(demo);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     // The demo stores are module singletons, so the count carries over between cases.
     const before = ids().length;
     const target = ids()[2];
     await act(async () => remove(target));
 
-    expect(container.querySelectorAll('li')).toHaveLength(before - 1);
+    expect(container.querySelectorAll("li")).toHaveLength(before - 1);
     // The survivors kept their identity, so none of them re-rendered.
     expect(rendered).toEqual([]);
     expect(warn).not.toHaveBeenCalled();

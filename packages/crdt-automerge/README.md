@@ -20,12 +20,18 @@ npm install @homeostate/core @homeostate/crdt-automerge @automerge/automerge
 ## Usage
 
 ```ts
-import * as A from '@automerge/automerge';
-import { createSyncEngine } from '@homeostate/core';
-import { createAutomergeBackend, createAutomergeHandle } from '@homeostate/crdt-automerge';
+import * as A from "@automerge/automerge";
+import { createSyncEngine } from "@homeostate/core";
+import {
+  createAutomergeBackend,
+  createAutomergeHandle,
+} from "@homeostate/crdt-automerge";
 
 const handle = createAutomergeHandle(A.init());
-const engine = createSyncEngine(createAutomergeBackend(handle, 'shared'), adapter);
+const engine = createSyncEngine(
+  createAutomergeBackend(handle, "shared"),
+  adapter,
+);
 engine.connect();
 ```
 

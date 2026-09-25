@@ -1,10 +1,10 @@
-import { memo, type ReactElement } from 'react';
-import { useStore } from 'zustand';
-import { createStore as createZustandStore } from 'zustand/vanilla';
-import { createZustandAdapter } from '@homeostate/store-zustand';
-import type { Todo, TodoState } from '@homeostate/benchmark-crdt';
-import { createCounters } from '../counters.js';
-import type { Fixture } from '../types.js';
+import { memo, type ReactElement } from "react";
+import { useStore } from "zustand";
+import { createStore as createZustandStore } from "zustand/vanilla";
+import { createZustandAdapter } from "@homeostate/store-zustand";
+import type { Todo, TodoState } from "@homeostate/benchmark-crdt";
+import { createCounters } from "../counters.js";
+import type { Fixture } from "../types.js";
 
 /**
  * The idiomatic Zustand list: a selector per component through `useStore`, which compares what
@@ -13,8 +13,9 @@ import type { Fixture } from '../types.js';
  * disagreement between them is a finding about the adapter rather than about the library.
  */
 export const zustand: Fixture = {
-  name: 'zustand',
-  description: 'Zustand vanilla store, useStore selector per component, React.memo rows keyed by id',
+  name: "zustand",
+  description:
+    "Zustand vanilla store, useStore selector per component, React.memo rows keyed by id",
 
   create: (initial) => {
     const counters = createCounters();

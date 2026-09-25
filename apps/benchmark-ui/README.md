@@ -20,10 +20,10 @@ pnpm --filter @homeostate/benchmark-ui build       # static site in dist/, repor
 
 Two folders are picked up automatically, one per benchmark:
 
-| folder | saved by | shown in |
-| --- | --- | --- |
-| `apps/benchmark-crdt/results/*.json` | `pnpm bench:crdt -- --json` | Overview, Operations, Scaling, Replicas, Compare |
-| `apps/benchmark-store/results/*.json` | `pnpm bench:store -- --json` | Renders |
+| folder                                | saved by                     | shown in                                         |
+| ------------------------------------- | ---------------------------- | ------------------------------------------------ |
+| `apps/benchmark-crdt/results/*.json`  | `pnpm bench:crdt -- --json`  | Overview, Operations, Scaling, Replicas, Compare |
+| `apps/benchmark-store/results/*.json` | `pnpm bench:store -- --json` | Renders                                          |
 
 The two report shapes are different measurements — backends against bytes and milliseconds,
 adapters against component counts — so they are kept as separate kinds of run rather than merged
@@ -39,14 +39,14 @@ labelled by commit, date, and file name, with a badge when the tree was dirty.
 
 ## Views
 
-| tab | what it shows |
-| --- | --- |
-| Overview | four headline figures (slowest write, widest gap between backends, noisiest timing, heaviest wire per op) and a heatmap of one metric over every scenario, backend, and size |
+| tab        | what it shows                                                                                                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Overview   | four headline figures (slowest write, widest gap between backends, noisiest timing, heaviest wire per op) and a heatmap of one metric over every scenario, backend, and size                                                                           |
 | Operations | one state size at a time: a dot plot of a metric per scenario with a dot per backend, then the full table with write ± margin of error, p50, p99, vs best, roundtrip, renders and wasted renders per op, wire, document, and heap growth per operation |
-| Scaling | one scenario at a time: a metric against state size on log-log axes, one line per backend, and the fitted exponent `k` in `value ∝ todos^k` |
-| Replicas | seed, adopt, document size, and heap per replica, per state size |
-| Compare | a baseline run against the current one: regression and improvement counts, a heatmap of the change per cell, and `before → after (Δ%)` tables per size |
-| Renders | the render benchmark: row renders per adapter, scenario and size as a heatmap, and the full table with list, search box and footer renders beside the advisory apply, commit and mount timings |
+| Scaling    | one scenario at a time: a metric against state size on log-log axes, one line per backend, and the fitted exponent `k` in `value ∝ todos^k`                                                                                                            |
+| Replicas   | seed, adopt, document size, and heap per replica, per state size                                                                                                                                                                                       |
+| Compare    | a baseline run against the current one: regression and improvement counts, a heatmap of the change per cell, and `before → after (Δ%)` tables per size                                                                                                 |
+| Renders    | the render benchmark: row renders per adapter, scenario and size as a heatmap, and the full table with list, search box and footer renders beside the advisory apply, commit and mount timings                                                         |
 
 ## Reading the charts
 

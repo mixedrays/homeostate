@@ -1,15 +1,15 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Spinner } from '@/components/ui/spinner';
-import Home from './pages/Home';
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Spinner } from "@/components/ui/spinner";
+import Home from "./pages/Home";
 
-const ZustandTodo = lazy(() => import('./pages/ZustandTodo'));
-const MobxTodo = lazy(() => import('./pages/MobxTodo'));
-const ReduxTodo = lazy(() => import('./pages/ReduxTodo'));
-const JotaiTodo = lazy(() => import('./pages/JotaiTodo'));
-const ValtioTodo = lazy(() => import('./pages/ValtioTodo'));
-const TanStackStoreTodo = lazy(() => import('./pages/TanStackStoreTodo'));
-const MobxStateTreeTodo = lazy(() => import('./pages/MobxStateTreeTodo'));
+const ZustandTodo = lazy(() => import("./pages/ZustandTodo"));
+const MobxTodo = lazy(() => import("./pages/MobxTodo"));
+const ReduxTodo = lazy(() => import("./pages/ReduxTodo"));
+const JotaiTodo = lazy(() => import("./pages/JotaiTodo"));
+const ValtioTodo = lazy(() => import("./pages/ValtioTodo"));
+const TanStackStoreTodo = lazy(() => import("./pages/TanStackStoreTodo"));
+const MobxStateTreeTodo = lazy(() => import("./pages/MobxStateTreeTodo"));
 
 function RouteFallback() {
   return (

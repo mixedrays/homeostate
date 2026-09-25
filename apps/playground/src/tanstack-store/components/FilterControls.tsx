@@ -1,6 +1,6 @@
-import { useSelector } from '@tanstack/react-store';
-import { TodoFilters } from '../../components/todo/TodoFilters';
-import { todoCountsAtom, todoStore } from '../store/todoStore';
+import { useSelector } from "@tanstack/react-store";
+import { TodoFilters } from "../../components/todo/TodoFilters";
+import { todoCountsAtom, todoStore } from "../store/todoStore";
 
 export function FilterControls() {
   const searchTerm = useSelector(todoStore, (state) => state.searchTerm);

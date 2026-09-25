@@ -1,7 +1,14 @@
-import { useId, type ReactNode } from 'react';
-import { Field, FieldLabel } from '@/components/ui/field';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useId, type ReactNode } from "react";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export interface Option<T extends string | number> {
   value: T;
@@ -14,7 +21,11 @@ interface ControlsProps {
 
 /** The single filter row above the content it scopes. */
 export function Controls({ children }: ControlsProps) {
-  return <div className="flex flex-wrap items-center gap-x-5 gap-y-3">{children}</div>;
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+      {children}
+    </div>
+  );
 }
 
 interface SelectFieldProps<T extends string> {
@@ -26,7 +37,14 @@ interface SelectFieldProps<T extends string> {
   className?: string;
 }
 
-export function SelectField<T extends string>({ label, options, value, onChange, placeholder, className }: SelectFieldProps<T>) {
+export function SelectField<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  className,
+}: SelectFieldProps<T>) {
   const id = useId();
   return (
     <Field orientation="horizontal" className="w-auto">
@@ -64,7 +82,12 @@ interface ChoiceGroupProps<T extends string | number> {
   onChange(value: NoInfer<T>): void;
 }
 
-export function ChoiceGroup<T extends string | number>({ label, options, value, onChange }: ChoiceGroupProps<T>) {
+export function ChoiceGroup<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: ChoiceGroupProps<T>) {
   return (
     <ToggleGroup
       aria-label={label}
@@ -73,7 +96,9 @@ export function ChoiceGroup<T extends string | number>({ label, options, value, 
       spacing={0}
       value={[String(value)]}
       onValueChange={(next: string[]) => {
-        const chosen = options.find((option) => String(option.value) === next[0]);
+        const chosen = options.find(
+          (option) => String(option.value) === next[0],
+        );
         if (chosen) onChange(chosen.value);
       }}
     >

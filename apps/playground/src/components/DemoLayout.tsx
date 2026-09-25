@@ -1,19 +1,19 @@
-import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, CloudOff, Terminal } from 'lucide-react';
-import type { WebsocketProvider } from 'y-websocket';
-import type { Doc } from 'yjs';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
-import { accentClass, type DemoMeta } from '../demos';
-import { useSyncConnection } from '../hooks/useSyncConnection';
-import { SYNC_MAP_NAME, SYNC_ROOM } from '../sync';
-import { InlineCode } from './InlineCode';
-import { SyncedStatePanel } from './inspector/SyncedStatePanel';
-import { SyncStatus } from './SyncStatus';
-import { SyncToggle } from './SyncToggle';
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, CloudOff, Terminal } from "lucide-react";
+import type { WebsocketProvider } from "y-websocket";
+import type { Doc } from "yjs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { accentClass, type DemoMeta } from "../demos";
+import { useSyncConnection } from "../hooks/useSyncConnection";
+import { SYNC_MAP_NAME, SYNC_ROOM } from "../sync";
+import { InlineCode } from "./InlineCode";
+import { SyncedStatePanel } from "./inspector/SyncedStatePanel";
+import { SyncStatus } from "./SyncStatus";
+import { SyncToggle } from "./SyncToggle";
 
 interface DemoLayoutProps {
   demo: DemoMeta;
@@ -27,10 +27,20 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
   const Icon = demo.icon;
 
   return (
-    <div className={cn(accentClass[demo.accent], 'min-h-screen bg-background text-foreground')}>
+    <div
+      className={cn(
+        accentClass[demo.accent],
+        "min-h-screen bg-background text-foreground",
+      )}
+    >
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4 lg:max-w-6xl">
-          <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft aria-hidden />
             All demos
           </Button>
@@ -47,18 +57,24 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
             <Icon size={20} aria-hidden />
           </span>
           <div className="min-w-0">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight">{demo.title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{demo.description}</p>
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              {demo.title}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {demo.description}
+            </p>
           </div>
         </div>
 
         <div className="lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-6">
           <div className="min-w-0 space-y-4">
-            {status === 'offline' && <OfflineNotice />}
-            {status === 'unreachable' && <ServerDownNotice />}
+            {status === "offline" && <OfflineNotice />}
+            {status === "unreachable" && <ServerDownNotice />}
 
             <Card role="region" aria-label={`${demo.name} todo list`}>
-              <CardContent className="space-y-6 sm:px-6 sm:py-2">{children}</CardContent>
+              <CardContent className="space-y-6 sm:px-6 sm:py-2">
+                {children}
+              </CardContent>
             </Card>
           </div>
 
@@ -68,8 +84,8 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
         </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-          Every demo joins the room <InlineCode>{SYNC_ROOM}</InlineCode>. Open another demo or a
-          second tab to watch changes propagate.
+          Every demo joins the room <InlineCode>{SYNC_ROOM}</InlineCode>. Open
+          another demo or a second tab to watch changes propagate.
         </p>
       </main>
     </div>
@@ -82,9 +98,9 @@ function OfflineNotice() {
       <CloudOff />
       <AlertTitle>Offline. This tab is disconnected from sync.</AlertTitle>
       <AlertDescription>
-        Edits stay in this tab and other tabs keep going without them. Hit{' '}
-        <span className="font-medium text-foreground">Go online</span> and both sides merge, no
-        edits lost.
+        Edits stay in this tab and other tabs keep going without them. Hit{" "}
+        <span className="font-medium text-foreground">Go online</span> and both
+        sides merge, no edits lost.
       </AlertDescription>
     </Alert>
   );
@@ -96,9 +112,12 @@ function ServerDownNotice() {
       <Terminal />
       <AlertTitle>Sync server unreachable.</AlertTitle>
       <AlertDescription>
-        Tabs in this browser still sync with each other, but other browsers will not. Start the
-        server with <InlineCode>pnpm --filter @homeostate/websocket-server-yjs dev</InlineCode>. This
-        page reconnects on its own.
+        Tabs in this browser still sync with each other, but other browsers will
+        not. Start the server with{" "}
+        <InlineCode>
+          pnpm --filter @homeostate/websocket-server-yjs dev
+        </InlineCode>
+        . This page reconnects on its own.
       </AlertDescription>
     </Alert>
   );

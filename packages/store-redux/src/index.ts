@@ -1,1 +1,1 @@
-export { ReduxAdapter, createReduxAdapter } from './adapter.js';
+export { ReduxAdapter, createReduxAdapter } from "./adapter.js";

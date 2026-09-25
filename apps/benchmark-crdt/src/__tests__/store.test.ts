@@ -1,15 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createStore } from '../store.js';
+import { describe, expect, it, vi } from "vitest";
+import { createStore } from "../store.js";
 
-describe('createStore', () => {
-  it('exposes the current state through the adapter and the store alike', () => {
+describe("createStore", () => {
+  it("exposes the current state through the adapter and the store alike", () => {
     const store = createStore({ count: 0 });
     store.setState({ count: 1 });
     expect(store.getState()).toEqual({ count: 1 });
     expect(store.adapter.getState()).toBe(store.getState());
   });
 
-  it('notifies subscribers on every setState until they unsubscribe', () => {
+  it("notifies subscribers on every setState until they unsubscribe", () => {
     const store = createStore({ count: 0 });
     const listener = vi.fn();
     const unsubscribe = store.adapter.subscribe(listener);

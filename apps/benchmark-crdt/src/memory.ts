@@ -1,5 +1,5 @@
-import v8 from 'node:v8';
-import vm from 'node:vm';
+import v8 from "node:v8";
+import vm from "node:vm";
 
 type Collect = () => void;
 
@@ -11,8 +11,8 @@ export const garbageCollector = (): Collect | null => {
   const exposed = (globalThis as { gc?: Collect }).gc;
   if (exposed) return (collect = exposed);
   try {
-    v8.setFlagsFromString('--expose-gc');
-    collect = vm.runInNewContext('gc') as Collect;
+    v8.setFlagsFromString("--expose-gc");
+    collect = vm.runInNewContext("gc") as Collect;
   } catch {
     collect = null;
   }
@@ -22,14 +22,19 @@ export const garbageCollector = (): Collect | null => {
 /** Heap in use after a full collection, in bytes. */
 export const settledHeap = (): number => {
   const gc = garbageCollector();
-  if (gc === null) throw new Error('No garbage collector available; run Node with --expose-gc');
+  if (gc === null)
+    throw new Error(
+      "No garbage collector available; run Node with --expose-gc",
+    );
   gc();
   gc();
   return process.memoryUsage().heapUsed;
 };
 
 /** Runs `allocate` and returns what it built together with the heap it retains. */
-export const retainedHeap = <T>(allocate: () => T): { value: T; bytes: number } => {
+export const retainedHeap = <T>(
+  allocate: () => T,
+): { value: T; bytes: number } => {
   const before = settledHeap();
   const value = allocate();
   const after = settledHeap();

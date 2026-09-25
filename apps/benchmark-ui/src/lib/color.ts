@@ -4,14 +4,20 @@ type Lab = [number, number, number];
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 export const hexToRgb = (hex: string): Rgb => {
-  const clean = hex.replace('#', '');
+  const clean = hex.replace("#", "");
   const full = clean.length === 3 ? clean.replace(/./g, (c) => c + c) : clean;
   const n = Number.parseInt(full, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 
 export const rgbToHex = ([r, g, b]: Rgb): string =>
-  `#${[r, g, b].map((c) => Math.round(clamp01(c / 255) * 255).toString(16).padStart(2, '0')).join('')}`;
+  `#${[r, g, b]
+    .map((c) =>
+      Math.round(clamp01(c / 255) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 
 const toLinear = (c: number): number => {
   const s = c / 255;
@@ -25,9 +31,15 @@ const fromLinear = (c: number): number => {
 
 const rgbToOklab = ([r, g, b]: Rgb): Lab => {
   const [lr, lg, lb] = [toLinear(r), toLinear(g), toLinear(b)];
-  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
-  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
-  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  const l = Math.cbrt(
+    0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb,
+  );
+  const m = Math.cbrt(
+    0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb,
+  );
+  const s = Math.cbrt(
+    0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb,
+  );
   return [
     0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
     1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
@@ -51,7 +63,13 @@ export const mix = (from: string, to: string, t: number): string => {
   const a = rgbToOklab(hexToRgb(from));
   const b = rgbToOklab(hexToRgb(to));
   const k = clamp01(t);
-  return rgbToHex(oklabToRgb([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]));
+  return rgbToHex(
+    oklabToRgb([
+      a[0] + (b[0] - a[0]) * k,
+      a[1] + (b[1] - a[1]) * k,
+      a[2] + (b[2] - a[2]) * k,
+    ]),
+  );
 };
 
 /** WCAG relative luminance, 0 to 1. */
@@ -66,5 +84,8 @@ export const contrast = (a: string, b: string): number => {
 };
 
 /** Ink that clears the fill: white on dark fills, near-black on light ones. */
-export const inkFor = (fill: string, dark = '#0b0b0b', light = '#ffffff'): string =>
-  contrast(fill, dark) >= contrast(fill, light) ? dark : light;
+export const inkFor = (
+  fill: string,
+  dark = "#0b0b0b",
+  light = "#ffffff",
+): string => (contrast(fill, dark) >= contrast(fill, light) ? dark : light);

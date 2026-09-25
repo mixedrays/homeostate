@@ -1,10 +1,14 @@
-import { memo, type ReactElement } from 'react';
-import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import { Provider, useSelector } from 'react-redux';
-import { createReduxAdapter } from '@homeostate/store-redux';
-import type { Todo, TodoState } from '@homeostate/benchmark-crdt';
-import { createCounters } from '../counters.js';
-import type { Fixture } from '../types.js';
+import { memo, type ReactElement } from "react";
+import {
+  configureStore,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
+import { Provider, useSelector } from "react-redux";
+import { createReduxAdapter } from "@homeostate/store-redux";
+import type { Todo, TodoState } from "@homeostate/benchmark-crdt";
+import { createCounters } from "../counters.js";
+import type { Fixture } from "../types.js";
 
 /**
  * The idiomatic Redux list: one selector per component, `React.memo` on the row, and the row
@@ -12,14 +16,15 @@ import type { Fixture } from '../types.js';
  * a single object prop, so a row re-renders exactly when its own todo is a new object.
  */
 export const redux: Fixture = {
-  name: 'redux',
-  description: 'Redux Toolkit, useSelector per component, React.memo rows keyed by id',
+  name: "redux",
+  description:
+    "Redux Toolkit, useSelector per component, React.memo rows keyed by id",
 
   create: (initial) => {
     const counters = createCounters();
 
     const slice = createSlice({
-      name: 'todos',
+      name: "todos",
       initialState: initial,
       reducers: {
         setState: (_state, action: PayloadAction<TodoState>) => action.payload,
@@ -30,7 +35,8 @@ export const redux: Fixture = {
       reducer: slice.reducer,
       // Both checks walk the whole state on every dispatch, which at 4000 todos would be most
       // of what `applyMs` measures and none of what it is about.
-      middleware: (getDefault) => getDefault({ serializableCheck: false, immutableCheck: false }),
+      middleware: (getDefault) =>
+        getDefault({ serializableCheck: false, immutableCheck: false }),
     });
 
     const Row = memo(function Row({ todo }: { todo: Todo }) {
@@ -59,7 +65,9 @@ export const redux: Fixture = {
     const Footer = (): ReactElement => {
       counters.footer++;
       const total = useSelector((state: TodoState) => state.todos.length);
-      const filterStatus = useSelector((state: TodoState) => state.filterStatus);
+      const filterStatus = useSelector(
+        (state: TodoState) => state.filterStatus,
+      );
       return (
         <footer>
           {total} · {filterStatus}

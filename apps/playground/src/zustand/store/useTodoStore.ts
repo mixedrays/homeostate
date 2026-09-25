@@ -1,9 +1,13 @@
-import { create } from 'zustand';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createZustandAdapter } from '@homeostate/store-zustand';
-import type { FilterStatus, TodoState } from '../../types/todo';
-import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
+import { create } from "zustand";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createZustandAdapter } from "@homeostate/store-zustand";
+import type { FilterStatus, TodoState } from "../../types/todo";
+import {
+  SYNC_MAP_NAME,
+  connectSharedDoc,
+  createInitialTodoState,
+} from "../../sync";
 
 interface TodoStore extends TodoState {
   addTodo: (title: string) => void;
@@ -21,19 +25,24 @@ export const useTodoStore = create<TodoStore>((set) => ({
 
   addTodo: (title) =>
     set((state) => ({
-      todos: [...state.todos, { id: crypto.randomUUID(), title, completed: false }],
+      todos: [
+        ...state.todos,
+        { id: crypto.randomUUID(), title, completed: false },
+      ],
     })),
 
   toggleTodo: (id) =>
     set((state) => ({
       todos: state.todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+        todo.id === id ? { ...todo, completed: !todo.completed } : todo,
       ),
     })),
 
   editTodo: (id, title) =>
     set((state) => ({
-      todos: state.todos.map((todo) => (todo.id === id ? { ...todo, title } : todo)),
+      todos: state.todos.map((todo) =>
+        todo.id === id ? { ...todo, title } : todo,
+      ),
     })),
 
   deleteTodo: (id) =>
@@ -47,7 +56,10 @@ export const useTodoStore = create<TodoStore>((set) => ({
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createZustandAdapter(useTodoStore);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
+const syncEngine = createSyncEngine(
+  createYjsBackend(ydoc, SYNC_MAP_NAME),
+  adapter,
+);
 
 syncEngine.connect();
 

@@ -1,9 +1,20 @@
-import { Link } from 'react-router-dom';
-import { ArrowRight, MonitorSmartphone, Terminal, Waypoints } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { InlineCode } from '../components/InlineCode';
-import { accentClass, demoList } from '../demos';
-import { SYNC_SERVER_URL } from '../sync';
+import { Link } from "react-router-dom";
+import {
+  ArrowRight,
+  MonitorSmartphone,
+  Terminal,
+  Waypoints,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { InlineCode } from "../components/InlineCode";
+import { accentClass, demoList } from "../demos";
+import { SYNC_SERVER_URL } from "../sync";
 
 export default function Home() {
   return (
@@ -19,9 +30,9 @@ export default function Home() {
             </h1>
           </div>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-            One shared todo list, {demoList.length} state managers. Every demo joins the same Yjs
-            room, so a change made in any of them shows up in the others and in every other open
-            tab.
+            One shared todo list, {demoList.length} state managers. Every demo
+            joins the same Yjs room, so a change made in any of them shows up in
+            the others and in every other open tab.
           </p>
         </header>
 
@@ -43,7 +54,9 @@ export default function Home() {
                         <span className="mb-2 inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                           <Icon size={20} aria-hidden />
                         </span>
-                        <CardTitle className="text-lg font-semibold">{demo.name}</CardTitle>
+                        <CardTitle className="text-lg font-semibold">
+                          {demo.name}
+                        </CardTitle>
                         <CardDescription className="leading-relaxed">
                           {demo.description}
                         </CardDescription>
@@ -75,7 +88,11 @@ export default function Home() {
               <Card className="h-full">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 font-semibold">
-                    <Terminal size={18} aria-hidden className="text-muted-foreground" />
+                    <Terminal
+                      size={18}
+                      aria-hidden
+                      className="text-muted-foreground"
+                    />
                     1. Start the playground
                   </CardTitle>
                   <CardDescription>From the repo root, run:</CardDescription>
@@ -85,9 +102,10 @@ export default function Home() {
                     <code>pnpm playground</code>
                   </pre>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    This starts the app together with the WebSocket sync server the demos connect
-                    to at <InlineCode>{SYNC_SERVER_URL}</InlineCode>. No separate terminal is
-                    needed.
+                    This starts the app together with the WebSocket sync server
+                    the demos connect to at{" "}
+                    <InlineCode>{SYNC_SERVER_URL}</InlineCode>. No separate
+                    terminal is needed.
                   </p>
                 </CardContent>
               </Card>
@@ -96,17 +114,24 @@ export default function Home() {
               <Card className="h-full">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 font-semibold">
-                    <MonitorSmartphone size={18} aria-hidden className="text-muted-foreground" />
+                    <MonitorSmartphone
+                      size={18}
+                      aria-hidden
+                      className="text-muted-foreground"
+                    />
                     2. Open two windows
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Open a demo twice, or two different demos side by side, then add and toggle
-                    todos. The header of each demo shows its connection state and a{' '}
-                    <span className="font-medium text-foreground">Go offline</span> button that
-                    cuts that tab off from sync. Edit on both sides, then go back online and watch
-                    the two histories merge.
+                    Open a demo twice, or two different demos side by side, then
+                    add and toggle todos. The header of each demo shows its
+                    connection state and a{" "}
+                    <span className="font-medium text-foreground">
+                      Go offline
+                    </span>{" "}
+                    button that cuts that tab off from sync. Edit on both sides,
+                    then go back online and watch the two histories merge.
                   </p>
                 </CardContent>
               </Card>

@@ -1,10 +1,14 @@
-import { makeAutoObservable } from 'mobx';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createMobxAdapter } from '@homeostate/store-mobx';
-import type { FilterStatus, Todo, TodoState } from '../../types/todo';
-import { countTodos, filterTodos } from '../../lib/todos';
-import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
+import { makeAutoObservable } from "mobx";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createMobxAdapter } from "@homeostate/store-mobx";
+import type { FilterStatus, Todo, TodoState } from "../../types/todo";
+import { countTodos, filterTodos } from "../../lib/todos";
+import {
+  SYNC_MAP_NAME,
+  connectSharedDoc,
+  createInitialTodoState,
+} from "../../sync";
 
 const initialState = createInitialTodoState();
 
@@ -59,8 +63,15 @@ class TodoStore implements TodoState {
 export const todoStore = new TodoStore();
 
 const { ydoc, wsProvider } = connectSharedDoc();
-const adapter = createMobxAdapter(todoStore, ['todos', 'searchTerm', 'filterStatus']);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
+const adapter = createMobxAdapter(todoStore, [
+  "todos",
+  "searchTerm",
+  "filterStatus",
+]);
+const syncEngine = createSyncEngine(
+  createYjsBackend(ydoc, SYNC_MAP_NAME),
+  adapter,
+);
 
 syncEngine.connect();
 

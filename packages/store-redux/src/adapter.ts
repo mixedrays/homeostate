@@ -1,5 +1,5 @@
-import type { Store } from 'redux';
-import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
+import type { Store } from "redux";
+import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
 /**
  * Redux-specific store adapter that bridges Redux stores with the sync engine.
@@ -35,7 +35,10 @@ export class ReduxAdapter<S extends object> implements StoreAdapter<S> {
    * @param store - The Redux store instance
    * @param setStateAction - Action creator that replaces the entire state (for sync updates)
    */
-  constructor(store: Store<S>, setStateAction: (state: S) => { type: string; payload: S }) {
+  constructor(
+    store: Store<S>,
+    setStateAction: (state: S) => { type: string; payload: S },
+  ) {
     this.store = store;
     this.setStateAction = setStateAction;
   }
@@ -69,7 +72,7 @@ export class ReduxAdapter<S extends object> implements StoreAdapter<S> {
  */
 export function createReduxAdapter<S extends object>(
   store: Store<S>,
-  setStateAction: (state: S) => { type: string; payload: S }
+  setStateAction: (state: S) => { type: string; payload: S },
 ): StoreAdapter<S> {
   return new ReduxAdapter(store, setStateAction);
 }

@@ -1,5 +1,5 @@
-import { useAtomValue, useSetAtom } from 'jotai';
-import { TodoListView } from '../../components/todo/TodoListView';
+import { useAtomValue, useSetAtom } from "jotai";
+import { TodoListView } from "../../components/todo/TodoListView";
 import {
   deleteTodoAtom,
   editTodoAtom,
@@ -8,7 +8,7 @@ import {
   todoCountsAtom,
   toggleTodoAtom,
   visibleTodosAtom,
-} from '../store/todoAtoms';
+} from "../store/todoAtoms";
 
 export function TodoList() {
   const todos = useAtomValue(visibleTodosAtom);

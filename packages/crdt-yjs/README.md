@@ -19,12 +19,12 @@ npm install @homeostate/core @homeostate/crdt-yjs yjs
 ## Usage
 
 ```ts
-import * as Y from 'yjs';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
+import * as Y from "yjs";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const doc = new Y.Doc();
-const engine = createSyncEngine(createYjsBackend(doc, 'shared'), adapter);
+const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter);
 engine.connect();
 ```
 

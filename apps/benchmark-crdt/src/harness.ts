@@ -1,13 +1,13 @@
-import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { Bench, type Task } from 'tinybench';
-import { createSyncEngine, type SyncEngine } from '@homeostate/core';
-import { retainedHeap, settledHeap } from './memory.js';
-import { countRenders, deepEqual, type RenderCount } from './renders.js';
-import { emptyState, makeState } from './scenarios.js';
-import { createStore, type BenchStore } from './store.js';
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { Bench, type Task } from "tinybench";
+import { createSyncEngine, type SyncEngine } from "@homeostate/core";
+import { retainedHeap, settledHeap } from "./memory.js";
+import { countRenders, deepEqual, type RenderCount } from "./renders.js";
+import { emptyState, makeState } from "./scenarios.js";
+import { createStore, type BenchStore } from "./store.js";
 import type {
   BackendCandidate,
   BenchmarkMeta,
@@ -20,7 +20,7 @@ import type {
   Timing,
   TodoState,
   Wire,
-} from './types.js';
+} from "./types.js";
 
 interface Peer<R extends Replica> {
   replica: R;
@@ -38,7 +38,7 @@ interface Pair<R extends Replica> {
 const createPeer = <R extends Replica>(
   candidate: BackendCandidate<R>,
   state: TodoState,
-  replica: R = candidate.createReplica()
+  replica: R = candidate.createReplica(),
 ): Peer<R> => {
   const store = createStore(state);
   const engine = createSyncEngine(replica.backend, store.adapter);
@@ -52,7 +52,10 @@ const destroyPeer = (peer: Peer<Replica>): void => {
 };
 
 /** Replica `a` is seeded with `size` todos; `b` starts empty and adopts them over the wire. */
-const createPair = <R extends Replica>(candidate: BackendCandidate<R>, size: number): Pair<R> => {
+const createPair = <R extends Replica>(
+  candidate: BackendCandidate<R>,
+  size: number,
+): Pair<R> => {
   const replicaA = candidate.createReplica();
   const replicaB = candidate.createReplica();
   const wire = candidate.connect(replicaA, replicaB);
@@ -73,7 +76,9 @@ const createPair = <R extends Replica>(candidate: BackendCandidate<R>, size: num
 
 const assertConverged = (pair: Pair<Replica>, label: string): void => {
   if (!deepEqual(pair.a.store.getState(), pair.b.store.getState()))
-    throw new Error(`${label}: the two stores diverged; the candidate does not replicate correctly`);
+    throw new Error(
+      `${label}: the two stores diverged; the candidate does not replicate correctly`,
+    );
 };
 
 /** Runs the untimed part of an iteration: restore the steady size, then compute the next state. */
@@ -81,7 +86,7 @@ const prepare = (
   store: BenchStore<TodoState>,
   scenario: Scenario,
   size: number,
-  i: number
+  i: number,
 ): TodoState => {
   let state = store.getState();
   const restored = scenario.reset?.(state, size);
@@ -94,9 +99,11 @@ const prepare = (
 
 const toTiming = (task: Task): Timing => {
   const result = task.result;
-  if (result.state === 'errored') throw result.error;
-  if (!('latency' in result))
-    throw new Error(`Benchmark task "${task.name}" ended in state "${result.state}"`);
+  if (result.state === "errored") throw result.error;
+  if (!("latency" in result))
+    throw new Error(
+      `Benchmark task "${task.name}" ended in state "${result.state}"`,
+    );
   const { latency } = result;
   return {
     mean: latency.mean,
@@ -118,7 +125,7 @@ const measure = async (
   options: BenchmarkOptions,
   name: string,
   fn: () => void,
-  hooks: Hooks
+  hooks: Hooks,
 ): Promise<Timing> => {
   const bench = new Bench({
     time: options.time,
@@ -136,13 +143,13 @@ const measureWrite = <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
   scenario: Scenario,
-  size: number
+  size: number,
 ): Promise<Timing> => {
   let peer!: Peer<R>;
   let next!: TodoState;
   let i = 0;
 
-  return measure(options, 'write', () => peer.store.setState(next), {
+  return measure(options, "write", () => peer.store.setState(next), {
     beforeAll: () => {
       peer = createPeer(candidate, makeState(size));
       i = 0;
@@ -158,13 +165,13 @@ const measureRoundtrip = <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
   scenario: Scenario,
-  size: number
+  size: number,
 ): Promise<Timing> => {
   let pair!: Pair<R>;
   let next!: TodoState;
   let i = 0;
 
-  return measure(options, 'roundtrip', () => pair.a.store.setState(next), {
+  return measure(options, "roundtrip", () => pair.a.store.setState(next), {
     beforeAll: () => {
       pair = createPair(candidate, size);
       i = 0;
@@ -200,7 +207,7 @@ const measureFootprint = <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
   scenario: Scenario,
-  size: number
+  size: number,
 ): Footprint => {
   const pair = createPair(candidate, size);
   const wireBytes = pair.wire.bytes?.bind(pair.wire);
@@ -226,7 +233,10 @@ const measureFootprint = <R extends Replica>(
     const before = settledHeap();
     const deadline = performance.now() + HEAP_PASS_MAX_MS;
     let i = 0;
-    while (i < options.operations || (i < HEAP_PASS_MAX_OPERATIONS && performance.now() < deadline))
+    while (
+      i < options.operations ||
+      (i < HEAP_PASS_MAX_OPERATIONS && performance.now() < deadline)
+    )
       peer.store.setState(prepare(peer.store, scenario, size, i++));
     const after = settledHeap();
     heapBytesPerOp = (after - before) / i;
@@ -241,7 +251,8 @@ const measureFootprint = <R extends Replica>(
 };
 
 /** Lets a backend that delivers on a macrotask, such as `loro` or `automerge`, catch up. */
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = (): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
  * Deterministic pass over a single operation: the counts are integers that depend only on the
@@ -251,7 +262,7 @@ const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve,
 const measureRenders = async <R extends Replica>(
   candidate: BackendCandidate<R>,
   scenario: Scenario,
-  size: number
+  size: number,
 ): Promise<RenderCount> => {
   const label = `${candidate.name}/${scenario.name}@${size}`;
   const pair = createPair(candidate, size);
@@ -259,7 +270,9 @@ const measureRenders = async <R extends Replica>(
 
   const before = pair.b.store.getState();
   if (before.todos.length !== size)
-    throw new Error(`${label}: the receiving peer adopted ${before.todos.length} of ${size} todos`);
+    throw new Error(
+      `${label}: the receiving peer adopted ${before.todos.length} of ${size} todos`,
+    );
 
   pair.a.store.setState(prepare(pair.a.store, scenario, size, 0));
   await settle();
@@ -275,7 +288,7 @@ const runOperation = async <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
   scenario: Scenario,
-  size: number
+  size: number,
 ): Promise<OperationResult> => {
   const { renders, wasted } = await measureRenders(candidate, scenario, size);
 
@@ -294,15 +307,18 @@ const runOperation = async <R extends Replica>(
 const measureSeed = <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
-  size: number
+  size: number,
 ): Promise<Timing> => {
   let replica!: R;
   let engine!: SyncEngine;
 
-  return measure(options, 'seed', () => engine.connect(), {
+  return measure(options, "seed", () => engine.connect(), {
     beforeEach: () => {
       replica = candidate.createReplica();
-      engine = createSyncEngine(replica.backend, createStore(makeState(size)).adapter);
+      engine = createSyncEngine(
+        replica.backend,
+        createStore(makeState(size)).adapter,
+      );
     },
     afterEach: () => {
       engine.disconnect();
@@ -314,20 +330,23 @@ const measureSeed = <R extends Replica>(
 const measureAdopt = <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
-  size: number
+  size: number,
 ): Promise<Timing> => {
   let seeded!: Peer<R>;
   let replica!: R;
   let wire!: Wire;
   let engine!: SyncEngine;
 
-  return measure(options, 'adopt', () => engine.connect(), {
+  return measure(options, "adopt", () => engine.connect(), {
     beforeEach: () => {
       const replicaA = candidate.createReplica();
       replica = candidate.createReplica();
       wire = candidate.connect(replicaA, replica);
       seeded = createPeer(candidate, makeState(size), replicaA);
-      engine = createSyncEngine(replica.backend, createStore(emptyState()).adapter);
+      engine = createSyncEngine(
+        replica.backend,
+        createStore(emptyState()).adapter,
+      );
     },
     afterEach: () => {
       engine.disconnect();
@@ -345,7 +364,7 @@ const replicasForHeap = (size: number): number =>
 const runReplica = async <R extends Replica>(
   options: BenchmarkOptions,
   candidate: BackendCandidate<R>,
-  size: number
+  size: number,
 ): Promise<ReplicaResult> => {
   const seed = await measureSeed(options, candidate, size);
   const adopt = await measureAdopt(options, candidate, size);
@@ -358,7 +377,9 @@ const runReplica = async <R extends Replica>(
   if (options.memory) {
     const count = replicasForHeap(size);
     const { value, bytes } = retainedHeap(() =>
-      Array.from({ length: count }, () => createPeer(candidate, makeState(size)))
+      Array.from({ length: count }, () =>
+        createPeer(candidate, makeState(size)),
+      ),
     );
     value.forEach(destroyPeer);
     heapBytes = bytes / count;
@@ -369,7 +390,10 @@ const runReplica = async <R extends Replica>(
 
 const git = (args: string): string | null => {
   try {
-    return execSync(`git ${args}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execSync(`git ${args}`, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
   } catch {
     return null;
   }
@@ -379,9 +403,11 @@ const dependencyVersion = (name: string): string | null => {
   try {
     let directory = dirname(createRequire(import.meta.url).resolve(name));
     while (true) {
-      const manifest = join(directory, 'package.json');
+      const manifest = join(directory, "package.json");
       if (existsSync(manifest)) {
-        const { name: found, version } = JSON.parse(readFileSync(manifest, 'utf8')) as {
+        const { name: found, version } = JSON.parse(
+          readFileSync(manifest, "utf8"),
+        ) as {
           name?: string;
           version?: string;
         };
@@ -397,9 +423,14 @@ const dependencyVersion = (name: string): string | null => {
 };
 
 export const collectMeta = (options: BenchmarkOptions): BenchmarkMeta => {
-  const status = git('status --porcelain');
+  const status = git("status --porcelain");
   const versions: Record<string, string> = {};
-  for (const name of ['yjs', 'loro-crdt', '@automerge/automerge', 'tinybench']) {
+  for (const name of [
+    "yjs",
+    "loro-crdt",
+    "@automerge/automerge",
+    "tinybench",
+  ]) {
     const version = dependencyVersion(name);
     if (version !== null) versions[name] = version;
   }
@@ -407,7 +438,7 @@ export const collectMeta = (options: BenchmarkOptions): BenchmarkMeta => {
   return {
     date: new Date().toISOString(),
     node: process.version,
-    commit: git('rev-parse --short HEAD'),
+    commit: git("rev-parse --short HEAD"),
     dirty: status === null ? null : status.length > 0,
     versions,
     options: {
@@ -427,14 +458,19 @@ export const countTasks = (options: BenchmarkOptions): number =>
     (total, size) =>
       total +
       options.candidates.length *
-        (1 + options.scenarios.filter((scenario) => applies(scenario, size)).length),
-    0
+        (1 +
+          options.scenarios.filter((scenario) => applies(scenario, size))
+            .length),
+    0,
   );
 
-export const runBenchmark = async (options: BenchmarkOptions): Promise<BenchmarkReport> => {
+export const runBenchmark = async (
+  options: BenchmarkOptions,
+): Promise<BenchmarkReport> => {
   const total = countTasks(options);
   let done = 0;
-  const progress = (label: string): void => options.onProgress?.(++done, total, label);
+  const progress = (label: string): void =>
+    options.onProgress?.(++done, total, label);
 
   const replicas: ReplicaResult[] = [];
   const operations: OperationResult[] = [];

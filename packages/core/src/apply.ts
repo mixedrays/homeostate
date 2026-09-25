@@ -1,4 +1,4 @@
-import { ChangeType, type Change } from './change.js';
+import { ChangeType, type Change } from "./change.js";
 
 type Plain = Record<string, unknown>;
 
@@ -15,7 +15,12 @@ export interface ApplyOps {
   /** Remove the record property `key`. */
   remove(target: object, key: string): void;
   /** `Array.prototype.splice`: drop `deleteCount` elements at `index`, then add `inserted`. */
-  splice(target: unknown[], index: number, deleteCount: number, inserted: unknown[]): void;
+  splice(
+    target: unknown[],
+    index: number,
+    deleteCount: number,
+    inserted: unknown[],
+  ): void;
 }
 
 /**
@@ -25,8 +30,10 @@ export interface ApplyOps {
 export const applyStringChanges = (value: string, changes: Change[]): string =>
   changes.reduce((revised, [type, index, inserted]) => {
     const at = index as number;
-    if (type === ChangeType.INSERT) return revised.slice(0, at) + (inserted as string) + revised.slice(at);
-    if (type === ChangeType.DELETE) return revised.slice(0, at) + revised.slice(at + 1);
+    if (type === ChangeType.INSERT)
+      return revised.slice(0, at) + (inserted as string) + revised.slice(at);
+    if (type === ChangeType.DELETE)
+      return revised.slice(0, at) + revised.slice(at + 1);
     return revised;
   }, value);
 
@@ -44,16 +51,20 @@ export const applyStringChanges = (value: string, changes: Change[]): string =>
  * @param changes The edit script to apply, in order.
  * @param ops How this store writes; see {@link ApplyOps}.
  */
-export const applyChanges = (target: object, changes: Change[], ops: ApplyOps): void => {
+export const applyChanges = (
+  target: object,
+  changes: Change[],
+  ops: ApplyOps,
+): void => {
   const array = Array.isArray(target) ? (target as unknown[]) : null;
 
   for (const [type, key, value] of changes) {
     switch (type) {
       case ChangeType.PENDING: {
         const child = (target as Plain)[key as string];
-        if (typeof child === 'string')
+        if (typeof child === "string")
           ops.set(target, key, applyStringChanges(child, value as Change[]));
-        else if (child !== null && typeof child === 'object')
+        else if (child !== null && typeof child === "object")
           applyChanges(child, value as Change[], ops);
         break;
       }

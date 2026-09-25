@@ -1,7 +1,11 @@
-import { TodoFilters } from '../../components/todo/TodoFilters';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { selectFilterStatus, selectSearchTerm, selectTodoCounts } from '../store/selectors';
-import { setFilterStatus, setSearchTerm } from '../store/todoStore';
+import { TodoFilters } from "../../components/todo/TodoFilters";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import {
+  selectFilterStatus,
+  selectSearchTerm,
+  selectTodoCounts,
+} from "../store/selectors";
+import { setFilterStatus, setSearchTerm } from "../store/todoStore";
 
 export function FilterControls() {
   const dispatch = useAppDispatch();

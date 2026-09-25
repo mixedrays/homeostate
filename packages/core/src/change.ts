@@ -3,13 +3,13 @@
  */
 export enum ChangeType {
   /** A value was inserted. */
-  INSERT = 'insert',
+  INSERT = "insert",
   /** A value was replaced. */
-  UPDATE = 'update',
+  UPDATE = "update",
   /** A value was deleted. */
-  DELETE = 'delete',
+  DELETE = "delete",
   /** The value requires a recursive diff to identify further changes. */
-  PENDING = 'pending',
+  PENDING = "pending",
 }
 
 /**

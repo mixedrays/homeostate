@@ -1,7 +1,7 @@
-import { observer } from 'mobx-react-lite';
-import { TodoItemRow } from '../../components/todo/TodoItem';
-import { TodoListView } from '../../components/todo/TodoListView';
-import { todoStore } from '../store/TodoStore';
+import { observer } from "mobx-react-lite";
+import { TodoItemRow } from "../../components/todo/TodoItem";
+import { TodoListView } from "../../components/todo/TodoListView";
+import { todoStore } from "../store/TodoStore";
 
 /**
  * MST mutates a todo node in place, so the row can never learn about a toggle from its props —

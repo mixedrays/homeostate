@@ -1,6 +1,6 @@
-import { snapshot, subscribe } from 'valtio/vanilla';
-import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
-import { reconcile } from './reconcile.js';
+import { snapshot, subscribe } from "valtio/vanilla";
+import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
+import { reconcile } from "./reconcile.js";
 
 /**
  * Valtio-specific store adapter that bridges a Valtio proxy with the sync engine.
@@ -50,6 +50,8 @@ export class ValtioAdapter<S extends object> implements StoreAdapter<S> {
  * @param state - The Valtio proxy object
  * @returns StoreAdapter instance for the proxy
  */
-export function createValtioAdapter<S extends object>(state: S): StoreAdapter<S> {
+export function createValtioAdapter<S extends object>(
+  state: S,
+): StoreAdapter<S> {
   return new ValtioAdapter(state);
 }

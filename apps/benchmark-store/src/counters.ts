@@ -1,4 +1,4 @@
-import type { Counters } from './types.js';
+import type { Counters } from "./types.js";
 
 export const createCounters = (): Counters => ({
   app: 0,

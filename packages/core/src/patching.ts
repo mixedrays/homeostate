@@ -1,14 +1,17 @@
-import { applyStringChanges } from './apply.js';
-import { ChangeType, type Change } from './change.js';
-import { getChanges, type Diffable } from './diff.js';
+import { applyStringChanges } from "./apply.js";
+import { ChangeType, type Change } from "./change.js";
+import { getChanges, type Diffable } from "./diff.js";
 
 const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
-  if (typeof state === 'string') return applyStringChanges(state, changes);
+  if (typeof state === "string") return applyStringChanges(state, changes);
   if (Array.isArray(state)) return applyChangesToArray(state, changes);
   return applyChangesToObject(state, changes);
 };
 
-const applyChangesToArray = (array: unknown[], changes: Change[]): unknown[] => {
+const applyChangesToArray = (
+  array: unknown[],
+  changes: Change[],
+): unknown[] => {
   const revised = [...array];
 
   for (const [type, index, value] of changes) {
@@ -38,7 +41,7 @@ const applyChangesToArray = (array: unknown[], changes: Change[]): unknown[] => 
 
 const applyChangesToObject = (
   object: Record<string, unknown>,
-  changes: Change[]
+  changes: Change[],
 ): Record<string, unknown> => {
   const revised = { ...object };
 

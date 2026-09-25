@@ -1,16 +1,16 @@
-import * as Y from 'yjs';
-import { LoroDoc } from 'loro-crdt';
-import * as A from '@automerge/automerge';
-import { createMemoryBackend, type MemoryBackend } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createLoroBackend } from '@homeostate/crdt-loro';
+import * as Y from "yjs";
+import { LoroDoc } from "loro-crdt";
+import * as A from "@automerge/automerge";
+import { createMemoryBackend, type MemoryBackend } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createLoroBackend } from "@homeostate/crdt-loro";
 import {
   createAutomergeBackend,
   createAutomergeHandle,
   type AutomergeHandle,
   type AutomergeHandleEvent,
-} from '@homeostate/crdt-automerge';
-import type { BackendCandidate, Replica } from './types.js';
+} from "@homeostate/crdt-automerge";
+import type { BackendCandidate, Replica } from "./types.js";
 
 export const utf8Bytes = (text: string): number => Buffer.byteLength(text);
 
@@ -24,8 +24,9 @@ interface PassthroughReplica extends Replica {
  * its own, so its numbers are the engine's own diff, patch, and filter work.
  */
 export const passthrough: BackendCandidate<PassthroughReplica> = {
-  name: 'passthrough',
-  description: 'keeps the state by reference; no cloning, no encoding; measures the engine alone',
+  name: "passthrough",
+  description:
+    "keeps the state by reference; no cloning, no encoding; measures the engine alone",
 
   createReplica() {
     let state: unknown = {};
@@ -73,8 +74,9 @@ interface MemoryReplica extends Replica {
 
 /** `createMemoryBackend` from core; peers receive the whole state as a JSON string. */
 export const memory: BackendCandidate<MemoryReplica> = {
-  name: 'memory',
-  description: 'createMemoryBackend from core; the whole state travels as JSON on every write',
+  name: "memory",
+  description:
+    "createMemoryBackend from core; the whole state travels as JSON on every write",
 
   createReplica() {
     const inner = createMemoryBackend();
@@ -124,37 +126,38 @@ interface YjsReplica extends Replica {
 
 /** `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates. */
 export const yjs: BackendCandidate<YjsReplica> = {
-  name: 'yjs',
-  description: 'createYjsBackend over a Y.Map; peers exchange Yjs updates',
+  name: "yjs",
+  description: "createYjsBackend over a Y.Map; peers exchange Yjs updates",
 
   createReplica() {
     const doc = new Y.Doc();
     return {
       doc,
-      backend: createYjsBackend(doc, 'shared'),
+      backend: createYjsBackend(doc, "shared"),
       encodedSize: () => Y.encodeStateAsUpdate(doc).byteLength,
       destroy: () => doc.destroy(),
     };
   },
 
   connect(a, b) {
-    const relay = Symbol('wire');
+    const relay = Symbol("wire");
     let bytes = 0;
-    const forward = (target: Y.Doc) => (update: Uint8Array, origin: unknown) => {
-      if (origin === relay) return;
-      bytes += update.byteLength;
-      Y.applyUpdate(target, update, relay);
-    };
+    const forward =
+      (target: Y.Doc) => (update: Uint8Array, origin: unknown) => {
+        if (origin === relay) return;
+        bytes += update.byteLength;
+        Y.applyUpdate(target, update, relay);
+      };
     const toB = forward(b.doc);
     const toA = forward(a.doc);
-    a.doc.on('update', toB);
-    b.doc.on('update', toA);
+    a.doc.on("update", toB);
+    b.doc.on("update", toA);
 
     return {
       bytes: () => bytes,
       disconnect: () => {
-        a.doc.off('update', toB);
-        b.doc.off('update', toA);
+        a.doc.off("update", toB);
+        b.doc.off("update", toA);
       },
     };
   },
@@ -165,25 +168,28 @@ interface LoroReplica extends Replica {
 }
 
 export const loro: BackendCandidate<LoroReplica> = {
-  name: 'loro',
-  description: 'createLoroBackend over a LoroMap; peers exchange Loro updates; the document is a snapshot',
+  name: "loro",
+  description:
+    "createLoroBackend over a LoroMap; peers exchange Loro updates; the document is a snapshot",
 
   createReplica() {
     const doc = new LoroDoc();
     return {
       doc,
-      backend: createLoroBackend(doc, 'shared'),
-      encodedSize: () => doc.export({ mode: 'snapshot' }).byteLength,
+      backend: createLoroBackend(doc, "shared"),
+      encodedSize: () => doc.export({ mode: "snapshot" }).byteLength,
       destroy: () => doc.free(),
     };
   },
 
   connect(a, b) {
     let bytes = 0;
-    const forward = (target: LoroDoc) => (update: Uint8Array): void => {
-      bytes += update.byteLength;
-      target.import(update);
-    };
+    const forward =
+      (target: LoroDoc) =>
+      (update: Uint8Array): void => {
+        bytes += update.byteLength;
+        target.import(update);
+      };
     const unsubscribeA = a.doc.subscribeLocalUpdates(forward(b.doc));
     const unsubscribeB = b.doc.subscribeLocalUpdates(forward(a.doc));
 
@@ -202,15 +208,15 @@ interface AutomergeReplica extends Replica {
 }
 
 export const automerge: BackendCandidate<AutomergeReplica> = {
-  name: 'automerge',
+  name: "automerge",
   description:
-    'createAutomergeBackend over an Automerge document; peers exchange encoded changes; the document is A.save',
+    "createAutomergeBackend over an Automerge document; peers exchange encoded changes; the document is A.save",
 
   createReplica() {
     const handle = createAutomergeHandle();
     return {
       handle,
-      backend: createAutomergeBackend(handle, 'shared'),
+      backend: createAutomergeBackend(handle, "shared"),
       encodedSize: () => A.save(handle.doc()).byteLength,
       destroy: () => A.free(handle.doc()),
     };
@@ -240,4 +246,10 @@ export const automerge: BackendCandidate<AutomergeReplica> = {
   },
 };
 
-export const candidates: BackendCandidate[] = [passthrough, memory, yjs, loro, automerge];
+export const candidates: BackendCandidate[] = [
+  passthrough,
+  memory,
+  yjs,
+  loro,
+  automerge,
+];

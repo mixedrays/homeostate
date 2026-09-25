@@ -1,9 +1,9 @@
-import { memo } from 'react';
-import { Circle, CircleCheck, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import type { Todo } from '../../types/todo';
+import { memo } from "react";
+import { Circle, CircleCheck, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import type { Todo } from "../../types/todo";
 
 export interface TodoItemProps {
   todo: Todo;
@@ -23,9 +23,14 @@ export interface TodoItemProps {
  * nothing to jump. Every keystroke goes to the store, which is also what puts each keystroke
  * on the wire for the other tabs.
  */
-export function TodoItemRow({ todo, onToggle, onEdit, onDelete }: TodoItemProps) {
+export function TodoItemRow({
+  todo,
+  onToggle,
+  onEdit,
+  onDelete,
+}: TodoItemProps) {
   // The field is free to be empty while it is being retyped, so labels need a fallback.
-  const label = todo.title.trim() || 'Untitled todo';
+  const label = todo.title.trim() || "Untitled todo";
 
   return (
     <li className="flex items-center gap-2 rounded-xl border bg-card px-2 py-2.5 transition-colors hover:border-ring">
@@ -36,11 +41,11 @@ export function TodoItemRow({ todo, onToggle, onEdit, onDelete }: TodoItemProps)
         size="icon-sm"
         onClick={() => onToggle(todo.id)}
         aria-pressed={todo.completed}
-        aria-label={`Mark "${label}" as ${todo.completed ? 'not completed' : 'completed'}`}
+        aria-label={`Mark "${label}" as ${todo.completed ? "not completed" : "completed"}`}
         className={cn(
           // Done, it picks up whichever accent the demo is themed with.
-          'shrink-0 hover:bg-primary/10 hover:text-primary',
-          todo.completed ? 'text-primary' : 'text-muted-foreground'
+          "shrink-0 hover:bg-primary/10 hover:text-primary",
+          todo.completed ? "text-primary" : "text-muted-foreground",
         )}
       >
         {/* The two icons draw the same r=10 ring, so the state change reads as a check
@@ -60,8 +65,8 @@ export function TodoItemRow({ todo, onToggle, onEdit, onDelete }: TodoItemProps)
         className={cn(
           // Reads as plain text until it is hovered or focused, where the border it already
           // reserves becomes visible. Nothing here changes the box, only its colours.
-          'min-w-0 flex-1 border-transparent px-2 hover:border-input dark:bg-transparent',
-          todo.completed && 'text-muted-foreground line-through'
+          "min-w-0 flex-1 border-transparent px-2 hover:border-input dark:bg-transparent",
+          todo.completed && "text-muted-foreground line-through",
         )}
       />
 

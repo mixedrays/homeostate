@@ -20,12 +20,12 @@ npm install @homeostate/core @homeostate/crdt-loro loro-crdt
 ## Usage
 
 ```ts
-import { LoroDoc } from 'loro-crdt';
-import { createSyncEngine } from '@homeostate/core';
-import { createLoroBackend } from '@homeostate/crdt-loro';
+import { LoroDoc } from "loro-crdt";
+import { createSyncEngine } from "@homeostate/core";
+import { createLoroBackend } from "@homeostate/crdt-loro";
 
 const doc = new LoroDoc();
-const engine = createSyncEngine(createLoroBackend(doc, 'shared'), adapter);
+const engine = createSyncEngine(createLoroBackend(doc, "shared"), adapter);
 engine.connect();
 ```
 

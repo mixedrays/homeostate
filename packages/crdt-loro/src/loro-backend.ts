@@ -1,6 +1,6 @@
-import type { LoroDoc } from 'loro-crdt';
-import type { CrdtBackend, Unsubscribe } from '@homeostate/core';
-import { patchContainer } from './patching.js';
+import type { LoroDoc } from "loro-crdt";
+import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import { patchContainer } from "./patching.js";
 
 let instances = 0;
 

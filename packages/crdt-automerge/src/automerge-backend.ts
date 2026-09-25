@@ -1,11 +1,11 @@
-import type { CrdtBackend, Unsubscribe } from '@homeostate/core';
-import type { AutomergeHandle } from './handle.js';
-import { applyChanges, diff, toJson, type Container } from './patching.js';
-import { createSnapshot } from './snapshot.js';
+import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import type { AutomergeHandle } from "./handle.js";
+import { applyChanges, diff, toJson, type Container } from "./patching.js";
+import { createSnapshot } from "./snapshot.js";
 
 export const createAutomergeBackend = <T extends Container>(
   handle: AutomergeHandle<T>,
-  name: string
+  name: string,
 ): CrdtBackend => {
   const snapshot = createSnapshot();
   let writing = false;

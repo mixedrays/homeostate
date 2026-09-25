@@ -1,7 +1,16 @@
-import * as Y from 'yjs';
-import { createSyncEngine, type StoreAdapter, type SyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createStore, makeState, type BenchStore, type TodoState } from '@homeostate/benchmark-crdt';
+import * as Y from "yjs";
+import {
+  createSyncEngine,
+  type StoreAdapter,
+  type SyncEngine,
+} from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import {
+  createStore,
+  makeState,
+  type BenchStore,
+  type TodoState,
+} from "@homeostate/benchmark-crdt";
 
 export interface Pair {
   /** The peer that writes. Its store is the inert one the write-path benchmark uses. */
@@ -15,10 +24,13 @@ export interface Pair {
  * the rows the components mount have been through a real encode and decode rather than being
  * the writer's own objects.
  */
-export const createPair = (size: number, reader: StoreAdapter<TodoState>): Pair => {
+export const createPair = (
+  size: number,
+  reader: StoreAdapter<TodoState>,
+): Pair => {
   const docA = new Y.Doc();
   const docB = new Y.Doc();
-  const relay = Symbol('wire');
+  const relay = Symbol("wire");
 
   const forward =
     (target: Y.Doc) =>
@@ -28,13 +40,13 @@ export const createPair = (size: number, reader: StoreAdapter<TodoState>): Pair 
     };
   const toB = forward(docB);
   const toA = forward(docA);
-  docA.on('update', toB);
-  docB.on('update', toA);
+  docA.on("update", toB);
+  docB.on("update", toA);
 
   const writer = createStore(makeState(size));
   const engines: SyncEngine[] = [
-    createSyncEngine(createYjsBackend(docA, 'shared'), writer.adapter),
-    createSyncEngine(createYjsBackend(docB, 'shared'), reader),
+    createSyncEngine(createYjsBackend(docA, "shared"), writer.adapter),
+    createSyncEngine(createYjsBackend(docB, "shared"), reader),
   ];
   engines.forEach((engine) => engine.connect());
 
@@ -42,8 +54,8 @@ export const createPair = (size: number, reader: StoreAdapter<TodoState>): Pair 
     writer,
     destroy: () => {
       engines.forEach((engine) => engine.disconnect());
-      docA.off('update', toB);
-      docB.off('update', toA);
+      docA.off("update", toB);
+      docB.off("update", toA);
       docA.destroy();
       docB.destroy();
     },

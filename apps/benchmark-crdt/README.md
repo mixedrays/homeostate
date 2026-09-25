@@ -59,26 +59,26 @@ Scenarios compute the next state in an untimed hook, so only the write is measur
 
 Per backend and size:
 
-| column | meaning |
-| --- | --- |
-| seed | `connect()` of a store holding N todos against an empty backend |
-| adopt | `connect()` of an empty store against a replica that already received the N todos |
-| doc size | encoded document after seeding: Yjs state update or JSON bytes |
-| heap / replica | retained heap of one peer, store state included, averaged over up to 20 peers |
+| column         | meaning                                                                           |
+| -------------- | --------------------------------------------------------------------------------- |
+| seed           | `connect()` of a store holding N todos against an empty backend                   |
+| adopt          | `connect()` of an empty store against a replica that already received the N todos |
+| doc size       | encoded document after seeding: Yjs state update or JSON bytes                    |
+| heap / replica | retained heap of one peer, store state included, averaged over up to 20 peers     |
 
 Per backend, scenario, and size:
 
-| column | meaning |
-| --- | --- |
-| write | store change to `backend.write` on a single peer, mean ± relative margin of error |
-| p99 | 99th percentile of write |
-| vs best | write mean relative to the fastest backend for that scenario and size |
-| roundtrip | store change on peer A until peer B's store holds it: B's `read`, `patchState`, `setState` included |
-| renders / op | rows of peer B that survived the operation and came back as a new object, matched by `id` |
-| wasted / op | of those, the rows whose data is deep-equal, so the new object carried nothing new |
-| wire / op | bytes over the wire per operation |
-| doc Δ / op | growth of the encoded document per operation |
-| heap Δ / op | retained heap growth of one writing peer per operation, over up to 200 operations or one second; coarse |
+| column       | meaning                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| write        | store change to `backend.write` on a single peer, mean ± relative margin of error                       |
+| p99          | 99th percentile of write                                                                                |
+| vs best      | write mean relative to the fastest backend for that scenario and size                                   |
+| roundtrip    | store change on peer A until peer B's store holds it: B's `read`, `patchState`, `setState` included     |
+| renders / op | rows of peer B that survived the operation and came back as a new object, matched by `id`               |
+| wasted / op  | of those, the rows whose data is deep-equal, so the new object carried nothing new                      |
+| wire / op    | bytes over the wire per operation                                                                       |
+| doc Δ / op   | growth of the encoded document per operation                                                            |
+| heap Δ / op  | retained heap growth of one writing peer per operation, over up to 200 operations or one second; coarse |
 
 Scenarios that drift in size (`add`, `remove`, `keystroke`) restore the steady size before
 each iteration. The restore is untimed and excluded from wire and document figures; the heap
@@ -120,13 +120,13 @@ on its way into components. That is measured against real React trees in
 
 ## Backends
 
-| name | what it is |
-| --- | --- |
-| `passthrough` | keeps the state by reference, no cloning or encoding; the engine's own cost, a floor for the others |
-| `memory` | `createMemoryBackend` from core; peers receive the whole state as a JSON string |
-| `yjs` | `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates |
-| `loro` | `createLoroBackend` over a `LoroMap`; peers exchange Loro updates; the document figure is a Loro snapshot |
-| `automerge` | `createAutomergeBackend` over an Automerge document; peers exchange encoded Automerge changes; the document figure is `A.save` |
+| name          | what it is                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `passthrough` | keeps the state by reference, no cloning or encoding; the engine's own cost, a floor for the others                            |
+| `memory`      | `createMemoryBackend` from core; peers receive the whole state as a JSON string                                                |
+| `yjs`         | `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates                                                                  |
+| `loro`        | `createLoroBackend` over a `LoroMap`; peers exchange Loro updates; the document figure is a Loro snapshot                      |
+| `automerge`   | `createAutomergeBackend` over an Automerge document; peers exchange encoded Automerge changes; the document figure is `A.save` |
 
 Backends disagree on the order of object keys after a roundtrip: `passthrough`, `memory` and
 `yjs` return a todo with the order it was authored in (`id, title, completed`), while `loro`
@@ -155,9 +155,13 @@ Implement `BackendCandidate` next to the others in `src/candidates.ts` and add i
 
 ```ts
 export const automerge: BackendCandidate<AutomergeReplica> = {
-  name: 'automerge',
-  description: '...',
-  createReplica: () => ({ backend, encodedSize: () => save(doc).byteLength, destroy }),
+  name: "automerge",
+  description: "...",
+  createReplica: () => ({
+    backend,
+    encodedSize: () => save(doc).byteLength,
+    destroy,
+  }),
   connect: (a, b) => ({ bytes: () => transferred, disconnect }),
 };
 ```

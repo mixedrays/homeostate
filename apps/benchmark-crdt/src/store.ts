@@ -1,4 +1,4 @@
-import type { StoreAdapter } from '@homeostate/core';
+import type { StoreAdapter } from "@homeostate/core";
 
 /** The smallest store that satisfies `StoreAdapter`, so the store adds nothing to the numbers. */
 export interface BenchStore<S extends object> {

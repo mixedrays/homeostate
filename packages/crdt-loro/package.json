@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/crdt-loro",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Loro CRDT backend for @homeostate/core",
   "license": "MIT",
   "type": "module",
@@ -29,7 +29,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public",

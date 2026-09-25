@@ -1,11 +1,12 @@
-import { JSDOM } from 'jsdom';
+import { JSDOM } from "jsdom";
 
 /**
  * Tells React that `act` is allowed to flush work synchronously. Vitest's jsdom environment
  * does not set it, so both the CLI and the test suite ask for it explicitly.
  */
 export const enableActEnvironment = (): void => {
-  (globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  (globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT =
+    true;
 };
 
 /**
@@ -15,7 +16,7 @@ export const enableActEnvironment = (): void => {
  * does not call this.
  */
 export const installDom = (): void => {
-  const { window } = new JSDOM('<!doctype html><html><body></body></html>', {
+  const { window } = new JSDOM("<!doctype html><html><body></body></html>", {
     pretendToBeVisual: true,
   });
   const global = globalThis as unknown as Record<string, unknown>;
@@ -24,7 +25,7 @@ export const installDom = (): void => {
   global.document = window.document;
 
   for (const key of Object.getOwnPropertyNames(window)) {
-    if (key.startsWith('_') || key in global) continue;
+    if (key.startsWith("_") || key in global) continue;
     try {
       global[key] = (window as unknown as Record<string, unknown>)[key];
     } catch {

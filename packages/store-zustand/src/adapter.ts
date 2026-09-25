@@ -1,5 +1,5 @@
-import type { StoreApi as ZustandStoreApi } from 'zustand';
-import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
+import type { StoreApi as ZustandStoreApi } from "zustand";
+import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
 /**
  * Zustand-specific store adapter that bridges Zustand stores with the sync engine.
@@ -35,6 +35,8 @@ export class ZustandAdapter<S extends object> implements StoreAdapter<S> {
 /**
  * Factory function to create a Zustand adapter
  */
-export function createZustandAdapter<S extends object>(store: ZustandStoreApi<S>): StoreAdapter<S> {
+export function createZustandAdapter<S extends object>(
+  store: ZustandStoreApi<S>,
+): StoreAdapter<S> {
   return new ZustandAdapter(store);
 }

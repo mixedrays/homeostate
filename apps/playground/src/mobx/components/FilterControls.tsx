@@ -1,6 +1,6 @@
-import { observer } from 'mobx-react-lite';
-import { TodoFilters } from '../../components/todo/TodoFilters';
-import { useStore } from '../store/storeContext';
+import { observer } from "mobx-react-lite";
+import { TodoFilters } from "../../components/todo/TodoFilters";
+import { useStore } from "../store/storeContext";
 
 export const FilterControls = observer(function FilterControls() {
   const { todoStore } = useStore();

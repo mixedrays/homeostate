@@ -1,5 +1,5 @@
-import type { BenchmarkReport } from '@homeostate/benchmark-crdt/types';
-import { canUseLog, type ScaleKind } from '../lib/scale';
+import type { BenchmarkReport } from "@homeostate/benchmark-crdt/types";
+import { canUseLog, type ScaleKind } from "../lib/scale";
 
 export interface ViewProps {
   report: BenchmarkReport;
@@ -7,16 +7,23 @@ export interface ViewProps {
 }
 
 export const SCALE_OPTIONS: Array<{ value: ScaleKind; label: string }> = [
-  { value: 'log', label: 'log' },
-  { value: 'linear', label: 'linear' },
+  { value: "log", label: "log" },
+  { value: "linear", label: "linear" },
 ];
 
 /** The requested scale, or linear when the values include zero or negatives. */
-export const effectiveScale = (kind: ScaleKind, values: number[]): { kind: ScaleKind; forced: boolean } =>
-  kind === 'log' && !canUseLog(values) ? { kind: 'linear', forced: true } : { kind, forced: false };
+export const effectiveScale = (
+  kind: ScaleKind,
+  values: number[],
+): { kind: ScaleKind; forced: boolean } =>
+  kind === "log" && !canUseLog(values)
+    ? { kind: "linear", forced: true }
+    : { kind, forced: false };
 
 export const finite = (values: Array<number | null>): number[] =>
   values.filter((v): v is number => v !== null && Number.isFinite(v));
 
-export const metricOptions = (metrics: ReadonlyArray<{ key: string; label: string }>): Array<{ value: string; label: string }> =>
+export const metricOptions = (
+  metrics: ReadonlyArray<{ key: string; label: string }>,
+): Array<{ value: string; label: string }> =>
   metrics.map((metric) => ({ value: metric.key, label: metric.label }));

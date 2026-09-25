@@ -1,14 +1,15 @@
-import { getVersion } from 'valtio/vanilla';
+import { getVersion } from "valtio/vanilla";
 
 type Plain = Record<string, unknown>;
 
 const isPlainObject = (value: unknown): value is Plain => {
-  if (value === null || typeof value !== 'object') return false;
+  if (value === null || typeof value !== "object") return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
 };
 
-const isProxy = (value: unknown): value is object => getVersion(value) !== undefined;
+const isProxy = (value: unknown): value is object =>
+  getVersion(value) !== undefined;
 
 const clone = <T>(value: T): T => {
   if (Array.isArray(value)) return value.map(clone) as T;
@@ -19,7 +20,8 @@ const clone = <T>(value: T): T => {
 };
 
 const sameKind = (a: unknown, b: unknown): boolean =>
-  (Array.isArray(a) && Array.isArray(b)) || (isPlainObject(a) && isPlainObject(b));
+  (Array.isArray(a) && Array.isArray(b)) ||
+  (isPlainObject(a) && isPlainObject(b));
 
 /**
  * Mutates the Valtio proxy `target` so that its snapshot equals `next`, touching only
@@ -27,7 +29,11 @@ const sameKind = (a: unknown, b: unknown): boolean =>
  * Changed subtrees are assigned as fresh plain copies so the proxy never wraps a
  * snapshot object, whose non-writable properties would swallow later mutations.
  */
-export const reconcile = (target: object, current: object, next: object): void => {
+export const reconcile = (
+  target: object,
+  current: object,
+  next: object,
+): void => {
   const dest = target as Plain;
   const prev = current as Plain;
   const keys = Array.isArray(next)

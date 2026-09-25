@@ -1,5 +1,5 @@
-import type { Store, StoreActionMap } from '@tanstack/store';
-import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
+import type { Store, StoreActionMap } from "@tanstack/store";
+import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
 /**
  * TanStack Store adapter that bridges a `Store` with the sync engine.
@@ -46,7 +46,7 @@ export class TanStackStoreAdapter<S extends object> implements StoreAdapter<S> {
  * @returns StoreAdapter instance for the store
  */
 export function createTanStackStoreAdapter<S extends object>(
-  store: Store<S, StoreActionMap>
+  store: Store<S, StoreActionMap>,
 ): StoreAdapter<S> {
   return new TanStackStoreAdapter(store);
 }

@@ -1,15 +1,15 @@
-import { useId, useState, type FormEvent } from 'react';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useId, useState, type FormEvent } from "react";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface TodoComposerProps {
   onAdd: (title: string) => void;
 }
 
 export function TodoComposer({ onAdd }: TodoComposerProps) {
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState("");
   const inputId = useId();
   const trimmed = title.trim();
 
@@ -17,7 +17,7 @@ export function TodoComposer({ onAdd }: TodoComposerProps) {
     event.preventDefault();
     if (!trimmed) return;
     onAdd(trimmed);
-    setTitle('');
+    setTitle("");
   };
 
   return (

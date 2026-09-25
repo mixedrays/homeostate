@@ -1,2 +1,2 @@
-export { MobxStateTreeAdapter, createMobxStateTreeAdapter } from './adapter.js';
-export type { SnapshotNode } from './adapter.js';
+export { MobxStateTreeAdapter, createMobxStateTreeAdapter } from "./adapter.js";
+export type { SnapshotNode } from "./adapter.js";

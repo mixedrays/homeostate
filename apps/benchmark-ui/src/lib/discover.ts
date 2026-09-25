@@ -1,35 +1,43 @@
-import type { BenchmarkReport } from '@homeostate/benchmark-crdt/types';
-import type { RenderReport } from '@homeostate/benchmark-store/types';
-import { isRenderReport, type RenderRun } from './render-runs';
-import { isReport, type Run } from './runs';
+import type { BenchmarkReport } from "@homeostate/benchmark-crdt/types";
+import type { RenderReport } from "@homeostate/benchmark-store/types";
+import { isRenderReport, type RenderRun } from "./render-runs";
+import { isReport, type Run } from "./runs";
 
-const backendModules = import.meta.glob<BenchmarkReport>('../../../benchmark-crdt/results/*.json', {
-  import: 'default',
-});
+const backendModules = import.meta.glob<BenchmarkReport>(
+  "../../../benchmark-crdt/results/*.json",
+  {
+    import: "default",
+  },
+);
 
-const renderModules = import.meta.glob<RenderReport>('../../../benchmark-store/results/*.json', {
-  import: 'default',
-});
+const renderModules = import.meta.glob<RenderReport>(
+  "../../../benchmark-store/results/*.json",
+  {
+    import: "default",
+  },
+);
 
 const load = async <Report, Loaded>(
   modules: Record<string, () => Promise<Report>>,
   valid: (value: unknown) => boolean,
   kind: string,
-  build: (name: string, report: Report) => Loaded
+  build: (name: string, report: Report) => Loaded,
 ): Promise<{ loaded: Loaded[]; errors: string[] }> => {
   const loaded: Loaded[] = [];
   const errors: string[] = [];
   await Promise.all(
     Object.entries(modules).map(async ([path, read]) => {
-      const name = path.slice(path.lastIndexOf('/') + 1);
+      const name = path.slice(path.lastIndexOf("/") + 1);
       try {
         const report = await read();
         if (!valid(report)) throw new Error(`not a ${kind} report`);
         loaded.push(build(name, report));
       } catch (error) {
-        errors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+        errors.push(
+          `${name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
-    })
+    }),
   );
   return { loaded, errors };
 };
@@ -46,18 +54,18 @@ export const discoverRuns = async (): Promise<{
   errors: string[];
 }> => {
   const [backend, render] = await Promise.all([
-    load(backendModules, isReport, 'benchmark', (name, report) => ({
-      kind: 'backend' as const,
+    load(backendModules, isReport, "benchmark", (name, report) => ({
+      kind: "backend" as const,
       id: `results:${name}`,
       name,
-      source: 'results' as const,
+      source: "results" as const,
       report,
     })),
-    load(renderModules, isRenderReport, 'render', (name, report) => ({
-      kind: 'render' as const,
+    load(renderModules, isRenderReport, "render", (name, report) => ({
+      kind: "render" as const,
       id: `render-results:${name}`,
       name,
-      source: 'results' as const,
+      source: "results" as const,
       report,
     })),
   ]);

@@ -1,0 +1,29 @@
+name: Version Packages
+
+# Turns the changesets merged into main into a "Version Packages" PR that bumps versions and
+# writes changelogs. Publishing stays local: merge that PR, pull main, run `pnpm release`.
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: changesets/action@v2
+        with:
+          commit-message: "chore(release): version packages"
+          pr-title: "chore(release): version packages"

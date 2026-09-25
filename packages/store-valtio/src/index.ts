@@ -1,1 +1,1 @@
-export { ValtioAdapter, createValtioAdapter } from './adapter.js';
+export { ValtioAdapter, createValtioAdapter } from "./adapter.js";

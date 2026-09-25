@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "main": "./dist/index.js",

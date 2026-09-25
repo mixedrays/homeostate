@@ -1,9 +1,13 @@
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { deepEqual, emptyState, type Scenario } from '@homeostate/benchmark-crdt';
-import { resetCounters } from './counters.js';
-import { createPair } from './peers.js';
-import type { Fixture, RenderResult } from './types.js';
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  deepEqual,
+  emptyState,
+  type Scenario,
+} from "@homeostate/benchmark-crdt";
+import { resetCounters } from "./counters.js";
+import { createPair } from "./peers.js";
+import type { Fixture, RenderResult } from "./types.js";
 
 /**
  * Mounts one fixture over a real list of `size` todos, applies one scenario step on the other
@@ -16,13 +20,13 @@ import type { Fixture, RenderResult } from './types.js';
 export const measure = async (
   fixture: Fixture,
   scenario: Scenario,
-  size: number
+  size: number,
 ): Promise<RenderResult> => {
   const label = `${fixture.name}/${scenario.name}@${size}`;
   const instance = fixture.create(emptyState());
   const pair = createPair(size, instance.adapter);
 
-  const container = document.createElement('div');
+  const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
 
@@ -35,7 +39,9 @@ export const measure = async (
   // A fixture that memoizes at the wrong level renders fewer components than it has rows, and
   // would then report a flattering number for its adapter. It is wrong, not fast.
   if (instance.counters.row !== size)
-    throw new Error(`${label}: mounted ${instance.counters.row} row components for ${size} rows`);
+    throw new Error(
+      `${label}: mounted ${instance.counters.row} row components for ${size} rows`,
+    );
   resetCounters(instance.counters);
 
   const next = scenario.step(pair.writer.getState(), 0);
@@ -49,7 +55,9 @@ export const measure = async (
 
   // Key order differs between backends, so the check has to be structural, not stringified.
   if (!deepEqual(instance.adapter.getState(), pair.writer.getState()))
-    throw new Error(`${label}: the fixture's store did not converge with the writing peer`);
+    throw new Error(
+      `${label}: the fixture's store did not converge with the writing peer`,
+    );
 
   const { app, searchBox, list, row, footer } = instance.counters;
 
@@ -88,11 +96,15 @@ const applies = (scenario: Scenario, size: number): boolean =>
 export const countRuns = (options: RunOptions): number =>
   options.sizes.reduce(
     (total, size) =>
-      total + options.fixtures.length * options.scenarios.filter((s) => applies(s, size)).length,
-    0
+      total +
+      options.fixtures.length *
+        options.scenarios.filter((s) => applies(s, size)).length,
+    0,
   );
 
-export const runRenderBenchmark = async (options: RunOptions): Promise<RenderResult[]> => {
+export const runRenderBenchmark = async (
+  options: RunOptions,
+): Promise<RenderResult[]> => {
   const total = countRuns(options);
   const results: RenderResult[] = [];
   let done = 0;
@@ -102,7 +114,11 @@ export const runRenderBenchmark = async (options: RunOptions): Promise<RenderRes
       if (!applies(scenario, size)) continue;
       for (const fixture of options.fixtures) {
         results.push(await measure(fixture, scenario, size));
-        options.onProgress?.(++done, total, `${size} todos · ${fixture.name} · ${scenario.name}`);
+        options.onProgress?.(
+          ++done,
+          total,
+          `${size} todos · ${fixture.name} · ${scenario.name}`,
+        );
       }
     }
 

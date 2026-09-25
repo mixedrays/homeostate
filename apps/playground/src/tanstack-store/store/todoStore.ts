@@ -1,10 +1,14 @@
-import { createAtom, createStore } from '@tanstack/store';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createTanStackStoreAdapter } from '@homeostate/store-tanstack';
-import type { FilterStatus, TodoState } from '../../types/todo';
-import { countTodos, filterTodos } from '../../lib/todos';
-import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
+import { createAtom, createStore } from "@tanstack/store";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createTanStackStoreAdapter } from "@homeostate/store-tanstack";
+import type { FilterStatus, TodoState } from "../../types/todo";
+import { countTodos, filterTodos } from "../../lib/todos";
+import {
+  SYNC_MAP_NAME,
+  connectSharedDoc,
+  createInitialTodoState,
+} from "../../sync";
 
 export const todoStore = createStore<TodoState, TodoActions>(
   createInitialTodoState(),
@@ -12,21 +16,26 @@ export const todoStore = createStore<TodoState, TodoActions>(
     addTodo: (title) =>
       setState((state) => ({
         ...state,
-        todos: [...state.todos, { id: crypto.randomUUID(), title, completed: false }],
+        todos: [
+          ...state.todos,
+          { id: crypto.randomUUID(), title, completed: false },
+        ],
       })),
 
     toggleTodo: (id) =>
       setState((state) => ({
         ...state,
         todos: state.todos.map((todo) =>
-          todo.id === id ? { ...todo, completed: !todo.completed } : todo
+          todo.id === id ? { ...todo, completed: !todo.completed } : todo,
         ),
       })),
 
     editTodo: (id, title) =>
       setState((state) => ({
         ...state,
-        todos: state.todos.map((todo) => (todo.id === id ? { ...todo, title } : todo)),
+        todos: state.todos.map((todo) =>
+          todo.id === id ? { ...todo, title } : todo,
+        ),
       })),
 
     deleteTodo: (id) =>
@@ -35,9 +44,11 @@ export const todoStore = createStore<TodoState, TodoActions>(
         todos: state.todos.filter((todo) => todo.id !== id),
       })),
 
-    setSearchTerm: (searchTerm) => setState((state) => ({ ...state, searchTerm })),
-    setFilterStatus: (filterStatus) => setState((state) => ({ ...state, filterStatus })),
-  })
+    setSearchTerm: (searchTerm) =>
+      setState((state) => ({ ...state, searchTerm })),
+    setFilterStatus: (filterStatus) =>
+      setState((state) => ({ ...state, filterStatus })),
+  }),
 );
 
 type TodoActions = {
@@ -54,11 +65,16 @@ export const visibleTodosAtom = createAtom(() => {
   return filterTodos(todos, searchTerm, filterStatus);
 });
 
-export const todoCountsAtom = createAtom(() => countTodos(todoStore.state.todos));
+export const todoCountsAtom = createAtom(() =>
+  countTodos(todoStore.state.todos),
+);
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createTanStackStoreAdapter(todoStore);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
+const syncEngine = createSyncEngine(
+  createYjsBackend(ydoc, SYNC_MAP_NAME),
+  adapter,
+);
 
 syncEngine.connect();
 

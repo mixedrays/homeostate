@@ -1,39 +1,96 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { AlertTriangle, FolderOpen, Upload, X } from 'lucide-react';
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MetaStrip } from './components/MetaStrip';
-import { Note } from './components/Note';
-import { discoverRuns } from './lib/discover';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
+import { AlertTriangle, FolderOpen, Upload, X } from "lucide-react";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MetaStrip } from "./components/MetaStrip";
+import { Note } from "./components/Note";
+import { discoverRuns } from "./lib/discover";
 import {
   assignAdapterSlots,
   parseRenderReport,
   sortRenderRuns,
   type RenderRun,
-} from './lib/render-runs';
-import { assignSlots, parseReport, runLabel, sortRuns, type Run } from './lib/runs';
-import { CompareView } from './views/CompareView';
-import { OperationsView } from './views/OperationsView';
-import { OverviewView } from './views/OverviewView';
-import { RendersView } from './views/RendersView';
-import { ReplicasView } from './views/ReplicasView';
-import { ScalingView } from './views/ScalingView';
+} from "./lib/render-runs";
+import {
+  assignSlots,
+  parseReport,
+  runLabel,
+  sortRuns,
+  type Run,
+} from "./lib/runs";
+import { CompareView } from "./views/CompareView";
+import { OperationsView } from "./views/OperationsView";
+import { OverviewView } from "./views/OverviewView";
+import { RendersView } from "./views/RendersView";
+import { ReplicasView } from "./views/ReplicasView";
+import { ScalingView } from "./views/ScalingView";
 
-type Tab = 'overview' | 'operations' | 'scaling' | 'replicas' | 'compare' | 'renders';
+type Tab =
+  "overview" | "operations" | "scaling" | "replicas" | "compare" | "renders";
 
 /** `renders` reads the render benchmark; every other tab reads the backend matrix. */
 const TABS: Array<{ key: Tab; label: string; hint: string }> = [
-  { key: 'overview', label: 'Overview', hint: 'every cell of the matrix at a glance' },
-  { key: 'operations', label: 'Operations', hint: 'backends side by side at one state size' },
-  { key: 'scaling', label: 'Scaling', hint: 'how a scenario grows with state size' },
-  { key: 'replicas', label: 'Replicas', hint: 'seed, adopt, document size, and heap per replica' },
-  { key: 'compare', label: 'Compare', hint: 'before and after between two runs' },
-  { key: 'renders', label: 'Renders', hint: 'components each adapter re-renders for one change from a peer' },
+  {
+    key: "overview",
+    label: "Overview",
+    hint: "every cell of the matrix at a glance",
+  },
+  {
+    key: "operations",
+    label: "Operations",
+    hint: "backends side by side at one state size",
+  },
+  {
+    key: "scaling",
+    label: "Scaling",
+    hint: "how a scenario grows with state size",
+  },
+  {
+    key: "replicas",
+    label: "Replicas",
+    hint: "seed, adopt, document size, and heap per replica",
+  },
+  {
+    key: "compare",
+    label: "Compare",
+    hint: "before and after between two runs",
+  },
+  {
+    key: "renders",
+    label: "Renders",
+    hint: "components each adapter re-renders for one change from a peer",
+  },
 ];
 
 /**
@@ -41,7 +98,7 @@ const TABS: Array<{ key: Tab; label: string; hint: string }> = [
  * and the message then names the backend report, which is what most files are.
  */
 const readFiles = async (
-  files: FileList | File[]
+  files: FileList | File[],
 ): Promise<{ runs: Run[]; renderRuns: RenderRun[]; errors: string[] }> => {
   const runs: Run[] = [];
   const renderRuns: RenderRun[] = [];
@@ -51,15 +108,29 @@ const readFiles = async (
       const text = await file.text();
       const id = `file:${file.name}:${file.lastModified}:${file.size}`;
       try {
-        runs.push({ kind: 'backend', id, name: file.name, source: 'file', report: parseReport(text) });
+        runs.push({
+          kind: "backend",
+          id,
+          name: file.name,
+          source: "file",
+          report: parseReport(text),
+        });
       } catch (error) {
         try {
-          renderRuns.push({ kind: 'render', id, name: file.name, source: 'file', report: parseRenderReport(text) });
+          renderRuns.push({
+            kind: "render",
+            id,
+            name: file.name,
+            source: "file",
+            report: parseRenderReport(text),
+          });
         } catch {
-          errors.push(`${file.name}: ${error instanceof Error ? error.message : String(error)}`);
+          errors.push(
+            `${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
-    })
+    }),
   );
   return { runs, renderRuns, errors };
 };
@@ -70,7 +141,7 @@ function App() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [renderId, setRenderId] = useState<string | null>(null);
   const [baselineId, setBaselineId] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>("overview");
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
@@ -113,43 +184,58 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    discoverRuns().then(({ runs: found, renderRuns: foundRenders, errors: problems }) => {
-      if (cancelled) return;
-      addRuns(found);
-      addRenderRuns(foundRenders);
-      setErrors(problems);
-      setLoading(false);
-    });
+    discoverRuns().then(
+      ({ runs: found, renderRuns: foundRenders, errors: problems }) => {
+        if (cancelled) return;
+        addRuns(found);
+        addRenderRuns(foundRenders);
+        setErrors(problems);
+        setLoading(false);
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, [addRuns, addRenderRuns]);
 
   const current = runs.find((run) => run.id === currentId) ?? runs[0] ?? null;
-  const currentRender = renderRuns.find((run) => run.id === renderId) ?? renderRuns[0] ?? null;
+  const currentRender =
+    renderRuns.find((run) => run.id === renderId) ?? renderRuns[0] ?? null;
   // With only render reports loaded there is no backend matrix to show, so that tab is it.
-  const tabs = current === null ? TABS.filter((item) => item.key === 'renders') : TABS;
+  const tabs =
+    current === null ? TABS.filter((item) => item.key === "renders") : TABS;
   const activeTab = tabs.some((item) => item.key === tab) ? tab : tabs[0].key;
 
   useEffect(() => {
     if (!current) return;
     const others = runs.filter((run) => run.id !== current.id);
-    if (baselineId !== null && others.some((run) => run.id === baselineId)) return;
-    const previousRun = others.find((run) => Date.parse(run.report.meta.date) <= Date.parse(current.report.meta.date)) ?? others[0];
+    if (baselineId !== null && others.some((run) => run.id === baselineId))
+      return;
+    const previousRun =
+      others.find(
+        (run) =>
+          Date.parse(run.report.meta.date) <=
+          Date.parse(current.report.meta.date),
+      ) ?? others[0];
     setBaselineId(previousRun?.id ?? null);
   }, [runs, current, baselineId]);
 
   const openFiles = async (files: FileList | File[] | null): Promise<void> => {
     if (!files || files.length === 0) return;
-    const { runs: parsed, renderRuns: parsedRenders, errors: problems } = await readFiles(files);
+    const {
+      runs: parsed,
+      renderRuns: parsedRenders,
+      errors: problems,
+    } = await readFiles(files);
     addRuns(parsed);
     addRenderRuns(parsedRenders);
     if (parsed.length > 0) setCurrentId(sortRuns(parsed)[0].id);
     if (parsedRenders.length > 0) {
       setRenderId(sortRenderRuns(parsedRenders)[0].id);
-      if (parsed.length === 0) setTab('renders');
+      if (parsed.length === 0) setTab("renders");
     }
-    if (problems.length > 0) setErrors((previous) => [...previous, ...problems]);
+    if (problems.length > 0)
+      setErrors((previous) => [...previous, ...problems]);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
@@ -164,7 +250,10 @@ function App() {
     if (baselineId === id) setBaselineId(null);
   };
 
-  const runOptions = runs.map((run) => ({ value: run.id, label: `${runLabel(run)} — ${run.name}` }));
+  const runOptions = runs.map((run) => ({
+    value: run.id,
+    label: `${runLabel(run)} — ${run.name}`,
+  }));
 
   return (
     <div
@@ -174,7 +263,8 @@ function App() {
         setDragging(true);
       }}
       onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setDragging(false);
       }}
       onDrop={onDrop}
     >
@@ -183,7 +273,7 @@ function App() {
           <h1 className="mr-auto font-heading text-base font-semibold tracking-tight">
             Homeostate <span className="text-muted-foreground">benchmark</span>
           </h1>
-          {runs.length > 0 && current && activeTab !== 'renders' && (
+          {runs.length > 0 && current && activeTab !== "renders" && (
             <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
               <span className="hidden sm:inline">Run</span>
               <Select
@@ -193,7 +283,11 @@ function App() {
                 }}
                 items={runOptions}
               >
-                <SelectTrigger size="sm" aria-label="Run" className="max-w-[60vw]">
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Run"
+                  className="max-w-[60vw]"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -208,7 +302,7 @@ function App() {
               </Select>
             </div>
           )}
-          {current && activeTab !== 'renders' && (
+          {current && activeTab !== "renders" && (
             <Button
               variant="ghost"
               size="icon"
@@ -232,7 +326,7 @@ function App() {
             className="sr-only"
             onChange={(event) => {
               void openFiles(event.target.files);
-              event.target.value = '';
+              event.target.value = "";
             }}
           />
         </div>
@@ -251,7 +345,12 @@ function App() {
               </ul>
             </AlertDescription>
             <AlertAction>
-              <Button variant="ghost" size="icon-xs" onClick={() => setErrors([])} aria-label="Dismiss">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setErrors([])}
+                aria-label="Dismiss"
+              >
                 <X aria-hidden />
               </Button>
             </AlertAction>
@@ -267,20 +366,39 @@ function App() {
           <EmptyState onOpen={() => fileInput.current?.click()} />
         ) : (
           <div className="space-y-6">
-            {current && activeTab !== 'renders' && <MetaStrip run={current} />}
+            {current && activeTab !== "renders" && <MetaStrip run={current} />}
 
-            <Tabs value={activeTab} onValueChange={(value) => setTab(value as Tab)} className="gap-6">
-              <TabsList variant="line" aria-label="Views" className="h-auto w-full justify-start border-b">
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => setTab(value as Tab)}
+              className="gap-6"
+            >
+              <TabsList
+                variant="line"
+                aria-label="Views"
+                className="h-auto w-full justify-start border-b"
+              >
                 {tabs.map((item) => (
-                  <TabsTrigger key={item.key} value={item.key} title={item.hint} className="flex-none py-1.5">
+                  <TabsTrigger
+                    key={item.key}
+                    value={item.key}
+                    title={item.hint}
+                    className="flex-none py-1.5"
+                  >
                     {item.label}
-                    {item.key === 'compare' && runs.length > 1 && (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums">
+                    {item.key === "compare" && runs.length > 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1.5 text-[10px] tabular-nums"
+                      >
                         {runs.length}
                       </Badge>
                     )}
-                    {item.key === 'renders' && renderRuns.length > 1 && (
-                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums">
+                    {item.key === "renders" && renderRuns.length > 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1.5 text-[10px] tabular-nums"
+                      >
                         {renderRuns.length}
                       </Badge>
                     )}
@@ -303,19 +421,30 @@ function App() {
                     <ReplicasView report={current.report} slots={slots} />
                   </TabsContent>
                   <TabsContent value="compare">
-                    <CompareView current={current} runs={runs} baselineId={baselineId} onBaselineChange={setBaselineId} slots={slots} />
+                    <CompareView
+                      current={current}
+                      runs={runs}
+                      baselineId={baselineId}
+                      onBaselineChange={setBaselineId}
+                      slots={slots}
+                    />
                   </TabsContent>
                 </>
               )}
               <TabsContent value="renders">
                 {currentRender ? (
-                  <RendersView run={currentRender} runs={renderRuns} onRunChange={setRenderId} slots={adapterSlots} />
+                  <RendersView
+                    run={currentRender}
+                    runs={renderRuns}
+                    onRunChange={setRenderId}
+                    slots={adapterSlots}
+                  />
                 ) : (
                   <Note>
-                    No render report loaded. Save one with{' '}
+                    No render report loaded. Save one with{" "}
                     <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">
                       pnpm bench:store -- --json results/quick.json
-                    </code>{' '}
+                    </code>{" "}
                     and it appears here from apps/benchmark-store/results.
                   </Note>
                 )}
@@ -329,7 +458,9 @@ function App() {
         <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-foreground/40 p-6">
           <div className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-background/80 bg-background/95 px-8 py-6 text-foreground shadow-xl">
             <Upload size={22} aria-hidden />
-            <span className="text-base font-medium">Drop benchmark JSON reports to open them</span>
+            <span className="text-base font-medium">
+              Drop benchmark JSON reports to open them
+            </span>
           </div>
         </div>
       )}
@@ -346,26 +477,37 @@ function EmptyState({ onOpen }: { onOpen(): void }) {
         </EmptyMedia>
         <EmptyTitle className="text-lg">No benchmark reports yet</EmptyTitle>
         <EmptyDescription>
-          Save a run as JSON and this page picks it up from{' '}
-          <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">apps/benchmark-crdt/results</code> or{' '}
-          <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">apps/benchmark-store/results</code>:
+          Save a run as JSON and this page picks it up from{" "}
+          <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">
+            apps/benchmark-crdt/results
+          </code>{" "}
+          or{" "}
+          <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-xs">
+            apps/benchmark-store/results
+          </code>
+          :
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent className="max-w-xl">
         <pre className="w-full overflow-x-auto rounded-xl bg-foreground p-4 text-left text-xs leading-relaxed text-background">
           <code>
-            {'pnpm bench:crdt -- --json results/main.json\npnpm bench:crdt -- --quick --json results/quick.json   # smoke run, under a minute\npnpm bench:store -- --json results/quick.json   # render counts per adapter'}
+            {
+              "pnpm bench:crdt -- --json results/main.json\npnpm bench:crdt -- --quick --json results/quick.json   # smoke run, under a minute\npnpm bench:store -- --json results/quick.json   # render counts per adapter"
+            }
           </code>
         </pre>
-        <p className="text-sm text-muted-foreground">Or drop report files anywhere on this page.</p>
+        <p className="text-sm text-muted-foreground">
+          Or drop report files anywhere on this page.
+        </p>
         <Button onClick={onOpen}>
           <FolderOpen aria-hidden />
           Open JSON
         </Button>
         <div className="text-left">
           <Note>
-            In development the results folder is watched, so a newly saved report appears without a reload. A production build bundles whatever is
-            in the folder at build time.
+            In development the results folder is watched, so a newly saved
+            report appears without a reload. A production build bundles whatever
+            is in the folder at build time.
           </Note>
         </div>
       </EmptyContent>

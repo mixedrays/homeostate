@@ -1,4 +1,4 @@
-import type { FilterStatus, Todo } from '../types/todo';
+import type { FilterStatus, Todo } from "../types/todo";
 
 export interface TodoCounts {
   all: number;
@@ -7,21 +7,21 @@ export interface TodoCounts {
 }
 
 export function matchesFilter(todo: Todo, filterStatus: FilterStatus): boolean {
-  if (filterStatus === 'active') return !todo.completed;
-  if (filterStatus === 'completed') return todo.completed;
+  if (filterStatus === "active") return !todo.completed;
+  if (filterStatus === "completed") return todo.completed;
   return true;
 }
 
 export function filterTodos(
   todos: readonly Todo[],
   searchTerm: string,
-  filterStatus: FilterStatus
+  filterStatus: FilterStatus,
 ): Todo[] {
   const term = searchTerm.trim().toLowerCase();
   return todos.filter(
     (todo) =>
       matchesFilter(todo, filterStatus) &&
-      (term === '' || todo.title.toLowerCase().includes(term))
+      (term === "" || todo.title.toLowerCase().includes(term)),
   );
 }
 

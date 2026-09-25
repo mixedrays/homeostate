@@ -62,7 +62,7 @@ export interface CrdtBackend {
  * - `'if-empty'`: seed the keys the backend lacks, in one write (default)
  * - `'never'`: leave seeding to the caller; the keys are written on the next local change
  */
-export type SeedStrategy = 'if-empty' | 'never';
+export type SeedStrategy = "if-empty" | "never";
 
 /**
  * Configuration options for the sync engine
@@ -94,5 +94,5 @@ export interface SyncEngine {
  * Default filter that excludes functions from sync
  */
 export const defaultSyncFilter = (_key: string, value: unknown): boolean => {
-  return typeof value !== 'function';
+  return typeof value !== "function";
 };

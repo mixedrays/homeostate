@@ -1,16 +1,16 @@
-import type { StateCreator, StoreMutatorIdentifier } from 'zustand';
+import type { StateCreator, StoreMutatorIdentifier } from "zustand";
 import {
   createSyncEngine,
   type CrdtBackend,
   type SyncEngine,
   type SyncEngineConfig,
-} from '@homeostate/core';
-import { ZustandAdapter } from './adapter.js';
+} from "@homeostate/core";
+import { ZustandAdapter } from "./adapter.js";
 
 type Write<T, U> = Omit<T, keyof U> & U;
 type WithHomeostate<S, A> = Write<S, { homeostate: A }>;
 
-declare module 'zustand/vanilla' {
+declare module "zustand/vanilla" {
   interface StoreMutators<S, A> {
     homeostate: WithHomeostate<S, A>;
   }
@@ -19,27 +19,28 @@ declare module 'zustand/vanilla' {
 export type HomeostateMiddleware = <
   T extends object,
   Mps extends [StoreMutatorIdentifier, unknown][] = [],
-  Mcs extends [StoreMutatorIdentifier, unknown][] = []
+  Mcs extends [StoreMutatorIdentifier, unknown][] = [],
 >(
   backend: CrdtBackend,
-  creator: StateCreator<T, [...Mps, ['homeostate', SyncEngine]], Mcs>,
-  config?: SyncEngineConfig
-) => StateCreator<T, Mps, [['homeostate', SyncEngine], ...Mcs]>;
+  creator: StateCreator<T, [...Mps, ["homeostate", SyncEngine]], Mcs>,
+  config?: SyncEngineConfig,
+) => StateCreator<T, Mps, [["homeostate", SyncEngine], ...Mcs]>;
 
 type HomeostateMiddlewareImpl = <T extends object>(
   backend: CrdtBackend,
   creator: StateCreator<T, [], []>,
-  config?: SyncEngineConfig
+  config?: SyncEngineConfig,
 ) => StateCreator<T, [], []>;
 
-const homeostateImpl: HomeostateMiddlewareImpl = (backend, creator, config) => (set, get, api) => {
-  const initialState = creator(set, get, api);
-  api.setState(initialState, true);
-  const engine = createSyncEngine(backend, new ZustandAdapter(api), config);
-  (api as unknown as { homeostate: SyncEngine }).homeostate = engine;
-  engine.connect();
-  return api.getState();
-};
+const homeostateImpl: HomeostateMiddlewareImpl =
+  (backend, creator, config) => (set, get, api) => {
+    const initialState = creator(set, get, api);
+    api.setState(initialState, true);
+    const engine = createSyncEngine(backend, new ZustandAdapter(api), config);
+    (api as unknown as { homeostate: SyncEngine }).homeostate = engine;
+    engine.connect();
+    return api.getState();
+  };
 
 /**
  * Zustand middleware that mirrors the store into a CRDT backend for peer-to-peer synchronization.

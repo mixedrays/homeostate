@@ -4,8 +4,8 @@ import {
   onSnapshot,
   type IStateTreeNode,
   type IType,
-} from 'mobx-state-tree';
-import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
+} from "mobx-state-tree";
+import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
 /** A state tree node whose output snapshot is `S` */
 export type SnapshotNode<S> = IStateTreeNode<IType<unknown, S, unknown>>;
@@ -62,6 +62,8 @@ export class MobxStateTreeAdapter<S extends object> implements StoreAdapter<S> {
  * @param node - The tree node to sync; usually the root instance
  * @returns StoreAdapter instance for the node
  */
-export function createMobxStateTreeAdapter<S extends object>(node: SnapshotNode<S>): StoreAdapter<S> {
+export function createMobxStateTreeAdapter<S extends object>(
+  node: SnapshotNode<S>,
+): StoreAdapter<S> {
   return new MobxStateTreeAdapter(node);
 }

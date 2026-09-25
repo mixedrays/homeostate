@@ -1,9 +1,9 @@
-import { useState, type FocusEvent, type PointerEvent } from 'react';
-import { useMeasure } from '../hooks/useMeasure';
-import { formatTick, formatValue, type Unit } from '../lib/metrics';
-import { INK } from '../lib/palette';
-import { scaleFor, type ScaleKind } from '../lib/scale';
-import { Tooltip } from './Tooltip';
+import { useState, type FocusEvent, type PointerEvent } from "react";
+import { useMeasure } from "../hooks/useMeasure";
+import { formatTick, formatValue, type Unit } from "../lib/metrics";
+import { INK } from "../lib/palette";
+import { scaleFor, type ScaleKind } from "../lib/scale";
+import { Tooltip } from "./Tooltip";
 
 export interface DotPoint {
   series: string;
@@ -42,7 +42,14 @@ interface Hover {
 }
 
 /** Categories as rows, one dot per series, whiskers for the margin of error. */
-export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fixedWidth }: DotPlotProps) {
+export function DotPlot({
+  rows,
+  unit,
+  signed = false,
+  kind,
+  ariaLabel,
+  width: fixedWidth,
+}: DotPlotProps) {
   const [ref, measured] = useMeasure<HTMLDivElement>();
   const width = fixedWidth ?? measured;
   const [hover, setHover] = useState<Hover | null>(null);
@@ -55,21 +62,39 @@ export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fi
   const height = TOP + plotHeight + AXIS;
 
   const values = rows.flatMap((row) =>
-    row.points.flatMap((p) => (p.value === null ? [] : [p.value, p.low ?? p.value, p.high ?? p.value]))
+    row.points.flatMap((p) =>
+      p.value === null ? [] : [p.value, p.low ?? p.value, p.high ?? p.value],
+    ),
   );
-  const scale = scaleFor(kind, values, [left, left + plotWidth], unit === 'bytes' ? 'bytes' : 'decimal');
-  const visible = (v: number): boolean => scale.kind !== 'log' || v > 0;
+  const scale = scaleFor(
+    kind,
+    values,
+    [left, left + plotWidth],
+    unit === "bytes" ? "bytes" : "decimal",
+  );
+  const visible = (v: number): boolean => scale.kind !== "log" || v > 0;
 
-  const locate = (event: PointerEvent | FocusEvent, row: number, fallbackY: number): Hover => {
+  const locate = (
+    event: PointerEvent | FocusEvent,
+    row: number,
+    fallbackY: number,
+  ): Hover => {
     const box = ref.current?.getBoundingClientRect();
-    if (!box || !('clientX' in event)) return { row, x: left + plotWidth / 2, y: fallbackY };
+    if (!box || !("clientX" in event))
+      return { row, x: left + plotWidth / 2, y: fallbackY };
     return { row, x: event.clientX - box.left, y: event.clientY - box.top };
   };
 
   return (
     <div ref={ref} className="relative">
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block overflow-visible">
+        <svg
+          width={width}
+          height={height}
+          role="img"
+          aria-label={ariaLabel}
+          className="block overflow-visible"
+        >
           {scale.ticks.map((tick) => (
             <g key={tick}>
               <line
@@ -86,7 +111,7 @@ export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fi
                 textAnchor="middle"
                 fontSize={11}
                 fill={INK.muted}
-                style={{ fontVariantNumeric: 'tabular-nums' }}
+                style={{ fontVariantNumeric: "tabular-nums" }}
               >
                 {formatTick(unit, tick)}
               </text>
@@ -99,7 +124,15 @@ export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fi
             const active = hover?.row === index;
             return (
               <g key={row.key}>
-                {active && <rect x={0} y={top} width={width} height={ROW} fill="rgba(11,11,11,0.04)" />}
+                {active && (
+                  <rect
+                    x={0}
+                    y={top}
+                    width={width}
+                    height={ROW}
+                    fill="rgba(11,11,11,0.04)"
+                  />
+                )}
                 <text
                   x={labelWidth}
                   y={cy}
@@ -111,7 +144,8 @@ export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fi
                   {row.label}
                 </text>
                 {row.points.map((point) => {
-                  if (point.value === null || !visible(point.value)) return null;
+                  if (point.value === null || !visible(point.value))
+                    return null;
                   const whisker =
                     point.low !== undefined &&
                     point.high !== undefined &&
@@ -150,8 +184,11 @@ export function DotPlot({ rows, unit, signed = false, kind, ariaLabel, width: fi
                   fill="transparent"
                   tabIndex={0}
                   aria-label={`${row.label}: ${row.points
-                    .map((p) => `${p.series} ${formatValue(unit, p.value, signed)}`)
-                    .join(', ')}`}
+                    .map(
+                      (p) =>
+                        `${p.series} ${formatValue(unit, p.value, signed)}`,
+                    )
+                    .join(", ")}`}
                   className="outline-hidden"
                   onPointerMove={(event) => setHover(locate(event, index, cy))}
                   onPointerLeave={() => setHover(null)}

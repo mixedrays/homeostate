@@ -1,5 +1,5 @@
-import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
-import type { RootState, AppDispatch } from './todoStore';
+import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
+import type { RootState, AppDispatch } from "./todoStore";
 
 // Typed hooks for Redux
 export const useAppDispatch = () => useDispatch<AppDispatch>();

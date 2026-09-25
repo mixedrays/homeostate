@@ -1,5 +1,5 @@
-import { Plug, PlugZap } from 'lucide-react';
-import { Toggle } from '@/components/ui/toggle';
+import { Plug, PlugZap } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 
 interface SyncToggleProps {
   online: boolean;
@@ -17,13 +17,13 @@ export function SyncToggle({ online, onToggle }: SyncToggleProps) {
       onPressedChange={onToggle}
       title={
         online
-          ? 'Disconnect from the sync server to edit offline'
-          : 'Reconnect and merge the edits made while offline'
+          ? "Disconnect from the sync server to edit offline"
+          : "Reconnect and merge the edits made while offline"
       }
       className="aria-pressed:border-primary/30 aria-pressed:bg-primary/10 aria-pressed:text-primary aria-pressed:hover:bg-primary/15"
     >
       <Icon aria-hidden />
-      {online ? 'Go offline' : 'Go online'}
+      {online ? "Go offline" : "Go online"}
     </Toggle>
   );
 }

@@ -4,9 +4,9 @@ import type {
   SyncEngine,
   SyncEngineConfig,
   Unsubscribe,
-} from './types.js';
-import { defaultSyncFilter } from './types.js';
-import { patchState } from './patching.js';
+} from "./types.js";
+import { defaultSyncFilter } from "./types.js";
+import { patchState } from "./patching.js";
 
 type Plain = Record<string, unknown>;
 
@@ -34,9 +34,9 @@ type Plain = Record<string, unknown>;
 export function createSyncEngine<S extends object>(
   backend: CrdtBackend,
   adapter: StoreAdapter<S>,
-  config: SyncEngineConfig = {}
+  config: SyncEngineConfig = {},
 ): SyncEngine {
-  const { filter = defaultSyncFilter, seed = 'if-empty' } = config;
+  const { filter = defaultSyncFilter, seed = "if-empty" } = config;
 
   let connected = false;
   let storeUnsubscribe: Unsubscribe | null = null;
@@ -53,7 +53,7 @@ export function createSyncEngine<S extends object>(
 
   const readBackend = (): Plain => {
     const value = backend.read();
-    return value !== null && typeof value === 'object' ? (value as Plain) : {};
+    return value !== null && typeof value === "object" ? (value as Plain) : {};
   };
 
   /**
@@ -61,7 +61,11 @@ export function createSyncEngine<S extends object>(
    * backend does not hold is left in place instead of being deleted; that is the
    * connect-time reconciliation. Otherwise `remote` is the whole synced state.
    */
-  const mergeStates = (current: S, remote: Plain, keepLocalOnly: boolean): S => {
+  const mergeStates = (
+    current: S,
+    remote: Plain,
+    keepLocalOnly: boolean,
+  ): S => {
     const synced = filterState(current);
     const target = keepLocalOnly ? { ...synced, ...remote } : remote;
     const patched = patchState(synced, target);
@@ -103,7 +107,7 @@ export function createSyncEngine<S extends object>(
       const remoteKeys = new Set(Object.keys(remote));
       const missing = Object.keys(local).filter((key) => !remoteKeys.has(key));
 
-      if (seed === 'if-empty' && missing.length > 0) {
+      if (seed === "if-empty" && missing.length > 0) {
         const seeded: Plain = { ...remote };
         for (const key of missing) seeded[key] = local[key];
         backend.write(seeded);

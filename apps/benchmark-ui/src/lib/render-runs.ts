@@ -1,5 +1,9 @@
-import type { RenderMeta, RenderReport, RenderResult } from '@homeostate/benchmark-store/types';
-import type { RunSource } from './runs';
+import type {
+  RenderMeta,
+  RenderReport,
+  RenderResult,
+} from "@homeostate/benchmark-store/types";
+import type { RunSource } from "./runs";
 
 /**
  * A run of the render benchmark. It is a different measurement from the backend matrix — one
@@ -7,7 +11,7 @@ import type { RunSource } from './runs';
  * as its own kind of run rather than squeezed into `BenchmarkReport`.
  */
 export interface RenderRun {
-  kind: 'render';
+  kind: "render";
   id: string;
   name: string;
   source: RunSource;
@@ -15,15 +19,16 @@ export interface RenderRun {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isCount = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
+const isCount = (value: unknown): boolean =>
+  typeof value === "number" && Number.isFinite(value);
 
 const isResult = (value: unknown): boolean =>
   isRecord(value) &&
-  typeof value.adapter === 'string' &&
-  typeof value.scenario === 'string' &&
-  typeof value.size === 'number' &&
+  typeof value.adapter === "string" &&
+  typeof value.scenario === "string" &&
+  typeof value.size === "number" &&
   isCount(value.rowRenders) &&
   isCount(value.listRenders) &&
   isCount(value.applyMs) &&
@@ -33,7 +38,7 @@ const isResult = (value: unknown): boolean =>
 export const isRenderReport = (value: unknown): value is RenderReport =>
   isRecord(value) &&
   isRecord(value.meta) &&
-  typeof value.meta.date === 'string' &&
+  typeof value.meta.date === "string" &&
   Array.isArray(value.results) &&
   value.results.every(isResult);
 
@@ -43,10 +48,12 @@ export const parseRenderReport = (text: string): RenderReport => {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error('not valid JSON');
+    throw new Error("not valid JSON");
   }
   if (!isRenderReport(parsed))
-    throw new Error('not a render report; expected the JSON written by pnpm bench:store -- --json');
+    throw new Error(
+      "not a render report; expected the JSON written by pnpm bench:store -- --json",
+    );
   return parsed;
 };
 
@@ -66,31 +73,42 @@ export const renderResultAt = (
   report: RenderReport,
   size: number,
   scenario: string,
-  adapter: string
+  adapter: string,
 ): RenderResult | undefined =>
   report.results.find(
-    (result) => result.size === size && result.scenario === scenario && result.adapter === adapter
+    (result) =>
+      result.size === size &&
+      result.scenario === scenario &&
+      result.adapter === adapter,
   );
 
 export const renderRunLabel = (run: RenderRun): string => {
   const meta: RenderMeta = run.report.meta;
-  const commit = meta.commit === null ? 'unknown commit' : `${meta.commit}${meta.dirty ? '*' : ''}`;
+  const commit =
+    meta.commit === null
+      ? "unknown commit"
+      : `${meta.commit}${meta.dirty ? "*" : ""}`;
   const date = new Date(meta.date);
-  const when = Number.isNaN(date.getTime()) ? meta.date : `${date.toISOString().replace('T', ' ').slice(0, 16)} UTC`;
+  const when = Number.isNaN(date.getTime())
+    ? meta.date
+    : `${date.toISOString().replace("T", " ").slice(0, 16)} UTC`;
   return `${commit} · ${when}`;
 };
 
 /** Newest first, like the backend runs. */
 export const sortRenderRuns = (runs: RenderRun[]): RenderRun[] =>
-  [...runs].sort((a, b) => Date.parse(b.report.meta.date) - Date.parse(a.report.meta.date));
+  [...runs].sort(
+    (a, b) => Date.parse(b.report.meta.date) - Date.parse(a.report.meta.date),
+  );
 
 /** Stable color slot per adapter across every loaded render run, in first-seen order. */
 export const assignAdapterSlots = (
   runs: RenderRun[],
-  previous: Map<string, number> = new Map()
+  previous: Map<string, number> = new Map(),
 ): Map<string, number> => {
   const slots = new Map(previous);
   for (const run of runs)
-    for (const adapter of adaptersOf(run.report)) if (!slots.has(adapter)) slots.set(adapter, slots.size);
+    for (const adapter of adaptersOf(run.report))
+      if (!slots.has(adapter)) slots.set(adapter, slots.size);
   return slots;
 };

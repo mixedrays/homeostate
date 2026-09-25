@@ -1,11 +1,16 @@
-import { reaction, runInAction, toJS } from 'mobx';
-import { applyChanges, getChanges } from '@homeostate/core';
-import type { ApplyOps, Diffable, StoreAdapter, Unsubscribe } from '@homeostate/core';
+import { reaction, runInAction, toJS } from "mobx";
+import { applyChanges, getChanges } from "@homeostate/core";
+import type {
+  ApplyOps,
+  Diffable,
+  StoreAdapter,
+  Unsubscribe,
+} from "@homeostate/core";
 
 type Plain = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is Plain =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** Whether a change to `b` can be written into `a` in place rather than replacing it. */
 const sameKind = (a: unknown, b: unknown): boolean =>
@@ -105,7 +110,7 @@ export class MobxAdapter<S extends object> implements StoreAdapter<S> {
           applyChanges(
             current as object,
             getChanges(previous[property] as Diffable, value as Diffable),
-            mobxOps
+            mobxOps,
           );
         else (this.store as Plain)[property] = value;
 
@@ -119,7 +124,7 @@ export class MobxAdapter<S extends object> implements StoreAdapter<S> {
   subscribe(onStoreChange: () => void): Unsubscribe {
     return reaction(
       () => this.getState(),
-      () => onStoreChange()
+      () => onStoreChange(),
     );
   }
 }
@@ -133,7 +138,7 @@ export class MobxAdapter<S extends object> implements StoreAdapter<S> {
  */
 export function createMobxAdapter<S extends object>(
   store: S,
-  syncableKeys: (keyof S)[]
+  syncableKeys: (keyof S)[],
 ): StoreAdapter<S> {
   return new MobxAdapter(store, syncableKeys);
 }

@@ -1,10 +1,14 @@
-import { atom, createStore } from 'jotai';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createJotaiAdapter } from '@homeostate/store-jotai';
-import type { FilterStatus, Todo, TodoState } from '../../types/todo';
-import { countTodos, filterTodos } from '../../lib/todos';
-import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
+import { atom, createStore } from "jotai";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createJotaiAdapter } from "@homeostate/store-jotai";
+import type { FilterStatus, Todo, TodoState } from "../../types/todo";
+import { countTodos, filterTodos } from "../../lib/todos";
+import {
+  SYNC_MAP_NAME,
+  connectSharedDoc,
+  createInitialTodoState,
+} from "../../sync";
 
 const initialState = createInitialTodoState();
 
@@ -22,37 +26,47 @@ export const todoStateAtom = atom(
     set(todosAtom, next.todos);
     set(searchTermAtom, next.searchTerm);
     set(filterStatusAtom, next.filterStatus);
-  }
+  },
 );
 
 export const visibleTodosAtom = atom((get) =>
-  filterTodos(get(todosAtom), get(searchTermAtom), get(filterStatusAtom))
+  filterTodos(get(todosAtom), get(searchTermAtom), get(filterStatusAtom)),
 );
 
 export const todoCountsAtom = atom((get) => countTodos(get(todosAtom)));
 
 export const addTodoAtom = atom(null, (get, set, title: string) => {
-  set(todosAtom, [...get(todosAtom), { id: crypto.randomUUID(), title, completed: false }]);
+  set(todosAtom, [
+    ...get(todosAtom),
+    { id: crypto.randomUUID(), title, completed: false },
+  ]);
 });
 
 export const toggleTodoAtom = atom(null, (get, set, id: string) => {
   set(
     todosAtom,
-    get(todosAtom).map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo))
+    get(todosAtom).map((todo) =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo,
+    ),
   );
 });
 
-export const editTodoAtom = atom(null, (get, set, id: string, title: string) => {
-  set(
-    todosAtom,
-    get(todosAtom).map((todo) => (todo.id === id ? { ...todo, title } : todo))
-  );
-});
+export const editTodoAtom = atom(
+  null,
+  (get, set, id: string, title: string) => {
+    set(
+      todosAtom,
+      get(todosAtom).map((todo) =>
+        todo.id === id ? { ...todo, title } : todo,
+      ),
+    );
+  },
+);
 
 export const deleteTodoAtom = atom(null, (get, set, id: string) => {
   set(
     todosAtom,
-    get(todosAtom).filter((todo) => todo.id !== id)
+    get(todosAtom).filter((todo) => todo.id !== id),
   );
 });
 
@@ -60,7 +74,10 @@ export const store = createStore();
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createJotaiAdapter(todoStateAtom, store);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
+const syncEngine = createSyncEngine(
+  createYjsBackend(ydoc, SYNC_MAP_NAME),
+  adapter,
+);
 
 syncEngine.connect();
 

@@ -1,13 +1,13 @@
-import { useCallback } from 'react';
-import { TodoListView } from '../../components/todo/TodoListView';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { useCallback } from "react";
+import { TodoListView } from "../../components/todo/TodoListView";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
   selectFilterStatus,
   selectSearchTerm,
   selectTodoCounts,
   selectVisibleTodos,
-} from '../store/selectors';
-import { deleteTodo, editTodo, toggleTodo } from '../store/todoStore';
+} from "../store/selectors";
+import { deleteTodo, editTodo, toggleTodo } from "../store/todoStore";
 
 export function TodoList() {
   const dispatch = useAppDispatch();
@@ -18,12 +18,18 @@ export function TodoList() {
 
   // The rows are memoized, and an inline arrow would be a new prop on every render and defeat
   // that. `dispatch` is stable for the life of the store, so these are too.
-  const onToggle = useCallback((id: string) => dispatch(toggleTodo(id)), [dispatch]);
+  const onToggle = useCallback(
+    (id: string) => dispatch(toggleTodo(id)),
+    [dispatch],
+  );
   const onEdit = useCallback(
     (id: string, title: string) => dispatch(editTodo({ id, title })),
-    [dispatch]
+    [dispatch],
   );
-  const onDelete = useCallback((id: string) => dispatch(deleteTodo(id)), [dispatch]);
+  const onDelete = useCallback(
+    (id: string) => dispatch(deleteTodo(id)),
+    [dispatch],
+  );
 
   return (
     <TodoListView

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { WebsocketProvider } from 'y-websocket';
+import { useCallback, useEffect, useState } from "react";
+import type { WebsocketProvider } from "y-websocket";
 
-export type SyncStatus = 'connecting' | 'connected' | 'synced' | 'unreachable' | 'offline';
+export type SyncStatus =
+  "connecting" | "connected" | "synced" | "unreachable" | "offline";
 
 export interface SyncConnection {
   status: SyncStatus;
@@ -11,9 +12,9 @@ export interface SyncConnection {
 }
 
 function readStatus(provider: WebsocketProvider): SyncStatus {
-  if (!provider.shouldConnect) return 'offline';
-  if (provider.wsconnected) return (provider.synced ? 'synced' : 'connected');
-  return provider.wsconnecting ? 'connecting' : 'unreachable';
+  if (!provider.shouldConnect) return "offline";
+  if (provider.wsconnected) return provider.synced ? "synced" : "connected";
+  return provider.wsconnecting ? "connecting" : "unreachable";
 }
 
 export function useSyncConnection(provider: WebsocketProvider): SyncConnection {
@@ -22,15 +23,15 @@ export function useSyncConnection(provider: WebsocketProvider): SyncConnection {
   useEffect(() => {
     const update = () => setStatus(readStatus(provider));
     update();
-    provider.on('status', update);
-    provider.on('sync', update);
-    provider.on('connection-close', update);
-    provider.on('connection-error', update);
+    provider.on("status", update);
+    provider.on("sync", update);
+    provider.on("connection-close", update);
+    provider.on("connection-error", update);
     return () => {
-      provider.off('status', update);
-      provider.off('sync', update);
-      provider.off('connection-close', update);
-      provider.off('connection-error', update);
+      provider.off("status", update);
+      provider.off("sync", update);
+      provider.off("connection-close", update);
+      provider.off("connection-error", update);
     };
   }, [provider]);
 
@@ -44,12 +45,12 @@ export function useSyncConnection(provider: WebsocketProvider): SyncConnection {
       }
       setStatus(readStatus(provider));
     },
-    [provider]
+    [provider],
   );
 
   const toggle = useCallback(() => {
     setOnline(!provider.shouldConnect);
   }, [provider, setOnline]);
 
-  return { status, online: status !== 'offline', setOnline, toggle };
+  return { status, online: status !== "offline", setOnline, toggle };
 }

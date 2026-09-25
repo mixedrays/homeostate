@@ -1,6 +1,10 @@
-import { useSelector } from '@tanstack/react-store';
-import { TodoListView } from '../../components/todo/TodoListView';
-import { todoCountsAtom, todoStore, visibleTodosAtom } from '../store/todoStore';
+import { useSelector } from "@tanstack/react-store";
+import { TodoListView } from "../../components/todo/TodoListView";
+import {
+  todoCountsAtom,
+  todoStore,
+  visibleTodosAtom,
+} from "../store/todoStore";
 
 export function TodoList() {
   const todos = useSelector(visibleTodosAtom);

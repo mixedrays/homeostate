@@ -1,6 +1,6 @@
-import { useState, type PointerEvent, type ReactNode } from 'react';
-import { useMeasure } from '../hooks/useMeasure';
-import { Tooltip, type TooltipRow } from './Tooltip';
+import { useState, type PointerEvent, type ReactNode } from "react";
+import { useMeasure } from "../hooks/useMeasure";
+import { Tooltip, type TooltipRow } from "./Tooltip";
 
 export interface HeatCell {
   text: string;
@@ -41,20 +41,39 @@ interface Hover {
 }
 
 /** A grid of colored cells with the value printed in each; the color carries the same number. */
-export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps) {
+export function Heatmap({
+  rows,
+  groups,
+  cell,
+  ariaLabel,
+  legend,
+}: HeatmapProps) {
   const [ref, width] = useMeasure<HTMLDivElement>();
   const [hover, setHover] = useState<Hover | null>(null);
 
-  const onMove = (event: PointerEvent<HTMLTableCellElement>, title: string, tooltipRows: TooltipRow[]): void => {
+  const onMove = (
+    event: PointerEvent<HTMLTableCellElement>,
+    title: string,
+    tooltipRows: TooltipRow[],
+  ): void => {
     const box = ref.current?.getBoundingClientRect();
     if (!box) return;
-    setHover({ title, rows: tooltipRows, x: event.clientX - box.left, y: event.clientY - box.top });
+    setHover({
+      title,
+      rows: tooltipRows,
+      x: event.clientX - box.left,
+      y: event.clientY - box.top,
+    });
   };
 
   return (
     <div ref={ref} className="relative">
       <div className="overflow-x-auto">
-        <table className="w-full border-separate text-sm tabular-nums" style={{ borderSpacing: 2 }} aria-label={ariaLabel}>
+        <table
+          className="w-full border-separate text-sm tabular-nums"
+          style={{ borderSpacing: 2 }}
+          aria-label={ariaLabel}
+        >
           <thead>
             <tr>
               <th />
@@ -80,14 +99,17 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
                   >
                     {column.label}
                   </th>
-                ))
+                )),
               )}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.key}>
-                <th scope="row" className="whitespace-nowrap pr-3 text-right text-xs font-medium text-muted-foreground">
+                <th
+                  scope="row"
+                  className="whitespace-nowrap pr-3 text-right text-xs font-medium text-muted-foreground"
+                >
                   {row.label}
                 </th>
                 {groups.flatMap((group) =>
@@ -108,13 +130,15 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
                         className="rounded-md px-2 py-1.5 text-center text-xs font-medium transition hover:ring-2 hover:ring-foreground/30"
                         style={{ background: value.fill, color: value.ink }}
                         aria-label={`${title}: ${value.text}`}
-                        onPointerMove={(event) => onMove(event, title, value.rows)}
+                        onPointerMove={(event) =>
+                          onMove(event, title, value.rows)
+                        }
                         onPointerLeave={() => setHover(null)}
                       >
                         {value.text}
                       </td>
                     );
-                  })
+                  }),
                 )}
               </tr>
             ))}
@@ -122,7 +146,15 @@ export function Heatmap({ rows, groups, cell, ariaLabel, legend }: HeatmapProps)
         </table>
       </div>
       {legend && <div className="mt-3">{legend}</div>}
-      {hover && <Tooltip x={hover.x} y={hover.y} width={width} title={hover.title} rows={hover.rows} />}
+      {hover && (
+        <Tooltip
+          x={hover.x}
+          y={hover.y}
+          width={width}
+          title={hover.title}
+          rows={hover.rows}
+        />
+      )}
     </div>
   );
 }

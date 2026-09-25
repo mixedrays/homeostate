@@ -1,21 +1,21 @@
-import { useId } from 'react';
-import { Search, X } from 'lucide-react';
+import { useId } from "react";
+import { Search, X } from "lucide-react";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from '@/components/ui/input-group';
-import { Label } from '@/components/ui/label';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { cn } from '@/lib/utils';
-import type { FilterStatus } from '../../types/todo';
-import type { TodoCounts } from '../../lib/todos';
+} from "@/components/ui/input-group";
+import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+import type { FilterStatus } from "../../types/todo";
+import type { TodoCounts } from "../../lib/todos";
 
 const FILTER_OPTIONS: ReadonlyArray<{ value: FilterStatus; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "completed", label: "Completed" },
 ];
 
 interface TodoFiltersProps {
@@ -58,7 +58,7 @@ export function TodoFilters({
             <InputGroupAddon align="inline-end">
               <InputGroupButton
                 size="icon-xs"
-                onClick={() => onSearchChange('')}
+                onClick={() => onSearchChange("")}
                 aria-label="Clear search"
               >
                 <X aria-hidden />
@@ -86,8 +86,8 @@ export function TodoFilters({
               {label}
               <span
                 className={cn(
-                  'text-xs tabular-nums',
-                  active ? 'text-primary' : 'text-muted-foreground'
+                  "text-xs tabular-nums",
+                  active ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 {counts[value]}

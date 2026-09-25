@@ -1,1 +1,1 @@
-export { TanStackStoreAdapter, createTanStackStoreAdapter } from './adapter.js';
+export { TanStackStoreAdapter, createTanStackStoreAdapter } from "./adapter.js";

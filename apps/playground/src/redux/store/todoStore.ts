@@ -1,18 +1,30 @@
-import { createSlice, configureStore, type PayloadAction } from '@reduxjs/toolkit';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createReduxAdapter } from '@homeostate/store-redux';
-import type { FilterStatus, TodoState } from '../../types/todo';
-import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
+import {
+  createSlice,
+  configureStore,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createReduxAdapter } from "@homeostate/store-redux";
+import type { FilterStatus, TodoState } from "../../types/todo";
+import {
+  SYNC_MAP_NAME,
+  connectSharedDoc,
+  createInitialTodoState,
+} from "../../sync";
 
 const initialState = createInitialTodoState();
 
 const todoSlice = createSlice({
-  name: 'todos',
+  name: "todos",
   initialState,
   reducers: {
     addTodo: (state, action: PayloadAction<string>) => {
-      state.todos.push({ id: crypto.randomUUID(), title: action.payload, completed: false });
+      state.todos.push({
+        id: crypto.randomUUID(),
+        title: action.payload,
+        completed: false,
+      });
     },
     toggleTodo: (state, action: PayloadAction<string>) => {
       const todo = state.todos.find((t) => t.id === action.payload);
@@ -58,7 +70,10 @@ export type AppDispatch = typeof store.dispatch;
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createReduxAdapter(store, setState);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
+const syncEngine = createSyncEngine(
+  createYjsBackend(ydoc, SYNC_MAP_NAME),
+  adapter,
+);
 
 syncEngine.connect();
 

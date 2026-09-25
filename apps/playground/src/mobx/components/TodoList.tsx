@@ -1,7 +1,7 @@
-import { observer } from 'mobx-react-lite';
-import { TodoItemRow } from '../../components/todo/TodoItem';
-import { TodoListView } from '../../components/todo/TodoListView';
-import { useStore } from '../store/storeContext';
+import { observer } from "mobx-react-lite";
+import { TodoItemRow } from "../../components/todo/TodoItem";
+import { TodoListView } from "../../components/todo/TodoListView";
+import { useStore } from "../store/storeContext";
 
 /**
  * MobX mutates a todo in place, so the row can never learn about a toggle from its props — the

@@ -1,18 +1,18 @@
-import { configure, makeAutoObservable } from 'mobx';
-import { observer } from 'mobx-react-lite';
-import { createMobxAdapter } from '@homeostate/store-mobx';
-import type { Todo, TodoState } from '@homeostate/benchmark-crdt';
-import { createCounters } from '../counters.js';
-import type { Fixture } from '../types.js';
+import { configure, makeAutoObservable } from "mobx";
+import { observer } from "mobx-react-lite";
+import { createMobxAdapter } from "@homeostate/store-mobx";
+import type { Todo, TodoState } from "@homeostate/benchmark-crdt";
+import { createCounters } from "../counters.js";
+import type { Fixture } from "../types.js";
 
 // The adapter writes inside `runInAction`, but the fixture seeds its store directly, which
 // MobX warns about under the default `enforceActions: 'observed'`.
-configure({ enforceActions: 'never' });
+configure({ enforceActions: "never" });
 
 class TodoStore {
   todos: Todo[];
   searchTerm: string;
-  filterStatus: TodoState['filterStatus'];
+  filterStatus: TodoState["filterStatus"];
 
   constructor(initial: TodoState) {
     this.todos = initial.todos;
@@ -38,8 +38,9 @@ class TodoStore {
  * could quietly lie about MobX.
  */
 export const mobx: Fixture = {
-  name: 'mobx',
-  description: 'MobX class store, observer() on every component including the row',
+  name: "mobx",
+  description:
+    "MobX class store, observer() on every component including the row",
 
   create: (initial) => {
     const counters = createCounters();
@@ -87,7 +88,11 @@ export const mobx: Fixture = {
     });
 
     return {
-      adapter: createMobxAdapter<TodoState>(store, ['todos', 'searchTerm', 'filterStatus']),
+      adapter: createMobxAdapter<TodoState>(store, [
+        "todos",
+        "searchTerm",
+        "filterStatus",
+      ]),
       tree: <App />,
       counters,
     };

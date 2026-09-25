@@ -1,8 +1,8 @@
-import * as Y from 'yjs';
-import { describe, expect, it } from 'vitest';
-import { createSyncEngine, type SyncEngine } from '@homeostate/core';
-import { yjs } from '../candidates.js';
-import { countRenders, deepEqual } from '../renders.js';
+import * as Y from "yjs";
+import { describe, expect, it } from "vitest";
+import { createSyncEngine, type SyncEngine } from "@homeostate/core";
+import { yjs } from "../candidates.js";
+import { countRenders, deepEqual } from "../renders.js";
 import {
   add,
   emptyState,
@@ -13,9 +13,9 @@ import {
   remove,
   search,
   toggle,
-} from '../scenarios.js';
-import { createStore, type BenchStore } from '../store.js';
-import type { Scenario, TodoState } from '../types.js';
+} from "../scenarios.js";
+import { createStore, type BenchStore } from "../store.js";
+import type { Scenario, TodoState } from "../types.js";
 
 /**
  * The gate on core's structural sharing, driven end to end over a real CRDT rather than over
@@ -80,7 +80,9 @@ const createPair = (): Pair => {
 };
 
 /** One scenario step on `a`, and what the rows of `b` cost between the two states. */
-const applyOne = (scenario: Scenario): { before: TodoState; after: TodoState } => {
+const applyOne = (
+  scenario: Scenario,
+): { before: TodoState; after: TodoState } => {
   const pair = createPair();
   const before = pair.b.store.getState();
   expect(before.todos).toHaveLength(SIZE);
@@ -124,23 +126,23 @@ const expectations: Expectation[] = [
 
 describe(`identity of ${SIZE} todos across a Yjs roundtrip`, () => {
   it.each(expectations)(
-    '$scenario.name re-renders $renders rows, $wasted of them wasted',
+    "$scenario.name re-renders $renders rows, $wasted of them wasted",
     ({ scenario, renders, wasted, todosReplaced }) => {
       const { before, after } = applyOne(scenario);
 
       expect(countRenders(before, after)).toEqual({ renders, wasted });
       expect(after.todos !== before.todos).toBe(todosReplaced);
-    }
+    },
   );
 
-  it('keeps the top-level keys the operation did not touch', () => {
+  it("keeps the top-level keys the operation did not touch", () => {
     const { before, after } = applyOne(toggle);
 
     expect(after.searchTerm).toBe(before.searchTerm);
     expect(after.filterStatus).toBe(before.filterStatus);
   });
 
-  it('does not notify the store for a remote change that changes nothing', () => {
+  it("does not notify the store for a remote change that changes nothing", () => {
     const pair = createPair();
     const before = pair.b.store.getState();
     let notifications = 0;
@@ -149,7 +151,9 @@ describe(`identity of ${SIZE} todos across a Yjs roundtrip`, () => {
     // A Y.Map.set always produces an update, even when the value is equal, so peer `b` does
     // hear about this one; `mergeStates` (`packages/core/src/sync-engine.ts:68`) is what stops
     // it from reaching the store.
-    pair.doc.transact(() => pair.doc.getMap<unknown>('shared').set('searchTerm', new Y.Text('')));
+    pair.doc.transact(() =>
+      pair.doc.getMap<unknown>("shared").set("searchTerm", new Y.Text("")),
+    );
 
     expect(notifications).toBe(0);
     expect(pair.b.store.getState()).toBe(before);

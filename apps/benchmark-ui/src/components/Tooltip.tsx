@@ -27,12 +27,29 @@ export function Tooltip({ x, y, width, title, rows }: TooltipProps) {
       <p className="mb-1 font-medium">{title}</p>
       <dl className="space-y-0.5">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3">
+          <div
+            key={row.label}
+            className="flex items-center justify-between gap-3"
+          >
             <dt className="inline-flex min-w-0 items-center gap-1.5 text-background/70">
-              {row.color && <span className="inline-block h-0.5 w-3 shrink-0 rounded-full" style={{ background: row.color }} aria-hidden />}
+              {row.color && (
+                <span
+                  className="inline-block h-0.5 w-3 shrink-0 rounded-full"
+                  style={{ background: row.color }}
+                  aria-hidden
+                />
+              )}
               <span className="truncate">{row.label}</span>
             </dt>
-            <dd className={row.muted ? 'tabular-nums text-background/60' : 'font-semibold tabular-nums'}>{row.value}</dd>
+            <dd
+              className={
+                row.muted
+                  ? "tabular-nums text-background/60"
+                  : "font-semibold tabular-nums"
+              }
+            >
+              {row.value}
+            </dd>
           </div>
         ))}
       </dl>

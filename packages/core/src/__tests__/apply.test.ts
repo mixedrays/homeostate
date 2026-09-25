@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { applyChanges, applyStringChanges, type ApplyOps } from '../apply.js';
-import { ChangeType, type Change } from '../change.js';
-import { getChanges, type Diffable } from '../diff.js';
-import { snapshot } from './helpers.js';
+import { describe, expect, it } from "vitest";
+import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
+import { ChangeType, type Change } from "../change.js";
+import { getChanges, type Diffable } from "../diff.js";
+import { snapshot } from "./helpers.js";
 
 type Plain = Record<string, unknown>;
 
@@ -34,50 +34,61 @@ const reconcile = <T extends object>(before: T, after: T) => {
   return { target, log };
 };
 
-describe('applyStringChanges', () => {
-  it('revises a string by the edit script getChanges produced', () => {
+describe("applyStringChanges", () => {
+  it("revises a string by the edit script getChanges produced", () => {
     const cases: [string, string][] = [
-      ['', 'abc'],
-      ['abc', ''],
-      ['abc', 'abcd'],
-      ['abc', 'xyz'],
-      ['the quick fox', 'the quick brown fox'],
-      ['aaa', 'aa'],
+      ["", "abc"],
+      ["abc", ""],
+      ["abc", "abcd"],
+      ["abc", "xyz"],
+      ["the quick fox", "the quick brown fox"],
+      ["aaa", "aa"],
     ];
 
     for (const [before, after] of cases)
       expect(applyStringChanges(before, getChanges(before, after))).toBe(after);
   });
 
-  it('ignores a step it has no meaning for', () => {
-    expect(applyStringChanges('ab', [[ChangeType.UPDATE, 0, 'z']])).toBe('ab');
+  it("ignores a step it has no meaning for", () => {
+    expect(applyStringChanges("ab", [[ChangeType.UPDATE, 0, "z"]])).toBe("ab");
   });
 });
 
-describe('applyChanges', () => {
-  it('adds, replaces and removes record keys', () => {
-    const { target, log } = reconcile(
-      { keep: 1, drop: 2, change: 'a' },
-      { keep: 1, change: 'b', added: true } as Record<string, unknown>
-    );
+describe("applyChanges", () => {
+  it("adds, replaces and removes record keys", () => {
+    const { target, log } = reconcile({ keep: 1, drop: 2, change: "a" }, {
+      keep: 1,
+      change: "b",
+      added: true,
+    } as Record<string, unknown>);
 
-    expect(target).toEqual({ keep: 1, change: 'b', added: true });
-    expect(log).toEqual(['remove drop', 'set change', 'set added']);
+    expect(target).toEqual({ keep: 1, change: "b", added: true });
+    expect(log).toEqual(["remove drop", "set change", "set added"]);
   });
 
-  it('splices an array rather than rewriting it', () => {
-    const before = { list: [{ id: '1' }, { id: '2' }, { id: '3' }] };
-    const after = { list: [{ id: '2' }, { id: '3' }, { id: '4' }] };
+  it("splices an array rather than rewriting it", () => {
+    const before = { list: [{ id: "1" }, { id: "2" }, { id: "3" }] };
+    const after = { list: [{ id: "2" }, { id: "3" }, { id: "4" }] };
 
     const { target, log } = reconcile(before, after);
 
     expect(target).toEqual(after);
-    expect(log).toEqual(['splice 0 1 0', 'splice 2 0 1']);
+    expect(log).toEqual(["splice 0 1 0", "splice 2 0 1"]);
   });
 
-  it('recurses into a container instead of replacing it', () => {
-    const before = { list: [{ id: '1', done: false }, { id: '2', done: false }] };
-    const after = { list: [{ id: '1', done: true }, { id: '2', done: false }] };
+  it("recurses into a container instead of replacing it", () => {
+    const before = {
+      list: [
+        { id: "1", done: false },
+        { id: "2", done: false },
+      ],
+    };
+    const after = {
+      list: [
+        { id: "1", done: true },
+        { id: "2", done: false },
+      ],
+    };
     const target = snapshot(before);
     const untouched = target.list[1];
     const edited = target.list[0];
@@ -87,52 +98,63 @@ describe('applyChanges', () => {
 
     expect(target).toEqual(after);
     // Only the field the diff named was written; both elements are the objects that were there.
-    expect(log).toEqual(['set done']);
+    expect(log).toEqual(["set done"]);
     expect(target.list[0]).toBe(edited);
     expect(target.list[1]).toBe(untouched);
   });
 
-  it('rebuilds a string field through its nested edit script', () => {
-    const { target, log } = reconcile({ title: 'todo' }, { title: 'todos' });
+  it("rebuilds a string field through its nested edit script", () => {
+    const { target, log } = reconcile({ title: "todo" }, { title: "todos" });
 
-    expect(target).toEqual({ title: 'todos' });
-    expect(log).toEqual(['set title']);
+    expect(target).toEqual({ title: "todos" });
+    expect(log).toEqual(["set title"]);
   });
 
-  it('replaces an element whose kind changed', () => {
-    const { target } = reconcile({ list: [{ a: 1 }, 2] }, { list: [7, { b: 8 }] } as unknown as {
+  it("replaces an element whose kind changed", () => {
+    const { target } = reconcile({ list: [{ a: 1 }, 2] }, {
+      list: [7, { b: 8 }],
+    } as unknown as {
       list: unknown[];
     });
 
     expect(target).toEqual({ list: [7, { b: 8 }] });
   });
 
-  it('leaves a pending step unapplied when the target does not mirror the diff', () => {
+  it("leaves a pending step unapplied when the target does not mirror the diff", () => {
     // `PENDING` carries no replacement value, so a target that has already diverged is left
     // alone rather than being written something wrong.
     const target = { list: 3 } as unknown as object;
-    const changes: Change[] = [[ChangeType.PENDING, 'list', [[ChangeType.UPDATE, 0, 1]]]];
+    const changes: Change[] = [
+      [ChangeType.PENDING, "list", [[ChangeType.UPDATE, 0, 1]]],
+    ];
 
     expect(() => applyChanges(target, changes, createOps().ops)).not.toThrow();
     expect(target).toEqual({ list: 3 });
   });
 
-  it('reaches the target state for every shape the diff can produce', () => {
+  it("reaches the target state for every shape the diff can produce", () => {
     const cases: [object, object][] = [
       [{ a: 1 }, { a: 1 }],
       [{ list: [] }, { list: [1, 2, 3] }],
       [{ list: [1, 2, 3] }, { list: [] }],
       [{ list: [1, 2, 3] }, { list: [3, 2, 1] }],
-      [{ list: ['a', 'b'] }, { list: ['ab', 'b'] }],
+      [{ list: ["a", "b"] }, { list: ["ab", "b"] }],
       [{ n: { deep: { deeper: [1] } } }, { n: { deep: { deeper: [1, 2] } } }],
       [{ a: { b: 1 } }, { a: [1] } as unknown as object],
       [{ a: null }, { a: { b: 1 } } as unknown as object],
       [
-        { todos: [{ id: '1', title: 'a', tags: ['x'] }], term: 'ab' },
-        { todos: [{ id: '1', title: 'ab' }, { id: '2', title: 'b', tags: [] }], term: 'abc' },
+        { todos: [{ id: "1", title: "a", tags: ["x"] }], term: "ab" },
+        {
+          todos: [
+            { id: "1", title: "ab" },
+            { id: "2", title: "b", tags: [] },
+          ],
+          term: "abc",
+        },
       ],
     ];
 
-    for (const [before, after] of cases) expect(reconcile(before, after).target).toEqual(after);
+    for (const [before, after] of cases)
+      expect(reconcile(before, after).target).toEqual(after);
   });
 });

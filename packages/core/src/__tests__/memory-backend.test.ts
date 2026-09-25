@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createMemoryBackend } from '../index.js';
+import { describe, expect, it, vi } from "vitest";
+import { createMemoryBackend } from "../index.js";
 
-describe('createMemoryBackend', () => {
-  it('starts as an empty object by default', () => {
+describe("createMemoryBackend", () => {
+  it("starts as an empty object by default", () => {
     expect(createMemoryBackend().read()).toEqual({});
   });
 
-  it('copies the initial value instead of aliasing it', () => {
+  it("copies the initial value instead of aliasing it", () => {
     const initial = { list: [1] };
     const backend = createMemoryBackend(initial);
 
@@ -15,7 +15,7 @@ describe('createMemoryBackend', () => {
     expect(backend.read()).toEqual({ list: [1] });
   });
 
-  it('returns a fresh copy on every read', () => {
+  it("returns a fresh copy on every read", () => {
     const backend = createMemoryBackend({ list: [1] });
 
     const first = backend.read() as { list: number[] };
@@ -25,7 +25,7 @@ describe('createMemoryBackend', () => {
     expect(backend.read()).not.toBe(backend.read());
   });
 
-  it('replaces the whole state on write, copying it and dropping functions', () => {
+  it("replaces the whole state on write, copying it and dropping functions", () => {
     const backend = createMemoryBackend({ a: 1, b: 2 });
     const next = { b: 3, nested: { c: [1] }, fn: () => {} };
 
@@ -35,7 +35,7 @@ describe('createMemoryBackend', () => {
     expect(backend.read()).toEqual({ b: 3, nested: { c: [1] } });
   });
 
-  it('does not notify subscribers about its own writes', () => {
+  it("does not notify subscribers about its own writes", () => {
     const backend = createMemoryBackend();
     const onRemoteChange = vi.fn();
     backend.subscribe(onRemoteChange);
@@ -45,7 +45,7 @@ describe('createMemoryBackend', () => {
     expect(onRemoteChange).not.toHaveBeenCalled();
   });
 
-  it('notifies every subscriber once per receive and stores a copy', () => {
+  it("notifies every subscriber once per receive and stores a copy", () => {
     const backend = createMemoryBackend();
     const first = vi.fn();
     const second = vi.fn();
@@ -61,7 +61,7 @@ describe('createMemoryBackend', () => {
     expect(backend.read()).toEqual({ a: [1] });
   });
 
-  it('stops notifying after unsubscribe', () => {
+  it("stops notifying after unsubscribe", () => {
     const backend = createMemoryBackend();
     const onRemoteChange = vi.fn();
     const unsubscribe = backend.subscribe(onRemoteChange);

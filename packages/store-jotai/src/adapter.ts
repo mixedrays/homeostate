@@ -1,5 +1,9 @@
-import { getDefaultStore, type WritableAtom, type createStore } from 'jotai/vanilla';
-import type { StoreAdapter, Unsubscribe } from '@homeostate/core';
+import {
+  getDefaultStore,
+  type WritableAtom,
+  type createStore,
+} from "jotai/vanilla";
+import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
 export type JotaiStore = ReturnType<typeof createStore>;
 
@@ -60,7 +64,7 @@ export class JotaiAdapter<S extends object> implements StoreAdapter<S> {
  */
 export function createJotaiAdapter<S extends object>(
   atom: SyncedAtom<S>,
-  store?: JotaiStore
+  store?: JotaiStore,
 ): StoreAdapter<S> {
   return new JotaiAdapter(atom, store);
 }

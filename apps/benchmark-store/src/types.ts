@@ -1,6 +1,6 @@
-import type { StoreAdapter } from '@homeostate/core';
-import type { TodoState } from '@homeostate/benchmark-crdt';
-import type { ReactElement } from 'react';
+import type { StoreAdapter } from "@homeostate/core";
+import type { TodoState } from "@homeostate/benchmark-crdt";
+import type { ReactElement } from "react";
 
 /**
  * One counter per component of the fixture tree. `row` is the sum over every row in the list,

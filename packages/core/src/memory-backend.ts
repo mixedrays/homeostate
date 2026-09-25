@@ -1,4 +1,4 @@
-import type { CrdtBackend, Unsubscribe } from './types.js';
+import type { CrdtBackend, Unsubscribe } from "./types.js";
 
 export interface MemoryBackend extends CrdtBackend {
   /** Replace the held state as if a remote peer had written it, then notify subscribers */

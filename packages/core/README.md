@@ -21,10 +21,12 @@ you use.
 ## Usage
 
 ```ts
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
 
-const engine = createSyncEngine(createYjsBackend(doc, 'shared'), adapter, { seed: 'if-empty' });
+const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+  seed: "if-empty",
+});
 engine.connect();
 ```
 

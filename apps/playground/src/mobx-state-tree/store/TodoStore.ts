@@ -1,22 +1,30 @@
-import { destroy, types, type Instance } from 'mobx-state-tree';
-import { createSyncEngine } from '@homeostate/core';
-import { createYjsBackend } from '@homeostate/crdt-yjs';
-import { createMobxStateTreeAdapter } from '@homeostate/store-mobx-state-tree';
-import type { FilterStatus, Todo } from '../../types/todo';
-import { countTodos, filterTodos } from '../../lib/todos';
-import { SYNC_MAP_NAME, connectSharedDoc, createInitialTodoState } from '../../sync';
+import { destroy, types, type Instance } from "mobx-state-tree";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createMobxStateTreeAdapter } from "@homeostate/store-mobx-state-tree";
+import type { FilterStatus, Todo } from "../../types/todo";
+import { countTodos, filterTodos } from "../../lib/todos";
+import {
+  SYNC_MAP_NAME,
+  connectSharedDoc,
+  createInitialTodoState,
+} from "../../sync";
 
-const TodoModel = types.model('Todo', {
+const TodoModel = types.model("Todo", {
   id: types.identifier,
   title: types.string,
   completed: types.boolean,
 });
 
 const TodoStore = types
-  .model('TodoStore', {
+  .model("TodoStore", {
     todos: types.array(TodoModel),
     searchTerm: types.string,
-    filterStatus: types.enumeration<FilterStatus>('FilterStatus', ['all', 'active', 'completed']),
+    filterStatus: types.enumeration<FilterStatus>("FilterStatus", [
+      "all",
+      "active",
+      "completed",
+    ]),
   })
   .views((self) => ({
     /**
@@ -68,7 +76,10 @@ export const todoStore = TodoStore.create(createInitialTodoState());
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createMobxStateTreeAdapter(todoStore);
-const syncEngine = createSyncEngine(createYjsBackend(ydoc, SYNC_MAP_NAME), adapter);
+const syncEngine = createSyncEngine(
+  createYjsBackend(ydoc, SYNC_MAP_NAME),
+  adapter,
+);
 
 syncEngine.connect();
 

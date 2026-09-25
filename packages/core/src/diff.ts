@@ -1,13 +1,14 @@
-import { ChangeType, type Change } from './change.js';
+import { ChangeType, type Change } from "./change.js";
 
 export type Diffable = Record<string, unknown> | Array<unknown> | string;
 
-const isArray = (value: unknown): value is Array<unknown> => Array.isArray(value);
+const isArray = (value: unknown): value is Array<unknown> =>
+  Array.isArray(value);
 
-const isString = (value: unknown): value is string => typeof value === 'string';
+const isString = (value: unknown): value is string => typeof value === "string";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isDiffable = (value: unknown): value is Diffable =>
   isArray(value) || isString(value) || isRecord(value);
@@ -21,7 +22,9 @@ const nestedChanges = (a: unknown, b: unknown): Change[] | null =>
 const deepEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
   if (isArray(a) && isArray(b))
-    return a.length === b.length && a.every((value, i) => deepEqual(value, b[i]));
+    return (
+      a.length === b.length && a.every((value, i) => deepEqual(value, b[i]))
+    );
   if (isRecord(a) && isRecord(b)) {
     const keys = Object.keys(a);
     return (
@@ -48,7 +51,11 @@ const sharesCharacter = (a: string, b: string): boolean => {
 const getStringChanges = (a: string, b: string): Change[] => {
   if (a === b) return [];
   if (!sharesCharacter(a, b)) {
-    const deletes = Array.from(a, (): Change => [ChangeType.DELETE, 0, undefined]);
+    const deletes = Array.from(a, (): Change => [
+      ChangeType.DELETE,
+      0,
+      undefined,
+    ]);
     return b.length === 0 ? deletes : [...deletes, [ChangeType.INSERT, 0, b]];
   }
 
@@ -56,8 +63,9 @@ const getStringChanges = (a: string, b: string): Change[] => {
   let index = 0;
 
   for (const { step, b: position } of editScript(a, b, (x, y) => x === y)) {
-    if (step === 'eq') index++;
-    else if (step === 'del') changes.push([ChangeType.DELETE, index, undefined]);
+    if (step === "eq") index++;
+    else if (step === "del")
+      changes.push([ChangeType.DELETE, index, undefined]);
     else {
       const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
       if (
@@ -86,10 +94,12 @@ const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
       const next = b[inserted[i]];
       const nested = nestedChanges(a[deleted[i]], next);
       if (nested === null) changes.push([ChangeType.UPDATE, index, next]);
-      else if (nested.length > 0) changes.push([ChangeType.PENDING, index, nested]);
+      else if (nested.length > 0)
+        changes.push([ChangeType.PENDING, index, nested]);
       index++;
     }
-    for (let i = pairs; i < deleted.length; i++) changes.push([ChangeType.DELETE, index, undefined]);
+    for (let i = pairs; i < deleted.length; i++)
+      changes.push([ChangeType.DELETE, index, undefined]);
     for (let i = pairs; i < inserted.length; i++) {
       changes.push([ChangeType.INSERT, index, b[inserted[i]]]);
       index++;
@@ -99,8 +109,8 @@ const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
   };
 
   for (const { step, a: from, b: to } of editScript(a, b, deepEqual)) {
-    if (step === 'del') deleted.push(from);
-    else if (step === 'ins') inserted.push(to);
+    if (step === "del") deleted.push(from);
+    else if (step === "ins") inserted.push(to);
     else {
       flush();
       index++;
@@ -113,20 +123,23 @@ const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
 
 const getRecordChanges = (
   a: Record<string, unknown>,
-  b: Record<string, unknown>
+  b: Record<string, unknown>,
 ): Change[] => {
   const changes: Change[] = [];
 
   for (const property of Object.keys(a))
-    if (!(property in b)) changes.push([ChangeType.DELETE, property, undefined]);
+    if (!(property in b))
+      changes.push([ChangeType.DELETE, property, undefined]);
 
   for (const [property, value] of Object.entries(b)) {
     if (!(property in a)) changes.push([ChangeType.INSERT, property, value]);
     else {
       const nested = nestedChanges(a[property], value);
       if (nested === null) {
-        if (a[property] !== value) changes.push([ChangeType.UPDATE, property, value]);
-      } else if (nested.length > 0) changes.push([ChangeType.PENDING, property, nested]);
+        if (a[property] !== value)
+          changes.push([ChangeType.UPDATE, property, value]);
+      } else if (nested.length > 0)
+        changes.push([ChangeType.PENDING, property, nested]);
     }
   }
 
@@ -134,7 +147,7 @@ const getRecordChanges = (
 };
 
 interface EditOp {
-  step: 'eq' | 'ins' | 'del';
+  step: "eq" | "ins" | "del";
   a: number;
   b: number;
 }
@@ -146,7 +159,7 @@ interface EditOp {
 const editScript = <T>(
   a: ArrayLike<T>,
   b: ArrayLike<T>,
-  equal: (x: T, y: T) => boolean
+  equal: (x: T, y: T) => boolean,
 ): EditOp[] => {
   const swapped = a.length > b.length;
   const s = swapped ? b : a;
@@ -173,7 +186,10 @@ const editScript = <T>(
     points.push({
       x,
       y,
-      prev: fromBelow > fromAbove ? pointAt[k + offset - 1] : pointAt[k + offset + 1],
+      prev:
+        fromBelow > fromAbove
+          ? pointAt[k + offset - 1]
+          : pointAt[k + offset + 1],
     });
   };
 
@@ -184,25 +200,26 @@ const editScript = <T>(
   }
 
   const path: { x: number; y: number }[] = [];
-  for (let i = pointAt[delta + offset]; i !== -1; i = points[i].prev) path.push(points[i]);
+  for (let i = pointAt[delta + offset]; i !== -1; i = points[i].prev)
+    path.push(points[i]);
 
   const ops: EditOp[] = [];
   let x = 0;
   let y = 0;
-  const op = (step: EditOp['step']): EditOp =>
+  const op = (step: EditOp["step"]): EditOp =>
     swapped ? { step, a: y, b: x } : { step, a: x, b: y };
 
   for (let i = path.length - 1; i >= 0; i--) {
     const end = path[i];
     if (end.y - end.x > y - x) {
-      ops.push(op(swapped ? 'del' : 'ins'));
+      ops.push(op(swapped ? "del" : "ins"));
       y++;
     } else if (end.y - end.x < y - x) {
-      ops.push(op(swapped ? 'ins' : 'del'));
+      ops.push(op(swapped ? "ins" : "del"));
       x++;
     }
     while (x < end.x) {
-      ops.push(op('eq'));
+      ops.push(op("eq"));
       x++;
       y++;
     }

@@ -33,24 +33,24 @@ pnpm bench:ui                                    # http://localhost:5180, Render
 
 One remote `toggle` at 200 rows, on this machine:
 
-| adapter | row renders | list | apply | commit | mount |
-| --- | --- | --- | --- | --- | --- |
-| redux | 1 | 1 | 1.5 ms | 3.8 ms | 22.4 ms |
-| zustand | 1 | 1 | 0.7 ms | 2.3 ms | 14.0 ms |
-| mobx-state-tree | 1 | **0** | 2.5 ms | 0.6 ms | 18.5 ms |
-| mobx | 1 | **0** | 1.3 ms | 0.5 ms | 7.2 ms |
+| adapter         | row renders | list  | apply  | commit | mount   |
+| --------------- | ----------- | ----- | ------ | ------ | ------- |
+| redux           | 1           | 1     | 1.5 ms | 3.8 ms | 22.4 ms |
+| zustand         | 1           | 1     | 0.7 ms | 2.3 ms | 14.0 ms |
+| mobx-state-tree | 1           | **0** | 2.5 ms | 0.6 ms | 18.5 ms |
+| mobx            | 1           | **0** | 1.3 ms | 0.5 ms | 7.2 ms  |
 
 All four re-render the one row that changed. The whole matrix, at 200 rows, is where they
 separate:
 
-| scenario, 200 rows | redux | zustand | mobx-state-tree | mobx |
-| --- | --- | --- | --- | --- |
-| toggle | 1 | 1 | 1 | 1 |
-| keystroke | 1 | 1 | 1 | 1 |
-| add | 1 (the new row mounts) | 1 | 1 | 1 |
-| remove | 0 | 0 | 0 | 0 |
-| move | 1 | 1 | **200** | 1 |
-| search (a top-level string) | 0, and the list does not render either | 0 | 0 | 0 |
+| scenario, 200 rows          | redux                                  | zustand | mobx-state-tree | mobx |
+| --------------------------- | -------------------------------------- | ------- | --------------- | ---- |
+| toggle                      | 1                                      | 1       | 1               | 1    |
+| keystroke                   | 1                                      | 1       | 1               | 1    |
+| add                         | 1 (the new row mounts)                 | 1       | 1               | 1    |
+| remove                      | 0                                      | 0       | 0               | 0    |
+| move                        | 1                                      | 1       | **200**         | 1    |
+| search (a top-level string) | 0, and the list does not render either | 0       | 0               | 0    |
 
 One finding is left in that table.
 
@@ -70,14 +70,14 @@ test for that change; the numbers above are what it now asserts.
 
 ### Columns
 
-| column | meaning |
-| --- | --- |
-| row renders | row components React re-rendered for the change. The metric and the gate; ideal 1 |
-| list | whether the list container itself re-rendered, 0 or 1 |
+| column         | meaning                                                                              |
+| -------------- | ------------------------------------------------------------------------------------ |
+| row renders    | row components React re-rendered for the change. The metric and the gate; ideal 1    |
+| list           | whether the list container itself re-rendered, 0 or 1                                |
 | search, footer | the two components outside the list, as a check that a change stays where it belongs |
-| apply | the peer's write until this peer's store has settled, React excluded; advisory |
-| commit | React's render and commit for that change; advisory |
-| mount | first render of the whole list, the `adopt` analogue; advisory |
+| apply          | the peer's write until this peer's store has settled, React excluded; advisory       |
+| commit         | React's render and commit for that change; advisory                                  |
+| mount          | first render of the whole list, the `adopt` analogue; advisory                       |
 
 Counts are exact integers: identical on every machine, in every run, which is what makes them
 usable as a gate with no threshold to tune. The timings are advisory and are not asserted by
@@ -112,8 +112,8 @@ Add a fixture next to the others in `src/fixtures/` and register it in `src/fixt
 
 ```tsx
 export const zustand: Fixture = {
-  name: 'zustand',
-  description: '...',
+  name: "zustand",
+  description: "...",
   create: (initial) => ({ adapter, tree: <App />, counters }),
 };
 ```
