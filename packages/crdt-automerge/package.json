@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/crdt-automerge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Automerge CRDT backend for @homeostate/core",
   "license": "MIT",
   "type": "module",
