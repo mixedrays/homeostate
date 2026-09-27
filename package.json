@@ -8,7 +8,7 @@
     "dev": "pnpm -r --parallel run dev",
     "playground": "pnpm dev",
     "build": "pnpm -r run build",
-    "typecheck": "tsc -b",
+    "typecheck": "pnpm --filter @homeostate/docs typegen && tsc -b",
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -17,7 +17,8 @@
     "release": "bash scripts/release.sh",
     "bench:crdt": "pnpm --filter @homeostate/benchmark-crdt bench",
     "bench:store": "pnpm --filter @homeostate/benchmark-store bench",
-    "bench:ui": "pnpm --filter @homeostate/benchmark-ui dev"
+    "bench:ui": "pnpm --filter @homeostate/benchmark-ui dev",
+    "docs": "pnpm --filter @homeostate/docs dev"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",

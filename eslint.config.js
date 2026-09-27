@@ -5,7 +5,14 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist", "**/node_modules"] },
+  {
+    ignores: [
+      "**/dist",
+      "**/node_modules",
+      "apps/docs/build",
+      "**/.react-router",
+    ],
+  },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -15,7 +22,11 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/playground/**/*.{ts,tsx}", "apps/benchmark-ui/**/*.{ts,tsx}"],
+    files: [
+      "apps/playground/**/*.{ts,tsx}",
+      "apps/benchmark-ui/**/*.{ts,tsx}",
+      "apps/docs/**/*.{ts,tsx}",
+    ],
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
@@ -32,6 +43,25 @@ export default tseslint.config(
     files: ["apps/*/src/components/ui/**/*.tsx"],
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    // React Router route modules export loader, meta, links and ErrorBoundary next to the component.
+    files: ["apps/docs/src/routes/**/*.tsx", "apps/docs/src/root.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    // Build-time code: the content pipeline, routes.ts, configs and scripts run in Node.
+    files: [
+      "apps/docs/src/content/**/*.ts",
+      "apps/docs/src/routes.ts",
+      "apps/docs/scripts/**/*.ts",
+      "apps/docs/*.ts",
+    ],
+    languageOptions: {
+      globals: globals.node,
     },
   },
   {
