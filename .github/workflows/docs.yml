@@ -1,0 +1,65 @@
+name: Docs
+
+# Builds apps/docs and deploys it to Cloudflare Pages: production on every push to main, a preview
+# for every pull request from this repository (forks get no secrets).
+#
+# Needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets, and the SITE_URL (production
+# origin, e.g. https://homeostate.org) and CLOUDFLARE_PAGES_PROJECT repository variables. Previews
+# are built with the production SITE_URL too, so their canonical and .md links point at production.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @homeostate/docs build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/docs/build/client
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+            --branch=${{ github.head_ref || github.ref_name }}
+      - name: Comment the preview URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url || steps.deploy.outputs.deployment-url }}
+        with:
+          script: |
+            const marker = "<!-- docs-preview -->";
+            const body = `${marker}\nDocs preview: ${process.env.PREVIEW_URL}\n\nBuilt from ${context.sha.slice(0, 7)}.`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find((c) => c.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

@@ -33,13 +33,14 @@ Libraries, under `packages/`.
 
 Private tools and servers, under `apps/`. None of them are published.
 
-| Package                            | Path                        | Purpose                                                                                                                           |
-| ---------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `@homeostate/playground`           | `apps/playground`           | Vite app with a todo demo per store adapter: Zustand, MobX, Redux, Jotai, Valtio, TanStack Store, MobX-State-Tree                 |
-| `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                               |
-| `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                       |
-| `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter |
-| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playground                                                                                         |
+| Package                            | Path                        | Purpose                                                                                                                                  |
+| ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `@homeostate/playground`           | `apps/playground`           | Vite app with a todo demo per store adapter: Zustand, MobX, Redux, Jotai, Valtio, TanStack Store, MobX-State-Tree                        |
+| `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
+| `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
+| `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |
+| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playground                                                                                                |
+| `@homeostate/docs`                 | `apps/docs`                 | Landing page and docs site, prerendered from the markdown in `packages/*/docs` and `apps/docs/content`; every page also has a `.md` twin |
 
 ## Scripts
 
@@ -54,9 +55,17 @@ pnpm test         # vitest across packages/*/src/__tests__ and apps/*/src/__test
 pnpm bench:crdt   # CRDT backend matrix; pnpm bench:crdt -- --help for options
 pnpm bench:store  # render counts per store adapter; pnpm bench:store -- --help for options
 pnpm bench:ui     # viewer for reports saved with --json by either benchmark, on http://localhost:5180
+pnpm docs         # docs site on http://localhost:5190
 ```
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
+
+## Docs
+
+Each package's docs are markdown in `packages/<name>/docs/`, next to the code, and guides that
+span packages live in `apps/docs/content/`. The same files are the site, the plain-markdown
+`.md` twin of every page and `/llms.txt`. See [apps/docs/README.md](apps/docs/README.md) for the
+page format and conventions; `pnpm test` fails on a broken link, bad frontmatter or raw HTML.
 
 ## Releasing
 

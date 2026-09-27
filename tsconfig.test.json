@@ -11,5 +11,5 @@
     "apps/*/src/__tests__/**/*.ts",
     "apps/*/src/__tests__/**/*.tsx"
   ],
-  "exclude": ["apps/benchmark-ui/**", "apps/playground/**"]
+  "exclude": ["apps/benchmark-ui/**", "apps/playground/**", "apps/docs/**"]
 }
