@@ -11,10 +11,10 @@ import {
   summarizePackage,
   summarizePage,
 } from "@/content/manifest.server.ts";
+import { docsPackage } from "@/content/docs-package.server.ts";
 import { renderPage } from "@/content/markdown.server.ts";
 import { neighbours } from "@/content/nav.server.ts";
 import { notFound, requestPath } from "@/content/respond.server.ts";
-import type { PackageSummary } from "@/content/types.ts";
 import { siteUrl } from "@/lib/site-url.ts";
 import { site } from "@/site.config.ts";
 
@@ -27,10 +27,46 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     page: summarizePage(page),
     pkg: pkg && summarizePackage(pkg),
+    strip: infoStrip(page.path, pkg),
     hast,
     toc,
     ...neighbours(manifest, page),
   };
+}
+
+interface InfoStripData {
+  badge: string;
+  links: { label: string; href: string }[];
+}
+
+// Package pages show the package's published version; the About page shows the docs app's own.
+function infoStrip(
+  pathname: string,
+  pkg: ReturnType<typeof packageOf>,
+): InfoStripData | undefined {
+  if (pkg) {
+    return {
+      badge: `${pkg.name}@${pkg.version}`,
+      links: [
+        { label: "npm", href: `${site.npm}/${pkg.name}` },
+        {
+          label: "Source",
+          href: `${site.repo}/tree/${site.branch}/${pkg.repoPath}`,
+        },
+      ],
+    };
+  }
+  if (pathname === site.aboutPage) {
+    const docs = docsPackage();
+    return {
+      badge: `${docs.name}@${docs.version}`,
+      links: [
+        { label: "GitHub", href: site.repo },
+        { label: "npm", href: site.npmOrg },
+      ],
+    };
+  }
+  return undefined;
 }
 
 export const meta: Route.MetaFunction = ({ loaderData }) => {
@@ -63,27 +99,23 @@ export const meta: Route.MetaFunction = ({ loaderData }) => {
   ];
 };
 
-function PackageStrip({ pkg }: { pkg: PackageSummary }) {
+function InfoStrip({ strip }: { strip: InfoStripData }) {
   return (
     <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       <Badge variant="secondary" className="font-mono">
-        {pkg.name}@{pkg.version}
+        {strip.badge}
       </Badge>
-      <a href={`${site.npm}/${pkg.name}`} className="hover:text-foreground">
-        npm
-      </a>
-      <a
-        href={`${site.repo}/tree/${site.branch}/${pkg.repoPath}`}
-        className="hover:text-foreground"
-      >
-        Source
-      </a>
+      {strip.links.map((link) => (
+        <a key={link.label} href={link.href} className="hover:text-foreground">
+          {link.label}
+        </a>
+      ))}
     </div>
   );
 }
 
 export default function DocPage({ loaderData }: Route.ComponentProps) {
-  const { page, pkg, hast, toc, prev, next } = loaderData;
+  const { page, pkg, strip, hast, toc, prev, next } = loaderData;
   const section = pkg ? `${pkg.label}` : "Guides";
 
   return (
@@ -100,7 +132,7 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
           <p className="mt-3 text-lg text-pretty text-muted-foreground">
             {page.description}
           </p>
-          {pkg && <PackageStrip pkg={pkg} />}
+          {strip && <InfoStrip strip={strip} />}
         </header>
         <MobileToc toc={toc} />
         <div className="prose prose-docs max-w-none prose-headings:scroll-mt-20 prose-headings:font-semibold prose-headings:tracking-tight">

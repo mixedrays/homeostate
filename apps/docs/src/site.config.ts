@@ -8,8 +8,11 @@ export const site = {
   repo: "https://github.com/mixedrays/homeostate",
   branch: "main",
   npm: "https://www.npmjs.com/package",
+  npmOrg: "https://www.npmjs.com/org/homeostate",
   /** Where `/docs` sends readers. */
   docsHome: "/docs/getting-started",
+  /** The guide whose header shows the docs app's version, GitHub and npm. */
+  aboutPage: "/docs/about",
 } as const;
 
 export const groups: { id: GroupId; title: string }[] = [

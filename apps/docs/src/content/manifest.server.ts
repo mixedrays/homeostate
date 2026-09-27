@@ -373,11 +373,16 @@ function buildManifest(): Manifest {
     { from: "/docs", to: site.docsHome },
     ...packages.map((pkg) => ({ from: `/docs/${pkg.slug}`, to: pkg.path })),
   ];
-  if (!guides.some((g) => g.path === site.docsHome)) {
-    errors.push({
-      file: toRepoPath(guidesDir),
-      message: `${site.docsHome} (site.docsHome) has no page`,
-    });
+  for (const [key, pathname] of [
+    ["docsHome", site.docsHome],
+    ["aboutPage", site.aboutPage],
+  ] as const) {
+    if (!guides.some((g) => g.path === pathname)) {
+      errors.push({
+        file: toRepoPath(guidesDir),
+        message: `${pathname} (site.${key}) has no page`,
+      });
+    }
   }
 
   return {
