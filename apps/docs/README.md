@@ -75,11 +75,3 @@ renders the whole site. Loaders run only at build time. They parse and highlight
 components, so remark and shiki never reach the browser.
 [scripts/postbuild.ts](scripts/postbuild.ts) then adapts the output for Cloudflare Pages
 (`x/index.html` to `x.html`, `404.html`, `_headers`, `_redirects`) and checks it.
-
-## Deploy
-
-[.github/workflows/docs.yml](../../.github/workflows/docs.yml) deploys to Cloudflare Pages on
-every push to `main` and a preview per pull request. It needs the `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` secrets and the `SITE_URL` and `CLOUDFLARE_PAGES_PROJECT` repository
-variables. `SITE_URL` is the origin for canonical URLs, `.md` links, `llms.txt` and the
-sitemap; a build without it falls back to the dev origin and warns.
