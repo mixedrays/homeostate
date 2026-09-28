@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/crdt-loro",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Loro CRDT backend for @homeostate/core",
   "license": "MIT",
   "type": "module",

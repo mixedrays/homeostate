@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/store-mobx-state-tree",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MobX-State-Tree adapter for @homeostate/core",
   "license": "MIT",
   "type": "module",
