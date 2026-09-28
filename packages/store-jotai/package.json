@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/store-jotai",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Jotai adapter for @homeostate/core",
   "license": "MIT",
   "type": "module",
