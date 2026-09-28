@@ -1,8 +1,5 @@
 # @homeostate/crdt-loro
 
-> **Draft / placeholder release.** `0.0.0` reserves the name while the API is still
-> being designed. Nothing here is stable — do not depend on it yet.
-
 [Loro](https://github.com/loro-dev/loro) backend for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It maps the synced state onto a `LoroMap` (nested objects become `LoroMap`, arrays

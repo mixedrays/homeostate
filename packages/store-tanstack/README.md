@@ -1,8 +1,5 @@
 # @homeostate/store-tanstack
 
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [TanStack Store](https://tanstack.com/store) adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a TanStack `Store` in sync with a CRDT backend such as
