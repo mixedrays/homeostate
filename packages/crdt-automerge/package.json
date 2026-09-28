@@ -25,6 +25,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "sideEffects": false,
   "files": [
     "dist",
     "src",
