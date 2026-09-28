@@ -1,24 +1,7 @@
 import type { Store, StoreActionMap } from "@tanstack/store";
 import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
-/**
- * TanStack Store adapter that bridges a `Store` with the sync engine.
- * Stores created with or without an actions factory are both accepted.
- *
- * @example
- * ```typescript
- * import { Store } from '@tanstack/store';
- * import * as Y from 'yjs';
- * import { createYjsBackend } from '@homeostate/crdt-yjs';
- *
- * const store = new Store({ count: 0 });
- * const adapter = createTanStackStoreAdapter(store);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
- * engine.connect();
- * store.setState((s) => ({ ...s, count: s.count + 1 }));
- * ```
- */
-export class TanStackStoreAdapter<S extends object> implements StoreAdapter<S> {
+class TanStackStoreAdapter<S extends object> implements StoreAdapter<S> {
   private store: Store<S, StoreActionMap>;
 
   constructor(store: Store<S, StoreActionMap>) {
@@ -40,10 +23,24 @@ export class TanStackStoreAdapter<S extends object> implements StoreAdapter<S> {
 }
 
 /**
- * Factory function to create a TanStack Store adapter
+ * Creates a TanStack Store adapter that bridges a `Store` with the sync engine.
+ * Stores created with or without an actions factory are both accepted.
  *
  * @param store - The TanStack `Store` instance
  * @returns StoreAdapter instance for the store
+ *
+ * @example
+ * ```typescript
+ * import { Store } from '@tanstack/store';
+ * import * as Y from 'yjs';
+ * import { createYjsBackend } from '@homeostate/crdt-yjs';
+ *
+ * const store = new Store({ count: 0 });
+ * const adapter = createTanStackStoreAdapter(store);
+ * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * engine.connect();
+ * store.setState((s) => ({ ...s, count: s.count + 1 }));
+ * ```
  */
 export function createTanStackStoreAdapter<S extends object>(
   store: Store<S, StoreActionMap>,

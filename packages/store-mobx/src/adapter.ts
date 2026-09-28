@@ -33,34 +33,7 @@ const mobxOps: ApplyOps = {
   },
 };
 
-/**
- * MobX-specific store adapter that bridges MobX stores with the sync engine.
- *
- * A remote change is reconciled into the observable tree rather than assigned over it: the
- * adapter diffs the incoming state against the snapshot it last handed out and writes only
- * the fields, elements and keys that differ. In MobX identity is the unit of reactivity, so
- * this is what keeps an `observer` row, a per-item `reaction` and a `useEffect` keyed on an
- * item quiet when that item did not change.
- *
- * @example
- * ```typescript
- * import { makeAutoObservable } from 'mobx';
- * import * as Y from 'yjs';
- * import { createYjsBackend } from '@homeostate/crdt-yjs';
- *
- * class CounterStore {
- *   count = 0;
- *   constructor() { makeAutoObservable(this); }
- *   increment() { this.count++; }
- * }
- *
- * const store = new CounterStore();
- * const adapter = createMobxAdapter(store, ['count']);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
- * engine.connect();
- * ```
- */
-export class MobxAdapter<S extends object> implements StoreAdapter<S> {
+class MobxAdapter<S extends object> implements StoreAdapter<S> {
   private store: S;
   private syncableKeys: (keyof S)[];
 
@@ -130,11 +103,35 @@ export class MobxAdapter<S extends object> implements StoreAdapter<S> {
 }
 
 /**
- * Factory function to create a MobX adapter
+ * Creates a MobX-specific store adapter that bridges MobX stores with the sync engine.
+ *
+ * A remote change is reconciled into the observable tree rather than assigned over it: the
+ * adapter diffs the incoming state against the snapshot it last handed out and writes only
+ * the fields, elements and keys that differ. In MobX identity is the unit of reactivity, so
+ * this is what keeps an `observer` row, a per-item `reaction` and a `useEffect` keyed on an
+ * item quiet when that item did not change.
  *
  * @param store - The MobX store instance
  * @param syncableKeys - Array of property keys that should be synced
  * @returns StoreAdapter instance for the MobX store
+ *
+ * @example
+ * ```typescript
+ * import { makeAutoObservable } from 'mobx';
+ * import * as Y from 'yjs';
+ * import { createYjsBackend } from '@homeostate/crdt-yjs';
+ *
+ * class CounterStore {
+ *   count = 0;
+ *   constructor() { makeAutoObservable(this); }
+ *   increment() { this.count++; }
+ * }
+ *
+ * const store = new CounterStore();
+ * const adapter = createMobxAdapter(store, ['count']);
+ * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * engine.connect();
+ * ```
  */
 export function createMobxAdapter<S extends object>(
   store: S,

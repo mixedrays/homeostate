@@ -1,1 +1,1 @@
-export { MobxAdapter, createMobxAdapter } from "./adapter.js";
+export { createMobxAdapter } from "./adapter.js";
