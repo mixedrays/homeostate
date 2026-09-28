@@ -60,6 +60,8 @@ pnpm docs         # docs site on http://localhost:5190
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
 
+See the [playground README](apps/playground/README.md) for demo initialization and room versioning.
+
 ## Docs
 
 Each package's docs are markdown in `packages/<name>/docs/`, next to the code, and guides that
