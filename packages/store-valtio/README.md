@@ -1,8 +1,5 @@
 # @homeostate/store-valtio
 
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [Valtio](https://valtio.dev) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a Valtio proxy in sync with a CRDT backend such as

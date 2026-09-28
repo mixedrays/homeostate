@@ -2,7 +2,25 @@
   "name": "@homeostate/store-redux",
   "version": "0.1.1",
   "description": "Redux adapter for @homeostate/core",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mixedrays/homeostate.git",
+    "directory": "packages/store-redux"
+  },
+  "homepage": "https://homeostate.pages.dev",
+  "bugs": {
+    "url": "https://github.com/mixedrays/homeostate/issues"
+  },
+  "keywords": [
+    "redux",
+    "redux-toolkit",
+    "crdt",
+    "sync",
+    "state-management",
+    "collaborative"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -10,9 +28,14 @@
   },
   "files": [
     "dist",
+    "src",
+    "!src/**/__tests__",
+    "README.md",
+    "LICENSE",
     "CHANGELOG.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
@@ -32,6 +55,7 @@
     "redux": "^5.0.0"
   },
   "devDependencies": {
+    "@reduxjs/toolkit": "^2.11.0",
     "redux": "^5.0.1"
   }
 }

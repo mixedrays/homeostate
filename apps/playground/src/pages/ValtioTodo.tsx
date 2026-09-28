@@ -1,4 +1,4 @@
-import { DemoLayout } from "../components/DemoLayout";
+import { TodoDemoLayout } from "../components/todo/TodoDemoLayout";
 import { demos } from "../demos";
 import { wsProvider, ydoc } from "../valtio/store/todoState";
 import { TodoInput } from "../valtio/components/TodoInput";
@@ -7,10 +7,10 @@ import { TodoList } from "../valtio/components/TodoList";
 
 export default function ValtioTodo() {
   return (
-    <DemoLayout demo={demos.valtio} provider={wsProvider} doc={ydoc}>
+    <TodoDemoLayout demo={demos.valtio} provider={wsProvider} doc={ydoc}>
       <TodoInput />
       <FilterControls />
       <TodoList />
-    </DemoLayout>
+    </TodoDemoLayout>
   );
 }

@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/crdt-yjs
 
-> [!WARNING]
-> **Draft / placeholder release.** `0.0.0` reserves the name while the API is still
-> being designed. Nothing here is stable — do not depend on it yet.
-
 [Yjs](https://github.com/yjs/yjs) backend for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It maps the synced state onto a `Y.Map` (nested objects become `Y.Map`, arrays `Y.Array`,

@@ -35,7 +35,7 @@ Private tools and servers, under `apps/`. None of them are published.
 
 | Package                            | Path                        | Purpose                                                                                                                                  |
 | ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@homeostate/playground`           | `apps/playground`           | Vite app with a todo demo per store adapter: Zustand, MobX, Redux, Jotai, Valtio, TanStack Store, MobX-State-Tree                        |
+| `@homeostate/playground`           | `apps/playground`           | Vite app with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors                      |
 | `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
 | `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
 | `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |

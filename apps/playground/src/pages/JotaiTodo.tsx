@@ -1,5 +1,5 @@
 import { Provider } from "jotai";
-import { DemoLayout } from "../components/DemoLayout";
+import { TodoDemoLayout } from "../components/todo/TodoDemoLayout";
 import { demos } from "../demos";
 import { store, wsProvider, ydoc } from "../jotai/store/todoAtoms";
 import { TodoInput } from "../jotai/components/TodoInput";
@@ -9,11 +9,11 @@ import { TodoList } from "../jotai/components/TodoList";
 export default function JotaiTodo() {
   return (
     <Provider store={store}>
-      <DemoLayout demo={demos.jotai} provider={wsProvider} doc={ydoc}>
+      <TodoDemoLayout demo={demos.jotai} provider={wsProvider} doc={ydoc}>
         <TodoInput />
         <FilterControls />
         <TodoList />
-      </DemoLayout>
+      </TodoDemoLayout>
     </Provider>
   );
 }

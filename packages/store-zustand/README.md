@@ -1,8 +1,5 @@
 # @homeostate/store-zustand
 
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [Zustand](https://github.com/pmndrs/zustand) store adapter and middleware for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a Zustand store in sync with a CRDT backend such as

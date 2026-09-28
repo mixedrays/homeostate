@@ -1,8 +1,5 @@
 # @homeostate/store-mobx-state-tree
 
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [MobX-State-Tree](https://mobx-state-tree.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a state tree node in sync with a CRDT backend such as

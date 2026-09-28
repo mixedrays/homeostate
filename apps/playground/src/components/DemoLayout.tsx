@@ -5,24 +5,34 @@ import type { WebsocketProvider } from "y-websocket";
 import type { Doc } from "yjs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { accentClass, type DemoMeta } from "../demos";
+import { accentClass, type PageMeta } from "../demos";
 import { useSyncConnection } from "../hooks/useSyncConnection";
-import { SYNC_MAP_NAME, SYNC_ROOM } from "../sync";
+import { SYNC_MAP_NAME } from "../sync";
 import { InlineCode } from "./InlineCode";
 import { SyncedStatePanel } from "./inspector/SyncedStatePanel";
 import { SyncStatus } from "./SyncStatus";
 import { SyncToggle } from "./SyncToggle";
 
 interface DemoLayoutProps {
-  demo: DemoMeta;
+  demo: Omit<PageMeta, "path">;
   provider: WebsocketProvider;
   doc: Doc;
+  /** Where the header's back button leads. */
+  back: { to: string; label: string };
+  /** A line under the demo about the room it joins. */
+  footer: ReactNode;
   children: ReactNode;
 }
 
-export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
+export function DemoLayout({
+  demo,
+  provider,
+  doc,
+  back,
+  footer,
+  children,
+}: DemoLayoutProps) {
   const { status, online, toggle } = useSyncConnection(provider);
   const Icon = demo.icon;
 
@@ -39,10 +49,10 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
             variant="ghost"
             size="sm"
             nativeButton={false}
-            render={<Link to="/" />}
+            render={<Link to={back.to} />}
           >
             <ArrowLeft aria-hidden />
-            All demos
+            {back.label}
           </Button>
           <div className="flex items-center gap-2">
             <SyncStatus status={status} />
@@ -71,11 +81,7 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
             {status === "offline" && <OfflineNotice />}
             {status === "unreachable" && <ServerDownNotice />}
 
-            <Card role="region" aria-label={`${demo.name} todo list`}>
-              <CardContent className="space-y-6 sm:px-6 sm:py-2">
-                {children}
-              </CardContent>
-            </Card>
+            {children}
           </div>
 
           <aside className="mt-6 min-w-0 lg:sticky lg:top-20 lg:mt-0">
@@ -84,8 +90,7 @@ export function DemoLayout({ demo, provider, doc, children }: DemoLayoutProps) {
         </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-          Every demo joins the room <InlineCode>{SYNC_ROOM}</InlineCode>. Open
-          another demo or a second tab to watch changes propagate.
+          {footer}
         </p>
       </main>
     </div>

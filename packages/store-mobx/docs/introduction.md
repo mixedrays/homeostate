@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/store-mobx
 
-> [!WARNING]
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [MobX](https://mobx.js.org) store adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps chosen properties of an observable store in sync with a CRDT backend such as

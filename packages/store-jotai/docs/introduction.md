@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/store-jotai
 
-> [!WARNING]
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [Jotai](https://jotai.org) store adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps a writable atom in sync with a CRDT backend such as

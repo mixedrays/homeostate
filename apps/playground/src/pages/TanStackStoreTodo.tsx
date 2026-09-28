@@ -1,4 +1,4 @@
-import { DemoLayout } from "../components/DemoLayout";
+import { TodoDemoLayout } from "../components/todo/TodoDemoLayout";
 import { demos } from "../demos";
 import { wsProvider, ydoc } from "../tanstack-store/store/todoStore";
 import { TodoInput } from "../tanstack-store/components/TodoInput";
@@ -7,10 +7,14 @@ import { TodoList } from "../tanstack-store/components/TodoList";
 
 export default function TanStackStoreTodo() {
   return (
-    <DemoLayout demo={demos["tanstack-store"]} provider={wsProvider} doc={ydoc}>
+    <TodoDemoLayout
+      demo={demos["tanstack-store"]}
+      provider={wsProvider}
+      doc={ydoc}
+    >
       <TodoInput />
       <FilterControls />
       <TodoList />
-    </DemoLayout>
+    </TodoDemoLayout>
   );
 }

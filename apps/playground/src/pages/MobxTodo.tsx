@@ -1,4 +1,4 @@
-import { DemoLayout } from "../components/DemoLayout";
+import { TodoDemoLayout } from "../components/todo/TodoDemoLayout";
 import { demos } from "../demos";
 import { StoreProvider } from "../mobx/store/StoreProvider";
 import { wsProvider, ydoc } from "../mobx/store/TodoStore";
@@ -9,11 +9,11 @@ import { TodoList } from "../mobx/components/TodoList";
 export default function MobxTodo() {
   return (
     <StoreProvider>
-      <DemoLayout demo={demos.mobx} provider={wsProvider} doc={ydoc}>
+      <TodoDemoLayout demo={demos.mobx} provider={wsProvider} doc={ydoc}>
         <TodoInput />
         <FilterControls />
         <TodoList />
-      </DemoLayout>
+      </TodoDemoLayout>
     </StoreProvider>
   );
 }

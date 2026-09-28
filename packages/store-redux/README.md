@@ -1,8 +1,5 @@
 # @homeostate/store-redux
 
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [Redux](https://redux.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a Redux store in sync with a CRDT backend such as

@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/store-zustand
 
-> [!WARNING]
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [Zustand](https://github.com/pmndrs/zustand) store adapter and middleware for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps a Zustand store in sync with a CRDT backend such as

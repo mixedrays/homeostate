@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/store-valtio
 
-> [!WARNING]
-> **Early release.** The API is still being designed and may change in any `0.x` minor
-> version.
-
 [Valtio](https://valtio.dev) store adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps a Valtio proxy in sync with a CRDT backend such as

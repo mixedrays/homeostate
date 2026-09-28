@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/core
 
-> [!WARNING]
-> **Draft / placeholder release.** `0.0.0` reserves the name while the API is still
-> being designed. Nothing here is stable — do not depend on it yet.
-
 State-manager and CRDT-backend agnostic sync engine. It keeps a store, reached through a
 `StoreAdapter`, in sync with a `CrdtBackend` such as
 [`@homeostate/crdt-yjs`](../../crdt-yjs/docs/introduction.md),

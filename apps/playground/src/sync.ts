@@ -5,7 +5,10 @@ import type { TodoState } from "./types/todo";
 const envServerUrl: string | undefined = import.meta.env.VITE_SYNC_SERVER_URL;
 
 export const SYNC_SERVER_URL = envServerUrl ?? "ws://localhost:9999";
-export const SYNC_ROOM = "my-roomname";
+/** The room every todo demo joins, whichever store it is built on. */
+export const TODO_ROOM = "my-roomname";
+/** The room of the collaborative editor, kept apart so its presence stays out of the todos. */
+export const EDITOR_ROOM = "homeostate-editor";
 export const SYNC_MAP_NAME = "shared-ydoc";
 
 export const createInitialTodoState = (): TodoState => ({
@@ -20,8 +23,8 @@ export const createInitialTodoState = (): TodoState => ({
   filterStatus: "all",
 });
 
-export function connectSharedDoc() {
+export function connectSharedDoc(room = TODO_ROOM) {
   const ydoc = new Y.Doc();
-  const wsProvider = new WebsocketProvider(SYNC_SERVER_URL, SYNC_ROOM, ydoc);
+  const wsProvider = new WebsocketProvider(SYNC_SERVER_URL, room, ydoc);
   return { ydoc, wsProvider };
 }
