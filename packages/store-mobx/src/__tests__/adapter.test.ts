@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { isObservableArray, makeAutoObservable, reaction } from "mobx";
+import { createSyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
-  createSyncEngine,
   type MemoryBackend,
-} from "@homeostate/core";
+} from "@homeostate/core/testing";
 import { createMobxAdapter } from "../index.js";
 
 interface Todo {

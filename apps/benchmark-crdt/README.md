@@ -123,7 +123,7 @@ on its way into components. That is measured against real React trees in
 | name          | what it is                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `passthrough` | keeps the state by reference, no cloning or encoding; the engine's own cost, a floor for the others                            |
-| `memory`      | `createMemoryBackend` from core; peers receive the whole state as a JSON string                                                |
+| `memory`      | `createMemoryBackend` from `@homeostate/core/testing`; peers receive the whole state as a JSON string                          |
 | `yjs`         | `createYjsBackend` over a `Y.Map`; peers exchange Yjs updates                                                                  |
 | `loro`        | `createLoroBackend` over a `LoroMap`; peers exchange Loro updates; the document figure is a Loro snapshot                      |
 | `automerge`   | `createAutomergeBackend` over an Automerge document; peers exchange encoded Automerge changes; the document figure is `A.save` |

@@ -5,11 +5,11 @@ import {
   type PayloadAction,
 } from "@reduxjs/toolkit";
 import { legacy_createStore, type Reducer } from "redux";
+import { createSyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
-  createSyncEngine,
   type MemoryBackend,
-} from "@homeostate/core";
+} from "@homeostate/core/testing";
 import { createReduxAdapter } from "../index.js";
 
 interface Todo {

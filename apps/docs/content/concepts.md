@@ -58,8 +58,8 @@ interface CrdtBackend {
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 
-`createMemoryBackend()` from core is a plain JSON backend without replication, meant for
-tests.
+`createMemoryBackend()` from `@homeostate/core/testing` is a plain JSON backend without
+replication, meant for tests.
 
 ## Choosing what to sync
 

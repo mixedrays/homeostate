@@ -15,19 +15,19 @@ npm install @homeostate/core @homeostate/store-zustand @homeostate/crdt-yjs
 
 Libraries, under `packages/`.
 
-| Package                             | Path                             | Purpose                                                                                   |
-| ----------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, the `StoreAdapter` and `CrdtBackend` contracts, `createMemoryBackend` |
-| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend`: Yjs implementation of `CrdtBackend`                                   |
-| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend`: Loro implementation of `CrdtBackend`                                 |
-| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend`: Automerge implementation of `CrdtBackend`                       |
-| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                    |
-| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                       |
-| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                      |
-| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                      |
-| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                     |
-| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                             |
-| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                            |
+| Package                             | Path                             | Purpose                                                                                                   |
+| ----------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, the `StoreAdapter` and `CrdtBackend` contracts; `createMemoryBackend` from `/testing` |
+| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend`: Yjs implementation of `CrdtBackend`                                                   |
+| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend`: Loro implementation of `CrdtBackend`                                                 |
+| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend`: Automerge implementation of `CrdtBackend`                                       |
+| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                                    |
+| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                                       |
+| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                      |
+| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                      |
+| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                     |
+| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                             |
+| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                            |
 
 ## Apps
 

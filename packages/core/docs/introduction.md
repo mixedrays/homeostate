@@ -32,7 +32,8 @@ const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
 engine.connect();
 ```
 
-`createMemoryBackend()` is a plain-JSON backend without replication, meant for tests.
+`createMemoryBackend()` from `@homeostate/core/testing` is a plain-JSON backend without
+replication, meant for tests.
 `getChanges` is exported so a backend can turn a `write(next)` into fine-grained operations.
 
 ## Connecting
