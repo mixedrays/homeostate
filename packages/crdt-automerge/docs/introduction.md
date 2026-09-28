@@ -5,10 +5,6 @@ label: Introduction
 
 # @homeostate/crdt-automerge
 
-> [!WARNING]
-> **Draft / placeholder release.** `0.0.0` reserves the name while the API is still
-> being designed. Nothing here is stable — do not depend on it yet.
-
 [Automerge](https://automerge.org) backend for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It maps the synced state onto one key of an Automerge document (nested objects become

@@ -22,9 +22,9 @@ shares the document shares the state. You pick three packages:
    [Loro](../../../packages/crdt-loro/docs/introduction.md) or
    [Automerge](../../../packages/crdt-automerge/docs/introduction.md).
 
-> [!WARNING]
-> Every package is in `0.x`. The API is still being designed and may change in any minor
-> version.
+> [!NOTE]
+> Every package is in `0.x`, so breaking changes, if any, come in minor versions. The caret
+> range npm saves by default only takes patch releases in `0.x`.
 
 ## Install
 
