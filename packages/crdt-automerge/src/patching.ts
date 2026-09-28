@@ -101,5 +101,6 @@ const applyToText = (
 ): void => {
   if (type === ChangeType.INSERT)
     A.splice(doc, path, index, 0, value as string);
-  else if (type === ChangeType.DELETE) A.splice(doc, path, index, 1);
+  else if (type === ChangeType.DELETE)
+    A.splice(doc, path, index, typeof value === "number" ? value : 1);
 };

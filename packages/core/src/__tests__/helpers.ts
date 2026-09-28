@@ -64,6 +64,30 @@ export const setSearchTerm = (
   searchTerm,
 });
 
+/** Shared regressions for core and every CRDT backend's text patcher. */
+export const unicodeEdits: [string, string][] = [
+  ["😀", "x"],
+  ["😀", ""],
+  ["😀", "😃"],
+  ["a😀", "a😃"],
+  ["a😀b", "ab"],
+  ["a😀", "a"],
+  ["😀😀", "😀"],
+  ["😀", "😀😀"],
+  ["😀", "a😀"],
+  ["😀", "😀a"],
+  ["😀a", "😀b"],
+  ["😀ab", "😀aXb"],
+  ["😀abc", "😀ac"],
+  ["a😀b😃c", "a😃b😀c"],
+  ["", "😀😃"],
+  ["😀😃", "xy"],
+  ["𐐀x𐐁", "𐐁x𐐀"],
+  ["👩‍💻 works", "👩‍🔬 works!"],
+  ["👍🏽!", "👍🏻!"],
+  ["é😀é", "é😃é"],
+];
+
 export const deepFreeze = <T>(value: T): T => {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);

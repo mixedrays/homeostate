@@ -36,6 +36,26 @@ engine.connect();
 replication, meant for tests.
 `getChanges` is exported so a backend can turn a `write(next)` into fine-grained operations.
 
+## Applying string changes
+
+String changes from `getChanges` use UTF-16 offsets into the progressively edited string,
+matching JavaScript string indexing. The diff compares whole Unicode code points so an edit
+does not split a valid surrogate pair. It does not treat a multi-code-point grapheme, such as
+a joined emoji or a letter with combining marks, as one indivisible character.
+
+For a string `DELETE`, the third tuple entry is the number of UTF-16 units to remove;
+`undefined` means one unit. Custom backends must honor this length in one operation:
+
+```ts
+getChanges("😀a😃b", "😀ab");
+// [[ChangeType.DELETE, 3, 2]] — remove the whole 😃 surrogate pair
+```
+
+Inserts carry complete strings. Array and object deletes still carry `undefined` and remove
+one element or property. Core's `applyChanges` and the supplied CRDT backends handle string
+deletion lengths; an external backend using a different text-index unit must translate both
+offsets and lengths before applying them.
+
 ## Connecting
 
 `connect()` reconciles the store and the backend per key, over the view the `filter` allows:

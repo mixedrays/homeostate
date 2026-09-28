@@ -86,5 +86,6 @@ const applyToText = (
   value: unknown,
 ): void => {
   if (type === ChangeType.INSERT) text.insert(index, value as string);
-  else if (type === ChangeType.DELETE) text.delete(index, 1);
+  else if (type === ChangeType.DELETE)
+    text.delete(index, typeof value === "number" ? value : 1);
 };

@@ -26,6 +26,7 @@ export interface ApplyOps {
 /**
  * Revises `value` by the character-level edit script `changes`, which is what `getChanges`
  * returns for two strings. Each index addresses the string as revised by the steps before it.
+ * Offsets and deletion lengths are UTF-16 units; an omitted length means one unit.
  */
 export const applyStringChanges = (value: string, changes: Change[]): string =>
   changes.reduce((revised, [type, index, inserted]) => {
@@ -33,7 +34,10 @@ export const applyStringChanges = (value: string, changes: Change[]): string =>
     if (type === ChangeType.INSERT)
       return revised.slice(0, at) + (inserted as string) + revised.slice(at);
     if (type === ChangeType.DELETE)
-      return revised.slice(0, at) + revised.slice(at + 1);
+      return (
+        revised.slice(0, at) +
+        revised.slice(at + (typeof inserted === "number" ? inserted : 1))
+      );
     return revised;
   }, value);
 
