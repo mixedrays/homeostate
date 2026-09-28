@@ -26,7 +26,7 @@ type Plain = Record<string, unknown>;
  * @example
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
- * const adapter = new ZustandAdapter(store);
+ * const adapter = createZustandAdapter(store);
  * const engine = createSyncEngine(backend, adapter);
  * engine.connect();
  * ```
