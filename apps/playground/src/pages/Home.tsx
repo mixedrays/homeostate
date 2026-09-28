@@ -1,10 +1,5 @@
-import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  MonitorSmartphone,
-  Terminal,
-  Waypoints,
-} from "lucide-react";
+import { MonitorSmartphone, Terminal, Waypoints } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -12,8 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DemoCard } from "../components/DemoCard";
 import { InlineCode } from "../components/InlineCode";
-import { accentClass, demoList } from "../demos";
+import { appList } from "../demos";
 import { SYNC_SERVER_URL } from "../sync";
 
 export default function Home() {
@@ -30,9 +26,9 @@ export default function Home() {
             </h1>
           </div>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-            One shared todo list, {demoList.length} state managers. Every demo
-            joins the same Yjs room, so a change made in any of them shows up in
-            the others and in every other open tab.
+            Small apps that keep their state in an ordinary store and sync it
+            through homeostate into a Yjs room, so every open tab works on the
+            same data. Pick one to try.
           </p>
         </header>
 
@@ -40,42 +36,23 @@ export default function Home() {
           <h2 id="demos-heading" className="sr-only">
             Demos
           </h2>
-          <ul className="grid gap-4 sm:grid-cols-3">
-            {demoList.map((demo) => {
-              const Icon = demo.icon;
-              return (
-                <li key={demo.id} className={accentClass[demo.accent]}>
-                  <Link
-                    to={demo.path}
-                    className="group block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {appList.map((app) => (
+              <li key={app.id}>
+                <DemoCard page={app} action={app.action}>
+                  <ul
+                    aria-label="Built with"
+                    className="flex flex-wrap gap-1.5"
                   >
-                    <Card className="h-full transition group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/40">
-                      <CardHeader>
-                        <span className="mb-2 inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                          <Icon size={20} aria-hidden />
-                        </span>
-                        <CardTitle className="text-lg font-semibold">
-                          {demo.name}
-                        </CardTitle>
-                        <CardDescription className="leading-relaxed">
-                          {demo.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="mt-auto">
-                        <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
-                          Open demo
-                          <ArrowRight
-                            size={16}
-                            aria-hidden
-                            className="transition group-hover:translate-x-0.5"
-                          />
-                        </span>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                </li>
-              );
-            })}
+                    {app.tags.map((tag) => (
+                      <li key={tag}>
+                        <Badge variant="secondary">{tag}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </DemoCard>
+              </li>
+            ))}
           </ul>
         </section>
 
@@ -124,9 +101,8 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Open a demo twice, or two different demos side by side, then
-                    add and toggle todos. The header of each demo shows its
-                    connection state and a{" "}
+                    Open a demo in two tabs side by side and edit in both. The
+                    header of each demo shows its connection state and a{" "}
                     <span className="font-medium text-foreground">
                       Go offline
                     </span>{" "}

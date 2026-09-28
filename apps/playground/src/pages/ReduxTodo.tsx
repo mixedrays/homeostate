@@ -1,5 +1,5 @@
 import { Provider } from "react-redux";
-import { DemoLayout } from "../components/DemoLayout";
+import { TodoDemoLayout } from "../components/todo/TodoDemoLayout";
 import { demos } from "../demos";
 import { store, wsProvider, ydoc } from "../redux/store/todoStore";
 import { TodoInput } from "../redux/components/TodoInput";
@@ -9,11 +9,11 @@ import { TodoList } from "../redux/components/TodoList";
 export default function ReduxTodo() {
   return (
     <Provider store={store}>
-      <DemoLayout demo={demos.redux} provider={wsProvider} doc={ydoc}>
+      <TodoDemoLayout demo={demos.redux} provider={wsProvider} doc={ydoc}>
         <TodoInput />
         <FilterControls />
         <TodoList />
-      </DemoLayout>
+      </TodoDemoLayout>
     </Provider>
   );
 }

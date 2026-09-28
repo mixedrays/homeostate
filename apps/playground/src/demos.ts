@@ -2,8 +2,10 @@ import {
   Atom,
   Box,
   Layers,
+  ListTodo,
   Orbit,
   Package,
+  TextCursorInput,
   TreePine,
   Waves,
   type LucideIcon,
@@ -18,23 +20,47 @@ export type DemoId =
   | "tanstack-store"
   | "mobx-state-tree";
 export type DemoAccent =
-  "blue" | "violet" | "emerald" | "cyan" | "rose" | "orange" | "fuchsia";
+  | "blue"
+  | "violet"
+  | "emerald"
+  | "cyan"
+  | "rose"
+  | "orange"
+  | "fuchsia"
+  | "indigo"
+  | "teal";
 
-export interface DemoMeta {
-  id: DemoId;
+/** What a page needs to present itself: its heading, blurb, colour and icon. */
+export interface PageMeta {
   path: string;
   name: string;
   title: string;
   description: string;
-  adapter: string;
   accent: DemoAccent;
   icon: LucideIcon;
+}
+
+/** One store's version of the todo app. */
+export interface DemoMeta extends PageMeta {
+  id: DemoId;
+  adapter: string;
+}
+
+export type AppId = "todo" | "editor";
+
+/** One of the apps the landing page offers. */
+export interface AppMeta extends PageMeta {
+  id: AppId;
+  /** Short labels for what the app is built with or shows off. */
+  tags: readonly string[];
+  /** The label of the card's call to action. */
+  action: string;
 }
 
 export const demos: Record<DemoId, DemoMeta> = {
   zustand: {
     id: "zustand",
-    path: "/zustand",
+    path: "/todo/zustand",
     name: "Zustand",
     title: "Zustand Todo",
     description:
@@ -45,7 +71,7 @@ export const demos: Record<DemoId, DemoMeta> = {
   },
   mobx: {
     id: "mobx",
-    path: "/mobx",
+    path: "/todo/mobx",
     name: "MobX",
     title: "MobX Todo",
     description:
@@ -56,7 +82,7 @@ export const demos: Record<DemoId, DemoMeta> = {
   },
   redux: {
     id: "redux",
-    path: "/redux",
+    path: "/todo/redux",
     name: "Redux",
     title: "Redux Todo",
     description:
@@ -67,7 +93,7 @@ export const demos: Record<DemoId, DemoMeta> = {
   },
   jotai: {
     id: "jotai",
-    path: "/jotai",
+    path: "/todo/jotai",
     name: "Jotai",
     title: "Jotai Todo",
     description:
@@ -78,7 +104,7 @@ export const demos: Record<DemoId, DemoMeta> = {
   },
   valtio: {
     id: "valtio",
-    path: "/valtio",
+    path: "/todo/valtio",
     name: "Valtio",
     title: "Valtio Todo",
     description:
@@ -89,7 +115,7 @@ export const demos: Record<DemoId, DemoMeta> = {
   },
   "tanstack-store": {
     id: "tanstack-store",
-    path: "/tanstack-store",
+    path: "/todo/tanstack-store",
     name: "TanStack Store",
     title: "TanStack Store Todo",
     description:
@@ -100,7 +126,7 @@ export const demos: Record<DemoId, DemoMeta> = {
   },
   "mobx-state-tree": {
     id: "mobx-state-tree",
-    path: "/mobx-state-tree",
+    path: "/todo/mobx-state-tree",
     name: "MobX-State-Tree",
     title: "MobX-State-Tree Todo",
     description:
@@ -121,6 +147,35 @@ export const demoList: readonly DemoMeta[] = [
   demos["mobx-state-tree"],
 ];
 
+export const apps: Record<AppId, AppMeta> = {
+  todo: {
+    id: "todo",
+    path: "/todo",
+    name: "Todo app",
+    title: "Todo app",
+    description:
+      "One shared todo list built with seven state managers. Every version joins the same Yjs room, so a change made in any of them shows up in all the others.",
+    accent: "indigo",
+    icon: ListTodo,
+    tags: demoList.map((demo) => demo.name),
+    action: "Choose a store",
+  },
+  editor: {
+    id: "editor",
+    path: "/editor",
+    name: "Collaborative text editor",
+    title: "Collaborative Text Editor",
+    description:
+      "One document typed into from several tabs at once, with every writer's name and cursor. The text is a plain string in a Zustand store; homeostate syncs it into a Y.Text, so edits made at the same time merge character by character.",
+    accent: "teal",
+    icon: TextCursorInput,
+    tags: ["Zustand", "Y.Text", "Live cursors", "Names"],
+    action: "Open the editor",
+  },
+};
+
+export const appList: readonly AppMeta[] = [apps.todo, apps.editor];
+
 export const accentClass: Record<DemoAccent, string> = {
   blue: "theme-blue",
   violet: "theme-violet",
@@ -129,4 +184,6 @@ export const accentClass: Record<DemoAccent, string> = {
   rose: "theme-rose",
   orange: "theme-orange",
   fuchsia: "theme-fuchsia",
+  indigo: "theme-indigo",
+  teal: "theme-teal",
 };

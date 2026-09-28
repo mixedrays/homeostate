@@ -174,6 +174,18 @@
   --ring: var(--color-fuchsia-400);
 }
 
+.theme-indigo {
+  --primary: var(--color-indigo-600);
+  --primary-foreground: var(--color-white);
+  --ring: var(--color-indigo-400);
+}
+
+.theme-teal {
+  --primary: var(--color-teal-600);
+  --primary-foreground: var(--color-white);
+  --ring: var(--color-teal-400);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

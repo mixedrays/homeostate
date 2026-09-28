@@ -1,4 +1,4 @@
-import { DemoLayout } from "../components/DemoLayout";
+import { TodoDemoLayout } from "../components/todo/TodoDemoLayout";
 import { demos } from "../demos";
 import { wsProvider, ydoc } from "../zustand/store/useTodoStore";
 import { TodoInput } from "../zustand/components/TodoInput";
@@ -7,10 +7,10 @@ import { TodoList } from "../zustand/components/TodoList";
 
 export default function ZustandTodo() {
   return (
-    <DemoLayout demo={demos.zustand} provider={wsProvider} doc={ydoc}>
+    <TodoDemoLayout demo={demos.zustand} provider={wsProvider} doc={ydoc}>
       <TodoInput />
       <FilterControls />
       <TodoList />
-    </DemoLayout>
+    </TodoDemoLayout>
   );
 }
