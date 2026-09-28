@@ -9,7 +9,7 @@
     "url": "git+https://github.com/mixedrays/homeostate.git",
     "directory": "packages/crdt-automerge"
   },
-  "homepage": "https://github.com/mixedrays/homeostate#readme",
+  "homepage": "https://homeostate.pages.dev",
   "bugs": {
     "url": "https://github.com/mixedrays/homeostate/issues"
   },

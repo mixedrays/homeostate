@@ -2,7 +2,25 @@
   "name": "@homeostate/store-mobx-state-tree",
   "version": "0.1.1",
   "description": "MobX-State-Tree adapter for @homeostate/core",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mixedrays/homeostate.git",
+    "directory": "packages/store-mobx-state-tree"
+  },
+  "homepage": "https://homeostate.pages.dev",
+  "bugs": {
+    "url": "https://github.com/mixedrays/homeostate/issues"
+  },
+  "keywords": [
+    "mobx-state-tree",
+    "mobx",
+    "crdt",
+    "sync",
+    "state-management",
+    "collaborative"
+  ],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -10,9 +28,12 @@
   },
   "files": [
     "dist",
+    "README.md",
+    "LICENSE",
     "CHANGELOG.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
