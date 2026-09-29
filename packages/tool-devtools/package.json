@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/tool-devtools",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Floating React devtools to inspect and edit the state a homeostate sync engine keeps in sync",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/core",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "State-manager and CRDT-backend agnostic sync engine between a store adapter and a CrdtBackend",
   "license": "MIT",
   "type": "module",
