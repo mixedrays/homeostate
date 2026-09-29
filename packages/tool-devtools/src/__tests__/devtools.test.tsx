@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { createSyncEngine, type SyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
@@ -185,5 +193,29 @@ describe("HomeostateDevtools", () => {
     await click(buttonWithText("Sync"));
     expect(byLabel("Backend document").textContent).toContain("milk");
     expect(shadow().textContent).toContain("2 synced");
+  });
+
+  it("follows a controlled open prop and reports changes", async () => {
+    const onOpenChange = vi.fn();
+    const renderOpen = (open: boolean) =>
+      act(async () => {
+        root.render(
+          <HomeostateDevtools
+            open={open}
+            onOpenChange={onOpenChange}
+            sources={[{ name: "Todos", adapter: store.adapter }]}
+          />,
+        );
+      });
+
+    await renderOpen(false);
+    await act(tick);
+    await click(byLabel("Open Homeostate devtools"));
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    expect(shadow().querySelector('[aria-label="Store state"]')).toBeNull();
+
+    await renderOpen(true);
+    await act(tick);
+    expect(byLabel("Store state").textContent).toContain("milk");
   });
 });

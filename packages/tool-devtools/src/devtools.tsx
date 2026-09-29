@@ -27,6 +27,13 @@ export interface HomeostateDevtoolsProps {
   panelPosition?: PanelPosition;
   /** Whether the panel starts open, until it is opened or closed once. Defaults to `false`. */
   initialIsOpen?: boolean;
+  /**
+   * Controls whether the panel is open, for opening it from the app's own UI. Leave it
+   * out to let the devtools manage and remember it.
+   */
+  open?: boolean;
+  /** Called when the floating button, the close button or Escape opens or closes the panel. */
+  onOpenChange?: (open: boolean) => void;
   /** Defaults to `"system"`, which follows `prefers-color-scheme`. */
   theme?: DevtoolsTheme;
   /** Log entries kept per source. Defaults to 200. */
@@ -62,11 +69,18 @@ export function HomeostateDevtools({
   buttonPosition = "bottom-right",
   panelPosition = "right",
   initialIsOpen = false,
+  open: controlledOpen,
+  onOpenChange,
   theme = "system",
   logLimit,
 }: HomeostateDevtoolsProps) {
   const inspectors = useInspectors(sources, logLimit);
-  const [open, setOpen] = usePersistedState("open", initialIsOpen);
+  const [storedOpen, setStoredOpen] = usePersistedState("open", initialIsOpen);
+  const open = controlledOpen ?? storedOpen;
+  const setOpen = (next: boolean): void => {
+    if (controlledOpen === undefined) setStoredOpen(next);
+    onOpenChange?.(next);
+  };
   const [selectedName, setSelectedName] = usePersistedState(
     "source",
     sources[0]?.name ?? "",

@@ -58,8 +58,13 @@ Zustand `homeostate` middleware, create an adapter for the devtools with
 | `buttonPosition` | `"bottom-right"` | Viewport corner of the button: `bottom-left`, `top-right`, `top-left` |
 | `panelPosition`  | `"right"`        | Edge the panel docks to: `left`, `bottom`, `top`                      |
 | `initialIsOpen`  | `false`          | Whether the panel starts open, until it is opened or closed once      |
+| `open`           |                  | Controls whether the panel is open, to open it from your own UI       |
+| `onOpenChange`   |                  | Called with the new state when the panel is opened or closed          |
 | `theme`          | `"system"`       | `light`, `dark`, or `system` to follow `prefers-color-scheme`         |
 | `logLimit`       | `200`            | Log entries kept per source                                           |
+
+To open the panel from your own UI, such as an "Inspect state" button, control it with
+`open` and `onOpenChange`; the devtools then leave remembering it to you.
 
 Pass the engine's `filter` in the source too, if it has one, so the keys it keeps out of sync
 are marked local.
