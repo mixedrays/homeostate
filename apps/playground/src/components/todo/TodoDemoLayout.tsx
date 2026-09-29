@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { WebsocketProvider } from "y-websocket";
-import type { Doc } from "yjs";
 import { Card, CardContent } from "@/components/ui/card";
 import { apps, type DemoMeta } from "../../demos";
 import { TODO_ROOM } from "../../sync";
@@ -11,7 +10,6 @@ import { InlineCode } from "../InlineCode";
 interface TodoDemoLayoutProps {
   demo: DemoMeta;
   provider: WebsocketProvider;
-  doc: Doc;
   devtools: DevtoolsSource;
   children: ReactNode;
 }
@@ -20,7 +18,6 @@ interface TodoDemoLayoutProps {
 export function TodoDemoLayout({
   demo,
   provider,
-  doc,
   devtools,
   children,
 }: TodoDemoLayoutProps) {
@@ -28,7 +25,6 @@ export function TodoDemoLayout({
     <DemoLayout
       demo={demo}
       provider={provider}
-      doc={doc}
       devtools={devtools}
       back={{ to: apps.todo.path, label: "All stores" }}
       footer={

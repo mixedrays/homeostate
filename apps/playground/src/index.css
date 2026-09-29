@@ -48,21 +48,6 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@theme {
-  --animate-line-flash: line-flash 1.6s ease-out both;
-
-  @keyframes line-flash {
-    from {
-      background-color: color-mix(in oklab, var(--primary) 12%, transparent);
-      box-shadow: inset 3px 0 0 var(--primary);
-    }
-    to {
-      background-color: transparent;
-      box-shadow: inset 3px 0 0 transparent;
-    }
-  }
-}
-
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.148 0.004 228.8);

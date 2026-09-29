@@ -1,27 +1,23 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CloudOff, Terminal } from "lucide-react";
+import { ArrowLeft, Braces, CloudOff, Terminal } from "lucide-react";
 import {
   HomeostateDevtools,
   type DevtoolsSource,
 } from "@homeostate/tool-devtools";
 import type { WebsocketProvider } from "y-websocket";
-import type { Doc } from "yjs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { accentClass, type PageMeta } from "../demos";
 import { useSyncConnection } from "../hooks/useSyncConnection";
-import { SYNC_MAP_NAME } from "../sync";
 import { InlineCode } from "./InlineCode";
-import { SyncedStatePanel } from "./inspector/SyncedStatePanel";
 import { SyncStatus } from "./SyncStatus";
 import { SyncToggle } from "./SyncToggle";
 
 interface DemoLayoutProps {
   demo: Omit<PageMeta, "path">;
   provider: WebsocketProvider;
-  doc: Doc;
   /** The demo's store, adapter, backend and engine, for the devtools panel. */
   devtools: DevtoolsSource;
   /** Where the header's back button leads. */
@@ -34,13 +30,13 @@ interface DemoLayoutProps {
 export function DemoLayout({
   demo,
   provider,
-  doc,
   devtools,
   back,
   footer,
   children,
 }: DemoLayoutProps) {
   const { status, online, toggle } = useSyncConnection(provider);
+  const [inspecting, setInspecting] = useState(false);
   const Icon = demo.icon;
 
   return (
@@ -51,7 +47,7 @@ export function DemoLayout({
       )}
     >
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4 lg:max-w-6xl">
+        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4">
           <Button
             variant="ghost"
             size="sm"
@@ -64,11 +60,20 @@ export function DemoLayout({
           <div className="flex items-center gap-2">
             <SyncStatus status={status} />
             <SyncToggle online={online} onToggle={toggle} />
+            <Button
+              variant="outline"
+              size="sm"
+              aria-expanded={inspecting}
+              onClick={() => setInspecting(!inspecting)}
+            >
+              <Braces aria-hidden />
+              <span className="max-sm:sr-only">Inspect state</span>
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:py-10 lg:max-w-6xl">
+      <main className="mx-auto max-w-2xl px-4 py-8 sm:py-10">
         <div className="mb-6 flex items-start gap-3">
           <span className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Icon size={20} aria-hidden />
@@ -80,20 +85,20 @@ export function DemoLayout({
             <p className="mt-1 text-sm text-muted-foreground">
               {demo.description}
             </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              To see this store, its Yjs document and a log of every change, and
+              to edit them, open the devtools with{" "}
+              <span className="font-medium text-foreground">Inspect state</span>{" "}
+              or the round button in the bottom-right corner.
+            </p>
           </div>
         </div>
 
-        <div className="lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-6">
-          <div className="min-w-0 space-y-4">
-            {status === "offline" && <OfflineNotice />}
-            {status === "unreachable" && <ServerDownNotice />}
+        <div className="space-y-4">
+          {status === "offline" && <OfflineNotice />}
+          {status === "unreachable" && <ServerDownNotice />}
 
-            {children}
-          </div>
-
-          <aside className="mt-6 min-w-0 lg:sticky lg:top-20 lg:mt-0">
-            <SyncedStatePanel doc={doc} mapName={SYNC_MAP_NAME} />
-          </aside>
+          {children}
         </div>
 
         <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
@@ -101,7 +106,11 @@ export function DemoLayout({
         </p>
       </main>
 
-      <HomeostateDevtools sources={[devtools]} />
+      <HomeostateDevtools
+        sources={[devtools]}
+        open={inspecting}
+        onOpenChange={setInspecting}
+      />
     </div>
   );
 }

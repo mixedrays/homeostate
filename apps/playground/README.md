@@ -1,8 +1,9 @@
 # @homeostate/playground
 
 Private Vite app with seven store-adapter todo demos and a collaborative text editor. Every
-demo page mounts `@homeostate/tool-devtools`: the round button in the bottom-right corner
-opens a panel to inspect and edit that demo's store, backend and engine.
+demo page mounts `@homeostate/tool-devtools`: **Inspect state** in the header, or the round
+button in the bottom-right corner, opens a panel to inspect and edit that demo's store, its
+Yjs document and a log of its changes.
 
 ## Todo initialization
 
