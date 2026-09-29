@@ -79,8 +79,8 @@ export default function Home() {
                     <code>pnpm playground</code>
                   </pre>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    This starts the app together with the WebSocket sync server
-                    the demos connect to at{" "}
+                    This starts the React and Angular apps together with the
+                    WebSocket sync server the demos connect to at{" "}
                     <InlineCode>{SYNC_SERVER_URL}</InlineCode>. No separate
                     terminal is needed.
                   </p>

@@ -1,0 +1,150 @@
+<main>
+  <a class="back-link" [href]="config.playgroundUrl">← All todo demos</a>
+
+  <header>
+    <div class="eyebrow">
+      <span class="brand-mark" aria-hidden="true">A</span> Homeostate playground
+    </div>
+    <div class="heading-row">
+      <h1>Angular Todo</h1>
+      <span class="framework">NgRx Signals</span>
+    </div>
+    <p class="intro">
+      Your todos, in sync. Open a React demo alongside this one and watch your
+      changes appear in both.
+    </p>
+    <div class="connection-bar">
+      <span
+        class="status"
+        role="status"
+        aria-live="polite"
+        [attr.data-status]="store.status()"
+      >
+        <span class="status-dot" aria-hidden="true"></span>{{ store.status() }}
+      </span>
+      <button
+        class="button secondary"
+        type="button"
+        (click)="store.toggleConnection()"
+      >
+        {{ store.status() === "offline" ? "Go online" : "Go offline" }}
+      </button>
+    </div>
+    @if (store.status() === "unreachable") {
+      <p class="connection-help" role="status">
+        Sync server unavailable. Your edits stay in this tab while the
+        connection retries.
+      </p>
+    }
+  </header>
+
+  <section class="todo-panel" aria-labelledby="todos-heading">
+    <h2 id="todos-heading" class="sr-only">Todo list</h2>
+    <form class="add-form" (submit)="addTodo($event, newTodo)">
+      <label class="sr-only" for="new-todo">New todo</label>
+      <input
+        #newTodo
+        id="new-todo"
+        placeholder="What needs to get done?"
+        autocomplete="off"
+      />
+      <button class="button primary" type="submit">Add todo</button>
+    </form>
+
+    <div class="toolbar">
+      <div class="filters" role="group" aria-label="Filter todos">
+        @for (filter of filters; track filter.value) {
+          <button
+            type="button"
+            class="filter"
+            [attr.aria-pressed]="store.shared.filterStatus() === filter.value"
+            (click)="store.setFilterStatus(filter.value)"
+          >
+            {{ filter.label }} <span>{{ store.counts()[filter.value] }}</span>
+          </button>
+        }
+      </div>
+      <label class="sr-only" for="search">Search todos</label>
+      <input
+        #search
+        id="search"
+        class="search"
+        type="search"
+        placeholder="Search todos…"
+        [value]="store.shared.searchTerm()"
+        (input)="store.setSearchTerm(search.value)"
+      />
+    </div>
+
+    <ul class="todo-list">
+      @for (todo of store.visibleTodos(); track todo.id) {
+        <li class="todo-row" [class.completed]="todo.completed">
+          <input
+            class="checkbox"
+            type="checkbox"
+            [checked]="todo.completed"
+            [attr.aria-label]="
+              'Mark ' + todo.title + (todo.completed ? ' active' : ' completed')
+            "
+            (change)="store.toggleTodo(todo.id)"
+          />
+          <input
+            #title
+            class="todo-title"
+            [value]="todo.title"
+            [attr.aria-label]="'Edit ' + todo.title"
+            (change)="editTodo(todo.id, title)"
+            (keydown.enter)="title.blur()"
+          />
+          <button
+            type="button"
+            class="delete-button"
+            [attr.aria-label]="'Delete ' + todo.title"
+            (click)="store.deleteTodo(todo.id)"
+          >
+            ×
+          </button>
+        </li>
+      } @empty {
+        <li class="empty-state">
+          <span aria-hidden="true">✓</span>
+          <h3>
+            {{
+              store.counts().all === 0 ? "A fresh start" : "No matching todos"
+            }}
+          </h3>
+          <p>
+            {{
+              store.counts().all === 0
+                ? "Add a todo above to get started."
+                : "Try another filter or search term."
+            }}
+          </p>
+        </li>
+      }
+    </ul>
+    <footer class="list-footer">
+      <span
+        >{{ store.counts().active }}
+        {{ store.counts().active === 1 ? "todo" : "todos" }} left</span
+      >
+      <span>Click a title to edit · Enter to save</span>
+    </footer>
+  </section>
+
+  <aside class="try-it">
+    <strong>Try it across frameworks</strong>
+    <p>
+      Keep this tab open and
+      <a [href]="config.playgroundUrl" target="_blank" rel="noopener"
+        >open another demo ↗</a
+      >. Add, edit, or complete a todo. Search and filters are shared too. Go
+      offline in either tab, make changes, then reconnect to merge them.
+    </p>
+  </aside>
+
+  <details class="inspector">
+    <summary>Inspect shared state</summary>
+    <pre>{{ store.shared() | json }}</pre>
+  </details>
+</main>

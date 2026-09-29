@@ -33,6 +33,8 @@ export type DemoAccent =
 /** What a page needs to present itself: its heading, blurb, colour and icon. */
 export interface PageMeta {
   path: string;
+  /** Navigate to a separately built demo instead of using the React router. */
+  external?: boolean;
   name: string;
   title: string;
   description: string;
@@ -147,6 +149,19 @@ export const demoList: readonly DemoMeta[] = [
   demos["mobx-state-tree"],
 ];
 
+export const angularDemo: PageMeta = {
+  path:
+    import.meta.env.VITE_ANGULAR_PLAYGROUND_URL ??
+    (import.meta.env.DEV ? "http://localhost:4200" : "/angular/"),
+  external: true,
+  name: "Angular · NgRx Signals",
+  title: "Angular Todo",
+  description:
+    "A standalone Angular app using NgRx Signals, sharing the same todos with every React demo.",
+  accent: "rose",
+  icon: Layers,
+};
+
 export const apps: Record<AppId, AppMeta> = {
   todo: {
     id: "todo",
@@ -154,10 +169,10 @@ export const apps: Record<AppId, AppMeta> = {
     name: "Todo app",
     title: "Todo app",
     description:
-      "One shared todo list built with seven state managers. Every version joins the same Yjs room, so a change made in any of them shows up in all the others.",
+      "One shared todo list built with React and Angular. Every version joins the same Yjs room, so a change made in any of them shows up in all the others.",
     accent: "indigo",
     icon: ListTodo,
-    tags: demoList.map((demo) => demo.name),
+    tags: [...demoList.map((demo) => demo.name), "Angular · NgRx Signals"],
     action: "Choose a store",
   },
   editor: {

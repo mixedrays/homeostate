@@ -11,6 +11,7 @@ export default tseslint.config(
       "**/node_modules",
       "apps/docs/build",
       "**/.react-router",
+      "**/.angular",
     ],
   },
   {

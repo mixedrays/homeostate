@@ -40,7 +40,8 @@
     "valtio": "^2.3.2",
     "y-websocket": "^2.1.0",
     "yjs": "^13.6.23",
-    "zustand": "^4.5.2"
+    "zustand": "^4.5.2",
+    "@homeostate/playground-shared": "workspace:^"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -1,13 +1,5 @@
-export interface Todo {
-  id: string;
-  title: string;
-  completed: boolean;
-}
-
-export type FilterStatus = "all" | "active" | "completed";
-
-export interface TodoState {
-  todos: Todo[];
-  searchTerm: string;
-  filterStatus: FilterStatus;
-}
+export type {
+  Todo,
+  TodoState,
+  FilterStatus,
+} from "@homeostate/playground-shared";

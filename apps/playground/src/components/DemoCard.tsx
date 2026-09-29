@@ -26,6 +26,7 @@ export function DemoCard({ page, action, children }: DemoCardProps) {
   return (
     <Link
       to={page.path}
+      reloadDocument={page.external}
       className={cn(
         accentClass[page.accent],
         "group block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50",

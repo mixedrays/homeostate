@@ -1,6 +1,8 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/playground-shared" },
+    { "path": "packages/store-ngrx-signals" },
     { "path": "packages/core" },
     { "path": "packages/crdt-yjs" },
     { "path": "packages/crdt-loro" },

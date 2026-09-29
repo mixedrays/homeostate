@@ -269,6 +269,14 @@ function buildManifest(): Manifest {
     const dir = path.join(packagesDir, slug);
     const pkgJsonFile = path.join(dir, "package.json");
     if (!existsSync(pkgJsonFile)) continue;
+    const pkgJson = JSON.parse(readFileSync(pkgJsonFile, "utf8")) as {
+      name: string;
+      version: string;
+      description?: string;
+      private?: boolean;
+    };
+    // Internal workspace helpers are not part of the published library catalog.
+    if (pkgJson.private) continue;
     const docsDir = path.join(dir, "docs");
     if (!existsSync(path.join(docsDir, "introduction.md"))) {
       missingDocs.push(slug);
@@ -281,11 +289,6 @@ function buildManifest(): Manifest {
       continue;
     }
 
-    const pkgJson = JSON.parse(readFileSync(pkgJsonFile, "utf8")) as {
-      name: string;
-      version: string;
-      description?: string;
-    };
     const nav = packageNav[slug];
     packages.push({
       slug,

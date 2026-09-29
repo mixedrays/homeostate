@@ -6,9 +6,10 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
-    "playground": "pnpm --parallel --filter @homeostate/playground --filter @homeostate/websocket-server-yjs dev",
+    "playground": "pnpm --parallel --filter @homeostate/playground --filter @homeostate/playground-angular --filter @homeostate/websocket-server-yjs dev",
+    "playground:angular": "pnpm --parallel --filter @homeostate/playground-angular --filter @homeostate/websocket-server-yjs dev",
     "build": "pnpm -r run build",
-    "typecheck": "pnpm --filter @homeostate/docs typegen && tsc -b",
+    "typecheck": "pnpm --filter @homeostate/docs typegen && tsc -b && pnpm --filter @homeostate/playground-angular typecheck",
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",

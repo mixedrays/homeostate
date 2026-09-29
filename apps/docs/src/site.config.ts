@@ -4,7 +4,7 @@ export const site = {
   name: "Homeostate",
   summary:
     "State-manager and CRDT-backend agnostic sync engine: keep a Zustand, Redux, MobX, Jotai, " +
-    "Valtio, TanStack Store or MobX-State-Tree store in sync with a Yjs, Loro or Automerge document.",
+    "Valtio, TanStack Store, NgRx Signals or MobX-State-Tree store in sync with a Yjs, Loro or Automerge document.",
   repo: "https://github.com/mixedrays/homeostate",
   branch: "main",
   npm: "https://www.npmjs.com/package",
@@ -36,5 +36,6 @@ export const packageNav: Record<string, { label: string; order: number }> = {
   "store-jotai": { label: "Jotai", order: 5 },
   "store-valtio": { label: "Valtio", order: 6 },
   "store-tanstack": { label: "TanStack Store", order: 7 },
+  "store-ngrx-signals": { label: "NgRx Signals", order: 8 },
   "tool-devtools": { label: "Devtools", order: 1 },
 };

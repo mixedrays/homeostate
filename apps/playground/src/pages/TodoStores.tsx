@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DemoCard } from "../components/DemoCard";
-import { accentClass, apps, demoList } from "../demos";
+import { accentClass, angularDemo, apps, demoList } from "../demos";
 
 export default function TodoStores() {
   const app = apps.todo;
@@ -38,10 +38,10 @@ export default function TodoStores() {
             </h1>
           </div>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-            One shared todo list, {demoList.length} state managers. Every store
-            joins the same Yjs room, so a change made in any of them shows up in
-            the others and in every other open tab. Pick a store to open its
-            version.
+            One shared todo list, {demoList.length + 1} state managers across
+            React and Angular. Every store joins the same Yjs room, so a change
+            made in any of them shows up in the others and in every other open
+            tab. Pick a store to open its version.
           </p>
         </header>
 
@@ -50,8 +50,8 @@ export default function TodoStores() {
             Stores
           </h2>
           <ul className="grid gap-4 sm:grid-cols-3">
-            {demoList.map((demo) => (
-              <li key={demo.id}>
+            {[...demoList, angularDemo].map((demo) => (
+              <li key={demo.path}>
                 <DemoCard page={demo} action="Open demo" />
               </li>
             ))}

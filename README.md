@@ -29,6 +29,7 @@ Libraries, under `packages/`.
 | `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                      |
 | `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                      |
 | `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                     |
+| `@homeostate/store-ngrx-signals`    | `packages/store-ngrx-signals`    | NgRx Signals adapter for Angular                                                                          |
 | `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                             |
 | `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                            |
 | `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log            |
@@ -40,6 +41,7 @@ Private tools and servers, under `apps/`. None of them are published.
 | Package                            | Path                        | Purpose                                                                                                                                  |
 | ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `@homeostate/playground`           | `apps/playground`           | Vite app with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors                      |
+| `@homeostate/playground-angular`   | `apps/playground-angular`   | Angular + NgRx Signals todo demo sharing the React playground room                                                                       |
 | `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
 | `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
 | `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |
@@ -50,7 +52,8 @@ Private tools and servers, under `apps/`. None of them are published.
 
 ```bash
 pnpm install
-pnpm playground   # playground on http://localhost:5173 + websocket server on ws://localhost:9999
+pnpm playground   # React :5173 + Angular :4200 + WebSocket :9999
+pnpm playground:angular # Angular :4200 + WebSocket :9999
 pnpm dev          # every app's dev server: playground, websocket server, docs, benchmark viewer
 pnpm build        # builds every package
 pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json
