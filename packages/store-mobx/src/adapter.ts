@@ -33,6 +33,15 @@ const mobxOps: ApplyOps = {
   },
 };
 
+/**
+ * Removes a synced key a remote peer deleted. A property of an `observable({...})` object is
+ * deleted; a class field `makeObservable` defined is non-configurable, so `delete` fails and
+ * the field is set to `undefined` instead, which `getState()` reads as absent.
+ */
+const removeKey = (store: object, key: string): void => {
+  if (!Reflect.deleteProperty(store, key)) (store as Plain)[key] = undefined;
+};
+
 class MobxAdapter<S extends object> implements StoreAdapter<S> {
   private store: S;
   private syncableKeys: (keyof S)[];
@@ -58,7 +67,10 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
   getState(): S {
     const state: Partial<S> = {};
     for (const key of this.syncableKeys) {
-      state[key] = toJS(this.store[key]);
+      // `undefined` is how a synced key reads as absent, as in JSON: a removed class field
+      // cannot be deleted, so it holds `undefined` until something assigns it again.
+      const value = toJS(this.store[key]);
+      if (value !== undefined) state[key] = value;
     }
     this.snapshot = state as S;
     return this.snapshot;
@@ -72,9 +84,15 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
 
     runInAction(() => {
       for (const key of this.syncableKeys) {
-        if (!(key in next)) continue;
-
         const property = key as string;
+        if (!(key in next)) {
+          if (property in previous) {
+            removeKey(this.store, property);
+            delete applied[property];
+          }
+          continue;
+        }
+
         const value = next[key];
         if (Object.is(previous[property], value)) continue;
 
@@ -110,6 +128,11 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
  * the fields, elements and keys that differ. In MobX identity is the unit of reactivity, so
  * this is what keeps an `observer` row, a per-item `reaction` and a `useEffect` keyed on an
  * item quiet when that item did not change.
+ *
+ * A synced key a remote peer removes is deleted from an `observable({...})` object. A class
+ * field made observable by `makeObservable` or `makeAutoObservable` cannot be deleted, so it
+ * is set to `undefined`. Either way it is left out of the synced state, which omits every
+ * synced key whose value is `undefined`, until a local assignment gives it a value again.
  *
  * @param store - The MobX store instance
  * @param syncableKeys - Array of property keys that should be synced
