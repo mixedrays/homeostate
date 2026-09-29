@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createZustandAdapter } from "@homeostate/store-zustand";
+import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, TodoState } from "../../types/todo";
 import {
   SYNC_MAP_NAME,
@@ -56,11 +57,17 @@ export const useTodoStore = create<TodoStore>((set) => ({
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createZustandAdapter(useTodoStore);
-const syncEngine = createSyncEngine(
-  createYjsBackend(ydoc, SYNC_MAP_NAME),
-  adapter,
-);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
 
-export { syncEngine, ydoc, wsProvider };
+/** The store as the devtools panel sees it. */
+const devtoolsSource: DevtoolsSource = {
+  name: "Zustand todos",
+  adapter,
+  backend,
+  engine: syncEngine,
+};
+
+export { devtoolsSource, syncEngine, ydoc, wsProvider };

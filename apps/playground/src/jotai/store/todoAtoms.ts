@@ -2,6 +2,7 @@ import { atom, createStore } from "jotai";
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createJotaiAdapter } from "@homeostate/store-jotai";
+import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, Todo, TodoState } from "../../types/todo";
 import { countTodos, filterTodos } from "../../lib/todos";
 import {
@@ -74,11 +75,17 @@ export const store = createStore();
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createJotaiAdapter(todoStateAtom, store);
-const syncEngine = createSyncEngine(
-  createYjsBackend(ydoc, SYNC_MAP_NAME),
-  adapter,
-);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
 
-export { syncEngine, ydoc, wsProvider };
+/** The store as the devtools panel sees it. */
+const devtoolsSource: DevtoolsSource = {
+  name: "Jotai todos",
+  adapter,
+  backend,
+  engine: syncEngine,
+};
+
+export { devtoolsSource, syncEngine, ydoc, wsProvider };

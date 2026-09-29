@@ -18,6 +18,7 @@
     "@homeostate/store-tanstack": "workspace:^",
     "@homeostate/store-valtio": "workspace:^",
     "@homeostate/store-zustand": "workspace:^",
+    "@homeostate/tool-devtools": "workspace:^",
     "@homeostate/core": "workspace:^",
     "@homeostate/crdt-yjs": "workspace:^",
     "@reduxjs/toolkit": "^2.11.0",

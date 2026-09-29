@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CloudOff, Terminal } from "lucide-react";
+import {
+  HomeostateDevtools,
+  type DevtoolsSource,
+} from "@homeostate/tool-devtools";
 import type { WebsocketProvider } from "y-websocket";
 import type { Doc } from "yjs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,6 +22,8 @@ interface DemoLayoutProps {
   demo: Omit<PageMeta, "path">;
   provider: WebsocketProvider;
   doc: Doc;
+  /** The demo's store, adapter, backend and engine, for the devtools panel. */
+  devtools: DevtoolsSource;
   /** Where the header's back button leads. */
   back: { to: string; label: string };
   /** A line under the demo about the room it joins. */
@@ -29,6 +35,7 @@ export function DemoLayout({
   demo,
   provider,
   doc,
+  devtools,
   back,
   footer,
   children,
@@ -93,6 +100,8 @@ export function DemoLayout({
           {footer}
         </p>
       </main>
+
+      <HomeostateDevtools sources={[devtools]} />
     </div>
   );
 }
