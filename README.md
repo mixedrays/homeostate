@@ -11,6 +11,9 @@ manager. Pick one of each:
 npm install @homeostate/core @homeostate/store-zustand @homeostate/crdt-yjs
 ```
 
+`tool-*` packages are optional development tools, such as the devtools panel in
+`@homeostate/tool-devtools`.
+
 ## Packages
 
 Libraries, under `packages/`.
@@ -28,6 +31,7 @@ Libraries, under `packages/`.
 | `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                     |
 | `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                             |
 | `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                            |
+| `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log            |
 
 ## Apps
 

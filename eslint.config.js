@@ -26,6 +26,7 @@ export default tseslint.config(
       "apps/playground/**/*.{ts,tsx}",
       "apps/benchmark-ui/**/*.{ts,tsx}",
       "apps/docs/**/*.{ts,tsx}",
+      "packages/tool-devtools/**/*.{ts,tsx}",
     ],
     plugins: {
       "react-hooks": reactHooks,
@@ -40,7 +41,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/*/src/components/ui/**/*.tsx"],
+    files: [
+      "apps/*/src/components/ui/**/*.tsx",
+      "packages/tool-devtools/src/components/ui/**/*.tsx",
+    ],
     rules: {
       "react-refresh/only-export-components": "off",
     },
