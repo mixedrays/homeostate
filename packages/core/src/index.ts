@@ -1,8 +1,6 @@
 export { createSyncEngine } from "./sync-engine.js";
-export { createMemoryBackend } from "./memory-backend.js";
-export type { MemoryBackend } from "./memory-backend.js";
 export { getChanges } from "./diff.js";
-export { applyChanges, applyStringChanges } from "./apply.js";
+export { applyChanges } from "./apply.js";
 export type { ApplyOps } from "./apply.js";
 export type { Diffable } from "./diff.js";
 export { ChangeType } from "./change.js";

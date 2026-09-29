@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createStore } from "zustand/vanilla";
-import { createMemoryBackend, type MemoryBackend } from "@homeostate/core";
+import {
+  createMemoryBackend,
+  type MemoryBackend,
+} from "@homeostate/core/testing";
 import { homeostate } from "../index.js";
 
 interface CounterState {

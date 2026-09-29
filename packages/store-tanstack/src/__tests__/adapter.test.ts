@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Store, batch, createStore } from "@tanstack/store";
+import { createSyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
-  createSyncEngine,
   type MemoryBackend,
-} from "@homeostate/core";
+} from "@homeostate/core/testing";
 import { createTanStackStoreAdapter } from "../index.js";
 
 interface Counter {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { atom, createStore, getDefaultStore } from "jotai/vanilla";
-import { createMemoryBackend, createSyncEngine } from "@homeostate/core";
+import { createSyncEngine } from "@homeostate/core";
+import { createMemoryBackend } from "@homeostate/core/testing";
 import { createJotaiAdapter } from "../index.js";
 
 interface Counter {

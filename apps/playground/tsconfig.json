@@ -18,6 +18,7 @@
     { "path": "../../packages/store-jotai" },
     { "path": "../../packages/store-valtio" },
     { "path": "../../packages/store-tanstack" },
-    { "path": "../../packages/store-mobx-state-tree" }
+    { "path": "../../packages/store-mobx-state-tree" },
+    { "path": "../../packages/tool-devtools" }
   ]
 }

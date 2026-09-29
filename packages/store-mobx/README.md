@@ -53,6 +53,13 @@ only the fields, array elements and keys that differ are written, inside one act
 that did not change keep their identity, so `observer` components, reactions and effects
 that depend on them stay quiet.
 
+When a peer removes a synced key, the adapter removes it from the store. A property of an
+`observable({...})` object is deleted. A class field made observable by `makeObservable` or
+`makeAutoObservable` cannot be deleted, so it is set to `undefined`; type such fields as
+optional. The adapter leaves every synced key whose value is `undefined` out of the synced
+state, as JSON would, so the removal is not written back, and assigning the field again syncs
+it again.
+
 ## License
 
 MIT — see [LICENSE](https://github.com/mixedrays/homeostate/blob/main/LICENSE).

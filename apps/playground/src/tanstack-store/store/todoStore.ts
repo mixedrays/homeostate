@@ -2,6 +2,7 @@ import { createAtom, createStore } from "@tanstack/store";
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createTanStackStoreAdapter } from "@homeostate/store-tanstack";
+import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, TodoState } from "../../types/todo";
 import { countTodos, filterTodos } from "../../lib/todos";
 import {
@@ -71,11 +72,17 @@ export const todoCountsAtom = createAtom(() =>
 
 const { ydoc, wsProvider } = connectSharedDoc();
 const adapter = createTanStackStoreAdapter(todoStore);
-const syncEngine = createSyncEngine(
-  createYjsBackend(ydoc, SYNC_MAP_NAME),
-  adapter,
-);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
 
-export { syncEngine, ydoc, wsProvider };
+/** The store as the devtools panel sees it. */
+const devtoolsSource: DevtoolsSource = {
+  name: "TanStack Store todos",
+  adapter,
+  backend,
+  engine: syncEngine,
+};
+
+export { devtoolsSource, syncEngine, ydoc, wsProvider };

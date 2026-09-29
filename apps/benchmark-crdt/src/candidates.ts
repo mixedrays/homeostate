@@ -1,7 +1,10 @@
 import * as Y from "yjs";
 import { LoroDoc } from "loro-crdt";
 import * as A from "@automerge/automerge";
-import { createMemoryBackend, type MemoryBackend } from "@homeostate/core";
+import {
+  createMemoryBackend,
+  type MemoryBackend,
+} from "@homeostate/core/testing";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createLoroBackend } from "@homeostate/crdt-loro";
 import {

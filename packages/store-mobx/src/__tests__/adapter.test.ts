@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { isObservableArray, makeAutoObservable, reaction } from "mobx";
+import {
+  isObservableArray,
+  makeAutoObservable,
+  observable,
+  reaction,
+  runInAction,
+} from "mobx";
+import { createSyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
-  createSyncEngine,
   type MemoryBackend,
-} from "@homeostate/core";
+} from "@homeostate/core/testing";
 import { createMobxAdapter } from "../index.js";
 
 interface Todo {
@@ -265,5 +271,77 @@ describe("MobxAdapter", () => {
 
     backend.receive({ todos: [], filter: "active" });
     expect(store.filter).toBe("done");
+  });
+});
+
+type SyncedStore = Pick<TodoStore, "todos" | "filter" | "draft">;
+
+describe.each<[string, () => SyncedStore, boolean]>([
+  ["a makeAutoObservable class field", () => new TodoStore(), true],
+  [
+    "an observable object property",
+    () =>
+      observable({
+        todos: [
+          { id: "1", title: "a", done: false },
+          { id: "2", title: "b", done: false },
+        ] as Todo[],
+        filter: "all",
+        draft: "",
+      }),
+    false,
+  ],
+])("a synced key removed remotely from %s", (_, create, keepsProperty) => {
+  const removeFilter = () => {
+    const store = create();
+    const { backend, writes } = countingWrites(createMemoryBackend());
+    const adapter = createMobxAdapter(store, ["todos", "filter"]);
+    createSyncEngine(backend, adapter).connect();
+    const todos = store.todos;
+    runInAction(() => {
+      store.draft = "typing";
+    });
+    writes.length = 0;
+
+    backend.receive({ todos: held(backend).todos });
+    return { store, backend, writes, adapter, todos };
+  };
+
+  it("leaves the store and the adapter's snapshot without it", () => {
+    const { store, writes, adapter, todos } = removeFilter();
+
+    // A class field MobX defined is non-configurable, so it holds `undefined` instead.
+    expect("filter" in store).toBe(keepsProperty);
+    expect(store.filter).toBeUndefined();
+    expect("filter" in adapter.getState()).toBe(false);
+    expect(store.todos).toBe(todos);
+    expect(store.draft).toBe("typing");
+    expect(writes).toHaveLength(0);
+  });
+
+  it("does not write it back with an unrelated local change", () => {
+    const { store, backend } = removeFilter();
+
+    runInAction(() => {
+      store.todos[0].done = true;
+    });
+
+    expect(backend.read()).toEqual({
+      todos: [
+        { id: "1", title: "a", done: true },
+        { id: "2", title: "b", done: false },
+      ],
+    });
+  });
+
+  it("syncs it again once a local change assigns it", () => {
+    const { store, backend, adapter } = removeFilter();
+
+    runInAction(() => {
+      store.filter = "done";
+    });
+
+    expect(held(backend).filter).toBe("done");
+    expect(adapter.getState().filter).toBe("done");
   });
 });

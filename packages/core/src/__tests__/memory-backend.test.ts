@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMemoryBackend } from "../index.js";
+import { createMemoryBackend } from "../testing.js";
 
 describe("createMemoryBackend", () => {
   it("starts as an empty object by default", () => {

@@ -5,7 +5,7 @@ import {
   type SyncEngine,
   type SyncEngineConfig,
 } from "@homeostate/core";
-import { ZustandAdapter } from "./adapter.js";
+import { createZustandAdapter } from "./adapter.js";
 
 type Write<T, U> = Omit<T, keyof U> & U;
 type WithHomeostate<S, A> = Write<S, { homeostate: A }>;
@@ -36,7 +36,7 @@ const homeostateImpl: HomeostateMiddlewareImpl =
   (backend, creator, config) => (set, get, api) => {
     const initialState = creator(set, get, api);
     api.setState(initialState, true);
-    const engine = createSyncEngine(backend, new ZustandAdapter(api), config);
+    const engine = createSyncEngine(backend, createZustandAdapter(api), config);
     (api as unknown as { homeostate: SyncEngine }).homeostate = engine;
     engine.connect();
     return api.getState();

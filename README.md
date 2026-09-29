@@ -11,23 +11,27 @@ manager. Pick one of each:
 npm install @homeostate/core @homeostate/store-zustand @homeostate/crdt-yjs
 ```
 
+`tool-*` packages are optional development tools, such as the devtools panel in
+`@homeostate/tool-devtools`.
+
 ## Packages
 
 Libraries, under `packages/`.
 
-| Package                             | Path                             | Purpose                                                                                   |
-| ----------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, the `StoreAdapter` and `CrdtBackend` contracts, `createMemoryBackend` |
-| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend`: Yjs implementation of `CrdtBackend`                                   |
-| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend`: Loro implementation of `CrdtBackend`                                 |
-| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend`: Automerge implementation of `CrdtBackend`                       |
-| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                    |
-| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                       |
-| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                      |
-| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                      |
-| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                     |
-| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                             |
-| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                            |
+| Package                             | Path                             | Purpose                                                                                                   |
+| ----------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, the `StoreAdapter` and `CrdtBackend` contracts; `createMemoryBackend` from `/testing` |
+| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend`: Yjs implementation of `CrdtBackend`                                                   |
+| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend`: Loro implementation of `CrdtBackend`                                                 |
+| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend`: Automerge implementation of `CrdtBackend`                                       |
+| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                                    |
+| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                                       |
+| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                      |
+| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                      |
+| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                     |
+| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                             |
+| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                            |
+| `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log            |
 
 ## Apps
 
@@ -46,7 +50,8 @@ Private tools and servers, under `apps/`. None of them are published.
 
 ```bash
 pnpm install
-pnpm dev          # playground on http://localhost:5173 + websocket server on ws://localhost:9999
+pnpm playground   # playground on http://localhost:5173 + websocket server on ws://localhost:9999
+pnpm dev          # every app's dev server: playground, websocket server, docs, benchmark viewer
 pnpm build        # builds every package
 pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json
 pnpm lint
@@ -59,6 +64,8 @@ pnpm docs         # docs site on http://localhost:5190
 ```
 
 Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
+
+See the [playground README](apps/playground/README.md) for demo initialization and room versioning.
 
 ## Docs
 

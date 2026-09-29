@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getSnapshot, types } from "mobx-state-tree";
+import { createSyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
-  createSyncEngine,
   type MemoryBackend,
-} from "@homeostate/core";
+} from "@homeostate/core/testing";
 import { createMobxStateTreeAdapter } from "../index.js";
 
 const Todo = types.model("Todo", {

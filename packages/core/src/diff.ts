@@ -42,30 +42,39 @@ export const getChanges = (a: Diffable, b: Diffable): Change[] => {
   return [];
 };
 
-const sharesCharacter = (a: string, b: string): boolean => {
+const sharesCharacter = (a: string[], b: string[]): boolean => {
   const characters = new Set(a);
   for (const character of b) if (characters.has(character)) return true;
   return false;
 };
 
+const deleteCharacter = (index: number, character: string): Change => [
+  ChangeType.DELETE,
+  index,
+  character.length === 1 ? undefined : character.length,
+];
+
 const getStringChanges = (a: string, b: string): Change[] => {
   if (a === b) return [];
-  if (!sharesCharacter(a, b)) {
-    const deletes = Array.from(a, (): Change => [
-      ChangeType.DELETE,
-      0,
-      undefined,
-    ]);
+  // Compare whole code points, but keep Change offsets in JavaScript's UTF-16 units.
+  // Comparing code units can retain half a surrogate pair and corrupt a CRDT text.
+  const from = Array.from(a);
+  const to = Array.from(b);
+  if (!sharesCharacter(from, to)) {
+    const deletes = from.map((character) => deleteCharacter(0, character));
     return b.length === 0 ? deletes : [...deletes, [ChangeType.INSERT, 0, b]];
   }
 
   const changes: Change[] = [];
   let index = 0;
 
-  for (const { step, b: position } of editScript(a, b, (x, y) => x === y)) {
-    if (step === "eq") index++;
-    else if (step === "del")
-      changes.push([ChangeType.DELETE, index, undefined]);
+  for (const { step, a: source, b: position } of editScript(
+    from,
+    to,
+    (x, y) => x === y,
+  )) {
+    if (step === "eq") index += from[source].length;
+    else if (step === "del") changes.push(deleteCharacter(index, from[source]));
     else {
       const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
       if (
@@ -73,9 +82,9 @@ const getStringChanges = (a: string, b: string): Change[] => {
         last[0] === ChangeType.INSERT &&
         (last[1] as number) + (last[2] as string).length === index
       ) {
-        last[2] = (last[2] as string) + b[position];
-      } else changes.push([ChangeType.INSERT, index, b[position]]);
-      index++;
+        last[2] = (last[2] as string) + to[position];
+      } else changes.push([ChangeType.INSERT, index, to[position]]);
+      index += to[position].length;
     }
   }
 

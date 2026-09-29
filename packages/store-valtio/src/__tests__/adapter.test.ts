@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { proxy, snapshot } from "valtio/vanilla";
-import { createMemoryBackend, createSyncEngine } from "@homeostate/core";
+import { createSyncEngine } from "@homeostate/core";
+import { createMemoryBackend } from "@homeostate/core/testing";
 import { createValtioAdapter } from "../index.js";
 
 interface Todo {

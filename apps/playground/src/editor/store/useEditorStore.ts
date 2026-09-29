@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createZustandAdapter } from "@homeostate/store-zustand";
+import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import { EDITOR_ROOM, SYNC_MAP_NAME, connectSharedDoc } from "../../sync";
 import { seedDocument, sharedText } from "../document";
 import {
@@ -29,12 +30,19 @@ export const useEditorStore = create<EditorStore>((set) => ({
 const { ydoc, wsProvider } = connectSharedDoc(EDITOR_ROOM);
 seedDocument(ydoc);
 
-const syncEngine = createSyncEngine(
-  createYjsBackend(ydoc, SYNC_MAP_NAME),
-  createZustandAdapter(useEditorStore),
-);
+const adapter = createZustandAdapter(useEditorStore);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
+
+/** The store as the devtools panel sees it. */
+const devtoolsSource: DevtoolsSource = {
+  name: "Editor",
+  adapter,
+  backend,
+  engine: syncEngine,
+};
 
 const text = sharedText(ydoc);
 const awareness = wsProvider.awareness;
@@ -42,4 +50,12 @@ const identity = createIdentity();
 
 setLocalUser(awareness, toUser(identity, readStoredName()));
 
-export { awareness, identity, syncEngine, text, ydoc, wsProvider };
+export {
+  awareness,
+  devtoolsSource,
+  identity,
+  syncEngine,
+  text,
+  ydoc,
+  wsProvider,
+};

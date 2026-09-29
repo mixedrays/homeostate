@@ -20,6 +20,7 @@ export const groups: { id: GroupId; title: string }[] = [
   { id: "core", title: "Core" },
   { id: "crdt", title: "CRDT backends" },
   { id: "store", title: "Store adapters" },
+  { id: "tools", title: "Tools" },
 ];
 
 /** Sidebar label and order per package slug; the group comes from the slug's prefix. */
@@ -35,4 +36,5 @@ export const packageNav: Record<string, { label: string; order: number }> = {
   "store-jotai": { label: "Jotai", order: 5 },
   "store-valtio": { label: "Valtio", order: 6 },
   "store-tanstack": { label: "TanStack Store", order: 7 },
+  "tool-devtools": { label: "Devtools", order: 1 },
 };

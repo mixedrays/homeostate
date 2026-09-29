@@ -19,6 +19,7 @@ import {
   todo,
   toggleTodo,
   type TodoState,
+  unicodeEdits,
 } from "../../../core/src/__tests__/helpers.js";
 
 const NAME = "shared";
@@ -329,5 +330,56 @@ describe("two peers over Automerge", () => {
 
     expect(sizes.every((size) => size < 200)).toBe(true);
     expect(b.store.getState()).toEqual(a.store.getState());
+  });
+});
+
+describe("Unicode replication", () => {
+  it.each(unicodeEdits)(
+    "replicates %j to %j through both stores",
+    (before, after) => {
+      const initial = () => {
+        const state = threeTodos();
+        state.todos[0].title = before;
+        state.searchTerm = before;
+        return state;
+      };
+      const { a, b } = twoSyncedPeers(initial);
+      try {
+        a.store.update((state) => ({
+          ...renameTodo(state, "1", after),
+          searchTerm: after,
+        }));
+        const expected = {
+          ...renameTodo(initial(), "1", after),
+          searchTerm: after,
+        };
+        expect(a.backend.read()).toEqual(expected);
+        exchange(a.handle, b.handle);
+        expect(b.backend.read()).toEqual(expected);
+        expect(a.store.getState()).toEqual(expected);
+        expect(b.store.getState()).toEqual(expected);
+      } finally {
+        a.engine.disconnect();
+        b.engine.disconnect();
+      }
+    },
+  );
+
+  it("merges an emoji replacement with a peer's surrounding text edits", () => {
+    const { a, b } = twoSyncedPeers(() => ({
+      ...threeTodos(),
+      searchTerm: "a😀b",
+    }));
+    try {
+      a.store.update((state) => setSearchTerm(state, "a😃b"));
+      b.store.update((state) => setSearchTerm(state, "prefix a😀b suffix"));
+      exchange(a.handle, b.handle);
+      expect(a.store.getState().searchTerm).toBe("prefix a😃b suffix");
+      expect(b.store.getState()).toEqual(a.store.getState());
+      expect(a.backend.read()).toEqual(b.backend.read());
+    } finally {
+      a.engine.disconnect();
+      b.engine.disconnect();
+    }
   });
 });

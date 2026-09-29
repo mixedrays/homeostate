@@ -2,25 +2,7 @@ import { snapshot, subscribe } from "valtio/vanilla";
 import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 import { reconcile } from "./reconcile.js";
 
-/**
- * Valtio-specific store adapter that bridges a Valtio proxy with the sync engine.
- * Remote changes are applied by mutating only the paths that differ, so unchanged
- * subtrees keep their proxy identity and fine-grained subscribers stay quiet.
- *
- * @example
- * ```typescript
- * import { proxy } from 'valtio';
- * import * as Y from 'yjs';
- * import { createYjsBackend } from '@homeostate/crdt-yjs';
- *
- * const state = proxy({ count: 0 });
- * const adapter = createValtioAdapter(state);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
- * engine.connect();
- * state.count++;
- * ```
- */
-export class ValtioAdapter<S extends object> implements StoreAdapter<S> {
+class ValtioAdapter<S extends object> implements StoreAdapter<S> {
   private state: S;
 
   /**
@@ -45,10 +27,25 @@ export class ValtioAdapter<S extends object> implements StoreAdapter<S> {
 }
 
 /**
- * Factory function to create a Valtio adapter
+ * Creates a Valtio-specific store adapter that bridges a Valtio proxy with the sync engine.
+ * Remote changes are applied by mutating only the paths that differ, so unchanged
+ * subtrees keep their proxy identity and fine-grained subscribers stay quiet.
  *
  * @param state - The Valtio proxy object
  * @returns StoreAdapter instance for the proxy
+ *
+ * @example
+ * ```typescript
+ * import { proxy } from 'valtio';
+ * import * as Y from 'yjs';
+ * import { createYjsBackend } from '@homeostate/crdt-yjs';
+ *
+ * const state = proxy({ count: 0 });
+ * const adapter = createValtioAdapter(state);
+ * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * engine.connect();
+ * state.count++;
+ * ```
  */
 export function createValtioAdapter<S extends object>(
   state: S,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMemoryBackend, createSyncEngine } from "../index.js";
+import { createSyncEngine } from "../index.js";
+import { createMemoryBackend } from "../testing.js";
 import {
   addTodo,
   createTestStore,
