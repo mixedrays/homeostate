@@ -46,7 +46,8 @@ Private tools and servers, under `apps/`. None of them are published.
 
 ```bash
 pnpm install
-pnpm dev          # playground on http://localhost:5173 + websocket server on ws://localhost:9999
+pnpm playground   # playground on http://localhost:5173 + websocket server on ws://localhost:9999
+pnpm dev          # every app's dev server: playground, websocket server, docs, benchmark viewer
 pnpm build        # builds every package
 pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json
 pnpm lint
