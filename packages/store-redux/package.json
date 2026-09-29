@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/store-redux",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Redux adapter for @homeostate/core",
   "license": "MIT",
   "type": "module",
