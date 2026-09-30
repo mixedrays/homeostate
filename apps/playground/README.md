@@ -1,23 +1,52 @@
 # @homeostate/playground
 
-Private Vite app with seven store-adapter todo demos and a collaborative text editor. Every
-demo page mounts `@homeostate/tool-devtools`: **Inspect state** in the header, or the round
-button in the bottom-right corner, opens a panel to inspect and edit that demo's store, its
-Yjs document and a log of its changes.
+Private Vite page that links to every framework's playground, plus the
+[code those playgrounds share](#shared-code). Each playground is a
+separate app in `apps/playground-<framework>` with its own landing page and demos; they
+all join the same Yjs rooms through the shared WebSocket server.
 
-`pnpm playground` from the repository root starts this app on :5173, Angular on :4200,
-and the shared WebSocket server on :9999. The todo selector links to Angular using
-`VITE_ANGULAR_PLAYGROUND_URL` (defaults to `http://localhost:4200` in development and
-`/angular/` in production).
+| Playground                                 | Dev URL               | Production path |
+| ------------------------------------------ | --------------------- | --------------- |
+| This landing page                          | http://localhost:5180 | `/`             |
+| [React](../playground-react/README.md)     | http://localhost:5181 | `/react/`       |
+| [Angular](../playground-angular/README.md) | http://localhost:4200 | `/angular/`     |
 
-## Todo initialization
+## Run
 
-All seven React todo demos and the separate [Angular playground](../playground-angular/README.md) join `homeostate-todos-v1`. Before connecting, each tab applies the same
-CRDT seed for `todos`, `searchTerm`, and `filterStatus`, so opening another tab preserves the
-room's edits and tabs can start editing offline before their first synchronization.
+From the repository root:
 
-The seed and its encoding must stay identical within a room version. When changing the
-defaults in [shared sync initialization](../../packages/playground-shared/src/sync.ts) or their CRDT encoding, bump `TODO_SEED_VERSION`
-there as well. This intentionally starts a fresh demo room; existing room data is not
-automatically migrated. The former `my-roomname` room is left untouched, and older clients
-remain in their old room. The editor uses its own room and initialization.
+```bash
+pnpm playground          # this page, every playground and the WebSocket server
+pnpm playground:react    # React and the WebSocket server only
+pnpm playground:angular  # Angular and the WebSocket server only
+```
+
+## Configuration
+
+The links default to the dev URLs above in development and to the production paths in a
+build. Override one with `VITE_PLAYGROUND_REACT_URL` or `VITE_PLAYGROUND_ANGULAR_URL` when
+that playground is hosted elsewhere.
+
+## Shared code
+
+`shared/` holds the framework-independent helpers every playground imports from
+`@homeostate/playground/shared`: todo types, filtering/counting, room names, and identical
+Yjs document initialization.
+
+`connectSharedDoc(serverUrl, room?)` creates a seeded document and its WebSocket
+provider. The caller owns both and must destroy the provider and document on teardown.
+The sync server URL is supplied by each app's configuration.
+
+All todo demos use `homeostate-todos-v1` and the `shared-ydoc` map. The seed's CRDT
+history must remain identical in every playground. If defaults or their encoding change in
+[`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there. The editor room remains
+separate.
+
+## Adding a playground
+
+1. Create `apps/playground-<framework>` with a `dev` script on a fixed port, a landing page
+   listing its demos, a link back to this page, and a dependency on
+   `@homeostate/playground` for the shared code. `pnpm playground` picks it up through
+   the `./apps/playground*` filter.
+2. Add it to [`src/playgrounds.ts`](src/playgrounds.ts).
+3. Add a `playground:<framework>` script to the root `package.json`.

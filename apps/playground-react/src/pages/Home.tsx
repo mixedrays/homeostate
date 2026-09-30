@@ -1,5 +1,11 @@
-import { MonitorSmartphone, Terminal, Waypoints } from "lucide-react";
+import {
+  ArrowLeft,
+  MonitorSmartphone,
+  Terminal,
+  Waypoints,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,26 +15,37 @@ import {
 } from "@/components/ui/card";
 import { DemoCard } from "../components/DemoCard";
 import { InlineCode } from "../components/InlineCode";
-import { appList } from "../demos";
+import { appList, PLAYGROUNDS_URL } from "../demos";
 import { SYNC_SERVER_URL } from "../sync";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto max-w-3xl px-4 py-10">
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<a href={PLAYGROUNDS_URL} />}
+          className="mb-6 -ml-2.5"
+        >
+          <ArrowLeft aria-hidden />
+          All playgrounds
+        </Button>
+
         <header className="mb-10">
           <div className="flex items-center gap-3">
             <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
               <Waypoints size={24} aria-hidden />
             </span>
             <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-              Homeostate Playground
+              React Playground
             </h1>
           </div>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-            Small apps that keep their state in an ordinary store and sync it
-            through homeostate into a Yjs room, so every open tab works on the
-            same data. Pick one to try.
+            Small React apps that keep their state in an ordinary store and sync
+            it through homeostate into a Yjs room, so every open tab works on
+            the same data. Pick one to try.
           </p>
         </header>
 
@@ -76,13 +93,14 @@ export default function Home() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <pre className="overflow-x-auto rounded-lg bg-foreground px-3 py-2 text-xs text-background">
-                    <code>pnpm playground</code>
+                    <code>pnpm playground:react</code>
                   </pre>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    This starts the React and Angular apps together with the
-                    WebSocket sync server the demos connect to at{" "}
-                    <InlineCode>{SYNC_SERVER_URL}</InlineCode>. No separate
-                    terminal is needed.
+                    This starts the React app together with the WebSocket sync
+                    server the demos connect to at{" "}
+                    <InlineCode>{SYNC_SERVER_URL}</InlineCode>.{" "}
+                    <InlineCode>pnpm playground</InlineCode> starts every
+                    framework's playground at once.
                   </p>
                 </CardContent>
               </Card>

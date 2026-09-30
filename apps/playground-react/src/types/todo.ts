@@ -2,4 +2,4 @@ export type {
   Todo,
   TodoState,
   FilterStatus,
-} from "@homeostate/playground-shared";
+} from "@homeostate/playground/shared";

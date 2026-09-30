@@ -1,4 +1,4 @@
 {
   "syncServerUrl": "ws://localhost:9999",
-  "playgroundUrl": "http://localhost:5173/todo"
+  "playgroundUrl": "http://localhost:5180"
 }

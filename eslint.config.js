@@ -24,7 +24,7 @@ export default tseslint.config(
   },
   {
     files: [
-      "apps/playground/**/*.{ts,tsx}",
+      "apps/playground-react/**/*.{ts,tsx}",
       "apps/benchmark-ui/**/*.{ts,tsx}",
       "apps/docs/**/*.{ts,tsx}",
       "packages/tool-devtools/**/*.{ts,tsx}",

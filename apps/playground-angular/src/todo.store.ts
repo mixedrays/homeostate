@@ -18,7 +18,7 @@ import {
   filterTodos,
   SYNC_MAP_NAME,
   type FilterStatus,
-} from "@homeostate/playground-shared";
+} from "@homeostate/playground/shared";
 import type { WebsocketProvider } from "y-websocket";
 import { PLAYGROUND_CONFIG } from "./config";
 

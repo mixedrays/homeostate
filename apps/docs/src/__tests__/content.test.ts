@@ -19,9 +19,6 @@ describe("docs content", () => {
 
   it("documents every public package", () => {
     expect(manifest.missingDocs).toEqual([]);
-    expect(manifest.packages.map((pkg) => pkg.slug)).not.toContain(
-      "playground-shared",
-    );
   });
 
   it.each(manifest.pages.map((page) => [page.repoPath, page] as const))(

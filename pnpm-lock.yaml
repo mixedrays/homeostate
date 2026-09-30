@@ -330,6 +330,89 @@ importers:
 
   apps/playground:
     dependencies:
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../../packages/crdt-yjs
+      y-websocket:
+        specifier: ^2.1.0
+        version: 2.1.0(yjs@13.6.27)
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+    devDependencies:
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.0
+        version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)
+
+  apps/playground-angular:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.0
+        version: 21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@angular/compiler':
+        specifier: ^21.2.0
+        version: 21.2.24
+      '@angular/core':
+        specifier: ^21.2.0
+        version: 21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: ^21.2.0
+        version: 21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))
+      '@angular/router':
+        specifier: ^21.2.0
+        version: 21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(@angular/platform-browser@21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../../packages/core
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../../packages/crdt-yjs
+      '@homeostate/playground':
+        specifier: workspace:^
+        version: link:../playground
+      '@homeostate/store-ngrx-signals':
+        specifier: workspace:^
+        version: link:../../packages/store-ngrx-signals
+      '@ngrx/signals':
+        specifier: ^21.0.0
+        version: 21.1.1(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      y-websocket:
+        specifier: ^2.1.0
+        version: 2.1.0(yjs@13.6.27)
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+    devDependencies:
+      '@angular/build':
+        specifier: ^21.2.0
+        version: 21.2.24(@angular/compiler-cli@21.2.24(@angular/compiler@21.2.24)(typescript@5.9.3))(@angular/compiler@21.2.24)(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(@angular/platform-browser@21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)))(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@22.20.2)(chokidar@5.0.0)(jiti@2.7.0)(lightningcss@1.33.0)(postcss@8.5.28)(tailwindcss@4.3.3)(tslib@2.8.1)(tsx@4.23.13)(typescript@5.9.3)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)))(yaml@2.9.1)
+      '@angular/cli':
+        specifier: ^21.2.0
+        version: 21.2.24(@types/node@22.20.2)(chokidar@5.0.0)
+      '@angular/compiler-cli':
+        specifier: ^21.2.0
+        version: 21.2.24(@angular/compiler@21.2.24)(typescript@5.9.3)
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../../packages/store-zustand
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
+
+  apps/playground-react:
+    dependencies:
       '@base-ui/react':
         specifier: ^1.8.0
         version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -342,9 +425,9 @@ importers:
       '@homeostate/crdt-yjs':
         specifier: workspace:^
         version: link:../../packages/crdt-yjs
-      '@homeostate/playground-shared':
+      '@homeostate/playground':
         specifier: workspace:^
-        version: link:../../packages/playground-shared
+        version: link:../playground
       '@homeostate/store-jotai':
         specifier: workspace:^
         version: link:../../packages/store-jotai
@@ -452,67 +535,6 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)
 
-  apps/playground-angular:
-    dependencies:
-      '@angular/common':
-        specifier: ^21.2.0
-        version: 21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
-      '@angular/compiler':
-        specifier: ^21.2.0
-        version: 21.2.24
-      '@angular/core':
-        specifier: ^21.2.0
-        version: 21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)
-      '@angular/platform-browser':
-        specifier: ^21.2.0
-        version: 21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))
-      '@homeostate/core':
-        specifier: workspace:^
-        version: link:../../packages/core
-      '@homeostate/crdt-yjs':
-        specifier: workspace:^
-        version: link:../../packages/crdt-yjs
-      '@homeostate/playground-shared':
-        specifier: workspace:^
-        version: link:../../packages/playground-shared
-      '@homeostate/store-ngrx-signals':
-        specifier: workspace:^
-        version: link:../../packages/store-ngrx-signals
-      '@ngrx/signals':
-        specifier: ^21.0.0
-        version: 21.1.1(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
-      rxjs:
-        specifier: ^7.8.2
-        version: 7.8.2
-      tslib:
-        specifier: ^2.8.1
-        version: 2.8.1
-      y-websocket:
-        specifier: ^2.1.0
-        version: 2.1.0(yjs@13.6.27)
-      yjs:
-        specifier: ^13.6.23
-        version: 13.6.27
-    devDependencies:
-      '@angular/build':
-        specifier: ^21.2.0
-        version: 21.2.24(@angular/compiler-cli@21.2.24(@angular/compiler@21.2.24)(typescript@5.9.3))(@angular/compiler@21.2.24)(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(@angular/platform-browser@21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)))(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@22.20.2)(chokidar@5.0.0)(jiti@2.7.0)(lightningcss@1.33.0)(postcss@8.5.28)(tailwindcss@4.3.3)(tslib@2.8.1)(tsx@4.23.13)(typescript@5.9.3)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)))(yaml@2.9.1)
-      '@angular/cli':
-        specifier: ^21.2.0
-        version: 21.2.24(@types/node@22.20.2)(chokidar@5.0.0)
-      '@angular/compiler-cli':
-        specifier: ^21.2.0
-        version: 21.2.24(@angular/compiler@21.2.24)(typescript@5.9.3)
-      '@homeostate/store-zustand':
-        specifier: workspace:^
-        version: link:../../packages/store-zustand
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-      zustand:
-        specifier: ^4.5.2
-        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
-
   apps/websocket-server-yjs:
     dependencies:
       ws:
@@ -553,18 +575,6 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
-      yjs:
-        specifier: ^13.6.23
-        version: 13.6.27
-
-  packages/playground-shared:
-    dependencies:
-      '@homeostate/crdt-yjs':
-        specifier: workspace:^
-        version: link:../crdt-yjs
-      y-websocket:
-        specifier: ^2.1.0
-        version: 2.1.0(yjs@13.6.27)
       yjs:
         specifier: ^13.6.23
         version: 13.6.27
@@ -883,6 +893,15 @@ packages:
     peerDependenciesMeta:
       '@angular/animations':
         optional: true
+
+  '@angular/router@21.2.24':
+    resolution: {integrity: sha512-E72AvyTRGv5rDa/SlfSztThJ+9SemjnblzB9jTb8LJOFPo7u4GlfytvRE8DnxwmTfnlZcA6Sr10zlSDnL4pmyw==}
+    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
+    peerDependencies:
+      '@angular/common': 21.2.24
+      '@angular/core': 21.2.24
+      '@angular/platform-browser': 21.2.24
+      rxjs: ^6.5.3 || ^7.4.0
 
   '@asamuzakjp/css-color@6.0.7':
     resolution: {integrity: sha512-vC/bk1Lz7Tn/EfU9/apOTBk80/8dyGyWMowPoV1tJ52muDGsDqt2HPT2klrFUiY60MQmQv9q8yIht15JnBgDGw==}
@@ -6081,6 +6100,14 @@ snapshots:
     dependencies:
       '@angular/common': 21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
       '@angular/core': 21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)
+      tslib: 2.8.1
+
+  '@angular/router@21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(@angular/platform-browser@21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)))(rxjs@7.8.2)':
+    dependencies:
+      '@angular/common': 21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@angular/core': 21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2)
+      '@angular/platform-browser': 21.2.24(@angular/common@21.2.24(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))
+      rxjs: 7.8.2
       tslib: 2.8.1
 
   '@asamuzakjp/css-color@6.0.7':

@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/crdt-yjs" },
+    { "path": "../../packages/store-zustand" },
+    { "path": "../../packages/store-mobx" },
+    { "path": "../../packages/store-redux" },
+    { "path": "../../packages/store-jotai" },
+    { "path": "../../packages/store-valtio" },
+    { "path": "../../packages/store-tanstack" },
+    { "path": "../../packages/store-mobx-state-tree" },
+    { "path": "../../packages/tool-devtools" }
+  ]
+}

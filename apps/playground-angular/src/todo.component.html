@@ -1,5 +1,5 @@
 <main>
-  <a class="back-link" [href]="config.playgroundUrl">← All todo demos</a>
+  <a class="back-link" routerLink="/">← All demos</a>
 
   <header>
     <div class="eyebrow">
@@ -10,8 +10,8 @@
       <span class="framework">NgRx Signals</span>
     </div>
     <p class="intro">
-      Your todos, in sync. Open a React demo alongside this one and watch your
-      changes appear in both.
+      Your todos, in sync. Open another framework's todo demo alongside this one
+      and watch your changes appear in both.
     </p>
     <div class="connection-bar">
       <span
@@ -137,7 +137,7 @@
     <p>
       Keep this tab open and
       <a [href]="config.playgroundUrl" target="_blank" rel="noopener"
-        >open another demo ↗</a
+        >open another playground ↗</a
       >. Add, edit, or complete a todo. Search and filters are shared too. Go
       offline in either tab, make changes, then reconnect to merge them.
     </p>

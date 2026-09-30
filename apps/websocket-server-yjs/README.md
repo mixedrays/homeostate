@@ -1,6 +1,6 @@
 # @homeostate/websocket-server-yjs
 
-A simple WebSocket server for Yjs document synchronization, used by `@homeostate/playground`.
+A simple WebSocket server for Yjs document synchronization, used by the playgrounds.
 
 ## Usage
 
@@ -12,7 +12,7 @@ pnpm --filter @homeostate/websocket-server-yjs start
 pnpm --filter @homeostate/websocket-server-yjs dev
 ```
 
-`pnpm playground` at the workspace root starts this server together with the playground.
+`pnpm playground` at the workspace root starts this server together with every playground.
 `pnpm dev` starts it too, along with every other app's dev server.
 
 The server listens on `ws://localhost:9999` by default.

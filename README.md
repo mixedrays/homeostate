@@ -40,21 +40,23 @@ Private tools and servers, under `apps/`. None of them are published.
 
 | Package                            | Path                        | Purpose                                                                                                                                  |
 | ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@homeostate/playground`           | `apps/playground`           | Vite app with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors                      |
-| `@homeostate/playground-angular`   | `apps/playground-angular`   | Angular + NgRx Signals todo demo sharing the React playground room                                                                       |
+| `@homeostate/playground`           | `apps/playground`           | Landing page linking to every framework's playground                                                                                     |
+| `@homeostate/playground-react`     | `apps/playground-react`     | React playground with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors              |
+| `@homeostate/playground-angular`   | `apps/playground-angular`   | Angular playground: an NgRx Signals todo demo sharing the React todo room                                                                |
 | `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
 | `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
 | `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |
-| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playground                                                                                                |
+| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playgrounds                                                                                               |
 | `@homeostate/docs`                 | `apps/docs`                 | Landing page and docs site, prerendered from the markdown in `packages/*/docs` and `apps/docs/content`; every page also has a `.md` twin |
 
 ## Scripts
 
 ```bash
 pnpm install
-pnpm playground   # React :5173 + Angular :4200 + WebSocket :9999
+pnpm playground   # landing page :5180 + React :5181 + Angular :4200 + WebSocket :9999
+pnpm playground:react   # React :5181 + WebSocket :9999
 pnpm playground:angular # Angular :4200 + WebSocket :9999
-pnpm dev          # every app's dev server: playground, websocket server, docs, benchmark viewer
+pnpm dev          # every app's dev server: playgrounds, websocket server, docs, benchmark viewer
 pnpm build        # builds every package
 pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json
 pnpm lint
@@ -66,9 +68,9 @@ pnpm bench:ui     # viewer for reports saved with --json by either benchmark, on
 pnpm docs         # docs site on http://localhost:5190
 ```
 
-Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
+Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground-react dev`.
 
-See the [playground README](apps/playground/README.md) for demo initialization and room versioning.
+See the [playground README](apps/playground/README.md) for how the playgrounds fit together, and the [React playground README](apps/playground-react/README.md) for demo initialization and room versioning.
 
 ## Docs
 

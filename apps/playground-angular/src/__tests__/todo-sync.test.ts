@@ -11,7 +11,7 @@ import {
   createInitialTodoState,
   SYNC_MAP_NAME,
   type TodoState,
-} from "@homeostate/playground-shared";
+} from "@homeostate/playground/shared";
 import { PLAYGROUND_CONFIG } from "../config";
 import { TodoStore } from "../todo.store";
 
@@ -59,7 +59,7 @@ function openAngular() {
         provide: PLAYGROUND_CONFIG,
         useValue: {
           syncServerUrl: "ws://localhost:9999",
-          playgroundUrl: "http://localhost:5173/todo",
+          playgroundUrl: "http://localhost:5180",
         },
       },
     ],

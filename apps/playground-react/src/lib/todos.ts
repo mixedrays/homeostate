@@ -3,4 +3,4 @@ export {
   filterTodos,
   countTodos,
   type TodoCounts,
-} from "@homeostate/playground-shared";
+} from "@homeostate/playground/shared";
