@@ -15,6 +15,7 @@ import "./app.css";
 
 export const links: Route.LinksFunction = () => [
   { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

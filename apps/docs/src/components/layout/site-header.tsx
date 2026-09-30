@@ -12,7 +12,20 @@ export function Logo() {
       to="/"
       className="flex items-center gap-2 font-semibold tracking-tight"
     >
-      <img src="/favicon.svg" alt="" width={22} height={22} />
+      <img
+        src="/homeostate.svg"
+        alt=""
+        width={28}
+        height={28}
+        className="dark:hidden"
+      />
+      <img
+        src="/homeostate-dark.svg"
+        alt=""
+        width={28}
+        height={28}
+        className="hidden dark:block"
+      />
       {site.name}
     </Link>
   );
