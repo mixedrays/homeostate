@@ -1,0 +1,31 @@
+{
+  "name": "@homeostate/playground-vue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@homeostate/core": "workspace:^",
+    "@homeostate/crdt-yjs": "workspace:^",
+    "@homeostate/playground": "workspace:^",
+    "@homeostate/store-tanstack": "workspace:^",
+    "@tanstack/vue-store": "^0.11.2",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.23"
+  },
+  "devDependencies": {
+    "@homeostate/store-zustand": "workspace:^",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "typescript": "^5.5.3",
+    "vite": "^8.3.0",
+    "vue-tsc": "^3.3.11",
+    "zustand": "^4.5.2"
+  }
+}

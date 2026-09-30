@@ -10,6 +10,7 @@ all join the same Yjs rooms through the shared WebSocket server.
 | This landing page                          | http://localhost:5180 | `/`             |
 | [React](../playground-react/README.md)     | http://localhost:5181 | `/react/`       |
 | [Angular](../playground-angular/README.md) | http://localhost:4200 | `/angular/`     |
+| [Vue](../playground-vue/README.md)         | http://localhost:5182 | `/vue/`         |
 
 ## Run
 
@@ -19,12 +20,14 @@ From the repository root:
 pnpm playground          # this page, every playground and the WebSocket server
 pnpm playground:react    # React and the WebSocket server only
 pnpm playground:angular  # Angular and the WebSocket server only
+pnpm playground:vue      # Vue and the WebSocket server only
 ```
 
 ## Configuration
 
 The links default to the dev URLs above in development and to the production paths in a
-build. Override one with `VITE_PLAYGROUND_REACT_URL` or `VITE_PLAYGROUND_ANGULAR_URL` when
+build. Override one with `VITE_PLAYGROUND_REACT_URL`, `VITE_PLAYGROUND_ANGULAR_URL` or
+`VITE_PLAYGROUND_VUE_URL` when
 that playground is hosted elsewhere.
 
 ## Shared code

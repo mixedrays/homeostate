@@ -14,7 +14,7 @@ base: `pnpm --filter @homeostate/playground-react exec vite build --base /react/
 
 ## Todo initialization
 
-All seven React todo demos and the separate [Angular playground](../playground-angular/README.md) join `homeostate-todos-v1`. Before connecting, each tab applies the same
+All seven React todo demos and the separate [Angular](../playground-angular/README.md) and [Vue](../playground-vue/README.md) playgrounds join `homeostate-todos-v1`. Before connecting, each tab applies the same
 CRDT seed for `todos`, `searchTerm`, and `filterStatus`, so opening another tab preserves the
 room's edits and tabs can start editing offline before their first synchronization.
 

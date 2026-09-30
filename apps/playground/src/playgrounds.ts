@@ -51,4 +51,14 @@ export const playgrounds: readonly Playground[] = [
     command: "pnpm playground:angular",
     url: locate(env.VITE_PLAYGROUND_ANGULAR_URL, 4200, "/angular/"),
   },
+  {
+    id: "vue",
+    name: "Vue",
+    description:
+      "The shared todo list as a Vue app reading a TanStack Store through refs.",
+    tags: ["TanStack Store"],
+    accent: "#1f7a54",
+    command: "pnpm playground:vue",
+    url: locate(env.VITE_PLAYGROUND_VUE_URL, 5182, "/vue/"),
+  },
 ];

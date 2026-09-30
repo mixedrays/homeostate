@@ -43,6 +43,7 @@ Private tools and servers, under `apps/`. None of them are published.
 | `@homeostate/playground`           | `apps/playground`           | Landing page linking to every framework's playground                                                                                     |
 | `@homeostate/playground-react`     | `apps/playground-react`     | React playground with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors              |
 | `@homeostate/playground-angular`   | `apps/playground-angular`   | Angular playground: an NgRx Signals todo demo sharing the React todo room                                                                |
+| `@homeostate/playground-vue`       | `apps/playground-vue`       | Vue playground: a TanStack Store todo demo sharing the React todo room                                                                   |
 | `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
 | `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
 | `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |
@@ -53,12 +54,13 @@ Private tools and servers, under `apps/`. None of them are published.
 
 ```bash
 pnpm install
-pnpm playground   # landing page :5180 + React :5181 + Angular :4200 + WebSocket :9999
+pnpm playground   # landing page :5180 + React :5181 + Vue :5182 + Angular :4200 + WebSocket :9999
 pnpm playground:react   # React :5181 + WebSocket :9999
 pnpm playground:angular # Angular :4200 + WebSocket :9999
+pnpm playground:vue     # Vue :5182 + WebSocket :9999
 pnpm dev          # every app's dev server: playgrounds, websocket server, docs, benchmark viewer
 pnpm build        # builds every package
-pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json
+pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json, then the Angular and Vue playgrounds
 pnpm lint
 pnpm format       # prettier --write; CI runs pnpm format:check
 pnpm test         # vitest across packages/*/src/__tests__ and apps/*/src/__tests__
