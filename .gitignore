@@ -13,6 +13,7 @@ dist-ssr
 apps/docs/build
 .react-router
 .wrangler
+.angular
 *.local
 
 # Editor directories and files

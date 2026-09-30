@@ -29,6 +29,7 @@ Libraries, under `packages/`.
 | `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                      |
 | `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                      |
 | `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                     |
+| `@homeostate/store-ngrx-signals`    | `packages/store-ngrx-signals`    | NgRx Signals adapter for Angular                                                                          |
 | `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                             |
 | `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                            |
 | `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log            |
@@ -39,21 +40,29 @@ Private tools and servers, under `apps/`. None of them are published.
 
 | Package                            | Path                        | Purpose                                                                                                                                  |
 | ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@homeostate/playground`           | `apps/playground`           | Vite app with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors                      |
+| `@homeostate/playground`           | `apps/playground`           | Landing page linking to every framework's playground                                                                                     |
+| `@homeostate/playground-react`     | `apps/playground-react`     | React playground with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors              |
+| `@homeostate/playground-angular`   | `apps/playground-angular`   | Angular playground: an NgRx Signals todo demo sharing the React todo room                                                                |
+| `@homeostate/playground-vue`       | `apps/playground-vue`       | Vue playground: a TanStack Store todo demo sharing the React todo room                                                                   |
+| `@homeostate/playground-svelte`    | `apps/playground-svelte`    | Svelte playground: a TanStack Store todo demo sharing the React todo room                                                                |
 | `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
 | `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
 | `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |
-| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playground                                                                                                |
+| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playgrounds                                                                                               |
 | `@homeostate/docs`                 | `apps/docs`                 | Landing page and docs site, prerendered from the markdown in `packages/*/docs` and `apps/docs/content`; every page also has a `.md` twin |
 
 ## Scripts
 
 ```bash
 pnpm install
-pnpm playground   # playground on http://localhost:5173 + websocket server on ws://localhost:9999
-pnpm dev          # every app's dev server: playground, websocket server, docs, benchmark viewer
+pnpm playground   # landing page :5180 + React :5181 + Vue :5182 + Svelte :5183 + Angular :4200 + WebSocket :9999
+pnpm playground:react   # React :5181 + WebSocket :9999
+pnpm playground:angular # Angular :4200 + WebSocket :9999
+pnpm playground:vue     # Vue :5182 + WebSocket :9999
+pnpm playground:svelte  # Svelte :5183 + WebSocket :9999
+pnpm dev          # every app's dev server: playgrounds, websocket server, docs, benchmark viewer
 pnpm build        # builds every package
-pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json
+pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json, then the Angular, Vue and Svelte playgrounds
 pnpm lint
 pnpm format       # prettier --write; CI runs pnpm format:check
 pnpm test         # vitest across packages/*/src/__tests__ and apps/*/src/__tests__
@@ -63,9 +72,9 @@ pnpm bench:ui     # viewer for reports saved with --json by either benchmark, on
 pnpm docs         # docs site on http://localhost:5190
 ```
 
-Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground dev`.
+Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground-react dev`.
 
-See the [playground README](apps/playground/README.md) for demo initialization and room versioning.
+See the [playground README](apps/playground/README.md) for how the playgrounds fit together, and the [React playground README](apps/playground-react/README.md) for demo initialization and room versioning.
 
 ## Docs
 

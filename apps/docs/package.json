@@ -1,7 +1,7 @@
 {
   "name": "@homeostate/docs",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Landing page and docs site, prerendered from the markdown in packages/*/docs and apps/docs/content",
   "scripts": {

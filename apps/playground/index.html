@@ -1,22 +1,54 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Homeostate playground: a shared todo list built with seven state managers, and a collaborative text editor with names and live cursors."
+      content="Homeostate playgrounds: the same synced demos built with each supported framework."
     />
-    <meta name="theme-color" content="#ffffff" />
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Cpath d='M10 11h12M10 11l6 11M22 11l-6 11' stroke='%2394a3b8' stroke-width='2' fill='none'/%3E%3Ccircle cx='10' cy='11' r='3.5' fill='%2360a5fa'/%3E%3Ccircle cx='22' cy='11' r='3.5' fill='%23a78bfa'/%3E%3Ccircle cx='16' cy='22' r='3.5' fill='%2334d399'/%3E%3C/svg%3E"
-    />
+    <meta name="theme-color" content="#f8fafc" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Homeostate Playground</title>
   </head>
-  <body class="h-full">
-    <div id="root" class="min-h-full"></div>
-    <script type="module" src="/src/main.tsx"></script>
+  <body>
+    <main>
+      <div class="brand">
+        <img
+          class="brand-logo"
+          src="/shared/homeostate.svg"
+          alt=""
+          width="28"
+          height="28"
+        />
+        <span class="brand-name">homeostate</span>
+      </div>
+
+      <header>
+        <h1>Homeostate Playground</h1>
+        <p class="intro">
+          Small apps that keep their state in an ordinary store and sync it
+          through homeostate into a Yjs room. Every framework's playground joins
+          the same rooms, so a change made in one shows up in all the others.
+          Pick a framework to see its demos.
+        </p>
+      </header>
+
+      <section aria-labelledby="playgrounds-heading">
+        <h2 id="playgrounds-heading" class="sr-only">Playgrounds</h2>
+        <ul id="playgrounds" class="cards"></ul>
+      </section>
+
+      <section class="hint" aria-labelledby="start-heading">
+        <h2 id="start-heading">Start the playgrounds</h2>
+        <p>
+          From the repo root, <code>pnpm playground</code> starts this page,
+          every framework's playground and the WebSocket sync server they share.
+          <code>pnpm playground:&lt;framework&gt;</code> starts a single
+          playground with the sync server.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

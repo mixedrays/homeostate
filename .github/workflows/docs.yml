@@ -1,12 +1,11 @@
 name: Docs
 
-# Builds apps/docs and deploys it to the `homeostate` Cloudflare Pages project: production on
-# every push to main (and on a manual run from main), a preview for every pull request from this
-# repository (forks get no secrets). Previews are served at https://<branch>.homeostate.pages.dev.
+# Builds apps/docs and deploys it to the `homeostate` Cloudflare Pages project. Only main is
+# deployed (production): on every push to main and on a manual run from main. Pull requests
+# only build, as a check; nothing is deployed for them.
 #
 # Needs the CLOUDFLARE_API_TOKEN (Cloudflare Pages: Edit) and CLOUDFLARE_ACCOUNT_ID secrets and
-# the SITE_URL variable, the production origin. Previews are built with the production SITE_URL
-# too, so their canonical and .md links point at production.
+# the SITE_URL variable, the production origin.
 on:
   push:
     branches: [main]
@@ -19,11 +18,11 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   deploy:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # The "Version Packages" PR only bumps versions and writes changelogs: nothing to check.
+    if: github.head_ref != 'changeset-release/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -37,32 +36,9 @@ jobs:
         env:
           SITE_URL: ${{ vars.SITE_URL }}
       - name: Deploy to Cloudflare Pages
-        id: deploy
+        if: github.ref == 'refs/heads/main'
         working-directory: apps/docs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
-          BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          pnpm dlx wrangler@4 pages deploy build/client --project-name=homeostate --branch="$BRANCH"
-          url=$(jq -r 'select(.type == "pages-deploy-detailed") | .alias // .url' "$WRANGLER_OUTPUT_FILE_PATH")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-      - name: Comment the preview URL
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v9
-        env:
-          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
-        with:
-          script: |
-            const marker = "<!-- docs-preview -->";
-            const body = `${marker}\nDocs preview: ${process.env.PREVIEW_URL}\n\nBuilt from ${context.sha.slice(0, 7)}.`;
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const existing = comments.find((c) => c.body?.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+        run: pnpm dlx wrangler@4 pages deploy build/client --project-name=homeostate --branch=main

@@ -17,7 +17,7 @@ describe("docs content", () => {
     expect(formatErrors(manifest.errors)).toBe("");
   });
 
-  it("documents every package", () => {
+  it("documents every public package", () => {
     expect(manifest.missingDocs).toEqual([]);
   });
 

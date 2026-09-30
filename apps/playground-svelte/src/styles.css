@@ -1,0 +1,653 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* The Homeostate identity: cobalt for actions, ink and paper for everything else. */
+:root {
+  font-family:
+    "Geist Variable",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --ink: #203a40;
+  --midnight: #0f172a;
+  --paper: #f8fafc;
+  --subtle: #f1f5f9;
+  --muted: #64748b;
+  --border: #e2e8f0;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input {
+  font: inherit;
+}
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+button,
+input,
+a {
+  outline-offset: 3px;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+}
+a {
+  color: var(--accent);
+}
+code {
+  font-family:
+    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--subtle);
+}
+
+/* Page frame, shared by the landing pages and the demo. */
+.page {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 40px 16px;
+}
+.page-narrow {
+  max-width: 672px;
+}
+.brand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.brand-bar .back-link {
+  margin-bottom: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.brand-logo {
+  width: 28px;
+  height: 28px;
+}
+.brand-name {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+}
+.back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+.back-link:hover {
+  color: var(--accent);
+}
+.page-header {
+  margin-bottom: 40px;
+}
+.heading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(30px, 6vw, 36px);
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
+.intro {
+  max-width: 576px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 600;
+}
+.mark-solid {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: white;
+  font-size: 22px;
+}
+.framework-mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: white;
+}
+.framework-mark img {
+  width: 28px;
+  height: 28px;
+}
+
+/* Cards. */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.card-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  padding: 20px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.card-link {
+  color: inherit;
+  text-decoration: none;
+}
+.card-link {
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s,
+    border-color 0.15s;
+}
+.card-link:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 4px 12px #0f172a14;
+}
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.card-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.card-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.card-action {
+  margin-top: auto;
+  padding-top: 6px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 550;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-size: 12px;
+  font-weight: 500;
+}
+.steps {
+  margin-top: 40px;
+}
+.command {
+  margin: 0;
+  padding: 8px 12px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--midnight);
+  color: white;
+  font-size: 12px;
+}
+.command code {
+  padding: 0;
+  background: none;
+}
+
+/* The demo page: a sticky bar, the heading, notices, the todo card and a footer line. */
+.demo-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--border);
+  background: #f8fafccc;
+  backdrop-filter: blur(8px);
+}
+.demo-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 672px;
+  height: 56px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.demo-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bar-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bar-button:hover {
+  background: var(--subtle);
+}
+.bar-button.outlined {
+  border-color: var(--border);
+  background: white;
+}
+.bar-button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b78020;
+}
+.status[data-status="synced"] .status-dot {
+  background: #27804c;
+}
+.status[data-status="offline"] .status-dot {
+  background: #94a3b8;
+}
+.status[data-status="unreachable"] .status-dot {
+  background: #be3a36;
+}
+.demo-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.demo-title {
+  font-size: 24px;
+}
+.demo-description {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.demo-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.demo-hint strong {
+  color: var(--ink);
+  font-weight: 550;
+}
+.demo-body {
+  display: grid;
+  gap: 16px;
+}
+.notice {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  font-size: 14px;
+}
+.notice p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.notice-destructive {
+  border-color: #f0c9c7;
+  color: #be3a36;
+}
+.demo-footer {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+/* The todo card: composer, then search and status filters, then the list. */
+.todo-card {
+  gap: 24px;
+  padding: 24px;
+}
+input {
+  min-width: 0;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+input::placeholder {
+  color: #94a3b8;
+}
+.composer {
+  display: flex;
+  gap: 8px;
+}
+.composer input {
+  flex: 1;
+}
+.button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.primary {
+  color: white;
+  background: var(--accent);
+}
+.primary:not(:disabled):hover {
+  background: var(--accent-hover);
+}
+.filters-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.search-field {
+  position: relative;
+  flex: 1;
+}
+.search-field input {
+  width: 100%;
+  padding-right: 32px;
+}
+.search-field input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.clear-search {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.filters {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.filter {
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: white;
+  color: inherit;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.filter:first-child {
+  border-left: 0;
+}
+.filter span {
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.filter[aria-pressed="true"] {
+  background: var(--accent-soft);
+}
+.filter[aria-pressed="true"] span {
+  color: var(--accent);
+}
+.todo-list-block {
+  display: grid;
+  gap: 12px;
+}
+.list-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.list-summary p {
+  margin: 0;
+}
+.list-summary strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.todo-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.todo-row:hover {
+  border-color: #cbd5e1;
+}
+.icon-button {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+.toggle-button:hover,
+.toggle-button[aria-pressed="true"] {
+  color: var(--accent);
+}
+.toggle-button:hover {
+  background: var(--accent-soft);
+}
+.delete-button:hover {
+  background: #fff0f0;
+  color: #bd3232;
+}
+input.todo-title {
+  flex: 1;
+  border-color: transparent;
+  padding: 6px 8px;
+}
+input.todo-title:hover,
+input.todo-title:focus {
+  border-color: var(--border);
+}
+.completed .todo-title {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+.empty-state {
+  padding: 40px 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.empty-state .mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+.empty-state h3 {
+  margin: 12px 0 6px;
+  font-size: 16px;
+  font-weight: 550;
+  color: var(--ink);
+}
+.empty-state p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* The panel Inspect state opens. */
+.inspector {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  width: min(420px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 8px 28px #0f172a26;
+  font-size: 13px;
+}
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.inspector pre {
+  margin: 8px 0 0;
+  overflow: auto;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-link {
+    transition: none;
+  }
+}
+@media (max-width: 640px) {
+  .card-grid,
+  .card-grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filters {
+    align-self: flex-start;
+  }
+  .todo-card {
+    padding: 16px;
+  }
+}

@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/store-ngrx-signals" },
     { "path": "packages/core" },
     { "path": "packages/crdt-yjs" },
     { "path": "packages/crdt-loro" },
@@ -18,7 +19,8 @@
     { "path": "apps/benchmark-ui" },
     { "path": "apps/benchmark-ui/tsconfig.test.json" },
     { "path": "apps/playground" },
-    { "path": "apps/playground/tsconfig.test.json" },
+    { "path": "apps/playground-react" },
+    { "path": "apps/playground-react/tsconfig.test.json" },
     { "path": "apps/docs" },
     { "path": "apps/docs/tsconfig.test.json" },
     { "path": "tsconfig.test.json" }
