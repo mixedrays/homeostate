@@ -21,6 +21,8 @@ permissions:
 
 jobs:
   deploy:
+    # The "Version Packages" PR only bumps versions and writes changelogs: nothing to check.
+    if: github.head_ref != 'changeset-release/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
