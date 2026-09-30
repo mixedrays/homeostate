@@ -1,150 +1,222 @@
-<main>
-  <a class="back-link" routerLink="/">← All demos</a>
-
-  <header>
-    <div class="eyebrow">
-      <span class="brand-mark" aria-hidden="true">A</span> Homeostate playground
-    </div>
-    <div class="heading-row">
-      <h1>Angular Todo</h1>
-      <span class="framework">NgRx Signals</span>
-    </div>
-    <p class="intro">
-      Your todos, in sync. Open another framework's todo demo alongside this one
-      and watch your changes appear in both.
-    </p>
-    <div class="connection-bar">
+<header class="demo-bar">
+  <div class="demo-bar-inner">
+    <a class="bar-button" [routerLink]="back">← All stores</a>
+    <div class="demo-bar-actions">
       <span
         class="status"
         role="status"
         aria-live="polite"
         [attr.data-status]="store.status()"
+        [title]="statusTitle()"
       >
-        <span class="status-dot" aria-hidden="true"></span>{{ store.status() }}
+        <span class="status-dot" aria-hidden="true"></span>{{ statusLabel() }}
       </span>
       <button
-        class="button secondary"
+        class="bar-button outlined"
         type="button"
+        [attr.aria-pressed]="!online()"
+        [title]="
+          online()
+            ? 'Disconnect from the sync server to edit offline'
+            : 'Reconnect and merge the edits made while offline'
+        "
         (click)="store.toggleConnection()"
       >
-        {{ store.status() === "offline" ? "Go online" : "Go offline" }}
+        {{ online() ? "Go offline" : "Go online" }}
+      </button>
+      <button
+        class="bar-button outlined"
+        type="button"
+        [attr.aria-expanded]="inspecting()"
+        (click)="inspecting.set(!inspecting())"
+      >
+        Inspect state
       </button>
     </div>
-    @if (store.status() === "unreachable") {
-      <p class="connection-help" role="status">
-        Sync server unavailable. Your edits stay in this tab while the
-        connection retries.
+  </div>
+</header>
+
+<main class="page page-narrow">
+  <div class="demo-heading">
+    <span class="mark" aria-hidden="true">{{ demo.mark }}</span>
+    <div>
+      <h1 class="demo-title">{{ demo.title }}</h1>
+      <p class="demo-description">{{ demo.description }}</p>
+      <p class="demo-hint">
+        To see this store's shared state as JSON, open the inspector with
+        <strong>Inspect state</strong>.
       </p>
+    </div>
+  </div>
+
+  <div class="demo-body">
+    @if (store.status() === "offline") {
+      <div class="notice" role="status">
+        <strong>Offline. This tab is disconnected from sync.</strong>
+        <p>
+          Edits stay in this tab and other tabs keep going without them. Hit
+          <b>Go online</b> and both sides merge, no edits lost.
+        </p>
+      </div>
     }
-  </header>
+    @if (store.status() === "unreachable") {
+      <div class="notice notice-destructive" role="status">
+        <strong>Sync server unreachable.</strong>
+        <p>
+          Tabs in this browser still sync with each other, but other browsers
+          will not. Start the server with
+          <code>pnpm --filter &#64;homeostate/websocket-server-yjs dev</code>.
+          This page reconnects on its own.
+        </p>
+      </div>
+    }
 
-  <section class="todo-panel" aria-labelledby="todos-heading">
-    <h2 id="todos-heading" class="sr-only">Todo list</h2>
-    <form class="add-form" (submit)="addTodo($event, newTodo)">
-      <label class="sr-only" for="new-todo">New todo</label>
-      <input
-        #newTodo
-        id="new-todo"
-        placeholder="What needs to get done?"
-        autocomplete="off"
-      />
-      <button class="button primary" type="submit">Add todo</button>
-    </form>
+    <section
+      class="card todo-card"
+      role="region"
+      [attr.aria-label]="demo.name + ' todo list'"
+    >
+      <form class="composer" (submit)="addTodo($event)">
+        <label class="sr-only" for="new-todo">New todo</label>
+        <input
+          #newTodo
+          id="new-todo"
+          type="text"
+          placeholder="What needs to be done?"
+          autocomplete="off"
+          maxlength="200"
+          [value]="draft()"
+          (input)="draft.set(newTodo.value)"
+        />
+        <button
+          class="button primary"
+          type="submit"
+          [disabled]="!draft().trim()"
+        >
+          + Add
+        </button>
+      </form>
 
-    <div class="toolbar">
-      <div class="filters" role="group" aria-label="Filter todos">
-        @for (filter of filters; track filter.value) {
-          <button
-            type="button"
-            class="filter"
-            [attr.aria-pressed]="store.shared.filterStatus() === filter.value"
-            (click)="store.setFilterStatus(filter.value)"
-          >
-            {{ filter.label }} <span>{{ store.counts()[filter.value] }}</span>
-          </button>
+      <div class="filters-row">
+        <div class="search-field">
+          <label class="sr-only" for="search">Search todos</label>
+          <input
+            #search
+            id="search"
+            type="search"
+            placeholder="Search todos"
+            autocomplete="off"
+            [value]="store.shared.searchTerm()"
+            (input)="store.setSearchTerm(search.value)"
+          />
+          @if (store.shared.searchTerm()) {
+            <button
+              class="clear-search"
+              type="button"
+              aria-label="Clear search"
+              (click)="store.setSearchTerm('')"
+            >
+              ×
+            </button>
+          }
+        </div>
+
+        <div class="filters" role="group" aria-label="Filter by status">
+          @for (filter of filters; track filter.value) {
+            <button
+              type="button"
+              class="filter"
+              [attr.aria-pressed]="store.shared.filterStatus() === filter.value"
+              (click)="store.setFilterStatus(filter.value)"
+            >
+              {{ filter.label }} <span>{{ store.counts()[filter.value] }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="todo-list-block">
+        <div class="list-summary">
+          <p>
+            <strong>{{ store.counts().active }}</strong>
+            {{ store.counts().active === 1 ? "todo" : "todos" }} left
+          </p>
+          @if (hiddenCount() > 0) {
+            <p>{{ hiddenCount() }} hidden by filters</p>
+          }
+        </div>
+
+        @if (store.visibleTodos().length === 0) {
+          <div class="empty-state">
+            <span class="mark" aria-hidden="true">✓</span>
+            <h3>{{ emptyState().title }}</h3>
+            <p>{{ emptyState().hint }}</p>
+          </div>
+        } @else {
+          <ul class="todo-list">
+            @for (todo of store.visibleTodos(); track todo.id) {
+              <li class="todo-row" [class.completed]="todo.completed">
+                <button
+                  type="button"
+                  class="icon-button toggle-button"
+                  [attr.aria-pressed]="todo.completed"
+                  [attr.aria-label]="
+                    'Mark &quot;' +
+                    todo.title +
+                    '&quot; as ' +
+                    (todo.completed ? 'not completed' : 'completed')
+                  "
+                  (click)="store.toggleTodo(todo.id)"
+                >
+                  {{ todo.completed ? "✓" : "○" }}
+                </button>
+                <input
+                  #title
+                  class="todo-title"
+                  type="text"
+                  placeholder="Untitled todo"
+                  aria-label="Todo title"
+                  autocomplete="off"
+                  maxlength="200"
+                  [value]="todo.title"
+                  (change)="editTodo(todo.id, title)"
+                  (keydown.enter)="title.blur()"
+                />
+                <button
+                  type="button"
+                  class="icon-button delete-button"
+                  [attr.aria-label]="'Delete &quot;' + todo.title + '&quot;'"
+                  (click)="store.deleteTodo(todo.id)"
+                >
+                  ×
+                </button>
+              </li>
+            }
+          </ul>
         }
       </div>
-      <label class="sr-only" for="search">Search todos</label>
-      <input
-        #search
-        id="search"
-        class="search"
-        type="search"
-        placeholder="Search todos…"
-        [value]="store.shared.searchTerm()"
-        (input)="store.setSearchTerm(search.value)"
-      />
-    </div>
+    </section>
+  </div>
 
-    <ul class="todo-list">
-      @for (todo of store.visibleTodos(); track todo.id) {
-        <li class="todo-row" [class.completed]="todo.completed">
-          <input
-            class="checkbox"
-            type="checkbox"
-            [checked]="todo.completed"
-            [attr.aria-label]="
-              'Mark ' + todo.title + (todo.completed ? ' active' : ' completed')
-            "
-            (change)="store.toggleTodo(todo.id)"
-          />
-          <input
-            #title
-            class="todo-title"
-            [value]="todo.title"
-            [attr.aria-label]="'Edit ' + todo.title"
-            (change)="editTodo(todo.id, title)"
-            (keydown.enter)="title.blur()"
-          />
-          <button
-            type="button"
-            class="delete-button"
-            [attr.aria-label]="'Delete ' + todo.title"
-            (click)="store.deleteTodo(todo.id)"
-          >
-            ×
-          </button>
-        </li>
-      } @empty {
-        <li class="empty-state">
-          <span aria-hidden="true">✓</span>
-          <h3>
-            {{
-              store.counts().all === 0 ? "A fresh start" : "No matching todos"
-            }}
-          </h3>
-          <p>
-            {{
-              store.counts().all === 0
-                ? "Add a todo above to get started."
-                : "Try another filter or search term."
-            }}
-          </p>
-        </li>
-      }
-    </ul>
-    <footer class="list-footer">
-      <span
-        >{{ store.counts().active }}
-        {{ store.counts().active === 1 ? "todo" : "todos" }} left</span
-      >
-      <span>Click a title to edit · Enter to save</span>
-    </footer>
-  </section>
-
-  <aside class="try-it">
-    <strong>Try it across frameworks</strong>
-    <p>
-      Keep this tab open and
-      <a [href]="config.playgroundUrl" target="_blank" rel="noopener"
-        >open another playground ↗</a
-      >. Add, edit, or complete a todo. Search and filters are shared too. Go
-      offline in either tab, make changes, then reconnect to merge them.
-    </p>
-  </aside>
-
-  <details class="inspector">
-    <summary>Inspect shared state</summary>
-    <pre>{{ store.shared() | json }}</pre>
-  </details>
+  <p class="demo-footer">
+    Every store joins the room <code>{{ room }}</code
+    >. Open another store or a second tab to watch changes propagate.
+  </p>
 </main>
+
+@if (inspecting()) {
+  <aside class="inspector" aria-label="Shared state">
+    <div class="inspector-header">
+      <strong>Shared state</strong>
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Close"
+        (click)="inspecting.set(false)"
+      >
+        ×
+      </button>
+    </div>
+    <pre>{{ store.shared() | json }}</pre>
+  </aside>
+}

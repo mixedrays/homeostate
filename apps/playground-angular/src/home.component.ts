@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { PLAYGROUND_CONFIG } from "./config";
-import { demos } from "./demos";
+import { appList } from "./demos";
 
 @Component({
   selector: "app-home",
@@ -11,5 +11,5 @@ import { demos } from "./demos";
 })
 export class HomeComponent {
   readonly config = inject(PLAYGROUND_CONFIG);
-  readonly demos = demos;
+  readonly apps = appList;
 }

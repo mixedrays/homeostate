@@ -15,11 +15,11 @@ pnpm playground          # landing page :5180, React :5181, Angular :4200, WebSo
 pnpm playground:angular  # Angular :4200 and WebSocket :9999 only
 ```
 
-Open http://localhost:4200/todo and a React todo demo at http://localhost:5181/todo.
+Open http://localhost:4200/todo/ngrx-signals and a React todo demo at http://localhost:5181/todo.
 Add, rename, complete, and delete todos in either app. Search and filter selection
 are shared as well. Use **Go offline** to disconnect a tab, edit both sides, then
 reconnect to merge the histories. Offline edits live in memory and do not survive
-a page reload. **Inspect shared state** displays the current JSON snapshot.
+a page reload. **Inspect state** displays the current JSON snapshot.
 
 ## Configuration and deployment
 
@@ -50,7 +50,8 @@ does not deploy the playgrounds automatically.
 ## Structure
 
 - `src/todo.store.ts`: SignalStore methods, derived values, sync, and lifecycle cleanup.
-- `src/home.component.*`: the landing page, listing the demos in `src/demos.ts`.
+- `src/home.component.*`: the landing page, listing the apps in `src/demos.ts`.
+- `src/todo-stores.component.*`: the todo app's store selector.
 - `src/todo.component.*`: accessible todo controls, connection status, and state inspector.
 - `@homeostate/store-ngrx-signals`: reusable adapter using synchronous `watchState`.
 - `@homeostate/playground/shared`: common todo types, filtering, room, and CRDT seed.

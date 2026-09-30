@@ -1,11 +1,9 @@
-<main>
+<main class="page">
   <a class="back-link" [href]="config.playgroundUrl">← All playgrounds</a>
 
-  <header>
-    <div class="eyebrow">
-      <span class="brand-mark" aria-hidden="true">A</span> Homeostate playground
-    </div>
+  <header class="page-header">
     <div class="heading-row">
+      <span class="mark mark-solid" aria-hidden="true">A</span>
       <h1>Angular Playground</h1>
     </div>
     <p class="intro">
@@ -17,17 +15,53 @@
 
   <section aria-labelledby="demos-heading">
     <h2 id="demos-heading" class="sr-only">Demos</h2>
-    <ul class="demo-list">
-      @for (demo of demos; track demo.path) {
+    <ul class="card-grid">
+      @for (app of apps; track app.id) {
         <li>
-          <a class="demo-card" [routerLink]="demo.path">
-            <h2>{{ demo.name }}</h2>
-            <p>{{ demo.description }}</p>
-            <span class="framework">{{ demo.store }}</span>
-            <span class="demo-action">Open demo →</span>
+          <a class="card card-link" [routerLink]="app.path">
+            <span class="mark" aria-hidden="true">{{ app.mark }}</span>
+            <h3 class="card-title">{{ app.name }}</h3>
+            <p class="card-description">{{ app.description }}</p>
+            <ul class="tags" aria-label="Built with">
+              @for (tag of app.tags; track tag) {
+                <li class="tag">{{ tag }}</li>
+              }
+            </ul>
+            <span class="card-action">{{ app.action }} →</span>
           </a>
         </li>
       }
     </ul>
+  </section>
+
+  <section aria-labelledby="steps-heading" class="steps">
+    <h2 id="steps-heading" class="sr-only">Getting started</h2>
+    <ol class="card-grid">
+      <li>
+        <div class="card">
+          <h3 class="card-title">1. Start the playground</h3>
+          <p class="card-description">From the repo root, run:</p>
+          <pre class="command"><code>pnpm playground:angular</code></pre>
+          <p class="card-note">
+            This starts the Angular app together with the WebSocket sync server
+            the demos connect to at <code>{{ config.syncServerUrl }}</code
+            >. <code>pnpm playground</code> starts every framework's playground
+            at once.
+          </p>
+        </div>
+      </li>
+      <li>
+        <div class="card">
+          <h3 class="card-title">2. Open two windows</h3>
+          <p class="card-description">
+            Open a demo in two tabs side by side and edit in both. The header of
+            each demo shows its connection state and a
+            <strong>Go offline</strong> button that cuts that tab off from sync.
+            Edit on both sides, then go back online and watch the two histories
+            merge.
+          </p>
+        </div>
+      </li>
+    </ol>
   </section>
 </main>
