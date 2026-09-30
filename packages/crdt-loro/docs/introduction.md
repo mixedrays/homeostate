@@ -37,3 +37,23 @@ keystroke each produce one small update. Replication is yours to wire, for examp
 about every commit that did not come through its own `write`, imports and local edits alike.
 
 Loro stores `undefined` as `null`, so such values read back as `null`.
+
+## Persistence
+
+`createLoroPersistable(doc)` exposes the whole document to `createPersistence`, which keeps it in
+storage such as [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) so it outlives
+every peer and the server:
+
+```ts
+const persistence = createPersistence(
+  createLoroPersistable(doc),
+  createIndexedDbAdapter(),
+  {
+    key: "room",
+  },
+);
+await persistence.whenLoaded;
+engine.connect();
+```
+
+It stores a snapshot plus the update of each commit or import since. See the [persistence guide](/docs/persistence).

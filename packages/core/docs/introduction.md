@@ -33,7 +33,8 @@ engine.connect();
 ```
 
 `createMemoryBackend()` from `@homeostate/core/testing` is a plain-JSON backend without
-replication, meant for tests.
+replication, meant for tests; `createMemoryPersistenceAdapter()` is its in-memory storage
+counterpart for persistence.
 `getChanges` is exported so a backend can turn a `write(next)` into fine-grained operations.
 
 ## Applying string changes
@@ -71,6 +72,15 @@ Afterwards the backend owns the synced document: each local change replaces it w
 store's filtered state, and a key removed from the backend is removed from the store. A
 reconnect adopts the backend again, so edits made while disconnected are dropped unless
 they are still in the store's local-only keys.
+
+## Persistence
+
+`createPersistence(doc, adapter, { key })` keeps a CRDT document in storage, so its state
+survives reloads, offline starts, and every peer leaving the room. `doc` is a
+`PersistableDoc` from a backend package, such as `createYjsPersistable(ydoc)`, and `adapter`
+a `PersistenceAdapter` such as [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or
+[`@homeostate/persist-local-storage`](../../persist-local-storage/docs/introduction.md). Connect the engine after `whenLoaded`, so it
+adopts the restored state. See the [persistence guide](/docs/persistence).
 
 See the [repository](https://github.com/mixedrays/homeostate) for the full workspace,
 store adapters, and a runnable playground.

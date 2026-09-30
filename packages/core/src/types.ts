@@ -96,3 +96,88 @@ export interface SyncEngine {
 export const defaultSyncFilter = (_key: string, value: unknown): boolean => {
   return typeof value !== "function";
 };
+
+/**
+ * A CRDT document seen as binary updates, which is what persistence stores. `crdt-*`
+ * packages implement it next to their `CrdtBackend`. Persisting the document rather than the
+ * JSON state keeps its history, so a restored document merges with its peers instead of
+ * competing with them.
+ */
+export interface PersistableDoc {
+  /** Encode the whole document as one update that `apply` accepts. */
+  encode: () => Uint8Array;
+
+  /**
+   * Merge an update or an `encode()` result into the document. Applying the same update
+   * twice, or updates out of order, must be safe.
+   */
+  apply: (update: Uint8Array) => void;
+
+  /**
+   * Report every change to the document, local or from a peer, as an update `apply`
+   * accepts. Changes made by `apply` itself are not reported.
+   * @returns Unsubscribe function
+   */
+  subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;
+}
+
+/** What a `PersistenceAdapter` holds under one key. */
+export interface StoredUpdates {
+  /** Every stored update, oldest first; empty when nothing is stored. */
+  updates: Uint8Array[];
+  /** Position of the newest update, handed back to `compact`; 0 when nothing is stored. */
+  version: number;
+}
+
+/**
+ * Storage for persisted documents: an append-only log of updates per key.
+ * `persist-*` packages implement it for localStorage and IndexedDB.
+ */
+export interface PersistenceAdapter {
+  /** Read every update stored under `key`. */
+  load: (key: string) => Promise<StoredUpdates>;
+
+  /** Store one more update under `key`. */
+  append: (key: string, update: Uint8Array) => Promise<void>;
+
+  /**
+   * In one atomic step, remove the updates under `key` up to and including `version`, and
+   * store `snapshot`. Updates appended after that `load` must be kept.
+   */
+  compact: (
+    key: string,
+    snapshot: Uint8Array,
+    version: number,
+  ) => Promise<void>;
+
+  /** Remove everything stored under `key`. */
+  clear: (key: string) => Promise<void>;
+}
+
+/** Configuration options for `createPersistence` */
+export interface PersistenceConfig {
+  /** Name the document is stored under, such as its room name. */
+  key: string;
+  /**
+   * Number of appended updates after which the stored log is merged into one snapshot;
+   * defaults to 100. `Infinity` only compacts on load.
+   */
+  compactAfter?: number;
+  /** Called when storage fails or a stored update cannot be applied; defaults to `console.error`. */
+  onError?: (error: unknown) => void;
+}
+
+/** A document kept in storage by `createPersistence` */
+export interface Persistence {
+  /**
+   * Resolves once the stored updates are applied to the document. It also resolves when
+   * loading fails, after `onError`, so the app still starts without its stored state.
+   */
+  whenLoaded: Promise<void>;
+  /** Resolves when every update reported so far has been written. */
+  flush: () => Promise<void>;
+  /** Stop storing updates; stored data is kept. Resolves once pending writes finish. */
+  destroy: () => Promise<void>;
+  /** Stop storing updates and remove the stored document. */
+  clear: () => Promise<void>;
+}

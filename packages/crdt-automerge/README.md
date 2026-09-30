@@ -68,6 +68,26 @@ value is `undefined` and stores `undefined` array items as `null`, as `JSON.stri
 [Automerge's documentation](https://automerge.org/docs/), or import
 `@automerge/automerge/slim` and initialize the module yourself.
 
+## Persistence
+
+`createAutomergePersistable(handle)` exposes the whole document to `createPersistence`, which keeps it in
+storage such as [`@homeostate/persist-indexeddb`](https://github.com/mixedrays/homeostate/tree/main/packages/persist-indexeddb) so it outlives
+every peer and the server:
+
+```ts
+const persistence = createPersistence(
+  createAutomergePersistable(handle),
+  createIndexedDbAdapter(),
+  {
+    key: "room",
+  },
+);
+await persistence.whenLoaded;
+engine.connect();
+```
+
+It stores `A.save` of the handle's document plus the changes of each update since. See the [persistence guide](https://homeostate.pages.dev/docs/persistence).
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). Includes code derived from

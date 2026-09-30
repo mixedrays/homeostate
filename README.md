@@ -11,28 +11,32 @@ manager. Pick one of each:
 npm install @homeostate/core @homeostate/store-zustand @homeostate/crdt-yjs
 ```
 
-`tool-*` packages are optional development tools, such as the devtools panel in
+`persist-*` packages are optional storage for `createPersistence`, which keeps a CRDT document
+in the browser so its state survives reloads and every peer leaving the room. `tool-*`
+packages are optional development tools, such as the devtools panel in
 `@homeostate/tool-devtools`.
 
 ## Packages
 
 Libraries, under `packages/`.
 
-| Package                             | Path                             | Purpose                                                                                                   |
-| ----------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, the `StoreAdapter` and `CrdtBackend` contracts; `createMemoryBackend` from `/testing` |
-| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend`: Yjs implementation of `CrdtBackend`                                                   |
-| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend`: Loro implementation of `CrdtBackend`                                                 |
-| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend`: Automerge implementation of `CrdtBackend`                                       |
-| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                                    |
-| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                                       |
-| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                      |
-| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                      |
-| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                     |
-| `@homeostate/store-ngrx-signals`    | `packages/store-ngrx-signals`    | NgRx Signals adapter for Angular                                                                          |
-| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                             |
-| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                            |
-| `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log            |
+| Package                             | Path                             | Purpose                                                                                                 |
+| ----------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, `createPersistence` and their contracts; in-memory test doubles from `/testing`     |
+| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend` and `createYjsPersistable`: Yjs `CrdtBackend` and `PersistableDoc`                   |
+| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend` and `createLoroPersistable`: Loro `CrdtBackend` and `PersistableDoc`                |
+| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend` and `createAutomergePersistable`: Automerge `CrdtBackend` and `PersistableDoc` |
+| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                                  |
+| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                                     |
+| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                    |
+| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                    |
+| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                   |
+| `@homeostate/store-ngrx-signals`    | `packages/store-ngrx-signals`    | NgRx Signals adapter for Angular                                                                        |
+| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                           |
+| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                          |
+| `@homeostate/persist-indexeddb`     | `packages/persist-indexeddb`     | IndexedDB `PersistenceAdapter` for `createPersistence`                                                  |
+| `@homeostate/persist-local-storage` | `packages/persist-local-storage` | localStorage `PersistenceAdapter` for `createPersistence`                                               |
+| `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log          |
 
 ## Apps
 

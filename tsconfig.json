@@ -13,6 +13,8 @@
     { "path": "packages/store-valtio" },
     { "path": "packages/store-tanstack" },
     { "path": "packages/store-mobx-state-tree" },
+    { "path": "packages/persist-local-storage" },
+    { "path": "packages/persist-indexeddb" },
     { "path": "packages/tool-devtools" },
     { "path": "apps/benchmark-crdt" },
     { "path": "apps/benchmark-store" },

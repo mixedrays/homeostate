@@ -72,3 +72,23 @@ value is `undefined` and stores `undefined` array items as `null`, as `JSON.stri
 `@automerge/automerge` ships WebAssembly. Node loads it directly; for bundlers see
 [Automerge's documentation](https://automerge.org/docs/), or import
 `@automerge/automerge/slim` and initialize the module yourself.
+
+## Persistence
+
+`createAutomergePersistable(handle)` exposes the whole document to `createPersistence`, which keeps it in
+storage such as [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) so it outlives
+every peer and the server:
+
+```ts
+const persistence = createPersistence(
+  createAutomergePersistable(handle),
+  createIndexedDbAdapter(),
+  {
+    key: "room",
+  },
+);
+await persistence.whenLoaded;
+engine.connect();
+```
+
+It stores `A.save` of the handle's document plus the changes of each update since. See the [persistence guide](/docs/persistence).

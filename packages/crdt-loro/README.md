@@ -33,6 +33,26 @@ about every commit that did not come through its own `write`, imports and local 
 
 Loro stores `undefined` as `null`, so such values read back as `null`.
 
+## Persistence
+
+`createLoroPersistable(doc)` exposes the whole document to `createPersistence`, which keeps it in
+storage such as [`@homeostate/persist-indexeddb`](https://github.com/mixedrays/homeostate/tree/main/packages/persist-indexeddb) so it outlives
+every peer and the server:
+
+```ts
+const persistence = createPersistence(
+  createLoroPersistable(doc),
+  createIndexedDbAdapter(),
+  {
+    key: "room",
+  },
+);
+await persistence.whenLoaded;
+engine.connect();
+```
+
+It stores a snapshot plus the update of each commit or import since. See the [persistence guide](https://homeostate.pages.dev/docs/persistence).
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). Includes code derived from
