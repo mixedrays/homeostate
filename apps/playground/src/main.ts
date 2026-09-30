@@ -15,18 +15,23 @@ function element<K extends keyof HTMLElementTagNameMap>(
 function card(playground: Playground) {
   const link = element("a", "card");
   link.href = playground.url;
-  link.style.setProperty("--accent", playground.accent);
 
-  const mark = element("span", "mark", playground.name[0]);
-  mark.setAttribute("aria-hidden", "true");
+  const icon = element("img", "icon");
+  icon.src = playground.icon;
+  icon.alt = "";
+
+  const mark = element("span", "mark");
+  mark.append(icon);
 
   const tags = element("ul", "tags");
   tags.setAttribute("aria-label", "Built with");
   for (const tag of playground.tags) tags.append(element("li", "tag", tag));
 
+  const heading = element("div", "card-heading");
+  heading.append(mark, element("h3", "card-title", playground.name));
+
   link.append(
-    mark,
-    element("h3", "card-title", playground.name),
+    heading,
     element("p", "card-description", playground.description),
     tags,
     element("code", "command", playground.command),

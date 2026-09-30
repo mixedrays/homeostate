@@ -27,8 +27,10 @@ const app = apps.todo;
       <ul class="card-grid card-grid-3">
         <li v-for="demo in demoList" :key="demo.id">
           <RouterLink class="card card-link" :to="demo.path">
-            <span class="mark" aria-hidden="true">{{ demo.mark }}</span>
-            <h3 class="card-title">{{ demo.name }}</h3>
+            <div class="card-heading">
+              <span class="mark" aria-hidden="true">{{ demo.mark }}</span>
+              <h3 class="card-title">{{ demo.name }}</h3>
+            </div>
             <p class="card-description">{{ demo.description }}</p>
             <span class="card-action">Open demo →</span>
           </RouterLink>

@@ -1,18 +1,28 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* The Homeostate identity: cobalt for actions, ink and paper for everything else. */
 :root {
   font-family:
+    "Geist Variable",
     ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #27232e;
-  background: #faf9fb;
+  color: var(--ink);
+  background: var(--paper);
   font-synthesis: none;
-  --accent: #1f7a54;
-  --accent-soft: #e3f3eb;
-  --muted: #706979;
-  --border: #e8e3eb;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --ink: #203a40;
+  --midnight: #0f172a;
+  --paper: #f8fafc;
+  --subtle: #f1f5f9;
+  --muted: #64748b;
+  --border: #e2e8f0;
 }
 * {
   box-sizing: border-box;
@@ -48,11 +58,12 @@ a {
   color: var(--accent);
 }
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:
+    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
   padding: 1px 4px;
   border-radius: 4px;
-  background: #f1edf3;
+  background: var(--subtle);
 }
 
 /* Page frame, shared by the landing pages and the demo. */
@@ -63,6 +74,32 @@ code {
 }
 .page-narrow {
   max-width: 672px;
+}
+.brand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.brand-bar .back-link {
+  margin-bottom: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.brand-logo {
+  width: 28px;
+  height: 28px;
+}
+.brand-name {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
 }
 .back-link {
   display: inline-block;
@@ -86,7 +123,7 @@ h1 {
   margin: 0;
   font-size: clamp(30px, 6vw, 36px);
   letter-spacing: -0.025em;
-  font-weight: 650;
+  font-weight: 600;
 }
 .intro {
   max-width: 576px;
@@ -113,6 +150,20 @@ h1 {
   background: var(--accent);
   color: white;
   font-size: 22px;
+}
+.framework-mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: white;
+}
+.framework-mark img {
+  width: 28px;
+  height: 28px;
 }
 
 /* Cards. */
@@ -141,8 +192,21 @@ h1 {
   color: inherit;
   text-decoration: none;
 }
+.card-link {
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s,
+    border-color 0.15s;
+}
 .card-link:hover {
-  border-color: var(--accent);
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 4px 12px #0f172a14;
+}
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .card-title {
   margin: 0;
@@ -180,9 +244,9 @@ h1 {
   padding: 3px 9px;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-hover);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .steps {
   margin-top: 40px;
@@ -192,7 +256,7 @@ h1 {
   padding: 8px 12px;
   overflow-x: auto;
   border-radius: 8px;
-  background: #27232e;
+  background: var(--midnight);
   color: white;
   font-size: 12px;
 }
@@ -207,7 +271,7 @@ h1 {
   top: 0;
   z-index: 10;
   border-bottom: 1px solid var(--border);
-  background: #faf9fbcc;
+  background: #f8fafccc;
   backdrop-filter: blur(8px);
 }
 .demo-bar-inner {
@@ -240,7 +304,7 @@ h1 {
   white-space: nowrap;
 }
 .bar-button:hover {
-  background: #f1edf3;
+  background: var(--subtle);
 }
 .bar-button.outlined {
   border-color: var(--border);
@@ -273,7 +337,7 @@ h1 {
   background: #27804c;
 }
 .status[data-status="offline"] .status-dot {
-  background: #8b8492;
+  background: #94a3b8;
 }
 .status[data-status="unreachable"] .status-dot {
   background: #be3a36;
@@ -298,7 +362,7 @@ h1 {
   font-size: 12px;
 }
 .demo-hint strong {
-  color: #27232e;
+  color: var(--ink);
   font-weight: 550;
 }
 .demo-body {
@@ -344,7 +408,7 @@ input {
   font-size: 14px;
 }
 input::placeholder {
-  color: #918a99;
+  color: #94a3b8;
 }
 .composer {
   display: flex;
@@ -367,7 +431,7 @@ input::placeholder {
   background: var(--accent);
 }
 .primary:not(:disabled):hover {
-  background: #17603f;
+  background: var(--accent-hover);
 }
 .filters-row {
   display: flex;
@@ -447,7 +511,7 @@ input::placeholder {
   margin: 0;
 }
 .list-summary strong {
-  color: #27232e;
+  color: var(--ink);
   font-weight: 600;
 }
 .todo-list {
@@ -466,7 +530,7 @@ input::placeholder {
   border-radius: 12px;
 }
 .todo-row:hover {
-  border-color: #c9c1cf;
+  border-color: #cbd5e1;
 }
 .icon-button {
   flex-shrink: 0;
@@ -500,7 +564,7 @@ input.todo-title:focus {
   border-color: var(--border);
 }
 .completed .todo-title {
-  color: #918a99;
+  color: #94a3b8;
   text-decoration: line-through;
 }
 .empty-state {
@@ -519,7 +583,7 @@ input.todo-title:focus {
   margin: 12px 0 6px;
   font-size: 16px;
   font-weight: 550;
-  color: #27232e;
+  color: var(--ink);
 }
 .empty-state p {
   font-size: 14px;
@@ -539,7 +603,7 @@ input.todo-title:focus {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: white;
-  box-shadow: 0 8px 28px #30223b26;
+  box-shadow: 0 8px 28px #0f172a26;
   font-size: 13px;
 }
 .inspector-header {
@@ -550,7 +614,7 @@ input.todo-title:focus {
 .inspector pre {
   margin: 8px 0 0;
   overflow: auto;
-  color: #403348;
+  color: #334155;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -565,6 +629,11 @@ input.todo-title:focus {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-link {
+    transition: none;
+  }
 }
 @media (max-width: 640px) {
   .card-grid,

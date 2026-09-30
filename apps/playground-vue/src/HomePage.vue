@@ -1,15 +1,27 @@
 <script setup lang="ts">
 import { PLAYGROUNDS_URL, SYNC_SERVER_URL } from "./config";
+import homeostateLogo from "@homeostate/playground/shared/homeostate.svg";
+import vueLogo from "@homeostate/playground/shared/icons/vue.svg";
 import { appList } from "./demos";
 </script>
 
 <template>
   <main class="page">
-    <a class="back-link" :href="PLAYGROUNDS_URL">← All playgrounds</a>
+    <div class="brand-bar">
+      <a
+        class="brand"
+        :href="PLAYGROUNDS_URL"
+        aria-label="Homeostate playgrounds"
+      >
+        <img class="brand-logo" :src="homeostateLogo" alt="" />
+        <span class="brand-name">homeostate</span>
+      </a>
+      <a class="back-link" :href="PLAYGROUNDS_URL">← All playgrounds</a>
+    </div>
 
     <header class="page-header">
       <div class="heading-row">
-        <span class="mark mark-solid" aria-hidden="true">V</span>
+        <span class="framework-mark"><img :src="vueLogo" alt="" /></span>
         <h1>Vue Playground</h1>
       </div>
       <p class="intro">
@@ -24,8 +36,10 @@ import { appList } from "./demos";
       <ul class="card-grid">
         <li v-for="app in appList" :key="app.id">
           <RouterLink class="card card-link" :to="app.path">
-            <span class="mark" aria-hidden="true">{{ app.mark }}</span>
-            <h3 class="card-title">{{ app.name }}</h3>
+            <div class="card-heading">
+              <span class="mark" aria-hidden="true">{{ app.mark }}</span>
+              <h3 class="card-title">{{ app.name }}</h3>
+            </div>
             <p class="card-description">{{ app.description }}</p>
             <ul class="tags" aria-label="Built with">
               <li v-for="tag in app.tags" :key="tag" class="tag">{{ tag }}</li>

@@ -5,7 +5,8 @@
   "description": "Landing page linking to every framework's homeostate playground, and the code those playgrounds share",
   "type": "module",
   "exports": {
-    "./shared": "./shared/index.ts"
+    "./shared": "./shared/index.ts",
+    "./shared/*.svg": "./shared/*.svg"
   },
   "scripts": {
     "dev": "vite",
@@ -13,6 +14,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@homeostate/crdt-yjs": "workspace:^",
     "y-websocket": "^2.1.0",
     "yjs": "^13.6.23"

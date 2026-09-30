@@ -21,8 +21,10 @@
       @for (demo of demos; track demo.id) {
         <li>
           <a class="card card-link" [routerLink]="demo.path">
-            <span class="mark" aria-hidden="true">{{ demo.mark }}</span>
-            <h3 class="card-title">{{ demo.name }}</h3>
+            <div class="card-heading">
+              <span class="mark" aria-hidden="true">{{ demo.mark }}</span>
+              <h3 class="card-title">{{ demo.name }}</h3>
+            </div>
             <p class="card-description">{{ demo.description }}</p>
             <span class="card-action">Open demo →</span>
           </a>

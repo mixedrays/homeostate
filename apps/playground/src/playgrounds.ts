@@ -1,3 +1,7 @@
+import angularIcon from "../shared/icons/angular.svg";
+import reactIcon from "../shared/icons/react.svg";
+import vueIcon from "../shared/icons/vue.svg";
+
 /** One framework's playground: a separately built app with its own landing page and demos. */
 export interface Playground {
   id: string;
@@ -5,8 +9,8 @@ export interface Playground {
   description: string;
   /** Short labels for the stores and demos the playground shows off. */
   tags: readonly string[];
-  /** The colour of the card's mark and call to action. */
-  accent: string;
+  /** The URL of the framework's logo. */
+  icon: string;
   /** The root script that starts this playground on its own. */
   command: string;
   url: string;
@@ -37,7 +41,7 @@ export const playgrounds: readonly Playground[] = [
       "TanStack Store",
       "MobX-State-Tree",
     ],
-    accent: "#0e7490",
+    icon: reactIcon,
     command: "pnpm playground:react",
     url: locate(env.VITE_PLAYGROUND_REACT_URL, 5181, "/react/"),
   },
@@ -47,7 +51,7 @@ export const playgrounds: readonly Playground[] = [
     description:
       "The shared todo list as a standalone Angular app with an NgRx SignalStore.",
     tags: ["NgRx Signals"],
-    accent: "#a21c55",
+    icon: angularIcon,
     command: "pnpm playground:angular",
     url: locate(env.VITE_PLAYGROUND_ANGULAR_URL, 4200, "/angular/"),
   },
@@ -57,7 +61,7 @@ export const playgrounds: readonly Playground[] = [
     description:
       "The shared todo list as a Vue app reading a TanStack Store through refs.",
     tags: ["TanStack Store"],
-    accent: "#1f7a54",
+    icon: vueIcon,
     command: "pnpm playground:vue",
     url: locate(env.VITE_PLAYGROUND_VUE_URL, 5182, "/vue/"),
   },

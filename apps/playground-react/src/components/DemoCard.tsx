@@ -33,10 +33,12 @@ export function DemoCard({ page, action, children }: DemoCardProps) {
     >
       <Card className="h-full transition group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/40">
         <CardHeader>
-          <span className="mb-2 inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon size={20} aria-hidden />
-          </span>
-          <CardTitle className="text-lg font-semibold">{page.name}</CardTitle>
+          <div className="mb-1 flex items-center gap-3">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Icon size={20} aria-hidden />
+            </span>
+            <CardTitle className="text-lg font-semibold">{page.name}</CardTitle>
+          </div>
           <CardDescription className="leading-relaxed">
             {page.description}
           </CardDescription>

@@ -1,9 +1,19 @@
 <main class="page">
-  <a class="back-link" [href]="config.playgroundUrl">← All playgrounds</a>
+  <div class="brand-bar">
+    <a
+      class="brand"
+      [href]="config.playgroundUrl"
+      aria-label="Homeostate playgrounds"
+    >
+      <img class="brand-logo" src="homeostate.svg" alt="" />
+      <span class="brand-name">homeostate</span>
+    </a>
+    <a class="back-link" [href]="config.playgroundUrl">← All playgrounds</a>
+  </div>
 
   <header class="page-header">
     <div class="heading-row">
-      <span class="mark mark-solid" aria-hidden="true">A</span>
+      <span class="framework-mark"><img src="angular.svg" alt="" /></span>
       <h1>Angular Playground</h1>
     </div>
     <p class="intro">
@@ -19,8 +29,10 @@
       @for (app of apps; track app.id) {
         <li>
           <a class="card card-link" [routerLink]="app.path">
-            <span class="mark" aria-hidden="true">{{ app.mark }}</span>
-            <h3 class="card-title">{{ app.name }}</h3>
+            <div class="card-heading">
+              <span class="mark" aria-hidden="true">{{ app.mark }}</span>
+              <h3 class="card-title">{{ app.name }}</h3>
+            </div>
             <p class="card-description">{{ app.description }}</p>
             <ul class="tags" aria-label="Built with">
               @for (tag of app.tags; track tag) {

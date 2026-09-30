@@ -1,3 +1,7 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* The Homeostate identity: cobalt for actions, ink and paper for everything else. */
 :root {
   font-family:
     "Geist Variable",
@@ -7,9 +11,15 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #0f172a;
-  background: #ffffff;
+  color: var(--ink);
+  background: var(--paper);
   font-synthesis: none;
+  --cobalt: #2563eb;
+  --cobalt-hover: #1d4ed8;
+  --ink: #203a40;
+  --midnight: #0f172a;
+  --paper: #f8fafc;
+  --tint: #eff6ff;
   --muted: #64748b;
   --border: #e2e8f0;
   --subtle: #f1f5f9;
@@ -24,6 +34,21 @@ main {
   max-width: 768px;
   margin: 0 auto;
   padding: 40px 16px 64px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+.brand-logo {
+  width: 28px;
+  height: 28px;
+}
+.brand-name {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
 }
 h1 {
   margin: 0;
@@ -53,6 +78,7 @@ h1 {
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: 14px;
+  background: white;
   color: inherit;
   text-decoration: none;
   transition:
@@ -60,25 +86,35 @@ h1 {
     box-shadow 0.15s,
     border-color 0.15s;
 }
+.card:hover .action {
+  color: var(--cobalt-hover);
+}
 .card:hover {
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-color: color-mix(in srgb, var(--cobalt) 40%, var(--border));
   box-shadow: 0 4px 12px #0f172a14;
 }
 .card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--cobalt);
   outline-offset: 3px;
+}
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .mark {
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 10%, white);
-  color: var(--accent);
-  font-size: 18px;
-  font-weight: 600;
+  background: var(--paper);
+}
+.icon {
+  width: 24px;
+  height: 24px;
 }
 .card-title {
   margin: 0;
@@ -102,12 +138,14 @@ h1 {
 .tag {
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--subtle);
+  background: var(--tint);
+  color: var(--cobalt-hover);
   font-size: 12px;
   font-weight: 500;
 }
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:
+    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
 .command {
@@ -115,7 +153,7 @@ code {
 }
 .action {
   margin-top: auto;
-  color: var(--accent);
+  color: var(--cobalt);
   font-size: 14px;
   font-weight: 500;
 }
@@ -124,6 +162,7 @@ code {
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: 14px;
+  background: white;
 }
 .hint h2 {
   margin: 0 0 8px;
@@ -140,7 +179,7 @@ code {
   padding: 2px 6px;
   border-radius: 6px;
   background: var(--subtle);
-  color: #0f172a;
+  color: var(--ink);
 }
 .sr-only {
   position: absolute;

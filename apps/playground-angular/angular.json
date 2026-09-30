@@ -18,7 +18,17 @@
             "styles": ["src/styles.css"],
             "assets": [
               { "glob": "config.json", "input": "public", "output": "/" },
-              { "glob": "favicon.svg", "input": "public", "output": "/" }
+              { "glob": "favicon.svg", "input": "public", "output": "/" },
+              {
+                "glob": "homeostate.svg",
+                "input": "node_modules/@homeostate/playground/shared",
+                "output": "/"
+              },
+              {
+                "glob": "angular.svg",
+                "input": "node_modules/@homeostate/playground/shared/icons",
+                "output": "/"
+              }
             ]
           },
           "configurations": {
