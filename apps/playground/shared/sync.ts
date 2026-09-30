@@ -1,6 +1,8 @@
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { createPersistence, type Persistence } from "@homeostate/core";
+import { createYjsBackend, createYjsPersistable } from "@homeostate/crdt-yjs";
+import { createLocalStorageAdapter } from "@homeostate/persist-local-storage";
 import type { TodoState } from "./todo.js";
 
 /** Bump when changing the initial state or how its CRDT seed is encoded. */
@@ -40,10 +42,33 @@ function seedTodos(doc: Y.Doc): void {
   }
 }
 
+/**
+ * Keeps the room in this browser's localStorage, so it survives every tab closing and the sync
+ * server restarting: the next tab to open restores it and hands it back to the server.
+ * Engines may connect before it loads, because both rooms are seeded identically first:
+ * the synced keys already exist, so `connect()` seeds nothing that could compete.
+ */
+function persistRoom(ydoc: Y.Doc, room: string): Persistence | null {
+  // Not `typeof localStorage`: Node 25 defines one that warns when read.
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  const persistence = createPersistence(
+    createYjsPersistable(ydoc),
+    createLocalStorageAdapter(),
+    { key: room },
+  );
+  ydoc.on("destroy", () => void persistence.destroy());
+  return persistence;
+}
+
+/**
+ * Creates the room's document, restored from localStorage where available, and its WebSocket
+ * provider. Destroying the document also stops persisting it.
+ */
 export function connectSharedDoc(serverUrl: string, room = TODO_ROOM) {
   const ydoc = new Y.Doc();
   // Seed before the provider can receive updates (including same-browser broadcasts).
   if (room === TODO_ROOM) seedTodos(ydoc);
+  const persistence = persistRoom(ydoc, room);
   const wsProvider = new WebsocketProvider(serverUrl, room, ydoc);
-  return { ydoc, wsProvider };
+  return { ydoc, wsProvider, persistence };
 }

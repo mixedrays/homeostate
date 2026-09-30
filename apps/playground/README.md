@@ -40,7 +40,12 @@ Yjs document initialization.
 
 `connectSharedDoc(serverUrl, room?)` creates a seeded document and its WebSocket
 provider. The caller owns both and must destroy the provider and document on teardown.
-The sync server URL is supplied by each app's configuration.
+
+Where localStorage is available, the document is also persisted under its room name with
+`@homeostate/persist-local-storage`, so a room survives every tab closing and the WebSocket
+server restarting: the next tab restores it and syncs it back to the server. Destroying the
+document stops persisting it. To start a browser from the seed again, remove the
+`homeostate:`-prefixed localStorage entries in the browser's developer tools.
 
 All todo demos use `homeostate-todos-v1` and the `shared-ydoc` map. The seed's CRDT
 history must remain identical in every playground. If defaults or their encoding change in
