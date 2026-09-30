@@ -10,7 +10,7 @@ From the repository root:
 
 ```bash
 pnpm install
-pnpm playground      # landing page :5180, React :5181, Vue :5182, Angular :4200, WebSocket :9999
+pnpm playground      # landing page :5180, React :5181, Vue :5182, Svelte :5183, Angular :4200, WebSocket :9999
 pnpm playground:vue  # Vue :5182 and WebSocket :9999 only
 ```
 

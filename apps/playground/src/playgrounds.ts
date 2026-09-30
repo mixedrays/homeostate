@@ -1,5 +1,6 @@
 import angularIcon from "../shared/icons/angular.svg";
 import reactIcon from "../shared/icons/react.svg";
+import svelteIcon from "../shared/icons/svelte.svg";
 import vueIcon from "../shared/icons/vue.svg";
 
 /** One framework's playground: a separately built app with its own landing page and demos. */
@@ -64,5 +65,15 @@ export const playgrounds: readonly Playground[] = [
     icon: vueIcon,
     command: "pnpm playground:vue",
     url: locate(env.VITE_PLAYGROUND_VUE_URL, 5182, "/vue/"),
+  },
+  {
+    id: "svelte",
+    name: "Svelte",
+    description:
+      "The shared todo list as a Svelte app reading a TanStack Store through runes.",
+    tags: ["TanStack Store"],
+    icon: svelteIcon,
+    command: "pnpm playground:svelte",
+    url: locate(env.VITE_PLAYGROUND_SVELTE_URL, 5183, "/svelte/"),
   },
 ];

@@ -1,0 +1,33 @@
+{
+  "name": "@homeostate/playground-svelte",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "svelte-check --tsconfig ./tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@homeostate/core": "workspace:^",
+    "@homeostate/crdt-yjs": "workspace:^",
+    "@homeostate/playground": "workspace:^",
+    "@homeostate/store-tanstack": "workspace:^",
+    "@tanstack/store": "^0.11.1",
+    "@tanstack/svelte-store": "^0.12.2",
+    "svelte": "^5.57.1",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.23"
+  },
+  "devDependencies": {
+    "@homeostate/store-zustand": "workspace:^",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "svelte-check": "^4.7.6",
+    "typescript": "^5.5.3",
+    "vite": "^8.3.0",
+    "zustand": "^4.5.2"
+  }
+}
