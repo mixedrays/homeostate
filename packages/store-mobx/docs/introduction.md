@@ -8,9 +8,8 @@ label: Introduction
 [MobX](https://mobx.js.org) store adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps chosen properties of an observable store in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](../../crdt-yjs/docs/introduction.md),
-[`@homeostate/crdt-loro`](../../crdt-loro/docs/introduction.md), or
-[`@homeostate/crdt-automerge`](../../crdt-automerge/docs/introduction.md).
+[Yjs](../../crdt-yjs/docs/introduction.md), [Loro](../../crdt-loro/docs/introduction.md) or
+[Automerge](../../crdt-automerge/docs/introduction.md).
 
 ## Install
 
@@ -58,9 +57,7 @@ only the fields, array elements and keys that differ are written, inside one act
 that did not change keep their identity, so `observer` components, reactions and effects
 that depend on them stay quiet.
 
-When a peer removes a synced key, the adapter removes it from the store. A property of an
-`observable({...})` object is deleted. A class field made observable by `makeObservable` or
-`makeAutoObservable` cannot be deleted, so it is set to `undefined`; type such fields as
-optional. The adapter leaves every synced key whose value is `undefined` out of the synced
-state, as JSON would, so the removal is not written back, and assigning the field again syncs
-it again.
+When a peer removes a synced key, the adapter deletes it from an `observable({...})` object.
+A class field made observable by `makeObservable` or `makeAutoObservable` cannot be deleted,
+so it is set to `undefined` instead; type such fields as optional. A synced key holding
+`undefined` counts as absent, as in JSON, so assigning the field again syncs it again.

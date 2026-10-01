@@ -15,8 +15,9 @@ shares the document shares the state. You pick three packages:
    [MobX](../../../packages/store-mobx/docs/introduction.md),
    [MobX-State-Tree](../../../packages/store-mobx-state-tree/docs/introduction.md),
    [Jotai](../../../packages/store-jotai/docs/introduction.md),
-   [Valtio](../../../packages/store-valtio/docs/introduction.md) or
-   [TanStack Store](../../../packages/store-tanstack/docs/introduction.md).
+   [Valtio](../../../packages/store-valtio/docs/introduction.md),
+   [TanStack Store](../../../packages/store-tanstack/docs/introduction.md) or
+   [NgRx Signals](../../../packages/store-ngrx-signals/docs/introduction.md).
 3. One CRDT backend for your replication library:
    [Yjs](../../../packages/crdt-yjs/docs/introduction.md),
    [Loro](../../../packages/crdt-loro/docs/introduction.md) or
@@ -83,3 +84,4 @@ Open the app in two tabs and `increment` in one updates `count` in the other.
 - [Concepts](./concepts.md) explains the two contracts the packages implement and how
   `connect()` reconciles a store with a document that already has state.
 - [`@homeostate/core`](../../../packages/core/docs/introduction.md) covers the engine options.
+- [Persistence](./persistence.md) keeps the document in the browser, so it survives reloads.

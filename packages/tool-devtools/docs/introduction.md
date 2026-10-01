@@ -100,20 +100,19 @@ written directly.
 > peer in the room.
 
 While the engine is disconnected, edits stay in the local store. Reconnecting adopts the
-backend's values, as [`connect()`](../../core/docs/introduction.md#connecting) always does,
+backend's values, as [`connect()`](/docs/concepts#connecting) always does,
 so edits made in the meantime to keys the backend holds are dropped.
 
 ## Styles
 
-The devtools render into a shadow root on `document.body`, with a stylesheet compiled into
-the package. The page's CSS does not reach the panel, and the panel's does not reach the
-page. The only thing added to the document is Tailwind's `@property` registrations, which
-browsers ignore inside a shadow root.
+The devtools render into a shadow root on `document.body` with their own stylesheet, so the
+page's CSS and the panel's never mix. The only rules added to the page itself are Tailwind's
+`@property` registrations, which browsers ignore inside a shadow root.
 
 ## Production builds
 
 The component renders in every build. To leave it out of production bundles, load it only in
-development:
+development and render it inside a `Suspense` boundary:
 
 ```tsx
 import { lazy } from "react";
@@ -126,5 +125,3 @@ const HomeostateDevtools = import.meta.env.DEV
     )
   : () => null;
 ```
-
-Render it inside a `Suspense` boundary.

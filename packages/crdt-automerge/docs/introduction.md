@@ -6,10 +6,10 @@ label: Introduction
 # @homeostate/crdt-automerge
 
 [Automerge](https://automerge.org) backend for
-[`@homeostate/core`](../../core/docs/introduction.md).
-It maps the synced state onto one key of an Automerge document (nested objects become
-maps, arrays lists, strings text) and writes fine-grained operations derived from
-`getChanges`, one Automerge change per `write`.
+[`@homeostate/core`](../../core/docs/introduction.md). It maps the synced state onto one key of
+an Automerge document (objects become maps, arrays lists, strings text) and writes
+fine-grained operations as one Automerge change per write, so a middle-of-array delete, a
+toggle or a keystroke each produce one small change.
 
 ## Install
 
@@ -17,9 +17,13 @@ maps, arrays lists, strings text) and writes fine-grained operations derived fro
 npm install @homeostate/core @homeostate/crdt-automerge @automerge/automerge
 ```
 
-`@automerge/automerge` 3.x is a peer dependency.
+`@automerge/automerge` 3.x is a peer dependency. It ships WebAssembly, which Node loads
+directly; for bundler setup see [Automerge's documentation](https://automerge.org/docs/).
 
 ## Usage
+
+Automerge documents are immutable values: every change returns a new document. A handle
+holds the current one, so the backend and your replication code share it:
 
 ```ts
 import * as A from "@automerge/automerge";
@@ -35,60 +39,31 @@ const engine = createSyncEngine(
   adapter,
 );
 engine.connect();
-```
 
-Automerge documents are immutable values: every change returns a new document and leaves
-the old one behind. `createAutomergeHandle` holds the current document so the backend and
-your replication code share it:
-
-- `handle.doc()` returns the current document.
-- `handle.change(fn)` applies a local change through `A.change`.
-- `handle.update((doc) => ...)` replaces the document with the result of `A.merge`,
-  `A.applyChanges`, `A.loadIncremental`, `A.receiveSyncMessage`, or any other Automerge call.
-- `handle.subscribe(({ doc, local }) => ...)` fires whenever the heads change; `local` is
-  true for `change` and false for `update`.
-
-The synced state lives in `handle.doc().shared`; a middle-of-array delete, a toggle, or a
-keystroke each produce one small change. Replication is yours to wire, for example:
-
-```ts
+// Replication is yours to wire, for example:
 handle.subscribe(({ doc, local }) => {
   if (local) send(A.getLastLocalChange(doc));
 });
 onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 ```
 
-The engine hears about every change that did not come through its own `write`, imports
-and local edits alike.
+- `handle.doc()` returns the current document; the synced state is `handle.doc().shared`.
+- `handle.change(fn)` applies a local change through `A.change`.
+- `handle.update((doc) => ...)` replaces the document with the result of `A.merge`,
+  `A.applyChanges`, `A.loadIncremental`, `A.receiveSyncMessage` or any other Automerge call.
+- `handle.subscribe(({ doc, local }) => ...)` fires whenever the heads change; `local` is
+  true for `change` and false for `update`.
 
-`read()` returns plain JSON. Automerge keeps every object that the last change did not
-touch, so the backend caches copies per source object and a read after a toggle copies only
-the containers on the path to the toggled item. Snapshots are shared between reads; treat
-them as immutable.
+The engine picks up every change that did not come through its own write, imports and local
+edits alike.
 
 `undefined` is not JSON and Automerge rejects it, so the backend drops object entries whose
 value is `undefined` and stores `undefined` array items as `null`, as `JSON.stringify` does.
-
-`@automerge/automerge` ships WebAssembly. Node loads it directly; for bundlers see
-[Automerge's documentation](https://automerge.org/docs/), or import
-`@automerge/automerge/slim` and initialize the module yourself.
+Snapshots from `read()` copy only what changed since the last read and are shared between
+reads, so treat them as immutable.
 
 ## Persistence
 
-`createAutomergePersistable(handle)` exposes the whole document to `createPersistence`, which keeps it in
-storage such as [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) so it outlives
-every peer and the server:
-
-```ts
-const persistence = createPersistence(
-  createAutomergePersistable(handle),
-  createIndexedDbAdapter(),
-  {
-    key: "room",
-  },
-);
-await persistence.whenLoaded;
-engine.connect();
-```
-
-It stores `A.save` of the handle's document plus the changes of each update since. See the [persistence guide](/docs/persistence).
+Pass `createAutomergePersistable(handle)` to `createPersistence`. It stores `A.save` of the
+document plus the changes of each update since. See the
+[persistence guide](/docs/persistence).

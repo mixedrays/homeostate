@@ -6,10 +6,10 @@ label: Introduction
 # @homeostate/crdt-loro
 
 [Loro](https://github.com/loro-dev/loro) backend for
-[`@homeostate/core`](../../core/docs/introduction.md).
-It maps the synced state onto a `LoroMap` (nested objects become `LoroMap`, arrays
-`LoroList`, strings `LoroText`) and writes fine-grained operations derived from
-`getChanges`, committed as one transaction per `write`.
+[`@homeostate/core`](../../core/docs/introduction.md). It maps the synced state onto a
+`LoroMap` (objects become `LoroMap`, arrays `LoroList`, strings `LoroText`) and commits
+fine-grained operations as one transaction per write, so a middle-of-array delete, a toggle or
+a keystroke each produce one small update.
 
 ## Install
 
@@ -17,7 +17,8 @@ It maps the synced state onto a `LoroMap` (nested objects become `LoroMap`, arra
 npm install @homeostate/core @homeostate/crdt-loro loro-crdt
 ```
 
-`loro-crdt` is a peer dependency.
+`loro-crdt` ships WebAssembly; for bundler setup see
+[Loro's documentation](https://loro.dev/docs).
 
 ## Usage
 
@@ -31,29 +32,17 @@ const engine = createSyncEngine(createLoroBackend(doc, "shared"), adapter);
 engine.connect();
 ```
 
-The synced state lives in `doc.getMap('shared')`; a middle-of-array delete, a toggle, or a
-keystroke each produce one small update. Replication is yours to wire, for example with
-`doc.subscribeLocalUpdates` on one side and `doc.import` on the other. The engine hears
-about every commit that did not come through its own `write`, imports and local edits alike.
+The synced state lives in `doc.getMap("shared")`. Replication is yours to wire, for example:
 
-Loro stores `undefined` as `null`, so such values read back as `null`.
+```ts
+doc.subscribeLocalUpdates((update) => send(update));
+onMessage((update) => doc.import(update));
+```
+
+The engine picks up every commit that did not come through its own write, imports and local
+edits alike. Loro stores `undefined` as `null`, so such values read back as `null`.
 
 ## Persistence
 
-`createLoroPersistable(doc)` exposes the whole document to `createPersistence`, which keeps it in
-storage such as [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) so it outlives
-every peer and the server:
-
-```ts
-const persistence = createPersistence(
-  createLoroPersistable(doc),
-  createIndexedDbAdapter(),
-  {
-    key: "room",
-  },
-);
-await persistence.whenLoaded;
-engine.connect();
-```
-
-It stores a snapshot plus the update of each commit or import since. See the [persistence guide](/docs/persistence).
+Pass `createLoroPersistable(doc)` to `createPersistence`. It stores a snapshot plus the
+update of each commit or import since. See the [persistence guide](/docs/persistence).

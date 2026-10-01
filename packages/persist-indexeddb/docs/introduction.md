@@ -5,10 +5,10 @@ label: Introduction
 
 # @homeostate/persist-indexeddb
 
-IndexedDB storage for persisted documents: a `PersistenceAdapter` for
-`createPersistence` from [`@homeostate/core`](../../core/docs/introduction.md). It keeps a CRDT document such
-as a Yjs, Loro or Automerge one in the browser, so its state survives reloads, offline starts
-and every peer leaving the room.
+IndexedDB storage for `createPersistence` from
+[`@homeostate/core`](../../core/docs/introduction.md). It keeps a Yjs, Loro or Automerge
+document in the browser, so its state survives reloads, offline starts and every peer leaving
+the room.
 
 ## Install
 

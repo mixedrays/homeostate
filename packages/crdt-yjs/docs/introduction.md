@@ -6,17 +6,16 @@ label: Introduction
 # @homeostate/crdt-yjs
 
 [Yjs](https://github.com/yjs/yjs) backend for
-[`@homeostate/core`](../../core/docs/introduction.md).
-It maps the synced state onto a `Y.Map` (nested objects become `Y.Map`, arrays `Y.Array`,
-strings `Y.Text`) and writes fine-grained operations derived from `getChanges`.
+[`@homeostate/core`](../../core/docs/introduction.md). It maps the synced state onto a `Y.Map`
+(objects become `Y.Map`, arrays `Y.Array`, strings `Y.Text`) and writes fine-grained
+operations, so a middle-of-array delete, a toggle or a keystroke each produce one small
+update.
 
 ## Install
 
 ```bash install
 npm install @homeostate/core @homeostate/crdt-yjs yjs
 ```
-
-`yjs` is a peer dependency.
 
 ## Usage
 
@@ -30,25 +29,11 @@ const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter);
 engine.connect();
 ```
 
-The synced state lives in `doc.getMap('shared')`; a middle-of-array delete, a toggle, or a
-keystroke each produce one small update.
+The synced state lives in `doc.getMap("shared")`. Attach any Yjs provider, such as
+[y-websocket](https://github.com/yjs/y-websocket), to `doc` for replication.
 
 ## Persistence
 
-`createYjsPersistable(doc)` exposes the whole document to `createPersistence`, which keeps it in
-storage such as [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) so it outlives
-every peer and the server:
-
-```ts
-const persistence = createPersistence(
-  createYjsPersistable(doc),
-  createIndexedDbAdapter(),
-  {
-    key: "room",
-  },
-);
-await persistence.whenLoaded;
-engine.connect();
-```
-
-It stores Yjs updates, so every shared type in the document is kept, not only the synced map. See the [persistence guide](/docs/persistence).
+Pass `createYjsPersistable(doc)` to `createPersistence`. It stores Yjs updates, so every
+shared type in the document is kept, not only the synced map. See the
+[persistence guide](/docs/persistence).

@@ -88,5 +88,7 @@ After that, the backend owns the synced document. Each local change replaces it 
 store's filtered state, and a key removed from the backend is removed from the store.
 
 > [!IMPORTANT]
-> A reconnect adopts the backend again, so edits made while disconnected are dropped unless
-> they live in keys the filter keeps local.
+> A reconnect adopts the backend again, so edits made while the engine was disconnected are
+> dropped for every key the backend holds. To edit offline, disconnect the CRDT library's
+> provider instead and keep the engine connected: the document records the edits and merges
+> them when the provider reconnects.

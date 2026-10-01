@@ -31,8 +31,9 @@ adopts the backend again, so edits made while disconnected to keys it holds are 
 the [persistence guide](https://homeostate.pages.dev/docs/persistence).
 `@homeostate/core/testing` exports in-memory doubles for tests.
 
-See the [documentation](https://homeostate.pages.dev/docs/core/introduction) for the full
-connect rules and for writing a custom backend.
+See [Concepts](https://homeostate.pages.dev/docs/concepts#connecting) for the full connect
+rules and the [documentation](https://homeostate.pages.dev/docs/core/introduction) for the
+options and for writing a custom backend.
 
 ## License
 

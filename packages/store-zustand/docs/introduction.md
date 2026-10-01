@@ -8,9 +8,8 @@ label: Introduction
 [Zustand](https://github.com/pmndrs/zustand) store adapter and middleware for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps a Zustand store in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](../../crdt-yjs/docs/introduction.md),
-[`@homeostate/crdt-loro`](../../crdt-loro/docs/introduction.md), or
-[`@homeostate/crdt-automerge`](../../crdt-automerge/docs/introduction.md).
+[Yjs](../../crdt-yjs/docs/introduction.md), [Loro](../../crdt-loro/docs/introduction.md) or
+[Automerge](../../crdt-automerge/docs/introduction.md).
 
 ## Install
 
@@ -59,5 +58,5 @@ const engine = createSyncEngine(
 engine.connect();
 ```
 
-Actions and other functions in the state are skipped by the default sync filter, so only
-data is synced. Remote changes replace the state with `setState(state, true)`.
+Only data is synced: the default filter skips actions and other functions in the state, and
+remote changes leave them in place.
