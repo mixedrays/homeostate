@@ -1,8 +1,8 @@
 # @homeostate/persist-indexeddb
 
-IndexedDB storage for persisted documents: a `PersistenceAdapter` for
-`createPersistence` from [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core). It keeps a CRDT document such
-as a Yjs, Loro or Automerge one in the browser, so its state survives reloads, offline starts
+IndexedDB storage for `createPersistence` from
+[`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core). It keeps
+a Yjs, Loro or Automerge document in the browser, so its state survives reloads, offline starts
 and every peer leaving the room.
 
 ## Install
@@ -31,20 +31,11 @@ createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
 ```
 
 Connect the engine after `whenLoaded`, so it adopts the restored state instead of seeding the
-store's defaults over it. See the [persistence guide](https://homeostate.pages.dev/docs/persistence) for the whole flow.
+store's defaults over it. See the [persistence guide](https://homeostate.pages.dev/docs/persistence).
 
-## Options
-
-```ts
-createIndexedDbAdapter({
-  name: "homeostate", // database name
-  indexedDB: indexedDB, // IndexedDB implementation, such as fake-indexeddb in tests
-});
-```
-
-All documents share one database; `key` keeps them apart. Each update is one row, and each
-operation is one transaction, so several tabs can persist the same key safely. `close()`
-closes the connection; the next call reopens it.
+`createIndexedDbAdapter({ name, indexedDB })` takes an optional database name (default
+`"homeostate"`) and IndexedDB implementation, such as `fake-indexeddb` in tests. Several tabs
+can persist the same key safely.
 
 ## License
 

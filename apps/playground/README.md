@@ -1,9 +1,8 @@
 # @homeostate/playground
 
-Private Vite page that links to every framework's playground, plus the
-[code those playgrounds share](#shared-code). Each playground is a
-separate app in `apps/playground-<framework>` with its own landing page and demos; they
-all join the same Yjs rooms through the shared WebSocket server.
+Private landing page linking to every framework's playground, plus the code they share. Each
+playground is a separate app in `apps/playground-<framework>`. Their todo demos all join the
+same Yjs room through the WebSocket server, so an edit in one shows up in the others.
 
 | Playground                                 | Dev URL               | Production path |
 | ------------------------------------------ | --------------------- | --------------- |
@@ -18,39 +17,39 @@ all join the same Yjs rooms through the shared WebSocket server.
 From the repository root:
 
 ```bash
-pnpm playground          # this page, every playground and the WebSocket server
-pnpm playground:react    # React and the WebSocket server only
-pnpm playground:angular  # Angular and the WebSocket server only
-pnpm playground:vue      # Vue and the WebSocket server only
-pnpm playground:svelte   # Svelte and the WebSocket server only
+pnpm playground          # this page, every playground and the WebSocket server on :9999
+pnpm playground:react    # one playground and the WebSocket server; also :angular, :vue, :svelte
 ```
 
-## Configuration
+## Configuration and deployment
 
-The links default to the dev URLs above in development and to the production paths in a
-build. Override one with `VITE_PLAYGROUND_REACT_URL`, `VITE_PLAYGROUND_ANGULAR_URL`,
-`VITE_PLAYGROUND_VUE_URL` or `VITE_PLAYGROUND_SVELTE_URL` when
-that playground is hosted elsewhere.
+| Variable                          | Used by           | Default                                      |
+| --------------------------------- | ----------------- | -------------------------------------------- |
+| `VITE_PLAYGROUND_<FRAMEWORK>_URL` | this page's links | the dev URL above, or the production path    |
+| `VITE_SYNC_SERVER_URL`            | each playground   | `ws://localhost:9999`; use `wss://` on HTTPS |
+| `VITE_PLAYGROUNDS_URL`            | each playground   | `http://localhost:5180`, or `/`              |
+
+Angular reads the last two from `public/config.json` at startup instead (`syncServerUrl`,
+`playgroundUrl`), so they can change without a rebuild.
+
+To serve a playground under its production path, build with that base (`vite build --base
+/vue/`, or `ng build --base-href /angular/`) and fall back unknown paths to its `index.html`.
+The repository does not deploy the playgrounds.
 
 ## Shared code
 
-`shared/` holds the framework-independent helpers every playground imports from
-`@homeostate/playground/shared`: todo types, filtering/counting, room names, and identical
-Yjs document initialization.
+`shared/` is imported as `@homeostate/playground/shared`: todo types, filtering, room names,
+and `connectSharedDoc(serverUrl, room?)`, which creates a seeded Yjs document and its
+WebSocket provider. The caller destroys both on teardown.
 
-`connectSharedDoc(serverUrl, room?)` creates a seeded document and its WebSocket
-provider. The caller owns both and must destroy the provider and document on teardown.
+Where localStorage is available, `connectSharedDoc` also persists the room, so it survives
+every tab closing and the server restarting. To start over from the seed, remove the
+`homeostate:` entries from localStorage.
 
-Where localStorage is available, the document is also persisted under its room name with
-`@homeostate/persist-local-storage`, so a room survives every tab closing and the WebSocket
-server restarting: the next tab restores it and syncs it back to the server. Destroying the
-document stops persisting it. To start a browser from the seed again, remove the
-`homeostate:`-prefixed localStorage entries in the browser's developer tools.
-
-All todo demos use `homeostate-todos-v1` and the `shared-ydoc` map. The seed's CRDT
-history must remain identical in every playground. If defaults or their encoding change in
-[`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there. The editor room remains
-separate.
+Every playground must seed through `connectSharedDoc`: matching JSON inserted independently
+does not produce the same CRDT history, so joining tabs would lose edits. If the seed or its
+encoding changes in [`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there; that
+starts a fresh room.
 
 ## Adding a playground
 

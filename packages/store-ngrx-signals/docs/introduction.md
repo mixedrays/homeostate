@@ -12,7 +12,8 @@ and `signalStore` through a selected, replaceable plain-JSON state object.
 npm install @homeostate/core @homeostate/store-ngrx-signals @homeostate/crdt-yjs @ngrx/signals yjs
 ```
 
-Create the adapter inside an Angular injection context (or pass a captured injector):
+`injector` is required: it owns the state watcher, so the engine can reconnect outside an
+injection context. Capture it with `inject(Injector)`:
 
 ```ts
 import { DestroyRef, inject, Injector } from "@angular/core";

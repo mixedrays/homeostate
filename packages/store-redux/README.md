@@ -2,10 +2,7 @@
 
 [Redux](https://redux.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It keeps a Redux store in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs),
-[`@homeostate/crdt-loro`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-loro), or
-[`@homeostate/crdt-automerge`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-automerge).
+It keeps a Redux store in sync with a CRDT backend such as Yjs, Loro or Automerge.
 
 ## Install
 

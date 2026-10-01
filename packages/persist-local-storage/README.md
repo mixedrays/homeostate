@@ -1,8 +1,8 @@
 # @homeostate/persist-local-storage
 
-localStorage storage for persisted documents: a `PersistenceAdapter` for
-`createPersistence` from [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core). It keeps a CRDT document such
-as a Yjs, Loro or Automerge one in the browser, so its state survives reloads, offline starts
+localStorage storage for `createPersistence` from
+[`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core). It keeps
+a Yjs, Loro or Automerge document in the browser, so its state survives reloads, offline starts
 and every peer leaving the room.
 
 ## Install
@@ -31,22 +31,13 @@ createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
 ```
 
 Connect the engine after `whenLoaded`, so it adopts the restored state instead of seeding the
-store's defaults over it. See the [persistence guide](https://homeostate.pages.dev/docs/persistence) for the whole flow.
+store's defaults over it. See the [persistence guide](https://homeostate.pages.dev/docs/persistence).
 
-## Options
+`createLocalStorageAdapter({ prefix, storage })` takes an optional key prefix (default
+`"homeostate:"`) and storage, such as `sessionStorage`.
 
-```ts
-createLocalStorageAdapter({
-  prefix: "homeostate:", // prepended to every key
-  storage: sessionStorage, // defaults to localStorage
-});
-```
-
-## Limits
-
-Each document is one JSON entry holding its updates in base64, rewritten on every update.
-Browsers allow about 5 MB per origin; a write past that fails and is reported through
-`createPersistence`'s `onError`. For larger documents use
+Browsers allow about 5 MB per origin, and each document is rewritten on every update. For
+larger documents use
 [`@homeostate/persist-indexeddb`](https://github.com/mixedrays/homeostate/tree/main/packages/persist-indexeddb).
 
 ## License

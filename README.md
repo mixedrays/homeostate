@@ -1,103 +1,68 @@
 # Homeostate
 
-pnpm workspace for a state-manager and CRDT-backend agnostic store sync engine, its store
-adapters, its CRDT backends, and the apps that demo and benchmark them.
-
-Package names follow the two contracts in `@homeostate/core`: `crdt-*` packages implement
-`CrdtBackend` for a CRDT library, `store-*` packages implement `StoreAdapter` for a state
-manager. Pick one of each:
+Keep any state manager in sync with any CRDT. Pick a store adapter and a CRDT backend:
 
 ```bash
 npm install @homeostate/core @homeostate/store-zustand @homeostate/crdt-yjs
 ```
 
-`persist-*` packages are optional storage for `createPersistence`, which keeps a CRDT document
-in the browser so its state survives reloads and every peer leaving the room. `tool-*`
-packages are optional development tools, such as the devtools panel in
-`@homeostate/tool-devtools`.
+Docs: [homeostate.pages.dev](https://homeostate.pages.dev/docs/getting-started).
 
 ## Packages
 
-Libraries, under `packages/`.
+| Package                             | Purpose                                           |
+| ----------------------------------- | ------------------------------------------------- |
+| `@homeostate/core`                  | Sync engine, persistence, and the contracts below |
+| `@homeostate/crdt-yjs`              | Yjs backend                                       |
+| `@homeostate/crdt-loro`             | Loro backend                                      |
+| `@homeostate/crdt-automerge`        | Automerge backend                                 |
+| `@homeostate/store-zustand`         | Zustand adapter and middleware                    |
+| `@homeostate/store-redux`           | Redux adapter                                     |
+| `@homeostate/store-mobx`            | MobX adapter                                      |
+| `@homeostate/store-mobx-state-tree` | MobX-State-Tree adapter                           |
+| `@homeostate/store-jotai`           | Jotai adapter                                     |
+| `@homeostate/store-valtio`          | Valtio adapter                                    |
+| `@homeostate/store-tanstack`        | TanStack Store adapter                            |
+| `@homeostate/store-ngrx-signals`    | NgRx Signals adapter                              |
+| `@homeostate/persist-indexeddb`     | IndexedDB storage for `createPersistence`         |
+| `@homeostate/persist-local-storage` | localStorage storage for `createPersistence`      |
+| `@homeostate/tool-devtools`         | React panel to inspect and edit synced state      |
 
-| Package                             | Path                             | Purpose                                                                                                 |
-| ----------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@homeostate/core`                  | `packages/core`                  | `createSyncEngine`, `createPersistence` and their contracts; in-memory test doubles from `/testing`     |
-| `@homeostate/crdt-yjs`              | `packages/crdt-yjs`              | `createYjsBackend` and `createYjsPersistable`: Yjs `CrdtBackend` and `PersistableDoc`                   |
-| `@homeostate/crdt-loro`             | `packages/crdt-loro`             | `createLoroBackend` and `createLoroPersistable`: Loro `CrdtBackend` and `PersistableDoc`                |
-| `@homeostate/crdt-automerge`        | `packages/crdt-automerge`        | `createAutomergeBackend` and `createAutomergePersistable`: Automerge `CrdtBackend` and `PersistableDoc` |
-| `@homeostate/store-zustand`         | `packages/store-zustand`         | Zustand `StoreAdapter` and the `homeostate` middleware                                                  |
-| `@homeostate/store-mobx`            | `packages/store-mobx`            | MobX `StoreAdapter`                                                                                     |
-| `@homeostate/store-redux`           | `packages/store-redux`           | Redux `StoreAdapter`                                                                                    |
-| `@homeostate/store-jotai`           | `packages/store-jotai`           | Jotai `StoreAdapter`                                                                                    |
-| `@homeostate/store-valtio`          | `packages/store-valtio`          | Valtio `StoreAdapter`                                                                                   |
-| `@homeostate/store-ngrx-signals`    | `packages/store-ngrx-signals`    | NgRx Signals adapter for Angular                                                                        |
-| `@homeostate/store-tanstack`        | `packages/store-tanstack`        | TanStack Store `StoreAdapter`                                                                           |
-| `@homeostate/store-mobx-state-tree` | `packages/store-mobx-state-tree` | MobX-State-Tree `StoreAdapter`                                                                          |
-| `@homeostate/persist-indexeddb`     | `packages/persist-indexeddb`     | IndexedDB `PersistenceAdapter` for `createPersistence`                                                  |
-| `@homeostate/persist-local-storage` | `packages/persist-local-storage` | localStorage `PersistenceAdapter` for `createPersistence`                                               |
-| `@homeostate/tool-devtools`         | `packages/tool-devtools`         | `HomeostateDevtools`: floating React panel to inspect and edit synced state, with a change log          |
+`crdt-*` packages implement `CrdtBackend`, `store-*` packages implement `StoreAdapter`, and
+`persist-*` packages implement `PersistenceAdapter`. Each lives in `packages/<name>`.
 
 ## Apps
 
-Private tools and servers, under `apps/`. None of them are published.
+Private, under `apps/`:
 
-| Package                            | Path                        | Purpose                                                                                                                                  |
-| ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@homeostate/playground`           | `apps/playground`           | Landing page linking to every framework's playground                                                                                     |
-| `@homeostate/playground-react`     | `apps/playground-react`     | React playground with two demos: a todo list per store adapter, and a collaborative text editor with names and live cursors              |
-| `@homeostate/playground-angular`   | `apps/playground-angular`   | Angular playground: an NgRx Signals todo demo sharing the React todo room                                                                |
-| `@homeostate/playground-vue`       | `apps/playground-vue`       | Vue playground: a TanStack Store todo demo sharing the React todo room                                                                   |
-| `@homeostate/playground-svelte`    | `apps/playground-svelte`    | Svelte playground: a TanStack Store todo demo sharing the React todo room                                                                |
-| `@homeostate/benchmark-crdt`       | `apps/benchmark-crdt`       | Benchmarks of core across CRDT backends: latency, wire bytes, document growth, heap                                                      |
-| `@homeostate/benchmark-store`      | `apps/benchmark-store`      | Counts the React components each store adapter re-renders when a change arrives from a peer                                              |
-| `@homeostate/benchmark-ui`         | `apps/benchmark-ui`         | Vite app that views saved reports from both benchmarks: backends side by side, scaling, run comparison, render counts per adapter        |
-| `@homeostate/websocket-server-yjs` | `apps/websocket-server-yjs` | y-websocket server used by the playgrounds                                                                                               |
-| `@homeostate/docs`                 | `apps/docs`                 | Landing page and docs site, prerendered from the markdown in `packages/*/docs` and `apps/docs/content`; every page also has a `.md` twin |
+- [`playground`](apps/playground/README.md) and `playground-{react,angular,vue,svelte}`: demos that share Yjs rooms
+- [`websocket-server-yjs`](apps/websocket-server-yjs/README.md): y-websocket server for the playgrounds
+- [`benchmark-crdt`](apps/benchmark-crdt/README.md), [`benchmark-store`](apps/benchmark-store/README.md), [`benchmark-ui`](apps/benchmark-ui/README.md): backend and render benchmarks, and their viewer
+- [`docs`](apps/docs/README.md): docs site, built from `packages/*/docs` and `apps/docs/content`
 
 ## Scripts
 
 ```bash
 pnpm install
-pnpm playground   # landing page :5180 + React :5181 + Vue :5182 + Svelte :5183 + Angular :4200 + WebSocket :9999
-pnpm playground:react   # React :5181 + WebSocket :9999
-pnpm playground:angular # Angular :4200 + WebSocket :9999
-pnpm playground:vue     # Vue :5182 + WebSocket :9999
-pnpm playground:svelte  # Svelte :5183 + WebSocket :9999
-pnpm dev          # every app's dev server: playgrounds, websocket server, docs, benchmark viewer
-pnpm build        # builds every package
-pnpm typecheck    # tsc -b across the workspace, tests included via tsconfig.test.json, then the Angular, Vue and Svelte playgrounds
+pnpm playground   # every playground + WebSocket server; pnpm playground:<react|angular|vue|svelte> for one
+pnpm dev          # every app's dev server
+pnpm build
+pnpm typecheck
 pnpm lint
-pnpm format       # prettier --write; CI runs pnpm format:check
-pnpm test         # vitest across packages/*/src/__tests__ and apps/*/src/__tests__
-pnpm bench:crdt   # CRDT backend matrix; pnpm bench:crdt -- --help for options
-pnpm bench:store  # render counts per store adapter; pnpm bench:store -- --help for options
-pnpm bench:ui     # viewer for reports saved with --json by either benchmark, on http://localhost:5180
+pnpm format       # CI runs pnpm format:check
+pnpm test
+pnpm bench:crdt   # pnpm bench:crdt -- --help for options
+pnpm bench:store
+pnpm bench:ui     # viewer for saved benchmark reports
 pnpm docs         # docs site on http://localhost:5190
 ```
 
-Run a single package with `pnpm --filter <name> <script>`, for example `pnpm --filter @homeostate/playground-react dev`.
+Run one package's script with `pnpm --filter <name> <script>`.
 
-See the [playground README](apps/playground/README.md) for how the playgrounds fit together, and the [React playground README](apps/playground-react/README.md) for demo initialization and room versioning.
+Releasing: see [RELEASE.md](RELEASE.md).
 
-## Docs
+## Third-party notices
 
-Each package's docs are markdown in `packages/<name>/docs/`, next to the code, and guides that
-span packages live in `apps/docs/content/`. The same files are the site, the plain-markdown
-`.md` twin of every page and `/llms.txt`. See [apps/docs/README.md](apps/docs/README.md) for the
-page format and conventions; `pnpm test` fails on a broken link, bad frontmatter or raw HTML.
-
-## Releasing
-
-Packages are versioned and published one by one with Changesets; see [RELEASE.md](RELEASE.md).
-
-## Third-Party Notices
-
-`@homeostate/core`, `@homeostate/crdt-yjs`, `@homeostate/crdt-loro`, and
-`@homeostate/crdt-automerge` include code derived from
-[zustand-middleware-yjs](https://github.com/joebobmiles/zustand-middleware-yjs),
-copyright (c) 2021 Joseph R Miles, under the MIT License. The complete notice
-is included in [packages/core/THIRD_PARTY_NOTICES.md](packages/core/THIRD_PARTY_NOTICES.md),
-[packages/crdt-yjs/THIRD_PARTY_NOTICES.md](packages/crdt-yjs/THIRD_PARTY_NOTICES.md),
-[packages/crdt-loro/THIRD_PARTY_NOTICES.md](packages/crdt-loro/THIRD_PARTY_NOTICES.md), and
-[packages/crdt-automerge/THIRD_PARTY_NOTICES.md](packages/crdt-automerge/THIRD_PARTY_NOTICES.md).
+`core` and the `crdt-*` packages include code derived from
+[zustand-middleware-yjs](https://github.com/joebobmiles/zustand-middleware-yjs) (MIT, © 2021
+Joseph R Miles); see each package's `THIRD_PARTY_NOTICES.md`.

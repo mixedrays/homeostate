@@ -2,10 +2,7 @@
 
 [MobX-State-Tree](https://mobx-state-tree.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It keeps a state tree node in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs),
-[`@homeostate/crdt-loro`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-loro), or
-[`@homeostate/crdt-automerge`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-automerge).
+It keeps a state tree node in sync with a CRDT backend such as Yjs, Loro or Automerge.
 
 ## Install
 
@@ -45,10 +42,9 @@ const engine = createSyncEngine(
 engine.connect();
 ```
 
-The adapter syncs the node's snapshot: local changes go to the backend once per action, and
-remote changes are applied with `applySnapshot`, so instances with an identifier are
-reconciled in place instead of being recreated. Pass the root instance, or any subtree node
-to sync only that part.
+Local changes are sent once per action. Remote changes are applied with `applySnapshot`, so
+instances with an identifier are updated in place. Pass a subtree node instead of the root to
+sync only that part.
 
 ## License
 

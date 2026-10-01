@@ -1,13 +1,22 @@
 # @homeostate/store-ngrx-signals
 
-Homeostate adapter for Angular 21 and NgRx Signals 21. Supports both `signalState`
-and `signalStore` through a selected, replaceable plain-JSON state object.
+[NgRx Signals](https://ngrx.io/guide/signals) adapter for
+[`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
+It keeps a slice of a `signalState` or `signalStore` in sync with a CRDT backend such as
+Yjs, Loro or Automerge.
+
+## Install
 
 ```bash
 npm install @homeostate/core @homeostate/store-ngrx-signals @homeostate/crdt-yjs @ngrx/signals yjs
 ```
 
-Create the adapter inside an Angular injection context (or pass a captured injector):
+`@angular/core` 21 and `@ngrx/signals` 21 are peer dependencies.
+
+## Usage
+
+`injector` is required: it owns the state watcher, so the engine can reconnect outside an
+injection context. Capture it with `inject(Injector)`:
 
 ```ts
 import { DestroyRef, inject, Injector } from "@angular/core";
@@ -27,31 +36,20 @@ const adapter = createNgrxSignalsAdapter(state, {
 const engine = createSyncEngine(createYjsBackend(doc, "counter"), adapter);
 engine.connect();
 
-patchState(state, ({ shared }) => ({ shared: { count: shared.count + 1 } }));
-
 inject(DestroyRef).onDestroy(() => {
   engine.disconnect();
   doc.destroy();
 });
 ```
 
-Attach a Yjs transport provider to `doc` for replication between clients. Destroy
-that provider during teardown too. The Angular playground contains a complete example.
+- `select` must return the same object until the slice changes; update it immutably.
+- `replace` must replace the slice completely. `patchState` shallow-merges, so keep synced
+  data under one key such as `shared` and replace that key.
+- For a protected `signalStore`, create the adapter inside `withHooks` or `withMethods`.
 
-`select` must return the same object reference until that slice changes; avoid
-constructing a new object on every read. Update the selected object immutably.
-`replace` must replace it completely, including deleting absent keys. NgRx's
-`patchState(store, next)` shallow-merges, so directly patching a root state is not
-a general replacement implementation. Keeping synced data under `shared` lets
-`patchState(store, { shared: next })` satisfy the contract while other fields stay local.
+See the [documentation](https://homeostate.pages.dev/docs/store-ngrx-signals/introduction)
+for details.
 
-The adapter uses synchronous `watchState` notifications to let Homeostate suppress
-remote echoes. It skips the initial watcher notification and unchanged slices.
-Disconnecting destroys the watcher; reconnecting works outside an injection
-context via the captured injector. Destroying the owning injector also removes
-the watcher; the caller still owns engine/backend cleanup.
-
-For a protected SignalStore, create the adapter inside `withHooks`/`withMethods`,
-or supply a public replacement method through `replace`.
+## License
 
 MIT — see [LICENSE](./LICENSE).
