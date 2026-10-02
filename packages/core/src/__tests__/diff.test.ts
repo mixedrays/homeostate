@@ -6,6 +6,7 @@ import {
   type Diffable,
 } from "../index.js";
 import { patchState } from "../patching.js";
+import { prototypeMemberKeys } from "./helpers.js";
 
 const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
 
@@ -368,6 +369,37 @@ describe("getChanges", () => {
         [UPDATE, "b", 3],
         [INSERT, "c", 4],
       ]);
+    });
+
+    it.each(prototypeMemberKeys)(
+      "inserts and deletes a key named %s",
+      (key) => {
+        expect(getChanges({ [key]: 1 }, {})).toEqual([
+          [DELETE, key, undefined],
+        ]);
+        expect(getChanges({}, { [key]: "x" })).toEqual([[INSERT, key, "x"]]);
+        expect(getChanges({ o: { [key]: 1 } }, { o: {} })).toEqual([
+          [PENDING, "o", [[DELETE, key, undefined]]],
+        ]);
+      },
+    );
+
+    it("never diffs a __proto__ key", () => {
+      const withProto = (json: string): Record<string, unknown> =>
+        JSON.parse(json);
+
+      expect(
+        getChanges({ a: 1 }, withProto('{"a":1,"__proto__":{"isAdmin":true}}')),
+      ).toEqual([]);
+      expect(
+        getChanges(withProto('{"__proto__":{"isAdmin":true}}'), {}),
+      ).toEqual([]);
+      expect(
+        getChanges(
+          { l: [{ id: "1" }] },
+          withProto('{"l":[{"id":"1","__proto__":{"isAdmin":true}}]}'),
+        ),
+      ).toEqual([]);
     });
 
     it.each([

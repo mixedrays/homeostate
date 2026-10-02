@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import { withPlainPrototypes } from "./mapping.js";
 import { patchSharedType } from "./patching.js";
 
 /**
@@ -20,7 +21,7 @@ export const createYjsBackend = (doc: Y.Doc, name: string): CrdtBackend => {
   const origin = Symbol(`homeostate:${name}`);
 
   return {
-    read: () => map.toJSON(),
+    read: () => withPlainPrototypes(map.toJSON()),
 
     write: (next) => {
       doc.transact(() => patchSharedType(map, next), origin);

@@ -5,6 +5,8 @@ import {
   addTodo,
   createTestStore,
   deepFreeze,
+  prototypeHijacks,
+  prototypeMemberKeys,
   setSearchTerm,
   snapshot,
   threeTodos,
@@ -238,6 +240,46 @@ describe("createSyncEngine", () => {
       expect(() => backend.receive(remote)).not.toThrow();
       expect(store.getState()).toEqual(remote);
       expect(Object.isFrozen(store.getState().todos)).toBe(true);
+    });
+  });
+
+  describe("untrusted key names", () => {
+    it.each(prototypeMemberKeys)(
+      "applies remote deletions of a %s key at any depth",
+      (key) => {
+        const backend = createMemoryBackend();
+        const store = createTestStore<Record<string, unknown>>({
+          [key]: "local",
+          byName: { [key]: "local", bob: 1 },
+        });
+        createSyncEngine(backend, store.adapter).connect();
+
+        backend.receive({ byName: { bob: 1 } });
+
+        expect(Object.keys(store.getState())).toEqual(["byName"]);
+        expect(Object.keys(store.getState().byName as object)).toEqual(["bob"]);
+      },
+    );
+
+    it("never lets a remote __proto__ key reach the store", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore<Record<string, unknown>>({
+        todos: [{ id: "1" }],
+      });
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive(
+        JSON.parse(
+          '{"__proto__":{"isAdmin":true},' +
+            '"todos":[{"id":"1","__proto__":{"isAdmin":true}},' +
+            '{"id":"2","__proto__":{"isAdmin":true}}]}',
+        ),
+      );
+
+      expect(JSON.stringify(store.getState())).toBe(
+        '{"todos":[{"id":"1"},{"id":"2"}]}',
+      );
+      expect(prototypeHijacks(store.getState())).toEqual([]);
     });
   });
 

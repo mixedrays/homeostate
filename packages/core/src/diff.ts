@@ -10,6 +10,19 @@ const isString = (value: unknown): value is string => typeof value === "string";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+/**
+ * Whether `key` is an own property of `object`. `in` would also find inherited members such
+ * as `constructor`, so a record keyed by user input could never lose a key by that name.
+ */
+export const hasOwn = (object: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(object, key);
+
+/**
+ * Assigning this key replaces an object's prototype instead of adding a property, so a peer
+ * could make properties such as `isAdmin` appear on other users' state. It is never diffed.
+ */
+export const PROTO_KEY = "__proto__";
+
 const isDiffable = (value: unknown): value is Diffable =>
   isArray(value) || isString(value) || isRecord(value);
 
@@ -28,12 +41,19 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
   if (isRecord(a) && isRecord(b)) {
     const keys = Object.keys(a);
     return (
-      keys.length === Object.keys(b).length &&
-      keys.every((key) => key in b && deepEqual(a[key], b[key]))
+      keyCount(keys, a) === keyCount(Object.keys(b), b) &&
+      keys.every(
+        (key) =>
+          key === PROTO_KEY || (hasOwn(b, key) && deepEqual(a[key], b[key])),
+      )
     );
   }
   return false;
 };
+
+/** The number of `keys` the diff compares, so records equal under `deepEqual` diff to nothing. */
+const keyCount = (keys: string[], record: object): number =>
+  hasOwn(record, PROTO_KEY) ? keys.length - 1 : keys.length;
 
 export const getChanges = (a: Diffable, b: Diffable): Change[] => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
@@ -137,11 +157,13 @@ const getRecordChanges = (
   const changes: Change[] = [];
 
   for (const property of Object.keys(a))
-    if (!(property in b))
+    if (property !== PROTO_KEY && !hasOwn(b, property))
       changes.push([ChangeType.DELETE, property, undefined]);
 
   for (const [property, value] of Object.entries(b)) {
-    if (!(property in a)) changes.push([ChangeType.INSERT, property, value]);
+    if (property === PROTO_KEY) continue;
+    if (!hasOwn(a, property))
+      changes.push([ChangeType.INSERT, property, value]);
     else {
       const nested = nestedChanges(a[property], value);
       if (nested === null) {

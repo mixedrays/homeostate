@@ -7,6 +7,7 @@ import type {
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
 import { patchState } from "./patching.js";
+import { hasOwn, PROTO_KEY } from "./diff.js";
 
 type Plain = Record<string, unknown>;
 
@@ -46,7 +47,7 @@ export function createSyncEngine<S extends object>(
   const filterState = (state: object): Plain => {
     const filtered: Plain = {};
     for (const [key, value] of Object.entries(state)) {
-      if (filter(key, value)) filtered[key] = value;
+      if (key !== PROTO_KEY && filter(key, value)) filtered[key] = value;
     }
     return filtered;
   };
@@ -73,7 +74,7 @@ export function createSyncEngine<S extends object>(
 
     const merged: Plain = { ...current, ...patched };
     for (const key of Object.keys(synced)) {
-      if (!(key in patched)) delete merged[key];
+      if (!hasOwn(patched, key)) delete merged[key];
     }
     return merged as S;
   };

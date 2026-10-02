@@ -8,6 +8,9 @@ const isPlainObject = (value: unknown): value is Plain => {
   return proto === Object.prototype || proto === null;
 };
 
+const hasOwn = (object: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(object, key);
+
 const isProxy = (value: unknown): value is object =>
   getVersion(value) !== undefined;
 
@@ -42,7 +45,7 @@ export const reconcile = (
 
   for (const key of keys) {
     const value = (next as Plain)[key];
-    if (key in prev && Object.is(prev[key], value)) continue;
+    if (hasOwn(prev, key) && Object.is(prev[key], value)) continue;
 
     const previous = prev[key];
     const child = dest[key];
@@ -58,7 +61,7 @@ export const reconcile = (
     if (array.length > next.length) array.splice(next.length);
   } else {
     for (const key of Object.keys(prev)) {
-      if (!(key in next)) delete dest[key];
+      if (!hasOwn(next, key)) delete dest[key];
     }
   }
 };

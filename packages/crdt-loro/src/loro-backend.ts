@@ -1,5 +1,6 @@
 import type { LoroDoc } from "loro-crdt";
 import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import { withPlainPrototypes } from "./mapping.js";
 import { patchContainer } from "./patching.js";
 
 let instances = 0;
@@ -9,7 +10,7 @@ export const createLoroBackend = (doc: LoroDoc, name: string): CrdtBackend => {
   const origin = `homeostate:${name}#${instances++}`;
 
   return {
-    read: () => map.toJSON(),
+    read: () => withPlainPrototypes(map.toJSON()),
 
     write: (next) => {
       patchContainer(map, next);

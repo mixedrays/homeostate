@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { patchState } from "../patching.js";
-import { deepFreeze, snapshot } from "./helpers.js";
+import { deepFreeze, prototypeHijacks, snapshot } from "./helpers.js";
 
 describe("patchState", () => {
   it("returns the same reference when nothing changed", () => {
@@ -124,6 +124,34 @@ describe("patchState", () => {
       { id: "1", done: false },
       { id: "2", done: true },
     ]);
+  });
+
+  it("leaves out __proto__ keys at any depth of inserted and updated values", () => {
+    const newState = JSON.parse(
+      '{"todos":[{"id":"1","__proto__":{"isAdmin":true}},' +
+        '{"id":"2","__proto__":{"isAdmin":true},"tags":[{"__proto__":{"isAdmin":true}}]}],' +
+        '"v":{"__proto__":{"isAdmin":true}}}',
+    );
+    const newSnapshot = snapshot(newState);
+
+    const result = patchState({ todos: [{ id: "1" }], v: "x" }, newState);
+
+    expect(JSON.stringify(result)).toBe(
+      '{"todos":[{"id":"1"},{"id":"2","tags":[{}]}],"v":{}}',
+    );
+    expect(prototypeHijacks(result)).toEqual([]);
+    expect(newState).toEqual(newSnapshot);
+  });
+
+  it("shares inserted values that hold no __proto__ key", () => {
+    const item = { id: "2", tags: ["a"] };
+
+    const result = patchState(
+      { todos: [{ id: "1" }] },
+      { todos: [{ id: "1" }, item] },
+    );
+
+    expect(result.todos[1]).toBe(item);
   });
 
   it("patches nested arrays inside objects inside arrays", () => {

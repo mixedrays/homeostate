@@ -1,6 +1,37 @@
 import { applyStringChanges } from "./apply.js";
 import { ChangeType, type Change } from "./change.js";
-import { getChanges, type Diffable } from "./diff.js";
+import { getChanges, PROTO_KEY, type Diffable } from "./diff.js";
+
+const isContainer = (value: unknown): value is Record<string, unknown> => {
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    Array.isArray(value) || prototype === Object.prototype || prototype === null
+  );
+};
+
+/**
+ * Returns `value` without own `__proto__` keys in any array or plain object, copying only the
+ * containers on a path to one. A store that copies such an object by assignment, as
+ * `Object.assign` does, would hand the key's value to the copy as its prototype.
+ */
+const withoutProtoKeys = (value: unknown): unknown => {
+  if (!isContainer(value)) return value;
+
+  let copy: Record<string, unknown> | undefined;
+  for (const key of Object.keys(value)) {
+    if (key === PROTO_KEY) delete (copy ??= copyOf(value))[key];
+    else {
+      const item = withoutProtoKeys(value[key]);
+      if (item !== value[key]) (copy ??= copyOf(value))[key] = item;
+    }
+  }
+
+  return copy ?? value;
+};
+
+const copyOf = (value: object): Record<string, unknown> =>
+  (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
 const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
   if (typeof state === "string") return applyStringChanges(state, changes);
@@ -19,11 +50,11 @@ const applyChangesToArray = (
 
     switch (type) {
       case ChangeType.INSERT:
-        revised.splice(i, 0, value);
+        revised.splice(i, 0, withoutProtoKeys(value));
         break;
 
       case ChangeType.UPDATE:
-        revised[i] = value;
+        revised[i] = withoutProtoKeys(value);
         break;
 
       case ChangeType.PENDING:
@@ -51,7 +82,7 @@ const applyChangesToObject = (
     switch (type) {
       case ChangeType.INSERT:
       case ChangeType.UPDATE:
-        revised[key] = value;
+        revised[key] = withoutProtoKeys(value);
         break;
 
       case ChangeType.PENDING:
@@ -71,7 +102,8 @@ const applyChangesToObject = (
  * Returns a value identical to newState, built from oldState by copying every
  * container along a changed path and sharing every unchanged subtree. Neither
  * input is mutated. If oldState and newState are already identical (indicated
- * by an empty diff), then oldState itself is returned.
+ * by an empty diff), then oldState itself is returned. Own `__proto__` keys in
+ * newState are left out at any depth.
  *
  * @param oldState The state we want to patch.
  * @param newState The state we want the result to match.

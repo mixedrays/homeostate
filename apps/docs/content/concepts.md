@@ -42,6 +42,10 @@ Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and
 Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are
 neither diffed nor synced.
 
+Keys sync as own properties, so a key such as `constructor` or `toString` behaves like any
+other. A `__proto__` key is never synced: assigning it would replace an object's prototype, so
+the engine leaves it out of remote state at any depth.
+
 ## CRDT backends
 
 A `CrdtBackend` holds the synced part of the state in a CRDT or any other replicated store:

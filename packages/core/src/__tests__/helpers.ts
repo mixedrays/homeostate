@@ -88,6 +88,34 @@ export const unicodeEdits: [string, string][] = [
   ["é😀é", "é😃é"],
 ];
 
+/** Keys that `in` finds on every object, because `Object.prototype` has members by these names. */
+export const prototypeMemberKeys = [
+  "constructor",
+  "toString",
+  "valueOf",
+  "hasOwnProperty",
+];
+
+/**
+ * Paths of the objects in `value` that inherit from anything other than `Object.prototype` or
+ * `Array.prototype`, or hold an own `__proto__` key: the ways a peer could add properties to
+ * other users' state.
+ */
+export const prototypeHijacks = (value: unknown, path = "$"): string[] => {
+  if (value === null || typeof value !== "object") return [];
+  const standard = Array.isArray(value) ? Array.prototype : Object.prototype;
+  const hijacked =
+    Object.getPrototypeOf(value) !== standard ||
+    Object.prototype.hasOwnProperty.call(value, "__proto__");
+  return Object.entries(value).reduce<string[]>(
+    (paths, [key, item]) => [
+      ...paths,
+      ...prototypeHijacks(item, `${path}.${key}`),
+    ],
+    hijacked ? [path] : [],
+  );
+};
+
 export const deepFreeze = <T>(value: T): T => {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);

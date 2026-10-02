@@ -19,6 +19,8 @@ import {
   todo,
   toggleTodo,
   type TodoState,
+  prototypeHijacks,
+  prototypeMemberKeys,
   unicodeEdits,
 } from "../../../core/src/__tests__/helpers.js";
 
@@ -34,9 +36,9 @@ const createHandle = (id?: number): Handle =>
     id === undefined ? A.init<Root>() : A.init<Root>(actor(id)),
   );
 
-const createPeer = (
+const createPeer = <S extends object>(
   handle: Handle,
-  initial: TodoState,
+  initial: S,
   config?: SyncEngineConfig,
 ) => {
   const store = createTestStore(initial);
@@ -330,6 +332,48 @@ describe("two peers over Automerge", () => {
 
     expect(sizes.every((size) => size < 200)).toBe(true);
     expect(b.store.getState()).toEqual(a.store.getState());
+  });
+});
+
+describe("untrusted key names", () => {
+  it.each(prototypeMemberKeys)(
+    "replicates adding and deleting a %s key",
+    (key) => {
+      const initial = () => ({ byName: { bob: 1 } as Record<string, number> });
+      const handleA = createHandle(1);
+      const handleB = createHandle(2);
+      const a = createPeer(handleA, initial());
+      exchange(handleA, handleB);
+      const b = createPeer(handleB, initial());
+
+      a.store.setState({ byName: { bob: 1, [key]: 2 } });
+      exchange(handleA, handleB);
+      expect(b.store.getState().byName[key]).toBe(2);
+
+      a.store.setState({ byName: { bob: 1 } });
+      exchange(handleA, handleB);
+      const written = a.backend.read() as { byName: object };
+      expect(Object.keys(written.byName)).toEqual(["bob"]);
+      expect(Object.keys(b.store.getState().byName)).toEqual(["bob"]);
+    },
+  );
+
+  it("never lets a peer's __proto__ entry reach the store", () => {
+    const handle = createHandle();
+    const { store, backend } = createPeer(handle, { todos: [{ id: "1" }] });
+
+    // Automerge stores the key; its document proxies leave it out of Object.keys.
+    handle.update((doc) =>
+      A.change(doc, (draft) => {
+        (draft[NAME] as { todos: unknown[] }).todos.push(
+          JSON.parse('{"id":"2","__proto__":{"isAdmin":true}}'),
+        );
+      }),
+    );
+
+    expect(prototypeHijacks(backend.read())).toEqual([]);
+    expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
+    expect(prototypeHijacks(store.getState())).toEqual([]);
   });
 });
 

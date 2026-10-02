@@ -30,7 +30,8 @@ replacement of the root. Wrap a value in a record if its type may change, or han
 replacement in your adapter. Nested values that change kind produce an `UPDATE`.
 
 Use plain JSON data. `Date`, `Map` and `Set` contents are not compared, and cyclic data is
-unsupported. Unlike the sync engine, this helper does not filter functions for you.
+unsupported. Unlike the sync engine, this helper does not filter functions for you. Record
+keys are compared as own properties, and a `__proto__` key is ignored on both sides.
 
 ```ts title="get-changes-example.ts"
 import { getChanges } from "@homeostate/core";

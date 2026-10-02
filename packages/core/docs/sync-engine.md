@@ -159,8 +159,11 @@ interface CrdtBackend {
 | `subscribe(callback)` | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
 
 Although `read()` has return type `unknown`, the engine treats a `null` or non-object
-result as an empty state. Keep document replication in your CRDT provider. For writing a
-backend that applies small edits, see [Diff and apply API](./diffing.md).
+result as an empty state. Objects in the snapshot must inherit from `Object.prototype`: a
+library that builds them by assignment turns a peer's `__proto__` entry into the prototype,
+which the Yjs and Loro backends undo before returning. Keep document replication in your CRDT
+provider. For writing a backend that applies small edits, see
+[Diff and apply API](./diffing.md).
 
 ## Unsubscribe
 

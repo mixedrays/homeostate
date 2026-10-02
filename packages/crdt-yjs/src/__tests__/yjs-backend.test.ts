@@ -14,14 +14,16 @@ import {
   todo,
   toggleTodo,
   type TodoState,
+  prototypeHijacks,
+  prototypeMemberKeys,
   unicodeEdits,
 } from "../../../core/src/__tests__/helpers.js";
 
 const NAME = "shared";
 
-const createPeer = (
+const createPeer = <S extends object>(
   doc: Y.Doc,
-  initial: TodoState,
+  initial: S,
   config?: SyncEngineConfig,
 ) => {
   const store = createTestStore(initial);
@@ -262,6 +264,51 @@ describe("two peers over Yjs", () => {
 
     expect(sizes.every((size) => size < 200)).toBe(true);
     expect(b.store.getState()).toEqual(a.store.getState());
+  });
+});
+
+describe("untrusted key names", () => {
+  it.each(prototypeMemberKeys)(
+    "replicates adding and deleting a %s key",
+    (key) => {
+      const initial = () => ({ byName: { bob: 1 } as Record<string, number> });
+      const docA = new Y.Doc();
+      const docB = new Y.Doc();
+      const a = createPeer(docA, initial());
+      exchange(docA, docB);
+      const b = createPeer(docB, initial());
+
+      a.store.setState({ byName: { bob: 1, [key]: 2 } });
+      exchange(docA, docB);
+      expect(b.store.getState().byName[key]).toBe(2);
+
+      a.store.setState({ byName: { bob: 1 } });
+      exchange(docA, docB);
+      const written = a.backend.read() as { byName: object };
+      expect(Object.keys(written.byName)).toEqual(["bob"]);
+      expect(Object.keys(b.store.getState().byName)).toEqual(["bob"]);
+    },
+  );
+
+  it("never lets a peer's __proto__ entry reach the store", () => {
+    const doc = new Y.Doc();
+    const { store, backend } = createPeer(doc, { todos: [{ id: "1" }] });
+    const todos = doc.getMap(NAME).get("todos") as Y.Array<Y.Map<unknown>>;
+    const admin = () => new Y.Map<unknown>([["isAdmin", true]]);
+
+    doc.transact(() => {
+      todos.get(0).set("__proto__", admin());
+      todos.push([
+        new Y.Map<unknown>([
+          ["id", "2"],
+          ["__proto__", admin()],
+        ]),
+      ]);
+    });
+
+    expect(prototypeHijacks(backend.read())).toEqual([]);
+    expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
+    expect(prototypeHijacks(store.getState())).toEqual([]);
   });
 });
 
