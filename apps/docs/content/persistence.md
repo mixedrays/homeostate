@@ -10,6 +10,9 @@ disconnects, or the server restarts, the room and its state are gone. Persistenc
 copy of the document in each browser: on the next start the page restores it, works offline
 from it, and hands it back to the server once it reconnects.
 
+For complete signatures, options and method behavior, see the
+[persistence API reference](../../../packages/core/docs/persistence.md).
+
 ## What is stored
 
 Persistence stores the CRDT document, not the store's JSON state. A document restored from
@@ -21,7 +24,7 @@ Three pieces work together:
 
 | Piece                | Provided by                                                                                                                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createPersistence`  | [`@homeostate/core`](../../../packages/core/docs/introduction.md)                                                                                                                                             |
+| `createPersistence`  | [`@homeostate/core`](../../../packages/core/docs/persistence.md#createpersistence)                                                                                                                            |
 | `PersistableDoc`     | Each CRDT backend: `createYjsPersistable`, `createLoroPersistable`, `createAutomergePersistable`                                                                                                              |
 | `PersistenceAdapter` | [`@homeostate/persist-indexeddb`](../../../packages/persist-indexeddb/docs/introduction.md), [`@homeostate/persist-local-storage`](../../../packages/persist-local-storage/docs/introduction.md), or your own |
 
@@ -115,5 +118,5 @@ interface PersistenceAdapter {
 
 `version` identifies the newest update `load` returned. `compact` must, atomically, remove
 the updates up to that version and store the snapshot, keeping anything appended since.
-`createMemoryPersistenceAdapter()` from `@homeostate/core/testing` is an in-memory one for
-tests.
+[`createMemoryPersistenceAdapter()`](../../../packages/core/docs/testing.md#creatememorypersistenceadapter)
+from `@homeostate/core/testing` is an in-memory one for tests.

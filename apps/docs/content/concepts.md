@@ -6,10 +6,13 @@ order: 2
 # Concepts
 
 Homeostate is one engine and two contracts. The engine,
-[`createSyncEngine`](../../../packages/core/docs/introduction.md), sits between a store and a
+[`createSyncEngine`](../../../packages/core/docs/sync-engine.md#createsyncengine), sits between a store and a
 replicated document and moves plain JSON between them. It knows nothing about any particular
 state manager or CRDT library: `store-*` packages implement `StoreAdapter` for a state manager,
 and `crdt-*` packages implement `CrdtBackend` for a CRDT library.
+
+The [sync engine reference](../../../packages/core/docs/sync-engine.md) lists the complete
+signatures, options and lifecycle methods.
 
 ```ts
 import { createSyncEngine } from "@homeostate/core";
@@ -58,8 +61,8 @@ interface CrdtBackend {
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 
-`createMemoryBackend()` from `@homeostate/core/testing` is a plain JSON backend without
-replication, meant for tests.
+[`createMemoryBackend()`](../../../packages/core/docs/testing.md#creatememorybackend) from
+`@homeostate/core/testing` is a plain JSON backend without replication, meant for tests.
 
 ## Choosing what to sync
 

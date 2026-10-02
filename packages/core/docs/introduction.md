@@ -35,13 +35,19 @@ engine.isConnected(); // true
 engine.disconnect();
 ```
 
-| Option   | Default                                       | Description                                                                                                     |
-| -------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `filter` | `defaultSyncFilter`, which excludes functions | Which top-level keys are synced, in both directions                                                             |
-| `seed`   | `"if-empty"`                                  | On connect, write the keys only the store has into the backend; `"never"` leaves them for the next local change |
+Here, `doc` is your Yjs document and `adapter` comes from your state manager's `store-*`
+package. On `connect()` the backend's values win over the store's. See the
+[sync engine reference](./sync-engine.md) for all options, lifecycle methods and adapter
+contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation model.
 
-On `connect()` the backend's values win over the store's. See
-[Connecting](/docs/concepts#connecting) for the full rules.
+## API reference
+
+| Page                            | APIs and types                                                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SyncEngine`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `Unsubscribe` |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                        |
+| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `Change`, `ChangeType`, `applyChanges`, `ApplyOps`                                                            |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`    |
 
 ## Persistence
 
@@ -50,28 +56,19 @@ state survives reloads, offline starts and every peer leaving the room. `doc` co
 backend package, such as `createYjsPersistable(ydoc)`, and `adapter` from
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or
 [`@homeostate/persist-local-storage`](../../persist-local-storage/docs/introduction.md). See
-the [persistence guide](/docs/persistence).
+the [persistence guide](/docs/persistence) for setup and the
+[persistence reference](./persistence.md) for configuration, lifecycle and error handling.
 
 ## Testing
 
 `@homeostate/core/testing` has in-memory doubles: `createMemoryBackend()`, a plain JSON
-backend without replication, and `createMemoryPersistenceAdapter()`.
+backend without replication, and `createMemoryPersistenceAdapter()`. The
+[testing reference](./testing.md) covers their methods and examples.
 
 ## Writing a backend
 
 `getChanges(current, next)` turns a `write(next)` into fine-grained changes, so a backend can
 apply small edits instead of replacing the document. `applyChanges` applies them to a
-mutable target through your own set, remove and splice operations.
-
-String changes use UTF-16 offsets into the progressively edited string, as JavaScript
-indexes strings. The diff never splits a surrogate pair, but it does split graphemes made of
-several code points, such as a joined emoji. For a string `DELETE`, the third entry is the
-number of UTF-16 units to remove (`undefined` means one), and a backend must remove them in
-one operation:
-
-```ts
-getChanges("😀a😃b", "😀ab");
-// [["delete", 3, 2]]: remove the whole 😃 surrogate pair
-```
-
-A backend whose text index is not UTF-16 must translate both offsets and lengths.
+mutable target through your own set, remove and splice operations. See the
+[diff and apply reference](./diffing.md) for tuple formats, ordered array edits, UTF-16 string
+offsets and a complete `ApplyOps` example.
