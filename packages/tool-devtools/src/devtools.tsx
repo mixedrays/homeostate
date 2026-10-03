@@ -7,38 +7,10 @@ import {
   type Inspector,
 } from "./inspector";
 import { usePersistedState } from "./lib/use-persisted-state";
+import type { ButtonPosition, HomeostateDevtoolsProps } from "./options";
 import { HomeostateMark } from "./panel/mark";
-import {
-  DevtoolsPanel,
-  type PanelPosition,
-  type SourceInspector,
-} from "./panel/panel";
-import { ShadowHost, type DevtoolsTheme } from "./shadow-host";
-
-export type ButtonPosition =
-  "bottom-right" | "bottom-left" | "top-right" | "top-left";
-
-export interface HomeostateDevtoolsProps {
-  /** The stores to inspect. With more than one, the panel shows a switcher. */
-  sources: DevtoolsSource[];
-  /** Viewport corner of the floating button. Defaults to `"bottom-right"`. */
-  buttonPosition?: ButtonPosition;
-  /** Viewport edge the panel docks to. Defaults to `"right"`. */
-  panelPosition?: PanelPosition;
-  /** Whether the panel starts open, until it is opened or closed once. Defaults to `false`. */
-  initialIsOpen?: boolean;
-  /**
-   * Controls whether the panel is open, for opening it from the app's own UI. Leave it
-   * out to let the devtools manage and remember it.
-   */
-  open?: boolean;
-  /** Called when the floating button, the close button or Escape opens or closes the panel. */
-  onOpenChange?: (open: boolean) => void;
-  /** Defaults to `"system"`, which follows `prefers-color-scheme`. */
-  theme?: DevtoolsTheme;
-  /** Log entries kept per source. Defaults to 200. */
-  logLimit?: number;
-}
+import { DevtoolsPanel, type SourceInspector } from "./panel/panel";
+import { ShadowHost } from "./shadow-host";
 
 const buttonPositionClass: Record<ButtonPosition, string> = {
   "bottom-right": "right-4 bottom-4",

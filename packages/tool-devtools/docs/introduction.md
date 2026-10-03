@@ -1,11 +1,12 @@
 ---
-description: Floating React devtools to inspect and edit the state a homeostate sync engine keeps in sync
+description: Floating devtools to inspect and edit the state a homeostate sync engine keeps in sync, as a React component or mounted from any framework
 label: Introduction
 ---
 
 # @homeostate/tool-devtools
 
-React devtools for [`@homeostate/core`](../../core/docs/introduction.md). A floating button
+Devtools for [`@homeostate/core`](../../core/docs/introduction.md), as a React component or
+[mounted from any framework](#without-react). A floating button
 opens a panel docked to the edge of the page, where you can inspect and edit a store's
 state, compare it with the synced backend document, follow a log of every change, and
 connect or disconnect the sync engine.
@@ -16,8 +17,9 @@ connect or disconnect the sync engine.
 npm install -D @homeostate/tool-devtools
 ```
 
-`react` and `react-dom` 18 or 19 are peer dependencies. The package brings its own styles,
-so the app needs no Tailwind or shadcn setup.
+The React component needs `react` and `react-dom` 18 or 19, which are optional peer
+dependencies: other apps use [`mountDevtools`](#without-react), which brings its own. The
+package brings its own styles, so the app needs no Tailwind or shadcn setup.
 
 ## Usage
 
@@ -69,6 +71,37 @@ To open the panel from your own UI, such as an "Inspect state" button, control i
 Pass the engine's `filter` in the source too, if it has one, so the keys it keeps out of sync
 are marked local. If the document is [persisted](/docs/persistence), pass what
 `createPersistence` returned as `persistence` to see and manage what is stored.
+
+## Without React
+
+Apps on Angular, Vue, Svelte or no framework mount the same devtools with `mountDevtools`
+from `@homeostate/tool-devtools/mount`. It takes the component's props as options and
+returns right away with two methods:
+
+- `update(options)` changes some options and keeps the others, for example `{ open: true }`
+  from a button of your own.
+- `unmount()` takes the devtools off the page. Call it when the store goes away:
+  `onScopeDispose` in Vue, `onDestroy` in Svelte, `DestroyRef.onDestroy` in Angular.
+
+The panel brings its own React, about 170 kB gzipped, in a chunk loaded in the background
+once `mountDevtools` is called. The app needs no React, and its initial bundle grows by less
+than a kilobyte.
+
+```ts title="todo-page.ts"
+import { mountDevtools } from "@homeostate/tool-devtools/mount";
+
+const devtools = mountDevtools({
+  sources: [{ name: "Todos", adapter, backend, engine }],
+  open: false,
+  onOpenChange: (open) => (inspecting = open),
+});
+
+// From the app's own "Inspect state" button:
+devtools.update({ open: true });
+
+// When the page that owns the store is left:
+devtools.unmount();
+```
 
 ## The panel
 
@@ -136,3 +169,6 @@ const HomeostateDevtools = import.meta.env.DEV
     )
   : () => null;
 ```
+
+With `mountDevtools`, call it only in development, such as under `import.meta.env.DEV`:
+the panel's chunk is then never loaded in production.

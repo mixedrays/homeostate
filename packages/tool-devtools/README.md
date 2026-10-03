@@ -1,6 +1,7 @@
 # @homeostate/tool-devtools
 
-React devtools for [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
+Devtools for [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core),
+as a React component or mounted from any framework.
 A floating button opens a panel where you can inspect and edit a store's state, compare it
 with the synced backend document, follow a log of every change, and connect or disconnect
 the engine.
@@ -11,8 +12,9 @@ the engine.
 npm install -D @homeostate/tool-devtools
 ```
 
-`react` and `react-dom` 18 or 19 are peer dependencies. Styles are bundled and isolated in a
-shadow root, so no CSS setup is needed.
+The React component needs `react` and `react-dom` 18 or 19, which are optional peer
+dependencies: other apps use [`mountDevtools`](#without-react), which brings its own. Styles
+are bundled and isolated in a shadow root, so no CSS setup is needed.
 
 ## Usage
 
@@ -59,6 +61,24 @@ Storage tab.
 > **Warning:** edits go through the store like any local change, so every peer in the room
 > receives them. Restoring a log entry replaces the shared state for everyone.
 
+## Without React
+
+Apps on Angular, Vue, Svelte or no framework mount the same devtools with `mountDevtools`.
+It takes the component's props as options and returns `update` and `unmount`. The panel
+brings its own React and loads in the background, so the app needs no React and its initial
+bundle grows by less than a kilobyte.
+
+```ts
+import { mountDevtools } from "@homeostate/tool-devtools/mount";
+
+const devtools = mountDevtools({
+  sources: [{ name: "Todos", adapter, backend, engine }],
+});
+
+devtools.update({ open: true }); // change some options
+devtools.unmount(); // when the store goes away
+```
+
 ## Production builds
 
 The component renders in every build. To leave it out of production bundles, load it only in
@@ -75,6 +95,8 @@ const HomeostateDevtools = import.meta.env.DEV
     )
   : () => null;
 ```
+
+With `mountDevtools`, call it only in development, such as under `import.meta.env.DEV`.
 
 See the [documentation](https://homeostate.pages.dev/docs/tool-devtools/introduction) for
 the panel's tabs and editing behavior.

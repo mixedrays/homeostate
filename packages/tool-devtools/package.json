@@ -1,7 +1,7 @@
 {
   "name": "@homeostate/tool-devtools",
   "version": "0.1.0",
-  "description": "Floating React devtools to inspect and edit the state a homeostate sync engine keeps in sync",
+  "description": "Floating devtools to inspect and edit the state a homeostate sync engine keeps in sync, as a React component or mounted from any framework",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -16,6 +16,9 @@
   "keywords": [
     "devtools",
     "react",
+    "vue",
+    "angular",
+    "svelte",
     "crdt",
     "sync",
     "state-management",
@@ -24,7 +27,11 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./mount": {
+      "types": "./dist/mount.d.ts",
+      "default": "./dist/mount.js"
+    }
   },
   "sideEffects": false,
   "files": [
@@ -43,11 +50,15 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "./mount": {
+        "types": "./dist/mount.d.ts",
+        "default": "./dist/mount.js"
       }
     }
   },
   "scripts": {
-    "build": "tsc -b && vite build"
+    "build": "tsc -b && vite build && vite build --mode mount"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -59,6 +70,14 @@
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

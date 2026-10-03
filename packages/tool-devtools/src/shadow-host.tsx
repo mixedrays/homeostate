@@ -7,9 +7,8 @@ import {
 import { createPortal } from "react-dom";
 import { cn } from "cn";
 import { PortalContainerContext } from "./lib/portal";
+import type { DevtoolsTheme } from "./options";
 import { devtoolsCss, devtoolsPropertiesCss } from "./styles";
-
-export type DevtoolsTheme = "system" | "light" | "dark";
 
 const PROPERTIES_ID = "homeostate-devtools-properties";
 const DARK_QUERY = "(prefers-color-scheme: dark)";

@@ -26,7 +26,7 @@ Docs: [homeostate.pages.dev](https://homeostate.pages.dev/docs/getting-started).
 | `@homeostate/store-ngrx-signals`    | NgRx Signals adapter                              |
 | `@homeostate/persist-indexeddb`     | IndexedDB storage for `createPersistence`         |
 | `@homeostate/persist-local-storage` | localStorage storage for `createPersistence`      |
-| `@homeostate/tool-devtools`         | React panel to inspect and edit synced state      |
+| `@homeostate/tool-devtools`         | Panel to inspect and edit synced state            |
 
 `crdt-*` packages implement `CrdtBackend`, `store-*` packages implement `StoreAdapter`, and
 `persist-*` packages implement `PersistenceAdapter`. Each lives in `packages/<name>`.

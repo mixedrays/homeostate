@@ -44,13 +44,12 @@ import {
 } from "../components/ui/tabs";
 import type { DevtoolsSource, Inspector } from "../inspector";
 import { usePersistedState } from "../lib/use-persisted-state";
+import type { PanelPosition } from "../options";
 import { HomeostateMark } from "./mark";
 import { LogTab } from "./log-tab";
 import { StateTab } from "./state-tab";
 import { StorageTab } from "./storage-tab";
 import { SyncTab } from "./sync-tab";
-
-export type PanelPosition = "right" | "left" | "bottom" | "top";
 
 export interface SourceInspector {
   source: DevtoolsSource;
