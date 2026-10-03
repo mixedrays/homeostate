@@ -17,7 +17,7 @@ both sides and watch them merge on reconnect. See the
 - `src/router.svelte.ts`: a small History API router.
 - `src/HomePage.svelte`: the landing page, listing the apps in `src/demos.ts`.
 - `src/TodoStoresPage.svelte`: the store selector.
-- `src/TodoPage.svelte`: todo controls, connection status and state inspector.
+- `src/TodoPage.svelte`: todo controls, connection status, and the devtools mounted with `mountDevtools`.
 
 There is no Svelte-specific adapter: it uses `@homeostate/store-tanstack`, and components read
 the store through `useSelector` from `@tanstack/svelte-store`.

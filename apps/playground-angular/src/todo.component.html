@@ -43,8 +43,9 @@
       <h1 class="demo-title">{{ demo.title }}</h1>
       <p class="demo-description">{{ demo.description }}</p>
       <p class="demo-hint">
-        To see this store's shared state as JSON, open the inspector with
-        <strong>Inspect state</strong>.
+        To see this store, its Yjs document and a log of every change, and to
+        edit them, open the devtools with <strong>Inspect state</strong> or the
+        round button in the bottom-right corner.
       </p>
     </div>
   </div>
@@ -203,20 +204,3 @@
     >. Open another store or a second tab to watch changes propagate.
   </p>
 </main>
-
-@if (inspecting()) {
-  <aside class="inspector" aria-label="Shared state">
-    <div class="inspector-header">
-      <strong>Shared state</strong>
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Close"
-        (click)="inspecting.set(false)"
-      >
-        ×
-      </button>
-    </div>
-    <pre>{{ store.shared() | json }}</pre>
-  </aside>
-}

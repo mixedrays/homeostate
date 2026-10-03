@@ -394,6 +394,9 @@ importers:
       '@homeostate/store-ngrx-signals':
         specifier: workspace:^
         version: link:../../packages/store-ngrx-signals
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       '@ngrx/signals':
         specifier: ^21.0.0
         version: 21.1.1(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
@@ -576,6 +579,9 @@ importers:
       '@homeostate/store-tanstack':
         specifier: workspace:^
         version: link:../../packages/store-tanstack
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       '@tanstack/store':
         specifier: ^0.11.1
         version: 0.11.2
@@ -631,6 +637,9 @@ importers:
       '@homeostate/store-tanstack':
         specifier: workspace:^
         version: link:../../packages/store-tanstack
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       '@tanstack/vue-store':
         specifier: ^0.11.2
         version: 0.11.2(vue@3.5.43(typescript@5.9.3))

@@ -11,6 +11,7 @@ import {
   type FilterStatus,
   type TodoState,
 } from "@homeostate/playground/shared";
+import type { DevtoolsSource } from "@homeostate/tool-devtools/mount";
 import type { WebsocketProvider } from "y-websocket";
 
 export type SyncStatus =
@@ -89,11 +90,19 @@ export function createTodoStore(syncServerUrl: string) {
   });
   const counts = createAtom(() => countTodos(store.state.todos));
 
-  const { ydoc, wsProvider } = connectSharedDoc(syncServerUrl);
-  const engine = createSyncEngine(
-    createYjsBackend(ydoc, SYNC_MAP_NAME),
-    createTanStackStoreAdapter(store),
-  );
+  const { ydoc, wsProvider, persistence } = connectSharedDoc(syncServerUrl);
+  const adapter = createTanStackStoreAdapter(store);
+  const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+  const engine = createSyncEngine(backend, adapter);
+
+  /** The store as the devtools panel sees it. */
+  const devtoolsSource: DevtoolsSource = {
+    name: "TanStack Store todos",
+    adapter,
+    backend,
+    engine,
+    persistence,
+  };
 
   const status = createAtom<SyncStatus>(readStatus(wsProvider));
   const updateStatus = () => status.set(readStatus(wsProvider));
@@ -109,6 +118,7 @@ export function createTodoStore(syncServerUrl: string) {
     visibleTodos,
     counts,
     status,
+    devtoolsSource,
     toggleConnection() {
       if (wsProvider.shouldConnect) wsProvider.disconnect();
       else wsProvider.connect();

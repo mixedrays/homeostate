@@ -16,7 +16,7 @@ both sides and watch them merge on reconnect. See the
 - `src/todo.store.ts`: the TanStack Store, its actions and derived atoms, sync and teardown.
 - `src/HomePage.vue`: the landing page, listing the apps in `src/demos.ts`.
 - `src/TodoStoresPage.vue`: the store selector.
-- `src/TodoPage.vue`: todo controls, connection status and state inspector.
+- `src/TodoPage.vue`: todo controls, connection status, and the devtools mounted with `mountDevtools`.
 
 There is no Vue-specific adapter: it uses `@homeostate/store-tanstack`, and components read
 the store through `useSelector` from `@tanstack/vue-store`.

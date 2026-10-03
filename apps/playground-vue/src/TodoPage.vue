@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref } from "vue";
+import { computed, onScopeDispose, ref, watch } from "vue";
 import { useSelector } from "@tanstack/vue-store";
 import { TODO_ROOM, type FilterStatus } from "@homeostate/playground/shared";
+import { mountDevtools } from "@homeostate/tool-devtools/mount";
 import { SYNC_SERVER_URL } from "./config";
 import { apps, demos } from "./demos";
 import { createTodoStore, type SyncStatus } from "./todo.store";
@@ -36,6 +37,17 @@ const counts = useSelector(todoStore.counts);
 /** The composer's text, held here so the Add button can follow it. */
 const draft = ref("");
 const inspecting = ref(false);
+
+// The devtools render in a shadow root on the body; Inspect state opens and closes them.
+const devtools = mountDevtools({
+  sources: [todoStore.devtoolsSource],
+  open: false,
+  onOpenChange: (open) => {
+    inspecting.value = open;
+  },
+});
+watch(inspecting, (open) => devtools.update({ open }));
+onScopeDispose(devtools.unmount);
 
 const online = computed(() => status.value !== "offline");
 const statusTitle = computed(() => {
@@ -124,8 +136,9 @@ function editTodo(id: string, input: HTMLInputElement) {
         <h1 class="demo-title">{{ demo.title }}</h1>
         <p class="demo-description">{{ demo.description }}</p>
         <p class="demo-hint">
-          To see this store's shared state as JSON, open the inspector with
-          <strong>Inspect state</strong>.
+          To see this store, its Yjs document and a log of every change, and to
+          edit them, open the devtools with <strong>Inspect state</strong> or
+          the round button in the bottom-right corner.
         </p>
       </div>
     </div>
@@ -276,19 +289,4 @@ function editTodo(id: string, input: HTMLInputElement) {
       >. Open another store or a second tab to watch changes propagate.
     </p>
   </main>
-
-  <aside v-if="inspecting" class="inspector" aria-label="Shared state">
-    <div class="inspector-header">
-      <strong>Shared state</strong>
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Close"
-        @click="inspecting = false"
-      >
-        ×
-      </button>
-    </div>
-    <pre>{{ state }}</pre>
-  </aside>
 </template>

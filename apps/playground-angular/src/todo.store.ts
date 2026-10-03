@@ -19,6 +19,7 @@ import {
   SYNC_MAP_NAME,
   type FilterStatus,
 } from "@homeostate/playground/shared";
+import type { DevtoolsSource } from "@homeostate/tool-devtools/mount";
 import type { WebsocketProvider } from "y-websocket";
 import { PLAYGROUND_CONFIG } from "./config";
 
@@ -33,12 +34,29 @@ function readStatus(provider: WebsocketProvider): SyncStatus {
 
 export const TodoStore = signalStore(
   withState(() => ({ shared: createInitialTodoState() })),
-  withProps(() => {
+  withProps((store) => {
     const connection = connectSharedDoc(
       inject(PLAYGROUND_CONFIG).syncServerUrl,
     );
+    const adapter = createNgrxSignalsAdapter(store, {
+      select: (state) => state.shared,
+      replace: (shared) => patchState(store, { shared }),
+      injector: inject(Injector),
+    });
+    const backend = createYjsBackend(connection.ydoc, SYNC_MAP_NAME);
+    const engine = createSyncEngine(backend, adapter);
+    /** The store as the devtools panel sees it. */
+    const devtoolsSource: DevtoolsSource = {
+      name: "NgRx Signals todos",
+      adapter,
+      backend,
+      engine,
+      persistence: connection.persistence,
+    };
     return {
       _connection: connection,
+      _engine: engine,
+      devtoolsSource,
       status: signal(readStatus(connection.wsProvider)),
     };
   }),
@@ -110,19 +128,11 @@ export const TodoStore = signalStore(
     },
   })),
   withHooks((store) => {
-    const injector = inject(Injector);
     const destroyRef = inject(DestroyRef);
     return {
       onInit() {
         const { ydoc, wsProvider } = store._connection;
-        const engine = createSyncEngine(
-          createYjsBackend(ydoc, SYNC_MAP_NAME),
-          createNgrxSignalsAdapter(store, {
-            select: (state) => state.shared,
-            replace: (shared) => patchState(store, { shared }),
-            injector,
-          }),
-        );
+        const engine = store._engine;
         const updateStatus = () => store.status.set(readStatus(wsProvider));
         wsProvider.on("status", updateStatus);
         wsProvider.on("sync", updateStatus);

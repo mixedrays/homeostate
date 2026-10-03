@@ -2,12 +2,14 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  effect,
   inject,
   signal,
 } from "@angular/core";
-import { JsonPipe } from "@angular/common";
 import { RouterLink } from "@angular/router";
 import { TODO_ROOM, type FilterStatus } from "@homeostate/playground/shared";
+import { mountDevtools } from "@homeostate/tool-devtools/mount";
 import { PLAYGROUND_CONFIG } from "./config";
 import { apps, demos } from "./demos";
 import { TodoStore, type SyncStatus } from "./todo.store";
@@ -22,7 +24,7 @@ const STATUS_LABELS: Record<SyncStatus, string> = {
 
 @Component({
   selector: "app-todo",
-  imports: [JsonPipe, RouterLink],
+  imports: [RouterLink],
   providers: [TodoStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./todo.component.html",
@@ -72,6 +74,17 @@ export class TodoComponent {
       hint: "Check off a todo to see it here.",
     };
   });
+
+  constructor() {
+    // The devtools render in a shadow root on the body; Inspect state opens and closes them.
+    const devtools = mountDevtools({
+      sources: [this.store.devtoolsSource],
+      open: false,
+      onOpenChange: (open) => this.inspecting.set(open),
+    });
+    effect(() => devtools.update({ open: this.inspecting() }));
+    inject(DestroyRef).onDestroy(devtools.unmount);
+  }
 
   addTodo(event: Event) {
     event.preventDefault();

@@ -18,7 +18,7 @@ both sides and watch them merge on reconnect.
 - `src/todo.store.ts`: the SignalStore, its methods and derived values, sync and cleanup.
 - `src/home.component.*`: the landing page, listing the apps in `src/demos.ts`.
 - `src/todo-stores.component.*`: the store selector.
-- `src/todo.component.*`: todo controls, connection status and state inspector.
+- `src/todo.component.*`: todo controls, connection status, and the devtools mounted with `mountDevtools`.
 
 The store keeps synced data under a `shared` key that the adapter's `select` unwraps, so the
 CRDT schema matches the other playgrounds.

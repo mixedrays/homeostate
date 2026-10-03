@@ -23,6 +23,9 @@ pnpm playground          # this page, every playground and the WebSocket server 
 pnpm playground:react    # one playground and the WebSocket server; also :angular, :vue, :svelte, :whiteboard
 ```
 
+The Angular, Vue and Svelte playgrounds load the devtools from their built bundle, which these
+scripts build first. After changing the devtools, restart them or run `pnpm build:devtools`.
+
 ## Configuration and deployment
 
 | Variable                     | Used by           | Default                                      |
