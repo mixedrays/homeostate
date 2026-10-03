@@ -3,7 +3,15 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { Layers, TriangleAlert, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  HardDrive,
+  Layers,
+  ListTree,
+  ScrollText,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import {
@@ -209,6 +217,11 @@ function SourceView({
         <div className="border-b">
           <TabsList variant="line" className="h-7">
             <TabsTrigger value="state" className="text-xs">
+              <ListTree
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               State
               {snapshot.warnings.length > 0 && (
                 <TriangleAlert
@@ -219,15 +232,30 @@ function SourceView({
               )}
             </TabsTrigger>
             <TabsTrigger value="sync" className="text-xs">
+              <ArrowLeftRight
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               Sync
             </TabsTrigger>
             <TabsTrigger value="log" className="text-xs">
+              <ScrollText
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               Log
               <span className="text-muted-foreground tabular-nums">
                 {snapshot.log.length}
               </span>
             </TabsTrigger>
             <TabsTrigger value="storage" className="text-xs">
+              <HardDrive
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               Storage
             </TabsTrigger>
           </TabsList>
