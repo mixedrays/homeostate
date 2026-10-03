@@ -7,7 +7,7 @@ import type { KeyStatus } from "../inspector";
 import { formatPath, type Json, type JsonObject, type JsonPath } from "../json";
 import { JsonEditor } from "./json-editor";
 import { previewOf } from "./format";
-import { KeyStatusBadge, JsonValue } from "./value";
+import { KeyStatusBadge, JsonValue, NonJsonBadge } from "./value";
 
 /** Children shown before a "show all" button, so a long array does not stall the panel. */
 const CHILD_LIMIT = 100;
@@ -19,6 +19,8 @@ interface JsonTreeProps {
   onSet?: (path: JsonPath, value: Json | undefined) => void;
   /** Badges on the top-level keys. */
   keyStatus?: Readonly<Record<string, KeyStatus>>;
+  /** What each value that is not JSON really is, by `JSON.stringify(path)`. */
+  warnings?: ReadonlyMap<string, string>;
   /** Containers shallower than this start expanded. */
   expandDepth?: number;
 }
@@ -26,6 +28,7 @@ interface JsonTreeProps {
 interface TreeState {
   onSet?: (path: JsonPath, value: Json | undefined) => void;
   keyStatus?: Readonly<Record<string, KeyStatus>>;
+  warnings?: ReadonlyMap<string, string>;
   expandDepth: number;
   toggled: ReadonlySet<string>;
   toggle: (id: string) => void;
@@ -50,6 +53,7 @@ export function JsonTree({
   label,
   onSet,
   keyStatus,
+  warnings,
   expandDepth = 2,
 }: JsonTreeProps) {
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
@@ -58,6 +62,7 @@ export function JsonTree({
   const tree: TreeState = {
     onSet,
     keyStatus,
+    warnings,
     expandDepth,
     toggled,
     toggle: (id) =>
@@ -108,6 +113,7 @@ function TreeNode({ name, value, path, depth, tree }: TreeNodeProps) {
     container &&
     (editingJson || depth < tree.expandDepth !== tree.toggled.has(id));
   const status = depth === 0 ? tree.keyStatus?.[String(name)] : undefined;
+  const nonJson = tree.warnings?.get(id);
   const where = formatPath(path);
   const indent = { paddingLeft: `${depth * 14 + 4}px` };
 
@@ -190,6 +196,7 @@ function TreeNode({ name, value, path, depth, tree }: TreeNodeProps) {
         </span>
         <span className="shrink-0 text-muted-foreground">:</span>
         {display}
+        {nonJson && <NonJsonBadge kind={nonJson} />}
         {status && <KeyStatusBadge status={status} />}
         {set && tree.editing !== id && (
           <span className="ml-auto flex shrink-0 gap-0.5 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">

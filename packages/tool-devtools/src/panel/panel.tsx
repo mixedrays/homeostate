@@ -3,7 +3,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { Layers, X } from "lucide-react";
+import { Layers, TriangleAlert, X } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import {
@@ -39,6 +39,7 @@ import { usePersistedState } from "../lib/use-persisted-state";
 import { HomeostateMark } from "./mark";
 import { LogTab } from "./log-tab";
 import { StateTab } from "./state-tab";
+import { StorageTab } from "./storage-tab";
 import { SyncTab } from "./sync-tab";
 
 export type PanelPosition = "right" | "left" | "bottom" | "top";
@@ -48,7 +49,7 @@ export interface SourceInspector {
   inspector: Inspector;
 }
 
-const TABS = ["state", "sync", "log"];
+const TABS = ["state", "sync", "log", "storage"];
 const MIN_SIZE = 280;
 const RESIZE_STEP = 16;
 
@@ -153,7 +154,11 @@ export function DevtoolsPanel({
         </header>
 
         {current ? (
-          <SourceView key={current.source.name} inspector={current.inspector} />
+          <SourceView
+            key={current.source.name}
+            name={current.source.name}
+            inspector={current.inspector}
+          />
         ) : (
           <Empty className="flex-1">
             <EmptyHeader>
@@ -176,7 +181,13 @@ function useInspectorSnapshot(inspector: Inspector) {
   return useSyncExternalStore(inspector.subscribe, inspector.getSnapshot);
 }
 
-function SourceView({ inspector }: { inspector: Inspector }) {
+function SourceView({
+  name,
+  inspector,
+}: {
+  name: string;
+  inspector: Inspector;
+}) {
   const snapshot = useInspectorSnapshot(inspector);
   const [stored, setTab] = usePersistedState<string>("tab", "state");
   const tab = TABS.includes(stored) ? stored : "state";
@@ -195,10 +206,17 @@ function SourceView({ inspector }: { inspector: Inspector }) {
         onValueChange={(value: string) => setTab(value)}
         className="min-h-0 flex-1 gap-0"
       >
-        <div className="border-b px-3 pt-1 pb-1.5">
+        <div className="border-b">
           <TabsList variant="line" className="h-7">
             <TabsTrigger value="state" className="text-xs">
               State
+              {snapshot.warnings.length > 0 && (
+                <TriangleAlert
+                  role="img"
+                  aria-label={`${snapshot.warnings.length} not JSON`}
+                  className="size-3! text-amber-600 dark:text-amber-400"
+                />
+              )}
             </TabsTrigger>
             <TabsTrigger value="sync" className="text-xs">
               Sync
@@ -209,6 +227,9 @@ function SourceView({ inspector }: { inspector: Inspector }) {
                 {snapshot.log.length}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="storage" className="text-xs">
+              Storage
+            </TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="state" className="flex min-h-0 flex-col">
@@ -218,7 +239,10 @@ function SourceView({ inspector }: { inspector: Inspector }) {
           <SyncTab snapshot={snapshot} />
         </TabsContent>
         <TabsContent value="log" className="flex min-h-0 flex-col">
-          <LogTab snapshot={snapshot} inspector={inspector} />
+          <LogTab name={name} snapshot={snapshot} inspector={inspector} />
+        </TabsContent>
+        <TabsContent value="storage" className="flex min-h-0 flex-col">
+          <StorageTab snapshot={snapshot} inspector={inspector} />
         </TabsContent>
       </Tabs>
     </>

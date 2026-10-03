@@ -1,6 +1,8 @@
 import {
   defaultSyncFilter,
   type CrdtBackend,
+  type Persistence,
+  type PersistenceStats,
   type StoreAdapter,
   type SyncEngine,
   type Unsubscribe,
@@ -8,6 +10,7 @@ import {
 import {
   deepEqual,
   diffJson,
+  findNonJson,
   isRecord,
   setIn,
   share,
@@ -15,6 +18,7 @@ import {
   type DiffLine,
   type JsonObject,
   type JsonPath,
+  type NonJsonValue,
 } from "./json";
 
 /**
@@ -34,6 +38,8 @@ export interface DevtoolsSource<S extends object = any> {
   engine?: SyncEngine;
   /** The engine's `filter`, if it has one, so keys it keeps out of sync are marked local. */
   filter?: (key: string, value: unknown) => boolean;
+  /** What `createPersistence` returned for the document, for the Storage tab. */
+  persistence?: Persistence;
 }
 
 /**
@@ -53,6 +59,8 @@ export interface LogEntry {
   state: JsonObject;
   /** The change from the previous observed state. */
   diff: DiffLine[];
+  /** Read from an exported log file rather than recorded here. */
+  imported?: boolean;
 }
 
 /**
@@ -66,6 +74,17 @@ export interface LogEntry {
 export type KeyStatus =
   "synced" | "diverged" | "pending" | "local" | "backend-only";
 
+export interface StorageSnapshot {
+  /** What `persistence.stats()` last reported, or `null` until it has. */
+  stats: PersistenceStats | null;
+  /** A compaction or clear in progress. */
+  busy: "compacting" | "clearing" | null;
+  /** Set once Clear has stopped storing the document, until the page reloads. */
+  cleared: boolean;
+  /** Why the last storage call failed. */
+  error: string | null;
+}
+
 export interface InspectorSnapshot {
   /** The JSON view of `adapter.getState()`: functions and `undefined` are left out. */
   store: JsonObject;
@@ -76,6 +95,10 @@ export interface InspectorSnapshot {
   /** `engine.isConnected()`, or `null` without an engine. */
   connected: boolean | null;
   keyStatus: Readonly<Record<string, KeyStatus>>;
+  /** Values in synced keys that are not plain JSON, so the engine does not sync them as they are. */
+  warnings: readonly NonJsonValue[];
+  /** The stored document, or `null` without `persistence`. */
+  storage: StorageSnapshot | null;
   /** Oldest first. */
   log: readonly LogEntry[];
   paused: boolean;
@@ -98,7 +121,15 @@ export interface Inspector {
   connect: () => void;
   disconnect: () => void;
   clearLog: () => void;
+  /** Replace the log with entries read from an exported file, marked imported. */
+  importLog: (entries: readonly LogEntry[]) => void;
   setPaused: (paused: boolean) => void;
+  /** Read what is stored again, once pending writes finish. */
+  refreshStorage: () => Promise<void>;
+  /** Merge the stored log into one snapshot. */
+  compactStorage: () => Promise<void>;
+  /** Remove the stored document and stop storing it until the page reloads. */
+  clearStorage: () => Promise<void>;
 }
 
 export interface InspectorOptions {
@@ -120,6 +151,11 @@ const originRank: Record<LogOrigin, number> = {
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+const initialStorage = (source: DevtoolsSource): StorageSnapshot | null =>
+  source.persistence
+    ? { stats: null, busy: null, cleared: false, error: null }
+    : null;
 
 const keyStatusOf = (
   store: JsonObject,
@@ -157,16 +193,23 @@ export function createInspector(
   let scheduled = false;
   let pendingOrigin: LogOrigin | null = null;
   let pendingLabel: string | undefined;
+  let storageRead: Promise<void> | null = null;
+  let readStorageAgain = false;
   const listeners = new Set<() => void>();
 
   const read = (previous: InspectorSnapshot | null) => {
     let store = previous?.store ?? {};
     let storeError: string | null = null;
     let localKeys: string[] = [];
+    let warnings = previous?.warnings ?? [];
     try {
       const raw = source.adapter.getState() as Plain;
-      store = toJsonObject(raw);
       const filter = source.filter ?? defaultSyncFilter;
+      // Before the JSON view, which throws on some of them.
+      warnings = Object.keys(raw)
+        .filter((key) => filter(key, raw[key]))
+        .flatMap((key) => findNonJson(raw[key], [key]));
+      store = toJsonObject(raw);
       localKeys = Object.keys(store).filter((key) => !filter(key, raw[key]));
     } catch (error) {
       storeError = messageOf(error);
@@ -186,10 +229,13 @@ export function createInspector(
     if (previous && deepEqual(previous.store, store)) store = previous.store;
     if (previous?.backend && deepEqual(previous.backend, backend))
       backend = previous.backend;
+    if (previous && deepEqual(previous.warnings, warnings))
+      warnings = previous.warnings;
 
     return {
       store,
       storeError,
+      warnings,
       backend,
       connected: source.engine ? source.engine.isConnected() : null,
       keyStatus: keyStatusOf(store, localKeys, backend),
@@ -209,6 +255,7 @@ export function createInspector(
       },
     ],
     paused: false,
+    storage: initialStorage(source),
   };
 
   const emit = (next: InspectorSnapshot): void => {
@@ -244,6 +291,7 @@ export function createInspector(
       next.backend !== snapshot.backend ||
       next.connected !== snapshot.connected ||
       next.storeError !== snapshot.storeError ||
+      next.warnings !== snapshot.warnings ||
       !deepEqual(next.keyStatus, snapshot.keyStatus);
     if (changed) emit({ ...snapshot, ...next, log });
   };
@@ -294,6 +342,57 @@ export function createInspector(
     schedule("local");
   };
 
+  /** Patch the storage snapshot, unless the source has moved on to another persistence. */
+  const setStorage = (
+    persistence: Persistence,
+    patch: Partial<StorageSnapshot>,
+  ): void => {
+    if (source.persistence !== persistence || !snapshot.storage) return;
+    emit({ ...snapshot, storage: { ...snapshot.storage, ...patch } });
+  };
+
+  /** One read at a time; a refresh asked for meanwhile reads once more after it. */
+  const readStorage = async (): Promise<void> => {
+    do {
+      readStorageAgain = false;
+      const persistence = source.persistence;
+      if (!persistence) return;
+      try {
+        const stats = await persistence.stats();
+        setStorage(persistence, { stats, error: null });
+      } catch (error) {
+        setStorage(persistence, { error: messageOf(error) });
+      }
+    } while (readStorageAgain);
+  };
+
+  const refreshStorage = (): Promise<void> => {
+    if (storageRead) {
+      readStorageAgain = true;
+      return storageRead;
+    }
+    storageRead = readStorage().finally(() => {
+      storageRead = null;
+    });
+    return storageRead;
+  };
+
+  const changeStorage = async (
+    busy: "compacting" | "clearing",
+    change: (persistence: Persistence) => Promise<void>,
+  ): Promise<void> => {
+    const persistence = source.persistence;
+    if (!persistence || snapshot.storage?.busy) return;
+    setStorage(persistence, { busy, error: null });
+    try {
+      await change(persistence);
+      setStorage(persistence, { busy: null });
+    } catch (error) {
+      setStorage(persistence, { busy: null, error: messageOf(error) });
+    }
+    await refreshStorage();
+  };
+
   const stop = (): void => {
     if (!running) return;
     running = false;
@@ -317,7 +416,10 @@ export function createInspector(
     stop,
 
     update: (next) => {
+      const persistenceChanged = next.persistence !== source.persistence;
       source = next;
+      if (persistenceChanged)
+        emit({ ...snapshot, storage: initialStorage(next) });
       schedule("local");
     },
 
@@ -345,6 +447,26 @@ export function createInspector(
 
     clearLog: () => emit({ ...snapshot, log: [] }),
 
+    importLog: (entries) => {
+      const log = entries
+        .slice(-logLimit)
+        .map((entry): LogEntry => ({ ...entry, imported: true }));
+      // Entries recorded from here on continue after the imported ids.
+      nextId = log.reduce((next, { id }) => Math.max(next, id + 1), nextId);
+      emit({ ...snapshot, log });
+    },
+
     setPaused: (paused) => emit({ ...snapshot, paused }),
+
+    refreshStorage,
+
+    compactStorage: () =>
+      changeStorage("compacting", (persistence) => persistence.compact()),
+
+    clearStorage: () =>
+      changeStorage("clearing", async (persistence) => {
+        await persistence.clear();
+        setStorage(persistence, { cleared: true });
+      }),
   };
 }

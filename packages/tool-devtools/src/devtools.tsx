@@ -161,7 +161,7 @@ function useInspectors(
     return () => running.forEach((inspector) => inspector.stop());
   }, [activeKey]);
 
-  // A new name or filter for the same setup keeps the inspector and its log.
+  // A new name, filter or persistence for the same setup keeps the inspector and its log.
   useEffect(() => {
     for (const { source, inspector } of current) {
       const cached = cache.current.find(
@@ -170,7 +170,8 @@ function useInspectors(
       if (!cached || cached.source === source) continue;
       if (
         cached.source.name !== source.name ||
-        cached.source.filter !== source.filter
+        cached.source.filter !== source.filter ||
+        cached.source.persistence !== source.persistence
       )
         inspector.update(source);
       cached.source = source;

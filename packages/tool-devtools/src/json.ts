@@ -22,6 +22,65 @@ export const toJsonObject = (value: unknown): JsonObject => {
   return isRecord(json) ? (json as JsonObject) : {};
 };
 
+/** A value in a synced key that is not plain JSON, so the engine does not sync it as it is. */
+export interface NonJsonValue {
+  path: JsonPath;
+  /** What the value is: a class such as `Date` or `Map`, `BigInt`, `NaN`, `circular reference`… */
+  kind: string;
+}
+
+const nonJsonKind = (value: unknown): string | null => {
+  switch (typeof value) {
+    case "bigint":
+      return "BigInt";
+    case "symbol":
+      return "Symbol";
+    case "number":
+      return Number.isFinite(value) ? null : String(value);
+    case "object": {
+      if (value === null || Array.isArray(value)) return null;
+      const prototype: unknown = Object.getPrototypeOf(value);
+      if (prototype === Object.prototype || prototype === null) return null;
+      const name = (prototype as { constructor?: { name?: unknown } })
+        .constructor?.name;
+      // `Object` from another realm, such as an iframe, is still a plain object.
+      if (name === "Object") return null;
+      return typeof name === "string" && name !== "" ? name : "class instance";
+    }
+    default:
+      return null;
+  }
+};
+
+/**
+ * The values under `value` that are not plain JSON: class instances such as a Date, Map or
+ * Set, BigInts, symbols, NaN and the infinities, and circular references. Functions and
+ * `undefined` are not reported, since they are dropped as JSON drops them.
+ */
+export const findNonJson = (
+  value: unknown,
+  path: JsonPath = [],
+  ancestors: Set<object> = new Set(),
+): NonJsonValue[] => {
+  const kind = nonJsonKind(value);
+  if (kind !== null) return [{ path, kind }];
+  if (value === null || typeof value !== "object") return [];
+  if (ancestors.has(value)) return [{ path, kind: "circular reference" }];
+
+  ancestors.add(value);
+  const found = Array.isArray(value)
+    ? value.flatMap((item, index) =>
+        findNonJson(item, [...path, index], ancestors),
+      )
+    : Object.keys(value)
+        .filter((key) => key !== "__proto__")
+        .flatMap((key) =>
+          findNonJson((value as Plain)[key], [...path, key], ancestors),
+        );
+  ancestors.delete(value);
+  return found;
+};
+
 export const deepEqual = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
   if (Array.isArray(a) && Array.isArray(b))

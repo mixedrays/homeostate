@@ -54,7 +54,7 @@ Zustand `homeostate` middleware, create an adapter for the devtools with
 
 | Prop             | Default          | Description                                                           |
 | ---------------- | ---------------- | --------------------------------------------------------------------- |
-| `sources`        |                  | `{ name, adapter, backend?, engine?, filter? }` for each store        |
+| `sources`        |                  | `{ name, adapter, backend?, engine?, filter?, persistence? }` each    |
 | `buttonPosition` | `"bottom-right"` | Viewport corner of the button: `bottom-left`, `top-right`, `top-left` |
 | `panelPosition`  | `"right"`        | Edge the panel docks to: `left`, `bottom`, `top`                      |
 | `initialIsOpen`  | `false`          | Whether the panel starts open, until it is opened or closed once      |
@@ -67,7 +67,8 @@ To open the panel from your own UI, such as an "Inspect state" button, control i
 `open` and `onOpenChange`; the devtools then leave remembering it to you.
 
 Pass the engine's `filter` in the source too, if it has one, so the keys it keeps out of sync
-are marked local.
+are marked local. If the document is [persisted](/docs/persistence), pass what
+`createPersistence` returned as `persistence` to see and manage what is stored.
 
 ## The panel
 
@@ -77,13 +78,23 @@ it. Whether it is open, its size and its tab are remembered in `localStorage`.
 
 - **State** shows the store as a tree or as JSON. Click a value to edit it, click a boolean to
   toggle it, edit an object or array as JSON, or delete a key or item. The JSON view edits
-  the whole state. Each top-level key is marked with how it relates to the backend.
+  the whole state. Each top-level key is marked with how it relates to the backend. Values in
+  synced keys that are not plain JSON, such as a `Date`, a `Map`, a class instance or `NaN`,
+  are listed in a warning and marked in the tree: the engine does not sync them as they are,
+  and the tree shows them as JSON would, a `Date` as a string and a `Map` as `{}`.
 - **Sync** lists every key as `synced`, `diverged` (the backend holds another value, as it
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
   filter) or `backend only`, and shows the backend document read-only.
 - **Log** records each change to the store with its diff, marked `local`, `remote` (a peer's
   change applied through the backend) or `devtools`. Any entry can be restored. Recording
-  can be paused and the log cleared.
+  can be paused and the log cleared. **Export** saves the log as a JSON file and **Import**
+  replaces the log with one, so a log recorded elsewhere, such as one attached to a bug
+  report, can be stepped through and its states restored here.
+- **Storage** shows how many updates the stored document holds and their size, read again as
+  the state changes. **Compact** merges them into one snapshot now, as every `compactAfter`
+  updates do. **Clear** removes the stored document and stops storing it until the page
+  reloads; the live document and its peers keep their state, and other tabs that store the
+  same key may write it again.
 - The header shows whether the engine is connected, with a switch to disconnect and
   reconnect it.
 

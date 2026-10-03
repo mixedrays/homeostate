@@ -14,6 +14,13 @@ export const previewOf = (value: Json | undefined): string => {
   return text.length > MAX_STRING ? `${text.slice(0, MAX_STRING - 1)}…"` : text;
 };
 
+/** `512 B`, `4.2 KB`, `1.3 MB`. */
+export const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export const keyStatusInfo: Record<
   KeyStatus,
   { label: string; hint: string; className: string }
