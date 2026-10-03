@@ -57,8 +57,9 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 The engine picks up every change that did not come through its own write, imports and local
 edits alike.
 
-`undefined` is not JSON and Automerge rejects it, so the backend drops object entries whose
-value is `undefined` and stores `undefined` array items as `null`, as `JSON.stringify` does.
+`undefined` and functions are not JSON, so the backend leaves out object entries holding
+either and stores such array items as `null`, as `JSON.stringify` does.
+
 Snapshots from `read()` copy only what changed since the last read and are shared between
 reads, so treat them as immutable.
 

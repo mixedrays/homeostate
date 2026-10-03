@@ -88,6 +88,58 @@ export const unicodeEdits: [string, string][] = [
   ["é😀é", "é😃é"],
 ];
 
+/**
+ * Writes holding values JSON cannot hold: `[name, before, next, expected]`, where `expected` is
+ * what `JSON.stringify` makes of `next` and every backend reads back. Shared regressions for core
+ * and every CRDT backend.
+ */
+export const nonJsonWrites: [string, object, object, object][] = [
+  [
+    "an undefined item in a fresh array",
+    {},
+    { b: 1, list: [1, undefined, 2] },
+    { b: 1, list: [1, null, 2] },
+  ],
+  [
+    "an existing item that becomes undefined",
+    { list: [1, 2] },
+    { c: 1, list: [1, undefined] },
+    { c: 1, list: [1, null] },
+  ],
+  [
+    "an inserted undefined item",
+    { list: [1] },
+    { list: [undefined, 1] },
+    { list: [null, 1] },
+  ],
+  [
+    "a null item that becomes undefined",
+    { list: [null, 1] },
+    { list: [undefined, 1] },
+    { list: [null, 1] },
+  ],
+  [
+    "object entries that become undefined",
+    { a: 1, nested: { c: 1 } },
+    { a: undefined, b: 1, nested: { c: undefined, d: 1 } },
+    { b: 1, nested: { d: 1 } },
+  ],
+  [
+    "a nested function",
+    {},
+    { nested: { a: 1, fn: () => 1 } },
+    { nested: { a: 1 } },
+  ],
+  ["a function array item", {}, { list: [() => 1] }, { list: [null] }],
+  ["a top-level function", {}, { a: 1, fn: () => 1 }, { a: 1 }],
+  [
+    "a sparse array",
+    {},
+    { list: Object.assign([], { 0: 1, 2: 2 }) },
+    { list: [1, null, 2] },
+  ],
+];
+
 /** Keys that `in` finds on every object, because `Object.prototype` has members by these names. */
 export const prototypeMemberKeys = [
   "constructor",

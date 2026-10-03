@@ -32,6 +32,9 @@ engine.connect();
 The synced state lives in `doc.getMap("shared")`. Attach any Yjs provider, such as
 [y-websocket](https://github.com/yjs/y-websocket), to `doc` for replication.
 
+`undefined` and functions are not JSON, so the backend leaves out object entries holding
+either and stores such array items as `null`, as `JSON.stringify` does.
+
 ## Persistence
 
 Pass `createYjsPersistable(doc)` to `createPersistence`. It stores Yjs updates, so every

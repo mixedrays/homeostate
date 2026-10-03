@@ -1,6 +1,7 @@
 export { createSyncEngine } from "./sync-engine.js";
 export { createPersistence } from "./persistence.js";
 export { getChanges } from "./diff.js";
+export { toJsonValue } from "./json.js";
 export { applyChanges } from "./apply.js";
 export type { ApplyOps } from "./apply.js";
 export type { Diffable } from "./diff.js";

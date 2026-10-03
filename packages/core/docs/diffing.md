@@ -1,5 +1,5 @@
 ---
-description: getChanges, Change and ChangeType, ordered array and UTF-16 string edits, and applying changes in place with ApplyOps.
+description: getChanges, Change and ChangeType, ordered array and UTF-16 string edits, toJsonValue, and applying changes in place with ApplyOps.
 label: Diff and apply API
 order: 3
 ---
@@ -104,6 +104,30 @@ As with arrays, offsets address the progressively edited string. Backends whose 
 text indexes are not UTF-16 must translate both offsets and lengths. String scripts use
 insertions and deletions; replacements are expressed as a combination of those steps.
 
+## toJsonValue
+
+```ts
+declare const toJsonValue: (value: unknown) => unknown;
+```
+
+Returns `value` as `JSON.stringify` would store it. Object entries holding `undefined` or a
+function are left out, and such array items, holes included, become `null`. Own `__proto__`
+keys are left out too. The input is never mutated: only the containers on a path to a removed
+or replaced value are copied, and a value that is already JSON is returned as is.
+
+A backend calls it on `write(next)` before `getChanges`. CRDT libraries reject `undefined` or
+functions, often after applying the operations before them, so cleaning the value first means
+a write applies in full. Diffing the cleaned value also keeps rewrites idle: the document
+holds `null` where the store holds an `undefined` array item, and `getChanges` against the
+raw value would replace that item on every write.
+
+```ts title="to-json-value-example.ts"
+import { toJsonValue } from "@homeostate/core";
+
+console.log(toJsonValue({ a: undefined, list: [1, undefined], fn: () => 1 }));
+// { list: [1, null] }
+```
+
 ## applyChanges
 
 ```ts
@@ -190,4 +214,5 @@ Every target passed to an operation is a container already in the store. The wal
 not clone it. For `PENDING`, it descends into that existing container instead of replacing
 it. If your store requires batched notifications, apply the entire script within one batch.
 
-Source: [diff.ts](../src/diff.ts), [change.ts](../src/change.ts) and [apply.ts](../src/apply.ts).
+Source: [diff.ts](../src/diff.ts), [change.ts](../src/change.ts), [json.ts](../src/json.ts) and
+[apply.ts](../src/apply.ts).

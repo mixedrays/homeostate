@@ -19,6 +19,7 @@ import {
   todo,
   toggleTodo,
   type TodoState,
+  nonJsonWrites,
   prototypeHijacks,
   prototypeMemberKeys,
   unicodeEdits,
@@ -332,6 +333,43 @@ describe("two peers over Automerge", () => {
 
     expect(sizes.every((size) => size < 200)).toBe(true);
     expect(b.store.getState()).toEqual(a.store.getState());
+  });
+});
+
+describe("values JSON cannot hold", () => {
+  it.each(nonJsonWrites)(
+    "writes %s as JSON would, and rewrites it without a change",
+    (_, before, next, expected) => {
+      const handle = createHandle();
+      const backend = createAutomergeBackend(handle, NAME);
+      backend.write(before);
+
+      expect(() => backend.write(next)).not.toThrow();
+      expect(backend.read()).toEqual(expected);
+
+      const onChange = vi.fn();
+      handle.subscribe(onChange);
+      backend.write(next);
+      expect(onChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it("leaves object entries holding undefined out on the writer and on peers", () => {
+    const handle = createHandle();
+    const backend = createAutomergeBackend(handle, NAME);
+    backend.write({ a: 1, b: 1, nested: { c: 1, d: 1 } });
+
+    backend.write({ a: undefined, b: 1, nested: { c: undefined, d: 1 } });
+
+    const peer = createAutomergeHandle(A.load<Root>(A.save(handle.doc())));
+    for (const read of [
+      backend.read(),
+      createAutomergeBackend(peer, NAME).read(),
+    ]) {
+      const state = read as { nested: object };
+      expect(Object.keys(state).sort()).toEqual(["b", "nested"]);
+      expect(Object.keys(state.nested)).toEqual(["d"]);
+    }
   });
 });
 

@@ -40,7 +40,9 @@ notifications raised while it runs, so an adapter needs no echo suppression of i
 
 Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and `null`.
 Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are
-neither diffed nor synced.
+neither diffed nor synced. The supplied backends store `undefined` and nested functions as
+`JSON.stringify` does: object entries holding them are left out, and such array items become
+`null`.
 
 Keys sync as own properties, so a key such as `constructor` or `toString` behaves like any
 other. A `__proto__` key is never synced: assigning it would replace an object's prototype, so

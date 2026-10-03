@@ -46,7 +46,7 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SyncEngine`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `Unsubscribe` |
 | [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                        |
-| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `Change`, `ChangeType`, `applyChanges`, `ApplyOps`                                                            |
+| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `Change`, `ChangeType`, `toJsonValue`, `applyChanges`, `ApplyOps`                                             |
 | [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`    |
 
 ## Persistence
@@ -68,7 +68,8 @@ backend without replication, and `createMemoryPersistenceAdapter()`. The
 ## Writing a backend
 
 `getChanges(current, next)` turns a `write(next)` into fine-grained changes, so a backend can
-apply small edits instead of replacing the document. `applyChanges` applies them to a
+apply small edits instead of replacing the document. Pass `next` through `toJsonValue` first,
+so `undefined` and functions never reach the CRDT library. `applyChanges` applies them to a
 mutable target through your own set, remove and splice operations. See the
 [diff and apply reference](./diffing.md) for tuple formats, ordered array edits, UTF-16 string
 offsets and a complete `ApplyOps` example.

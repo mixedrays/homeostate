@@ -1,6 +1,10 @@
-import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import {
+  toJsonValue,
+  type CrdtBackend,
+  type Unsubscribe,
+} from "@homeostate/core";
 import type { AutomergeHandle } from "./handle.js";
-import { applyChanges, diff, toJson, type Container } from "./patching.js";
+import { applyChanges, diff, type Container } from "./patching.js";
 import { createSnapshot } from "./snapshot.js";
 
 export const createAutomergeBackend = <T extends Container>(
@@ -16,12 +20,13 @@ export const createAutomergeBackend = <T extends Container>(
     read: () => snapshot(current()) ?? {},
 
     write: (next) => {
-      const changes = diff(current(), next);
+      const value = toJsonValue(next);
+      const changes = diff(current(), value);
       if (changes?.length === 0) return;
       writing = true;
       try {
         handle.change((doc) => {
-          if (changes === null) (doc as Container)[name] = toJson(next);
+          if (changes === null) (doc as Container)[name] = value;
           else applyChanges(doc as Container, [name], changes);
         });
       } finally {

@@ -24,8 +24,10 @@ engine.connect();
 ```
 
 The synced state lives in `doc.getMap("shared")`. Replication is yours to wire, for example
-with `doc.subscribeLocalUpdates` on one side and `doc.import` on the other. Loro stores
-`undefined` as `null`.
+with `doc.subscribeLocalUpdates` on one side and `doc.import` on the other.
+
+`undefined` and functions are not JSON, so the backend leaves out object entries holding
+either and stores such array items as `null`, as `JSON.stringify` does.
 
 To persist the document, pass `createLoroPersistable(doc)` to `createPersistence`; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).

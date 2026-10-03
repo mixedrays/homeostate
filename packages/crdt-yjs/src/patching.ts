@@ -2,6 +2,7 @@ import * as Y from "yjs";
 import {
   ChangeType,
   getChanges,
+  toJsonValue,
   type Change,
   type Diffable,
 } from "@homeostate/core";
@@ -9,7 +10,8 @@ import { toSharedType, type SharedType } from "./mapping.js";
 
 /**
  * Diffs sharedType against newState once and applies the resulting changes, recursing
- * into nested Y.Maps, Y.Arrays, and Y.Texts for every pending entry.
+ * into nested Y.Maps, Y.Arrays, and Y.Texts for every pending entry. newState is first
+ * reduced to what JSON can hold, so no change is applied unless all of them can be.
  *
  * @param sharedType The Yjs shared type to patch.
  * @param newState The new state to patch the shared type into.
@@ -20,7 +22,10 @@ export const patchSharedType = (
 ): void => {
   applyChanges(
     sharedType,
-    getChanges(sharedType.toJSON() as Diffable, newState as Diffable),
+    getChanges(
+      sharedType.toJSON() as Diffable,
+      toJsonValue(newState) as Diffable,
+    ),
   );
 };
 

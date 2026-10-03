@@ -40,7 +40,10 @@ onMessage((update) => doc.import(update));
 ```
 
 The engine picks up every commit that did not come through its own write, imports and local
-edits alike. Loro stores `undefined` as `null`, so such values read back as `null`.
+edits alike.
+
+`undefined` and functions are not JSON, so the backend leaves out object entries holding
+either and stores such array items as `null`, as `JSON.stringify` does.
 
 ## Persistence
 

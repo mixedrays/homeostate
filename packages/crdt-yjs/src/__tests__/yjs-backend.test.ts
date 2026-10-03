@@ -14,6 +14,7 @@ import {
   todo,
   toggleTodo,
   type TodoState,
+  nonJsonWrites,
   prototypeHijacks,
   prototypeMemberKeys,
   unicodeEdits,
@@ -264,6 +265,41 @@ describe("two peers over Yjs", () => {
 
     expect(sizes.every((size) => size < 200)).toBe(true);
     expect(b.store.getState()).toEqual(a.store.getState());
+  });
+});
+
+describe("values JSON cannot hold", () => {
+  it.each(nonJsonWrites)(
+    "writes %s as JSON would, and rewrites it without an update",
+    (_, before, next, expected) => {
+      const doc = new Y.Doc();
+      const backend = createYjsBackend(doc, NAME);
+      backend.write(before);
+
+      expect(() => backend.write(next)).not.toThrow();
+      expect(backend.read()).toEqual(expected);
+
+      const onUpdate = vi.fn();
+      doc.on("update", onUpdate);
+      backend.write(next);
+      expect(onUpdate).not.toHaveBeenCalled();
+    },
+  );
+
+  it("leaves object entries holding undefined out on the writer and on peers", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ a: 1, b: 1, nested: { c: 1, d: 1 } });
+
+    backend.write({ a: undefined, b: 1, nested: { c: undefined, d: 1 } });
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+    for (const read of [backend.read(), createYjsBackend(peer, NAME).read()]) {
+      const state = read as { nested: object };
+      expect(Object.keys(state)).toEqual(["b", "nested"]);
+      expect(Object.keys(state.nested)).toEqual(["d"]);
+    }
   });
 });
 

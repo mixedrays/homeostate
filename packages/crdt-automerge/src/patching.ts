@@ -6,16 +6,6 @@ export type Container = Record<string, unknown>;
 const isRecord = (value: unknown): value is Container =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-export const toJson = (value: unknown): unknown => {
-  if (Array.isArray(value))
-    return value.map((item) => (item === undefined ? null : toJson(item)));
-  if (!isRecord(value)) return value;
-  const result: Container = {};
-  for (const [key, item] of Object.entries(value))
-    if (item !== undefined) result[key] = toJson(item);
-  return result;
-};
-
 export const diff = (current: unknown, next: unknown): Change[] | null => {
   if (!isRecord(next)) return [];
   return isRecord(current) ? getChanges(current, next) : null;
@@ -51,8 +41,7 @@ const applyToMap = (
   switch (type) {
     case ChangeType.INSERT:
     case ChangeType.UPDATE:
-      if (value !== undefined) map[key] = toJson(value);
-      else if (key in map) delete map[key];
+      map[key] = value;
       break;
 
     case ChangeType.DELETE:
@@ -75,11 +64,11 @@ const applyToList = (
 ): void => {
   switch (type) {
     case ChangeType.INSERT:
-      A.insertAt(list, index, toJson(value));
+      A.insertAt(list, index, value);
       break;
 
     case ChangeType.UPDATE:
-      list[index] = toJson(value);
+      list[index] = value;
       break;
 
     case ChangeType.DELETE:

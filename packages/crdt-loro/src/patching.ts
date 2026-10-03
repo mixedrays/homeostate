@@ -2,6 +2,7 @@ import { LoroList, LoroMap, LoroText } from "loro-crdt";
 import {
   ChangeType,
   getChanges,
+  toJsonValue,
   type Change,
   type Diffable,
 } from "@homeostate/core";
@@ -11,13 +12,20 @@ import {
   type SharedContainer,
 } from "./mapping.js";
 
+/**
+ * Diffs container against newState once and applies the resulting changes. newState is first
+ * reduced to what JSON can hold, so no change is applied unless all of them can be.
+ */
 export const patchContainer = (
   container: SharedContainer,
   newState: unknown,
 ): void => {
   applyChanges(
     container,
-    getChanges(container.toJSON() as Diffable, newState as Diffable),
+    getChanges(
+      container.toJSON() as Diffable,
+      toJsonValue(newState) as Diffable,
+    ),
   );
 };
 
