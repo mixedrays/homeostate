@@ -14,6 +14,7 @@ export type {
   PersistableDoc,
   PersistenceAdapter,
   PersistenceConfig,
+  PersistenceStats,
   SeedStrategy,
   StoredUpdates,
   StoreAdapter,

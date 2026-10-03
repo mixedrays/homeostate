@@ -98,6 +98,17 @@ export function createPersistence(
 
     flush: () => queue,
 
+    compact: () => (stopped ? queue : enqueue(() => compact())),
+
+    stats: async () => {
+      await queue;
+      const { updates } = await adapter.load(key);
+      return {
+        updates: updates.length,
+        bytes: updates.reduce((total, update) => total + update.byteLength, 0),
+      };
+    },
+
     destroy: () => {
       stop();
       return queue;

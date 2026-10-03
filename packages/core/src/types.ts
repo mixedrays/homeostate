@@ -167,6 +167,14 @@ export interface PersistenceConfig {
   onError?: (error: unknown) => void;
 }
 
+/** What `Persistence.stats()` reports about the stored document. */
+export interface PersistenceStats {
+  /** Stored updates, compacted snapshots included. */
+  updates: number;
+  /** Their total size in bytes, as handed to the adapter. */
+  bytes: number;
+}
+
 /** A document kept in storage by `createPersistence` */
 export interface Persistence {
   /**
@@ -176,6 +184,16 @@ export interface Persistence {
   whenLoaded: Promise<void>;
   /** Resolves when every update reported so far has been written. */
   flush: () => Promise<void>;
+  /**
+   * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
+   * once it is written; does nothing once storing has stopped.
+   */
+  compact: () => Promise<void>;
+  /**
+   * What is stored, read once every update reported so far has been written. Rejects when
+   * storage cannot be read.
+   */
+  stats: () => Promise<PersistenceStats>;
   /** Stop storing updates; stored data is kept. Resolves once pending writes finish. */
   destroy: () => Promise<void>;
   /** Stop storing updates and remove the stored document. */

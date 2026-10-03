@@ -92,8 +92,15 @@ compares its append count directly with `compactAfter`.
 interface Persistence {
   whenLoaded: Promise<void>;
   flush: () => Promise<void>;
+  compact: () => Promise<void>;
+  stats: () => Promise<PersistenceStats>;
   destroy: () => Promise<void>;
   clear: () => Promise<void>;
+}
+
+interface PersistenceStats {
+  updates: number;
+  bytes: number;
 }
 ```
 
@@ -112,6 +119,21 @@ wait for synchronization with network peers.
 Waits for storage work queued at the time of the call, including any compaction that work
 triggers. Updates arriving later may require another call. Returns `Promise<void>` and
 keeps the document subscription active.
+
+### compact
+
+Queues a compaction now, as every `compactAfter` appends do: loads the stored log, merges it
+into the document, and replaces it with one snapshot. Returns `Promise<void>`, which resolves
+once that work is done. Failures go to `onError`. After `destroy()` or `clear()` it does
+nothing.
+
+### stats
+
+Waits for storage work queued at the time of the call, then loads the stored log and resolves
+with a `PersistenceStats`: `updates` counts the stored entries, compacted snapshots included,
+and `bytes` adds up their sizes as handed to the adapter, which may encode them larger. Unlike
+the other methods, it rejects when storage cannot be read, rather than calling `onError`. The
+[devtools](../../tool-devtools/docs/introduction.md) Storage tab shows it.
 
 ### destroy
 

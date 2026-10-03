@@ -133,6 +133,59 @@ describe("createPersistence", () => {
     expect((await restore(adapter)).doc.ops()).toEqual(["a", "b", "c", "d"]);
   });
 
+  it("compacts the log on demand", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const { doc, persistence } = await restore(adapter);
+    doc.add("a");
+    doc.add("b");
+    await persistence.flush();
+    expect(adapter.size("doc")).toBe(3);
+
+    await persistence.compact();
+
+    expect(adapter.size("doc")).toBe(1);
+    expect((await restore(adapter)).doc.ops()).toEqual(["a", "b"]);
+  });
+
+  it("does not compact once storing has stopped", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const { doc, persistence } = await restore(adapter);
+    doc.add("a");
+    await persistence.clear();
+    await persistence.compact();
+
+    expect(adapter.size("doc")).toBe(0);
+  });
+
+  it("reports what is stored once pending writes finish", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const { doc, persistence } = await restore(adapter);
+    doc.add("a");
+    doc.add("b");
+
+    const stats = await persistence.stats();
+
+    const { updates } = await adapter.load("doc");
+    expect(stats).toEqual({
+      updates: 3,
+      bytes: updates.reduce((total, update) => total + update.byteLength, 0),
+    });
+  });
+
+  it("rejects stats when storage cannot be read", async () => {
+    const error = new Error("storage unavailable");
+    const memory = createMemoryPersistenceAdapter();
+    let failing = false;
+    const adapter: PersistenceAdapter = {
+      ...memory,
+      load: (key) => (failing ? Promise.reject(error) : memory.load(key)),
+    };
+    const { persistence } = await restore(adapter);
+    failing = true;
+
+    await expect(persistence.stats()).rejects.toBe(error);
+  });
+
   it("keeps every document's updates when several share a key", async () => {
     const adapter = createMemoryPersistenceAdapter();
     const config = { key: "doc", compactAfter: 2 };

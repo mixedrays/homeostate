@@ -85,6 +85,8 @@ does.
 
 ```ts
 await persistence.flush(); // every update so far is written
+await persistence.compact(); // merge the stored log into one snapshot now
+await persistence.stats(); // { updates, bytes } stored under the key
 await persistence.destroy(); // stop storing; the stored document stays
 await persistence.clear(); // stop storing and delete the stored document, e.g. on sign-out
 ```
