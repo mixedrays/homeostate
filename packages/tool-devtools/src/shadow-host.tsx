@@ -31,6 +31,25 @@ const subscribeToScheme = (onChange: () => void): (() => void) => {
 const prefersDark = (): boolean =>
   window.matchMedia?.(DARK_QUERY).matches ?? false;
 
+const KEY_EVENTS = ["keydown", "keypress", "keyup"];
+/** Keys Base UI listens for on the document, to close popups and to hold focus. */
+const PASSTHROUGH_KEYS = new Set(["Escape", "Tab"]);
+
+/**
+ * Keeps keys typed into a devtools field away from the page's own shortcuts. Past the shadow
+ * root an event's target is the host, so a page that skips keys typed into inputs cannot
+ * tell, and would act on them: Backspace deleting its selection instead of a character.
+ */
+const keepTypingInside = (event: Event): void => {
+  const [origin] = event.composedPath();
+  if (
+    origin instanceof Element &&
+    origin.matches("input, textarea") &&
+    !PASSTHROUGH_KEYS.has((event as KeyboardEvent).key)
+  )
+    event.stopPropagation();
+};
+
 /**
  * Renders its children into a shadow root on `document.body`, with the devtools stylesheet.
  * Mounting on the body keeps the fixed-position UI clear of a transformed or clipped
@@ -56,6 +75,8 @@ export function ShadowHost({
     hoistProperties();
     const host = document.createElement("div");
     host.setAttribute("data-homeostate-devtools", "");
+    for (const type of KEY_EVENTS)
+      host.addEventListener(type, keepTypingInside);
     document.body.append(host);
     setShadow(host.attachShadow({ mode: "open" }));
     return () => {

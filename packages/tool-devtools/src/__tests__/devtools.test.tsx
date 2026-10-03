@@ -139,6 +139,26 @@ describe("HomeostateDevtools", () => {
     expect((backend.read() as State).filter).toBe("done");
   });
 
+  it("keeps keys typed into a field from reaching page shortcuts", async () => {
+    await render();
+    await click(byLabel("Edit filter"));
+    const input = byLabel<HTMLInputElement>("Value of filter");
+    const pageKeys: string[] = [];
+    const onKeyDown = (event: KeyboardEvent) => pageKeys.push(event.key);
+    window.addEventListener("keydown", onKeyDown);
+    try {
+      for (const key of ["Backspace", "a", "Tab"]) {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true, composed: true }),
+        );
+      }
+    } finally {
+      window.removeEventListener("keydown", onKeyDown);
+    }
+
+    expect(pageKeys).toEqual(["Tab"]);
+  });
+
   it("toggles a boolean with one click", async () => {
     await render();
     await click(byLabel("Toggle todos[0].done"));
