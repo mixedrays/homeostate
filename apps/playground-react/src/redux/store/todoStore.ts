@@ -69,7 +69,7 @@ export const store = configureStore({
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence } = connectSharedDoc();
 const adapter = createReduxAdapter(store, setState);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
 const syncEngine = createSyncEngine(backend, adapter);
@@ -82,6 +82,7 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

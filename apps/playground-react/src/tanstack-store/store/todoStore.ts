@@ -70,7 +70,7 @@ export const todoCountsAtom = createAtom(() =>
   countTodos(todoStore.state.todos),
 );
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence } = connectSharedDoc();
 const adapter = createTanStackStoreAdapter(todoStore);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
 const syncEngine = createSyncEngine(backend, adapter);
@@ -83,6 +83,7 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

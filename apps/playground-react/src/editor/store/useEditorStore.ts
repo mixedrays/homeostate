@@ -27,7 +27,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setText: (text) => set({ text }),
 }));
 
-const { ydoc, wsProvider } = connectSharedDoc(EDITOR_ROOM);
+const { ydoc, wsProvider, persistence } = connectSharedDoc(EDITOR_ROOM);
 seedDocument(ydoc);
 
 const adapter = createZustandAdapter(useEditorStore);
@@ -42,6 +42,7 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
 };
 
 const text = sharedText(ydoc);

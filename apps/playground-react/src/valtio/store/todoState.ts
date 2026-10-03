@@ -44,7 +44,7 @@ export const todoActions = {
   },
 };
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence } = connectSharedDoc();
 const adapter = createValtioAdapter(todoState);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
 const syncEngine = createSyncEngine(backend, adapter);
@@ -57,6 +57,7 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

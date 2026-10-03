@@ -48,9 +48,9 @@ function seedTodos(doc: Y.Doc): void {
  * Engines may connect before it loads, because both rooms are seeded identically first:
  * the synced keys already exist, so `connect()` seeds nothing that could compete.
  */
-function persistRoom(ydoc: Y.Doc, room: string): Persistence | null {
+function persistRoom(ydoc: Y.Doc, room: string): Persistence | undefined {
   // Not `typeof localStorage`: Node 25 defines one that warns when read.
-  if (typeof window === "undefined" || !window.localStorage) return null;
+  if (typeof window === "undefined" || !window.localStorage) return undefined;
   const persistence = createPersistence(
     createYjsPersistable(ydoc),
     createLocalStorageAdapter(),
