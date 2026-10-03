@@ -1,16 +1,18 @@
 # @homeostate/playground
 
-Private landing page linking to every framework's playground, plus the code they share. Each
-playground is a separate app in `apps/playground-<framework>`. Their todo demos all join the
-same Yjs room through the WebSocket server, so an edit in one shows up in the others.
+Private landing page linking to every playground, plus the code they share. Each playground
+is a separate app in `apps/playground-<name>`. The framework playgrounds' todo demos all join
+the same Yjs room through the WebSocket server, so an edit in one shows up in the others; the
+whiteboard keeps a room of its own.
 
-| Playground                                 | Dev URL               | Production path |
-| ------------------------------------------ | --------------------- | --------------- |
-| This landing page                          | http://localhost:5180 | `/`             |
-| [React](../playground-react/README.md)     | http://localhost:5181 | `/react/`       |
-| [Angular](../playground-angular/README.md) | http://localhost:4200 | `/angular/`     |
-| [Vue](../playground-vue/README.md)         | http://localhost:5182 | `/vue/`         |
-| [Svelte](../playground-svelte/README.md)   | http://localhost:5183 | `/svelte/`      |
+| Playground                                       | Dev URL               | Production path |
+| ------------------------------------------------ | --------------------- | --------------- |
+| This landing page                                | http://localhost:5180 | `/`             |
+| [React](../playground-react/README.md)           | http://localhost:5181 | `/react/`       |
+| [Angular](../playground-angular/README.md)       | http://localhost:4200 | `/angular/`     |
+| [Vue](../playground-vue/README.md)               | http://localhost:5182 | `/vue/`         |
+| [Svelte](../playground-svelte/README.md)         | http://localhost:5183 | `/svelte/`      |
+| [Whiteboard](../playground-whiteboard/README.md) | http://localhost:5184 | `/whiteboard/`  |
 
 ## Run
 
@@ -18,16 +20,16 @@ From the repository root:
 
 ```bash
 pnpm playground          # this page, every playground and the WebSocket server on :9999
-pnpm playground:react    # one playground and the WebSocket server; also :angular, :vue, :svelte
+pnpm playground:react    # one playground and the WebSocket server; also :angular, :vue, :svelte, :whiteboard
 ```
 
 ## Configuration and deployment
 
-| Variable                          | Used by           | Default                                      |
-| --------------------------------- | ----------------- | -------------------------------------------- |
-| `VITE_PLAYGROUND_<FRAMEWORK>_URL` | this page's links | the dev URL above, or the production path    |
-| `VITE_SYNC_SERVER_URL`            | each playground   | `ws://localhost:9999`; use `wss://` on HTTPS |
-| `VITE_PLAYGROUNDS_URL`            | each playground   | `http://localhost:5180`, or `/`              |
+| Variable                     | Used by           | Default                                      |
+| ---------------------------- | ----------------- | -------------------------------------------- |
+| `VITE_PLAYGROUND_<NAME>_URL` | this page's links | the dev URL above, or the production path    |
+| `VITE_SYNC_SERVER_URL`       | each playground   | `ws://localhost:9999`; use `wss://` on HTTPS |
+| `VITE_PLAYGROUNDS_URL`       | each playground   | `http://localhost:5180`, or `/`              |
 
 Angular reads the last two from `public/config.json` at startup instead (`syncServerUrl`,
 `playgroundUrl`), so they can change without a rebuild.

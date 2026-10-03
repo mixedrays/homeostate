@@ -666,6 +666,85 @@ importers:
         specifier: ^4.5.2
         version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
 
+  apps/playground-whiteboard:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.8.0
+        version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../../packages/core
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../../packages/crdt-yjs
+      '@homeostate/playground':
+        specifier: workspace:^
+        version: link:../playground
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../../packages/store-zustand
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      cn:
+        specifier: ^0.2.6
+        version: 0.2.6
+      lucide-react:
+        specifier: ^1.45.0
+        version: 1.45.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+      shadcn:
+        specifier: ^4.21.0
+        version: 4.21.0(typescript@5.9.3)
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      y-websocket:
+        specifier: ^2.1.0
+        version: 2.1.0(yjs@13.6.27)
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1))
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1))
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.0
+        version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)
+
   apps/websocket-server-yjs:
     dependencies:
       ws:

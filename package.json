@@ -11,6 +11,7 @@
     "playground:angular": "pnpm --parallel --filter @homeostate/playground-angular --filter @homeostate/websocket-server-yjs dev",
     "playground:vue": "pnpm --parallel --filter @homeostate/playground-vue --filter @homeostate/websocket-server-yjs dev",
     "playground:svelte": "pnpm --parallel --filter @homeostate/playground-svelte --filter @homeostate/websocket-server-yjs dev",
+    "playground:whiteboard": "pnpm --parallel --filter @homeostate/playground-whiteboard --filter @homeostate/websocket-server-yjs dev",
     "build": "pnpm -r run build",
     "typecheck": "pnpm --filter @homeostate/docs typegen && tsc -b && pnpm --filter @homeostate/playground-angular typecheck && pnpm --filter @homeostate/playground-vue typecheck && pnpm --filter @homeostate/playground-svelte typecheck",
     "test": "vitest run",

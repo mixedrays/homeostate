@@ -36,6 +36,7 @@ Docs: [homeostate.pages.dev](https://homeostate.pages.dev/docs/getting-started).
 Private, under `apps/`:
 
 - [`playground`](apps/playground/README.md) and `playground-{react,angular,vue,svelte}`: demos that share Yjs rooms
+- [`playground-whiteboard`](apps/playground-whiteboard/README.md): a collaborative whiteboard with names and live cursors
 - [`websocket-server-yjs`](apps/websocket-server-yjs/README.md): y-websocket server for the playgrounds
 - [`benchmark-crdt`](apps/benchmark-crdt/README.md), [`benchmark-store`](apps/benchmark-store/README.md), [`benchmark-ui`](apps/benchmark-ui/README.md): backend and render benchmarks, and their viewer
 - [`docs`](apps/docs/README.md): docs site, built from `packages/*/docs` and `apps/docs/content`
@@ -44,7 +45,7 @@ Private, under `apps/`:
 
 ```bash
 pnpm install
-pnpm playground   # every playground + WebSocket server; pnpm playground:<react|angular|vue|svelte> for one
+pnpm playground   # every playground + WebSocket server; pnpm playground:<react|angular|vue|svelte|whiteboard> for one
 pnpm dev          # every app's dev server
 pnpm build
 pnpm typecheck
