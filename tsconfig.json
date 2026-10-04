@@ -16,6 +16,7 @@
     { "path": "packages/persist-local-storage" },
     { "path": "packages/persist-indexeddb" },
     { "path": "packages/tool-devtools" },
+    { "path": "packages/tool-simulator" },
     { "path": "apps/benchmark-crdt" },
     { "path": "apps/benchmark-store" },
     { "path": "apps/benchmark-ui" },

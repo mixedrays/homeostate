@@ -41,4 +41,5 @@ export const packageNav: Record<string, { label: string; order: number }> = {
   "persist-indexeddb": { label: "IndexedDB", order: 1 },
   "persist-local-storage": { label: "localStorage", order: 2 },
   "tool-devtools": { label: "Devtools", order: 1 },
+  "tool-simulator": { label: "Simulator", order: 2 },
 };

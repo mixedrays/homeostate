@@ -958,6 +958,37 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)
 
+  packages/tool-simulator:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@automerge/automerge':
+        specifier: ^3.4.1
+        version: 3.4.1
+      '@homeostate/crdt-automerge':
+        specifier: workspace:^
+        version: link:../crdt-automerge
+      '@homeostate/crdt-loro':
+        specifier: workspace:^
+        version: link:../crdt-loro
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../crdt-yjs
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../store-zustand
+      loro-crdt:
+        specifier: ^1.16.1
+        version: 1.16.1
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
+
 packages:
 
   '@algolia/abtesting@1.14.1':

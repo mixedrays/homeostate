@@ -27,6 +27,7 @@ Docs: [homeostate.pages.dev](https://homeostate.pages.dev/docs/getting-started).
 | `@homeostate/persist-indexeddb`     | IndexedDB storage for `createPersistence`         |
 | `@homeostate/persist-local-storage` | localStorage storage for `createPersistence`      |
 | `@homeostate/tool-devtools`         | Panel to inspect and edit synced state            |
+| `@homeostate/tool-simulator`        | Test peers converge on a simulated network        |
 
 `crdt-*` packages implement `CrdtBackend`, `store-*` packages implement `StoreAdapter`, and
 `persist-*` packages implement `PersistenceAdapter`. Each lives in `packages/<name>`.
