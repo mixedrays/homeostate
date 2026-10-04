@@ -52,6 +52,7 @@ export const TodoStore = signalStore(
       backend,
       engine,
       persistence: connection.persistence,
+      network: connection.network,
     };
     return {
       _connection: connection,

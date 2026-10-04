@@ -3,6 +3,7 @@ import { WebsocketProvider } from "y-websocket";
 import { createPersistence, type Persistence } from "@homeostate/core";
 import { createYjsBackend, createYjsPersistable } from "@homeostate/crdt-yjs";
 import { createLocalStorageAdapter } from "@homeostate/persist-local-storage";
+import { createNetworkLink } from "@homeostate/tool-devtools/network";
 import type { TodoState } from "./todo.js";
 
 /** Bump when changing the initial state or how its CRDT seed is encoded. */
@@ -62,13 +63,24 @@ function persistRoom(ydoc: Y.Doc, room: string): Persistence | undefined {
 
 /**
  * Creates the room's document, restored from localStorage where available, and its WebSocket
- * provider. Destroying the document also stops persisting it.
+ * provider. The provider syncs a document of its own, which a network link keeps in step with
+ * the room's, so the devtools can slow down or cut the connection. Destroying the document
+ * also stops persisting it and the link.
  */
 export function connectSharedDoc(serverUrl: string, room = TODO_ROOM) {
   const ydoc = new Y.Doc();
   // Seed before the provider can receive updates (including same-browser broadcasts).
   if (room === TODO_ROOM) seedTodos(ydoc);
   const persistence = persistRoom(ydoc, room);
-  const wsProvider = new WebsocketProvider(serverUrl, room, ydoc);
-  return { ydoc, wsProvider, persistence };
+  const wire = new Y.Doc();
+  const network = createNetworkLink(
+    createYjsPersistable(ydoc),
+    createYjsPersistable(wire),
+  );
+  ydoc.on("destroy", () => {
+    network.destroy();
+    wire.destroy();
+  });
+  const wsProvider = new WebsocketProvider(serverUrl, room, wire);
+  return { ydoc, wsProvider, persistence, network };
 }

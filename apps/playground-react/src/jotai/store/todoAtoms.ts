@@ -73,7 +73,7 @@ export const deleteTodoAtom = atom(null, (get, set, id: string) => {
 
 export const store = createStore();
 
-const { ydoc, wsProvider, persistence } = connectSharedDoc();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createJotaiAdapter(todoStateAtom, store);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
 const syncEngine = createSyncEngine(backend, adapter);
@@ -87,6 +87,7 @@ const devtoolsSource: DevtoolsSource = {
   backend,
   engine: syncEngine,
   persistence,
+  network,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

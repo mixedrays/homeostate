@@ -19,6 +19,7 @@
     "@homeostate/core": "workspace:^",
     "@homeostate/crdt-yjs": "workspace:^",
     "@homeostate/persist-local-storage": "workspace:^",
+    "@homeostate/tool-devtools": "workspace:^",
     "y-websocket": "^2.1.0",
     "yjs": "^13.6.23"
   },

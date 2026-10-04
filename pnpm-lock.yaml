@@ -345,6 +345,9 @@ importers:
       '@homeostate/persist-local-storage':
         specifier: workspace:^
         version: link:../../packages/persist-local-storage
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       y-websocket:
         specifier: ^2.1.0
         version: 2.1.0(yjs@13.6.27)

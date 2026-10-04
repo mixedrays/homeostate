@@ -75,7 +75,7 @@ export type TodoStoreInstance = Instance<typeof TodoStore>;
 
 export const todoStore = TodoStore.create(createInitialTodoState());
 
-const { ydoc, wsProvider, persistence } = connectSharedDoc();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createMobxStateTreeAdapter(todoStore);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
 const syncEngine = createSyncEngine(backend, adapter);
@@ -89,6 +89,7 @@ const devtoolsSource: DevtoolsSource = {
   backend,
   engine: syncEngine,
   persistence,
+  network,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

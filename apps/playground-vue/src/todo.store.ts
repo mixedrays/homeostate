@@ -91,7 +91,8 @@ export function createTodoStore(syncServerUrl: string) {
   });
   const counts = createAtom(() => countTodos(store.state.todos));
 
-  const { ydoc, wsProvider, persistence } = connectSharedDoc(syncServerUrl);
+  const { ydoc, wsProvider, persistence, network } =
+    connectSharedDoc(syncServerUrl);
   const adapter = createTanStackStoreAdapter(store);
   const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
   const engine = createSyncEngine(backend, adapter);
@@ -103,6 +104,7 @@ export function createTodoStore(syncServerUrl: string) {
     backend,
     engine,
     persistence,
+    network,
   };
 
   const status = shallowRef(readStatus(wsProvider));

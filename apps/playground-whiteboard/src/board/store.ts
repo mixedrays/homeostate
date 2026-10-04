@@ -41,7 +41,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
 }));
 
-const { ydoc, wsProvider, persistence } = connectBoard();
+const { ydoc, wsProvider, persistence, network } = connectBoard();
 seedBoard(ydoc);
 
 const adapter = createZustandAdapter(useBoardStore);
@@ -57,6 +57,7 @@ const devtoolsSource: DevtoolsSource = {
   backend,
   engine: syncEngine,
   persistence,
+  network,
 };
 
 const awareness = wsProvider.awareness;
