@@ -42,7 +42,10 @@ export default defineConfig(({ mode }) =>
     : {
         plugins: [tailwindcss()],
         build: {
-          lib: { entry: "src/index.ts", formats: ["es"], fileName: "index" },
+          lib: {
+            entry: { index: "src/index.ts", network: "src/network.ts" },
+            formats: ["es"],
+          },
           emptyOutDir: false,
           sourcemap: true,
           rolldownOptions: { external: isExternal(external) },

@@ -47,7 +47,7 @@ export function StorageTab({
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <div className="flex items-center gap-1.5 border-b px-3 py-1.5">
+      <div className="flex items-center gap-1.5 border-b p-1.5">
         <Button
           size="xs"
           variant="outline"

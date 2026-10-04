@@ -22,6 +22,7 @@ import {
 } from "@homeostate/core/testing";
 import { HomeostateDevtools, type DevtoolsSource } from "../index";
 import { serializeLog } from "../log-file";
+import { createNetworkLink } from "../network";
 import { createTestDoc, createTestStore, tick } from "./helpers";
 
 interface State {
@@ -376,5 +377,26 @@ describe("HomeostateDevtools", () => {
     await render();
     await click(buttonWithText("Storage"));
     expect(shadow().textContent).toContain("No persistence");
+  });
+
+  it("changes network conditions from the Network tab", async () => {
+    const network = createNetworkLink(createTestDoc(), createTestDoc());
+    await renderSources([{ name: "Todos", adapter: store.adapter, network }]);
+    await click(buttonWithText("Network"));
+
+    await click(byLabel("Offline"));
+    expect(network.getSnapshot().conditions.offline).toBe(true);
+    expect(shadow().textContent).toContain("Network offline");
+
+    await click(byLabel("Latency 500 ms"));
+    expect(network.getSnapshot().conditions.latency).toBe(500);
+    expect(byLabel("conditions on")).toBeTruthy();
+    network.destroy();
+  });
+
+  it("explains the Network tab without a link", async () => {
+    await render();
+    await click(buttonWithText("Network"));
+    expect(shadow().textContent).toContain("No network link");
   });
 });

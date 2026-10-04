@@ -45,11 +45,13 @@ export function App() {
 Pass several sources to inspect several stores. With the Zustand `homeostate` middleware, use
 `createZustandAdapter(store)` as the adapter and `store.homeostate` as the engine. Pass what
 `createPersistence` returned as `persistence` to see and compact the stored document on the
-Storage tab.
+Storage tab. Pass the engine's `filter` too, if it has one, and a `network` link from
+`createNetworkLink` in `@homeostate/tool-devtools/network` to slow down or cut the
+connection on the Network tab: see the documentation.
 
 | Prop             | Default          | Description                                                           |
 | ---------------- | ---------------- | --------------------------------------------------------------------- |
-| `sources`        |                  | `{ name, adapter, backend?, engine?, filter?, persistence? }` each    |
+| `sources`        |                  | One per store: `{ name, adapter }` and the optional fields below      |
 | `buttonPosition` | `"bottom-right"` | Viewport corner of the button: `bottom-left`, `top-right`, `top-left` |
 | `panelPosition`  | `"right"`        | Edge the panel docks to: `left`, `bottom`, `top`                      |
 | `initialIsOpen`  | `false`          | Whether the panel starts open, until it is opened or closed once      |

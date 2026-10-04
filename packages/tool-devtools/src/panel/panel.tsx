@@ -10,6 +10,7 @@ import {
   ListTree,
   ScrollText,
   TriangleAlert,
+  Wifi,
   X,
 } from "lucide-react";
 import { cn } from "cn";
@@ -43,10 +44,14 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 import type { DevtoolsSource, Inspector } from "../inspector";
+import type { NetworkLink } from "../network";
+import { useNetworkSnapshot } from "../lib/use-network-snapshot";
 import { usePersistedState } from "../lib/use-persisted-state";
 import type { PanelPosition } from "../options";
 import { HomeostateMark } from "./mark";
 import { LogTab } from "./log-tab";
+import { conditionsActive } from "./format";
+import { NetworkTab } from "./network-tab";
 import { StateTab } from "./state-tab";
 import { StorageTab } from "./storage-tab";
 import { SyncTab } from "./sync-tab";
@@ -56,7 +61,7 @@ export interface SourceInspector {
   inspector: Inspector;
 }
 
-const TABS = ["state", "sync", "log", "storage"];
+const TABS = ["state", "sync", "log", "storage", "network"];
 const MIN_SIZE = 280;
 const RESIZE_STEP = 16;
 
@@ -165,6 +170,7 @@ export function DevtoolsPanel({
             key={current.source.name}
             name={current.source.name}
             inspector={current.inspector}
+            network={current.source.network}
           />
         ) : (
           <Empty className="flex-1">
@@ -191,11 +197,14 @@ function useInspectorSnapshot(inspector: Inspector) {
 function SourceView({
   name,
   inspector,
+  network,
 }: {
   name: string;
   inspector: Inspector;
+  network: NetworkLink | undefined;
 }) {
   const snapshot = useInspectorSnapshot(inspector);
+  const link = useNetworkSnapshot(network);
   const [stored, setTab] = usePersistedState<string>("tab", "state");
   const tab = TABS.includes(stored) ? stored : "state";
 
@@ -208,12 +217,21 @@ function SourceView({
           to keys it holds are dropped.
         </p>
       )}
+      {link && !link.connected && (
+        <p className="border-b bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+          {link.conditions.offline
+            ? "Network offline"
+            : "Network down for a moment"}
+          : changes made here wait, and peers&apos; changes do not arrive.
+          Coming back online merges both.
+        </p>
+      )}
       <Tabs
         value={tab}
         onValueChange={(value: string) => setTab(value)}
         className="min-h-0 flex-1 gap-0"
       >
-        <div className="border-b">
+        <div className="overflow-x-auto border-b">
           <TabsList variant="line" className="h-7">
             <TabsTrigger value="state" className="text-xs">
               <ListTree
@@ -257,6 +275,17 @@ function SourceView({
               />
               Storage
             </TabsTrigger>
+            <TabsTrigger value="network" className="text-xs">
+              <Wifi aria-hidden data-icon="inline-start" className="size-3.5" />
+              Network
+              {link && conditionsActive(link) && (
+                <span
+                  role="img"
+                  aria-label="conditions on"
+                  className="size-1.5 rounded-full bg-amber-500"
+                />
+              )}
+            </TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="state" className="flex min-h-0 flex-col">
@@ -270,6 +299,9 @@ function SourceView({
         </TabsContent>
         <TabsContent value="storage" className="flex min-h-0 flex-col">
           <StorageTab snapshot={snapshot} inspector={inspector} />
+        </TabsContent>
+        <TabsContent value="network" className="flex min-h-0 flex-col">
+          <NetworkTab network={network} />
         </TabsContent>
       </Tabs>
     </>

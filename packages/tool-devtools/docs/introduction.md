@@ -56,7 +56,7 @@ Zustand `homeostate` middleware, create an adapter for the devtools with
 
 | Prop             | Default          | Description                                                           |
 | ---------------- | ---------------- | --------------------------------------------------------------------- |
-| `sources`        |                  | `{ name, adapter, backend?, engine?, filter?, persistence? }` each    |
+| `sources`        |                  | One per store: `{ name, adapter }` and the optional fields below      |
 | `buttonPosition` | `"bottom-right"` | Viewport corner of the button: `bottom-left`, `top-right`, `top-left` |
 | `panelPosition`  | `"right"`        | Edge the panel docks to: `left`, `bottom`, `top`                      |
 | `initialIsOpen`  | `false`          | Whether the panel starts open, until it is opened or closed once      |
@@ -70,7 +70,8 @@ To open the panel from your own UI, such as an "Inspect state" button, control i
 
 Pass the engine's `filter` in the source too, if it has one, so the keys it keeps out of sync
 are marked local. If the document is [persisted](/docs/persistence), pass what
-`createPersistence` returned as `persistence` to see and manage what is stored.
+`createPersistence` returned as `persistence` to see and manage what is stored. Pass a
+[network link](#network-conditions) as `network` to slow down or cut the connection.
 
 ## Without React
 
@@ -128,8 +129,54 @@ it. Whether it is open, its size and its tab are remembered in `localStorage`.
   updates do. **Clear** removes the stored document and stops storing it until the page
   reloads; the live document and its peers keep their state, and other tabs that store the
   same key may write it again.
+- **Network** sets the [network conditions](#network-conditions) of the source's link:
+  offline, latency, jitter and a flaky connection.
 - The header shows whether the engine is connected, with a switch to disconnect and
   reconnect it.
+
+## Network conditions
+
+The Network tab slows down or cuts this tab's connection, to see what the app does when
+changes cross on their way, when a peer lags behind, or when it goes offline and comes back.
+It needs a link between the app's document and the network: `createNetworkLink` from
+`@homeostate/tool-devtools/network`. The provider syncs a document of its own, and the link
+relays every update between the two, at once until you set conditions.
+
+```ts title="sync.ts"
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import { createYjsBackend, createYjsPersistable } from "@homeostate/crdt-yjs";
+import { createNetworkLink } from "@homeostate/tool-devtools/network";
+
+const doc = new Y.Doc();
+const wire = new Y.Doc();
+const network = createNetworkLink(
+  createYjsPersistable(doc),
+  createYjsPersistable(wire),
+);
+const provider = new WebsocketProvider(url, room, wire);
+const backend = createYjsBackend(doc, "shared");
+
+// In the devtools source: { name, adapter, backend, engine, network }
+```
+
+It carries each document's binary updates, so it works with any provider, and with Loro and
+Automerge through their `create*Persistable`. The panel sets four conditions:
+
+- **Offline** stops every update, both ways. Coming back online exchanges the whole
+  documents, as a provider does on reconnecting, so both sides merge what the other missed.
+  Unlike the engine switch in the header, the store keeps syncing with this tab's document.
+- **Latency** delays every update, both ways.
+- **Jitter** adds up to that much more per update, at random. Updates still arrive in order,
+  as over a WebSocket.
+- **Flaky** drops the link for 1 to 3 seconds every 3 to 10 seconds, at random.
+
+The tab also counts the updates on their way in each direction, and the panel says so while
+the link is down. Pass starting conditions as a third argument, such as `{ latency: 200 }`, or
+change them from code with `network.setConditions`.
+
+Presence, such as cursors, goes through the provider directly and is not delayed. The second
+document doubles the memory the room takes, so set the link up in development only.
 
 ## Edits go through the store
 

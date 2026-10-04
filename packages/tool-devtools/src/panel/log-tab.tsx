@@ -112,7 +112,7 @@ export function LogTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-1.5 border-b px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-b p-1.5">
         <Button
           size="xs"
           variant="outline"

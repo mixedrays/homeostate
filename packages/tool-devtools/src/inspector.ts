@@ -20,6 +20,7 @@ import {
   type JsonPath,
   type NonJsonValue,
 } from "./json";
+import type { NetworkLink } from "./network";
 
 /**
  * One store the devtools inspect, with the pieces of its sync setup they can reach.
@@ -40,6 +41,8 @@ export interface DevtoolsSource<S extends object = any> {
   filter?: (key: string, value: unknown) => boolean;
   /** What `createPersistence` returned for the document, for the Storage tab. */
   persistence?: Persistence;
+  /** What `createNetworkLink` returned for the document, for the Network tab. */
+  network?: NetworkLink;
 }
 
 /**

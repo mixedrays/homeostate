@@ -31,7 +31,8 @@
     "./mount": {
       "types": "./dist/mount.d.ts",
       "default": "./dist/mount.js"
-    }
+    },
+    "./network": "./src/network.ts"
   },
   "sideEffects": false,
   "files": [
@@ -54,6 +55,10 @@
       "./mount": {
         "types": "./dist/mount.d.ts",
         "default": "./dist/mount.js"
+      },
+      "./network": {
+        "types": "./dist/network.d.ts",
+        "default": "./dist/network.js"
       }
     }
   },
