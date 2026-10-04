@@ -8,6 +8,7 @@ import { readPeers, type Awareness } from "../board/presence";
 import {
   applyStyle,
   INITIAL_SHAPES,
+  isShapeText,
   nextZ,
   readShapes,
   seedBoard,
@@ -47,7 +48,7 @@ const openTab = () => {
   seedBoard(doc);
   const store = createStore<Board>(() => ({ shapes: {} }));
   const engine = createSyncEngine(
-    createYjsBackend(doc, SYNC_MAP_NAME),
+    createYjsBackend(doc, SYNC_MAP_NAME, { text: isShapeText }),
     createZustandAdapter(store),
   );
   engine.connect();

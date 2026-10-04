@@ -7,18 +7,27 @@ import {
   type RandomAction,
 } from "../index";
 import { firstDifference, formatPath } from "../compare";
-import { backends, todoPeer, type TodoState } from "./helpers";
+import {
+  backends,
+  textPolicies,
+  todoPeer,
+  withText,
+  type TodoState,
+} from "./helpers";
 
 describe.each(backends)("randomized runs on %s", (_name, docs) => {
-  it("converge with latency, reordering and drops", async () => {
-    await runRandomized({
-      seed: 11,
-      peers: 3,
-      steps: 150,
-      createPeer: (index) => todoPeer(docs, index).setup,
-      network: { latency: [0, 20], reorder: true, dropRate: 0.1 },
-    });
-  });
+  it.each(textPolicies)(
+    "converge with latency, reordering and drops, with %s",
+    async (_policy, text) => {
+      await runRandomized({
+        seed: 11,
+        peers: 3,
+        steps: 150,
+        createPeer: (index) => todoPeer(withText(docs, text), index).setup,
+        network: { latency: [0, 20], reorder: true, dropRate: 0.1 },
+      });
+    },
+  );
 });
 
 describe("runRandomized", () => {

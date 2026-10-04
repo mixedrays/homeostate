@@ -2,6 +2,27 @@ import { ChangeType, type Change } from "./change.js";
 
 export type Diffable = Record<string, unknown> | Array<unknown> | string;
 
+/**
+ * Decides which strings are collaborative text, by their path from the root of the diffed or
+ * synced value: record keys and array indices, such as `["todos", 0, "title"]`.
+ *
+ * Concurrent edits to text merge character by character, which suits prose such as a title.
+ * Any other string is one value, so concurrent writes keep one of them whole, which suits ids,
+ * enum-like flags and timestamps.
+ */
+export type TextPolicy = (path: readonly (string | number)[]) => boolean;
+
+/** Options for `getChanges`. */
+export interface DiffOptions {
+  /**
+   * Which nested strings are diffed character by character. Any other string that changes is
+   * replaced whole by one `UPDATE`. Without it, every string is diffed character by character.
+   */
+  text?: TextPolicy;
+}
+
+type Path = (string | number)[];
+
 const isArray = (value: unknown): value is Array<unknown> =>
   Array.isArray(value);
 
@@ -29,8 +50,22 @@ const isDiffable = (value: unknown): value is Diffable =>
 const isSameKind = (a: Diffable, b: Diffable): boolean =>
   isString(a) ? isString(b) : isArray(a) ? isArray(b) : isRecord(b);
 
-const nestedChanges = (a: unknown, b: unknown): Change[] | null =>
-  isDiffable(a) && isDiffable(b) && isSameKind(a, b) ? getChanges(a, b) : null;
+/**
+ * The changes turning `a` into `b` under `key` of the container at `path`, or `null` when `b`
+ * replaces `a` whole: a value of another kind, a primitive, or a string that is not text.
+ */
+const nestedChanges = (
+  a: unknown,
+  b: unknown,
+  path: Path,
+  key: string | number,
+  text: TextPolicy | undefined,
+): Change[] | null => {
+  if (!isDiffable(a) || !isDiffable(b) || !isSameKind(a, b)) return null;
+  const at = [...path, key];
+  if (isString(a) && text !== undefined && !text(at)) return null;
+  return diff(a, b, at, text);
+};
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
@@ -55,10 +90,25 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
 const keyCount = (keys: string[], record: object): number =>
   hasOwn(record, PROTO_KEY) ? keys.length - 1 : keys.length;
 
-export const getChanges = (a: Diffable, b: Diffable): Change[] => {
+/**
+ * Returns the ordered edit script that turns `a` into `b`. Two strings passed directly are
+ * always diffed character by character; `options.text` decides for the strings nested in them.
+ */
+export const getChanges = (
+  a: Diffable,
+  b: Diffable,
+  options: DiffOptions = {},
+): Change[] => diff(a, b, [], options.text);
+
+const diff = (
+  a: Diffable,
+  b: Diffable,
+  path: Path,
+  text: TextPolicy | undefined,
+): Change[] => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
-  if (isArray(a) && isArray(b)) return getArrayChanges(a, b);
-  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b);
+  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, path, text);
+  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, path, text);
   return [];
 };
 
@@ -111,7 +161,12 @@ const getStringChanges = (a: string, b: string): Change[] => {
   return changes;
 };
 
-const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
+const getArrayChanges = (
+  a: Array<unknown>,
+  b: Array<unknown>,
+  path: Path,
+  text: TextPolicy | undefined,
+): Change[] => {
   const changes: Change[] = [];
   let index = 0;
   let deleted: number[] = [];
@@ -121,7 +176,7 @@ const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
     const pairs = Math.min(deleted.length, inserted.length);
     for (let i = 0; i < pairs; i++) {
       const next = b[inserted[i]];
-      const nested = nestedChanges(a[deleted[i]], next);
+      const nested = nestedChanges(a[deleted[i]], next, path, index, text);
       if (nested === null) changes.push([ChangeType.UPDATE, index, next]);
       else if (nested.length > 0)
         changes.push([ChangeType.PENDING, index, nested]);
@@ -153,6 +208,8 @@ const getArrayChanges = (a: Array<unknown>, b: Array<unknown>): Change[] => {
 const getRecordChanges = (
   a: Record<string, unknown>,
   b: Record<string, unknown>,
+  path: Path,
+  text: TextPolicy | undefined,
 ): Change[] => {
   const changes: Change[] = [];
 
@@ -165,7 +222,7 @@ const getRecordChanges = (
     if (!hasOwn(a, property))
       changes.push([ChangeType.INSERT, property, value]);
     else {
-      const nested = nestedChanges(a[property], value);
+      const nested = nestedChanges(a[property], value, path, property, text);
       if (nested === null) {
         if (a[property] !== value)
           changes.push([ChangeType.UPDATE, property, value]);

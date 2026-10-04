@@ -70,6 +70,33 @@ interface CrdtBackend {
 [`createMemoryBackend()`](../../../packages/core/docs/testing.md#creatememorybackend) from
 `@homeostate/core/testing` is a plain JSON backend without replication, meant for tests.
 
+## Strings and text
+
+Concurrent writes to one value keep one of them, whatever the backend. Strings are values by
+default too: two peers setting a status to `"active"` and `"completed"` at once end with one
+of the two, never a blend of their characters such as `"compctiveeted"`. The same holds for
+ids and timestamps.
+
+For prose such as a title or a note, mark the string as collaborative text with the backend's
+`text` option. Text is stored in the library's text type (`Y.Text`, `LoroText` or Automerge
+text) and edited character by character, so what two peers type into one title at once merges:
+
+```ts
+const isTitle = (path: readonly (string | number)[]) =>
+  path.length === 3 && path[0] === "todos" && path[2] === "title";
+
+createSyncEngine(createYjsBackend(doc, "shared", { text: isTitle }), adapter);
+```
+
+The path runs from the synced root through record keys and array indices, as in
+`["todos", 0, "title"]`. `read()` returns plain strings either way. Give every backend writing
+to a document the same policy, seed scripts included.
+
+A document can hold a string as the other kind: written before the policy changed, by a peer
+with another policy, or by an earlier release of the backends, which stored every string as
+text. It reads as usual and is stored as the configured kind the next time it changes. That
+change replaces the string whole, so a concurrent edit to the old one is lost.
+
 ## Choosing what to sync
 
 The `filter` option decides which top-level keys are synced, in both directions:

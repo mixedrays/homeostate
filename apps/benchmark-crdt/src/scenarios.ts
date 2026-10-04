@@ -1,4 +1,9 @@
+import type { TextPolicy } from "@homeostate/core";
 import type { Scenario, Todo, TodoState } from "./types.js";
+
+/** Titles are collaborative text, as a todo app would mark them; other strings are values. */
+export const isTitle: TextPolicy = (path) =>
+  path.length === 3 && path[0] === "todos" && path[2] === "title";
 
 const TITLES = [
   "Buy groceries for the week",

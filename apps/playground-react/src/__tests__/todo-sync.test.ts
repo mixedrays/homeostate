@@ -8,6 +8,7 @@ import {
   connectSharedDoc,
   createInitialTodoState,
   EDITOR_ROOM,
+  isTodoTitle,
   SYNC_MAP_NAME,
   TODO_ROOM,
 } from "../sync";
@@ -35,7 +36,7 @@ function openTab(clientID: number) {
   ydoc.clientID = clientID;
   const store = createStore<TodoState>(() => createInitialTodoState());
   const engine = createSyncEngine(
-    createYjsBackend(ydoc, SYNC_MAP_NAME),
+    createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle }),
     createZustandAdapter(store),
   );
   engine.connect();

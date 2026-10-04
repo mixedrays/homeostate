@@ -16,6 +16,7 @@ import {
   countTodos,
   createInitialTodoState,
   filterTodos,
+  isTodoTitle,
   SYNC_MAP_NAME,
   type FilterStatus,
 } from "@homeostate/playground/shared";
@@ -43,7 +44,9 @@ export const TodoStore = signalStore(
       replace: (shared) => patchState(store, { shared }),
       injector: inject(Injector),
     });
-    const backend = createYjsBackend(connection.ydoc, SYNC_MAP_NAME);
+    const backend = createYjsBackend(connection.ydoc, SYNC_MAP_NAME, {
+      text: isTodoTitle,
+    });
     const engine = createSyncEngine(backend, adapter);
     /** The store as the devtools panel sees it. */
     const devtoolsSource: DevtoolsSource = {

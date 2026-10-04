@@ -62,6 +62,10 @@ does not produce the same CRDT history, so joining tabs would lose edits. If the
 encoding changes in [`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there; that
 starts a fresh room.
 
+Todo titles are collaborative text and every other string a plain value. Every todo backend
+must pass the shared policy, `createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle })`, so
+that tabs agree on how each string is stored.
+
 ## Adding a playground
 
 1. Create `apps/playground-<framework>` with a `dev` script on a fixed port, a landing page

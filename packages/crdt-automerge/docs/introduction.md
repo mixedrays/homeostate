@@ -7,8 +7,8 @@ label: Introduction
 
 [Automerge](https://automerge.org) backend for
 [`@homeostate/core`](../../core/docs/introduction.md). It maps the synced state onto one key of
-an Automerge document (objects become maps, arrays lists, strings text) and writes
-fine-grained operations as one Automerge change per write, so a middle-of-array delete, a
+an Automerge document (objects become maps, arrays lists, and strings `ImmutableString`s or,
+where you choose, text) and writes fine-grained operations as one Automerge change per write, so a middle-of-array delete, a
 toggle or a keystroke each produce one small change.
 
 ## Install
@@ -62,6 +62,24 @@ either and stores such array items as `null`, as `JSON.stringify` does.
 
 Snapshots from `read()` copy only what changed since the last read and are shared between
 reads, so treat them as immutable.
+
+## Strings and text
+
+Strings are `ImmutableString` values by default, so two peers changing an id, a status or a
+timestamp at once keep one of the two values. Pass `text` to store chosen strings as Automerge
+text, whose concurrent edits merge character by character:
+
+```ts
+const backend = createAutomergeBackend(handle, "shared", {
+  text: (path) => path[0] === "todos" && path[2] === "title",
+});
+```
+
+`text` receives the path from the synced key, such as `["todos", 0, "title"]`. `read()`
+returns plain strings either way, `ImmutableString`s included. Give every backend writing to
+the document the same policy. A string held as the other kind, such as text written by an
+earlier release, reads as usual and is stored as the configured kind when it next changes. See
+[Strings and text](/docs/concepts#strings-and-text).
 
 ## Persistence
 

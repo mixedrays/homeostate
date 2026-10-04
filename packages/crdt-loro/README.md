@@ -2,8 +2,9 @@
 
 [Loro](https://github.com/loro-dev/loro) backend for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It maps the synced state onto a `LoroMap` (objects become `LoroMap`, arrays `LoroList`,
-strings `LoroText`), so a toggle or a keystroke produces one small update.
+It maps the synced state onto a `LoroMap` (objects become `LoroMap`, arrays `LoroList`, and
+strings plain values or, where you choose, `LoroText`), so a toggle or a keystroke produces one
+small update.
 
 ## Install
 
@@ -28,6 +29,15 @@ with `doc.subscribeLocalUpdates` on one side and `doc.import` on the other.
 
 `undefined` and functions are not JSON, so the backend leaves out object entries holding
 either and stores such array items as `null`, as `JSON.stringify` does.
+
+Strings are plain values, so concurrent writes keep one of them. Pass `text` to store chosen
+strings as `LoroText`, whose concurrent edits merge character by character:
+
+```ts
+createLoroBackend(doc, "shared", {
+  text: (path) => path[0] === "todos" && path[2] === "title",
+});
+```
 
 To persist the document, pass `createLoroPersistable(doc)` to `createPersistence`; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).

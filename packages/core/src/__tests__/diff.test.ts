@@ -1,12 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ChangeType,
   getChanges,
   type Change,
   type Diffable,
+  type TextPolicy,
 } from "../index.js";
 import { patchState } from "../patching.js";
-import { prototypeMemberKeys } from "./helpers.js";
+import { prototypeMemberKeys, todoTitles } from "./helpers.js";
 
 const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
 
@@ -416,6 +417,65 @@ describe("getChanges", () => {
       [{}, { a: { b: { c: [1, "x"] } } }],
       [{ a: { b: { c: [1, "x"] } } }, {}],
     ])("transforms %j into %j when applied", appliesCleanly);
+  });
+
+  describe("with a text policy", () => {
+    const text = todoTitles;
+
+    it("replaces a changed string outside the policy whole", () => {
+      expect(
+        getChanges(
+          { filterStatus: "all" },
+          { filterStatus: "active" },
+          { text },
+        ),
+      ).toEqual([[UPDATE, "filterStatus", "active"]]);
+      expect(getChanges({ tags: ["ab"] }, { tags: ["abc"] }, { text })).toEqual(
+        [[PENDING, "tags", [[UPDATE, 0, "abc"]]]],
+      );
+      expect(getChanges({ id: "1" }, { id: "1" }, { text })).toEqual([]);
+    });
+
+    it("diffs a string the policy marks as text character by character", () => {
+      expect(
+        getChanges(
+          { todos: [{ id: "1", title: "ab" }] },
+          { todos: [{ id: "2", title: "abc" }] },
+          { text },
+        ),
+      ).toEqual([
+        [
+          PENDING,
+          "todos",
+          [
+            [
+              PENDING,
+              0,
+              [
+                [UPDATE, "id", "2"],
+                [PENDING, "title", [[INSERT, 2, "c"]]],
+              ],
+            ],
+          ],
+        ],
+      ]);
+    });
+
+    it("asks with the path from the root, array indices as numbers", () => {
+      const policy = vi.fn<TextPolicy>(() => true);
+      getChanges(
+        { todos: [{ title: "a" }, { title: "b" }], term: "x" },
+        { todos: [{ title: "a" }, { title: "c" }], term: "y" },
+        { text: policy },
+      );
+      expect(policy.mock.calls).toEqual([[["todos", 1, "title"]], [["term"]]]);
+    });
+
+    it("always diffs two strings passed directly character by character", () => {
+      expect(getChanges("ab", "abc", { text: () => false })).toEqual([
+        [INSERT, 2, "c"],
+      ]);
+    });
   });
 
   describe("known limitations", () => {

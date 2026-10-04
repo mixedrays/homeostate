@@ -12,7 +12,12 @@ import {
   CollaborativeTextarea,
   type RemoteCursor,
 } from "../editor/components/CollaborativeTextarea";
-import { INITIAL_TEXT, seedDocument, sharedText } from "../editor/document";
+import {
+  INITIAL_TEXT,
+  isDocumentText,
+  seedDocument,
+  sharedText,
+} from "../editor/document";
 import {
   resolveCursor,
   resolveLocalCursor,
@@ -55,7 +60,7 @@ const openTab = () => {
   seedDocument(doc);
   const store = createStore<{ text: string }>(() => ({ text: "" }));
   const engine = createSyncEngine(
-    createYjsBackend(doc, SYNC_MAP_NAME),
+    createYjsBackend(doc, SYNC_MAP_NAME, { text: isDocumentText }),
     createZustandAdapter(store),
   );
   engine.connect();

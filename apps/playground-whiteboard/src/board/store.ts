@@ -5,7 +5,7 @@ import { createZustandAdapter } from "@homeostate/store-zustand";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import { connectBoard, SYNC_MAP_NAME } from "../sync";
 import { createIdentity } from "./presence";
-import { seedBoard, type Board, type Shape } from "./shapes";
+import { isShapeText, seedBoard, type Board, type Shape } from "./shapes";
 
 interface BoardStore extends Board {
   addShape: (id: string, shape: Shape) => void;
@@ -45,7 +45,7 @@ const { ydoc, wsProvider, persistence, network } = connectBoard();
 seedBoard(ydoc);
 
 const adapter = createZustandAdapter(useBoardStore);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isShapeText });
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();

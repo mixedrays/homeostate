@@ -1,17 +1,20 @@
-import { LoroDoc, LoroMap, type LoroList } from "loro-crdt";
+import { LoroDoc, LoroMap, LoroText, type LoroList } from "loro-crdt";
 import { describe, expect, it, vi } from "vitest";
 import { createSyncEngine, type SyncEngineConfig } from "@homeostate/core";
-import { createLoroBackend } from "../index.js";
+import { createLoroBackend, type LoroBackendOptions } from "../index.js";
 import {
   addTodo,
+  concurrentReplacements,
   createTestStore,
   deleteTodo,
+  expectOneWrittenValue,
   manyTodos,
   renameTodo,
   setSearchTerm,
   snapshot,
   threeTodos,
   todo,
+  todoTitles,
   toggleTodo,
   type TodoState,
   nonJsonWrites,
@@ -26,9 +29,10 @@ const createPeer = <S extends object>(
   doc: LoroDoc,
   initial: S,
   config?: SyncEngineConfig,
+  options?: LoroBackendOptions,
 ) => {
   const store = createTestStore(initial);
-  const backend = createLoroBackend(doc, NAME);
+  const backend = createLoroBackend(doc, NAME, options);
   const engine = createSyncEngine(backend, store.adapter, config);
   engine.connect();
   return { doc, store, backend, engine };
@@ -52,15 +56,20 @@ const twoSyncedPeers = (
   initial: () => TodoState = threeTodos,
   idA = 1,
   idB = 2,
+  options?: LoroBackendOptions,
 ) => {
   const docA = new LoroDoc();
   const docB = new LoroDoc();
   docA.setPeerId(idA);
   docB.setPeerId(idB);
-  const a = createPeer(docA, initial());
+  const a = createPeer(docA, initial(), undefined, options);
   exchange(docA, docB);
-  const b = createPeer(docB, initial());
+  const b = createPeer(docB, initial(), undefined, options);
   return { a, b };
+};
+
+const searchTermText: LoroBackendOptions = {
+  text: (path) => path[0] === "searchTerm",
 };
 
 describe("createLoroBackend", () => {
@@ -214,7 +223,7 @@ describe("two peers over Loro", () => {
   });
 
   it("merges concurrent renames of the same todo character-wise", () => {
-    const { a, b } = twoSyncedPeers();
+    const { a, b } = twoSyncedPeers(threeTodos, 1, 2, { text: todoTitles });
 
     a.store.update((s) => renameTodo(s, "1", "Todo 1 A"));
     b.store.update((s) => renameTodo(s, "1", "B Todo 1"));
@@ -377,7 +386,8 @@ describe("Unicode replication", () => {
         state.searchTerm = before;
         return state;
       };
-      const { a, b } = twoSyncedPeers(initial);
+      // Titles are LoroTexts and the search term a plain value, so both kinds round-trip.
+      const { a, b } = twoSyncedPeers(initial, 1, 2, { text: todoTitles });
       try {
         a.store.update((state) => ({
           ...renameTodo(state, "1", after),
@@ -400,10 +410,12 @@ describe("Unicode replication", () => {
   );
 
   it("merges an emoji replacement with a peer's surrounding text edits", () => {
-    const { a, b } = twoSyncedPeers(() => ({
-      ...threeTodos(),
-      searchTerm: "a😀b",
-    }));
+    const { a, b } = twoSyncedPeers(
+      () => ({ ...threeTodos(), searchTerm: "a😀b" }),
+      1,
+      2,
+      searchTermText,
+    );
     try {
       a.store.update((state) => setSearchTerm(state, "a😃b"));
       b.store.update((state) => setSearchTerm(state, "prefix a😀b suffix"));
@@ -415,5 +427,87 @@ describe("Unicode replication", () => {
       a.engine.disconnect();
       b.engine.disconnect();
     }
+  });
+});
+
+describe("strings", () => {
+  const map = (doc: LoroDoc) => doc.getMap(NAME);
+  const todoMap = (doc: LoroDoc, index: number) =>
+    (map(doc).get("todos") as LoroList).get(index) as LoroMap;
+
+  it.each([
+    [1, 2],
+    [2, 1],
+  ])(
+    "keeps one written value of short strings replaced at once (peers %i and %i)",
+    (idA, idB) => {
+      const { before, a, b } = concurrentReplacements;
+      const docA = new LoroDoc();
+      const docB = new LoroDoc();
+      docA.setPeerId(idA);
+      docB.setPeerId(idB);
+      const backendA = createLoroBackend(docA, NAME);
+      backendA.write(before);
+      exchange(docA, docB);
+      const backendB = createLoroBackend(docB, NAME);
+
+      backendA.write(a);
+      backendB.write(b);
+      exchange(docA, docB);
+
+      expectOneWrittenValue(backendA.read());
+      expect(backendB.read()).toEqual(backendA.read());
+    },
+  );
+
+  it("stores the strings the policy marks as LoroText and every other string as a value", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME, { text: todoTitles });
+    backend.write(threeTodos());
+    backend.write(addTodo(threeTodos(), todo("4")));
+
+    expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
+    expect(todoMap(doc, 3).get("title")).toBeInstanceOf(LoroText);
+    expect(todoMap(doc, 3).get("id")).toBe("4");
+    expect(map(doc).get("filterStatus")).toBe("all");
+
+    const version = doc.oplogVersion();
+    backend.write(addTodo(threeTodos(), todo("4")));
+    expect(doc.oplogVersion().compare(version)).toBe(0);
+  });
+
+  it("reads strings held as LoroText by an earlier version, and stores each as a value once it changes", () => {
+    const doc = new LoroDoc();
+    createLoroBackend(doc, NAME, { text: () => true }).write(threeTodos());
+    const backend = createLoroBackend(doc, NAME);
+    expect(backend.read()).toEqual(threeTodos());
+
+    const next = {
+      ...renameTodo(threeTodos(), "2", "Two"),
+      filterStatus: "active",
+    };
+    backend.write(next);
+
+    expect(backend.read()).toEqual(next);
+    expect(map(doc).get("filterStatus")).toBe("active");
+    expect(todoMap(doc, 1).get("title")).toBe("Two");
+    expect(map(doc).get("searchTerm")).toBeInstanceOf(LoroText);
+    expect(todoMap(doc, 0).get("title")).toBeInstanceOf(LoroText);
+  });
+
+  it("turns a plain string at a text path into a LoroText when it next changes", () => {
+    const doc = new LoroDoc();
+    createLoroBackend(doc, NAME).write({ ...threeTodos(), tags: ["a"] });
+    const backend = createLoroBackend(doc, NAME, {
+      text: (path) => todoTitles(path) || path[0] === "tags",
+    });
+
+    const next = { ...renameTodo(threeTodos(), "2", "Todo 2!"), tags: ["ab"] };
+    backend.write(next);
+
+    expect(backend.read()).toEqual(next);
+    expect(todoMap(doc, 1).get("title")).toBeInstanceOf(LoroText);
+    expect((map(doc).get("tags") as LoroList).get(0)).toBeInstanceOf(LoroText);
+    expect(todoMap(doc, 0).get("title")).toBe("Todo 1");
   });
 });

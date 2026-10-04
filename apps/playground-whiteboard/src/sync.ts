@@ -12,9 +12,10 @@ export const REACT_PLAYGROUND_URL: string =
 
 /**
  * The board's room, apart from the todo and editor rooms. Bump the version when changing
- * INITIAL_SHAPES: tabs seeded with different shapes under the same ids stop agreeing.
+ * INITIAL_SHAPES or `isShapeText`: tabs seeded with different shapes under the same ids stop
+ * agreeing.
  */
-export const WHITEBOARD_ROOM = "homeostate-whiteboard-v1";
+export const WHITEBOARD_ROOM = "homeostate-whiteboard-v2";
 
 /** The room's document, restored from localStorage where available, and its provider. */
 export const connectBoard = () =>

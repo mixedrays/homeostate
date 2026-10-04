@@ -4,19 +4,23 @@ import { createSyncEngine, type SyncEngineConfig } from "@homeostate/core";
 import {
   createAutomergeBackend,
   createAutomergeHandle,
+  type AutomergeBackendOptions,
   type AutomergeHandle,
   type AutomergeHandleEvent,
 } from "../index.js";
 import {
   addTodo,
+  concurrentReplacements,
   createTestStore,
   deleteTodo,
+  expectOneWrittenValue,
   manyTodos,
   renameTodo,
   setSearchTerm,
   snapshot,
   threeTodos,
   todo,
+  todoTitles,
   toggleTodo,
   type TodoState,
   nonJsonWrites,
@@ -41,9 +45,10 @@ const createPeer = <S extends object>(
   handle: Handle,
   initial: S,
   config?: SyncEngineConfig,
+  options?: AutomergeBackendOptions,
 ) => {
   const store = createTestStore(initial);
-  const backend = createAutomergeBackend(handle, NAME);
+  const backend = createAutomergeBackend(handle, NAME, options);
   const engine = createSyncEngine(backend, store.adapter, config);
   engine.connect();
   return { handle, store, backend, engine };
@@ -72,13 +77,18 @@ const twoSyncedPeers = (
   initial: () => TodoState = threeTodos,
   idA = 1,
   idB = 2,
+  options?: AutomergeBackendOptions,
 ) => {
   const handleA = createHandle(idA);
   const handleB = createHandle(idB);
-  const a = createPeer(handleA, initial());
+  const a = createPeer(handleA, initial(), undefined, options);
   exchange(handleA, handleB);
-  const b = createPeer(handleB, initial());
+  const b = createPeer(handleB, initial(), undefined, options);
   return { a, b };
+};
+
+const searchTermText: AutomergeBackendOptions = {
+  text: (path) => path[0] === "searchTerm",
 };
 
 describe("createAutomergeBackend", () => {
@@ -179,7 +189,7 @@ describe("createAutomergeBackend", () => {
 
     backend.write(deleteTodo(threeTodos(), "2"));
 
-    expect(todos()).toEqual(deleteTodo(threeTodos(), "2").todos);
+    expect(backend.read()).toEqual(deleteTodo(threeTodos(), "2"));
     expect(A.getObjectId(todos()[1])).toBe(third);
   });
 
@@ -262,7 +272,7 @@ describe("two peers over Automerge", () => {
   });
 
   it("merges concurrent renames of the same todo character-wise", () => {
-    const { a, b } = twoSyncedPeers();
+    const { a, b } = twoSyncedPeers(threeTodos, 1, 2, { text: todoTitles });
 
     a.store.update((s) => renameTodo(s, "1", "Todo 1 A"));
     b.store.update((s) => renameTodo(s, "1", "B Todo 1"));
@@ -425,7 +435,8 @@ describe("Unicode replication", () => {
         state.searchTerm = before;
         return state;
       };
-      const { a, b } = twoSyncedPeers(initial);
+      // Titles are text and the search term an ImmutableString, so both kinds round-trip.
+      const { a, b } = twoSyncedPeers(initial, 1, 2, { text: todoTitles });
       try {
         a.store.update((state) => ({
           ...renameTodo(state, "1", after),
@@ -448,10 +459,12 @@ describe("Unicode replication", () => {
   );
 
   it("merges an emoji replacement with a peer's surrounding text edits", () => {
-    const { a, b } = twoSyncedPeers(() => ({
-      ...threeTodos(),
-      searchTerm: "a😀b",
-    }));
+    const { a, b } = twoSyncedPeers(
+      () => ({ ...threeTodos(), searchTerm: "a😀b" }),
+      1,
+      2,
+      searchTermText,
+    );
     try {
       a.store.update((state) => setSearchTerm(state, "a😃b"));
       b.store.update((state) => setSearchTerm(state, "prefix a😀b suffix"));
@@ -463,5 +476,92 @@ describe("Unicode replication", () => {
       a.engine.disconnect();
       b.engine.disconnect();
     }
+  });
+});
+
+describe("strings", () => {
+  type Stored = Record<string, unknown> & {
+    todos: Record<string, unknown>[];
+    tags: unknown[];
+  };
+  const stored = (handle: Handle) => handle.doc()[NAME] as Stored;
+
+  it.each([
+    [1, 2],
+    [2, 1],
+  ])(
+    "keeps one written value of short strings replaced at once (actors %i and %i)",
+    (idA, idB) => {
+      const { before, a, b } = concurrentReplacements;
+      const handleA = createHandle(idA);
+      const handleB = createHandle(idB);
+      const backendA = createAutomergeBackend(handleA, NAME);
+      backendA.write(before);
+      exchange(handleA, handleB);
+      const backendB = createAutomergeBackend(handleB, NAME);
+
+      backendA.write(a);
+      backendB.write(b);
+      exchange(handleA, handleB);
+
+      expectOneWrittenValue(backendA.read());
+      expect(backendB.read()).toEqual(backendA.read());
+    },
+  );
+
+  it("stores the strings the policy marks as text and every other string as an ImmutableString", () => {
+    const handle = createHandle();
+    const backend = createAutomergeBackend(handle, NAME, { text: todoTitles });
+    backend.write(threeTodos());
+    backend.write(addTodo(threeTodos(), todo("4")));
+
+    expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
+    expect(stored(handle).todos[3].title).toBe("Todo 4");
+    expect(A.isImmutableString(stored(handle).todos[3].id)).toBe(true);
+    expect(A.isImmutableString(stored(handle).filterStatus)).toBe(true);
+
+    const heads = A.getHeads(handle.doc());
+    backend.write(addTodo(threeTodos(), todo("4")));
+    expect(A.getHeads(handle.doc())).toEqual(heads);
+  });
+
+  it("reads strings held as text by an earlier version, and stores each as an ImmutableString once it changes", () => {
+    const handle = createHandle();
+    createAutomergeBackend(handle, NAME, { text: () => true }).write(
+      threeTodos(),
+    );
+    const backend = createAutomergeBackend(handle, NAME);
+    expect(backend.read()).toEqual(threeTodos());
+
+    const next = {
+      ...renameTodo(threeTodos(), "2", "Two"),
+      filterStatus: "active",
+    };
+    backend.write(next);
+
+    expect(backend.read()).toEqual(next);
+    expect(A.isImmutableString(stored(handle).filterStatus)).toBe(true);
+    expect(A.isImmutableString(stored(handle).todos[1].title)).toBe(true);
+    expect(stored(handle).searchTerm).toBe("");
+    expect(stored(handle).todos[0].title).toBe("Todo 1");
+  });
+
+  it("turns an ImmutableString at a text path into text when it next changes", () => {
+    const handle = createHandle();
+    createAutomergeBackend(handle, NAME).write({
+      ...threeTodos(),
+      tags: ["a"],
+    });
+    const backend = createAutomergeBackend(handle, NAME, {
+      text: (path) => todoTitles(path) || path[0] === "tags",
+    });
+
+    const next = { ...renameTodo(threeTodos(), "2", "Todo 2!"), tags: ["ab"] };
+    backend.write(next);
+
+    expect(backend.read()).toEqual(next);
+    expect(stored(handle).todos[1].title).toBe("Todo 2!");
+    expect(stored(handle).tags[0]).toBe("ab");
+    expect(A.isImmutableString(stored(handle).todos[0].title)).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import type { TextPolicy } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { SYNC_MAP_NAME } from "../sync";
 
@@ -13,11 +14,7 @@ interface ShapeBase {
   y: number;
   /** Stacking order: higher is drawn on top, and ties fall back to the id. */
   z: number;
-  /**
-   * An index into PALETTE. Colours are numbers because homeostate syncs a string as a Y.Text
-   * and merges it character by character: two tabs recolouring one shape at once would blend
-   * "#dc2626" and "#16a34a" into neither. A number is replaced whole, so one of them wins.
-   */
+  /** An index into PALETTE. Two tabs recolouring one shape at once keep one of the colours. */
   color: number;
 }
 
@@ -38,7 +35,7 @@ export interface ArrowShape extends ShapeBase {
 
 export interface TextShape extends ShapeBase {
   kind: "text";
-  /** Synced as a Y.Text, so two people typing into one text merge. */
+  /** Synced as a Y.Text (see `isShapeText`), so two people typing into one text merge. */
   text: string;
 }
 
@@ -149,6 +146,14 @@ export const INITIAL_SHAPES: Record<string, Shape> = {
 };
 
 /**
+ * The body of a text shape is a Y.Text; every other string, such as a shape's kind, is a plain
+ * value. Every backend on the board's room must pass it; changing it requires a WHITEBOARD_ROOM
+ * bump.
+ */
+export const isShapeText: TextPolicy = (path) =>
+  path.length === 3 && path[0] === "shapes" && path[2] === "text";
+
+/**
  * Gives `doc` the starting shapes as one update authored by a fixed client id, before it syncs.
  *
  * Every tab applies the very same update, so a tab joining a room that already has it adds
@@ -160,7 +165,9 @@ export function seedBoard(doc: Y.Doc): void {
   const seed = new Y.Doc();
   try {
     seed.clientID = 0;
-    createYjsBackend(seed, SYNC_MAP_NAME).write({ shapes: INITIAL_SHAPES });
+    createYjsBackend(seed, SYNC_MAP_NAME, { text: isShapeText }).write({
+      shapes: INITIAL_SHAPES,
+    });
     Y.applyUpdate(doc, Y.encodeStateAsUpdate(seed));
   } finally {
     seed.destroy();

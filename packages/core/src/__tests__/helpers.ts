@@ -1,4 +1,5 @@
-import type { StoreAdapter } from "../index.js";
+import { expect } from "vitest";
+import type { StoreAdapter, TextPolicy } from "../index.js";
 
 export interface Todo {
   id: string;
@@ -63,6 +64,30 @@ export const setSearchTerm = (
   ...state,
   searchTerm,
 });
+
+/** Todo titles are collaborative text; every other string is a value. */
+export const todoTitles: TextPolicy = (path) =>
+  path.length === 3 && path[0] === "todos" && path[2] === "title";
+
+/**
+ * Short values two peers replace at the same time: an enum-like flag, an id and a timestamp.
+ * Merged as text, they became `"compctiveeted"`, `"user-32"` and `"2026-09-12T10:01:05Z"`.
+ */
+export const concurrentReplacements = {
+  before: { filterStatus: "all", id: "user-1", at: "2026-09-12T10:00:00Z" },
+  a: { filterStatus: "active", id: "user-2", at: "2026-09-12T10:00:05Z" },
+  b: { filterStatus: "completed", id: "user-3", at: "2026-09-12T10:01:00Z" },
+};
+
+/**
+ * Asserts that `merged` holds, for every key of `concurrentReplacements`, the value one of the
+ * two peers wrote.
+ */
+export const expectOneWrittenValue = (merged: unknown): void => {
+  const { a, b } = concurrentReplacements;
+  for (const key of Object.keys(a) as (keyof typeof a)[])
+    expect([a[key], b[key]]).toContain((merged as typeof a)[key]);
+};
 
 /** Shared regressions for core and every CRDT backend's text patcher. */
 export const unicodeEdits: [string, string][] = [

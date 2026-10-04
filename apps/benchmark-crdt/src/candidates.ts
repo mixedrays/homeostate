@@ -13,6 +13,7 @@ import {
   type AutomergeHandle,
   type AutomergeHandleEvent,
 } from "@homeostate/crdt-automerge";
+import { isTitle } from "./scenarios.js";
 import type { BackendCandidate, Replica } from "./types.js";
 
 export const utf8Bytes = (text: string): number => Buffer.byteLength(text);
@@ -136,7 +137,7 @@ export const yjs: BackendCandidate<YjsReplica> = {
     const doc = new Y.Doc();
     return {
       doc,
-      backend: createYjsBackend(doc, "shared"),
+      backend: createYjsBackend(doc, "shared", { text: isTitle }),
       encodedSize: () => Y.encodeStateAsUpdate(doc).byteLength,
       destroy: () => doc.destroy(),
     };
@@ -179,7 +180,7 @@ export const loro: BackendCandidate<LoroReplica> = {
     const doc = new LoroDoc();
     return {
       doc,
-      backend: createLoroBackend(doc, "shared"),
+      backend: createLoroBackend(doc, "shared", { text: isTitle }),
       encodedSize: () => doc.export({ mode: "snapshot" }).byteLength,
       destroy: () => doc.free(),
     };
@@ -219,7 +220,7 @@ export const automerge: BackendCandidate<AutomergeReplica> = {
     const handle = createAutomergeHandle();
     return {
       handle,
-      backend: createAutomergeBackend(handle, "shared"),
+      backend: createAutomergeBackend(handle, "shared", { text: isTitle }),
       encodedSize: () => A.save(handle.doc()).byteLength,
       destroy: () => A.free(handle.doc()),
     };

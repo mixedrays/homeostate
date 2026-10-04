@@ -7,6 +7,7 @@ import { createYjsBackend } from "@homeostate/crdt-yjs";
 import {
   connectSharedDoc,
   createInitialTodoState,
+  isTodoTitle,
   SYNC_MAP_NAME,
   type TodoState,
 } from "@homeostate/playground/shared";
@@ -65,7 +66,7 @@ function openReact() {
   const { ydoc, wsProvider } = connectSharedDoc("ws://localhost:9999");
   const store = createStore<TodoState>(() => createInitialTodoState());
   const engine = createSyncEngine(
-    createYjsBackend(ydoc, SYNC_MAP_NAME),
+    createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle }),
     createZustandAdapter(store),
   );
   engine.connect();

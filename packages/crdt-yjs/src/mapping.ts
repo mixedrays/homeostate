@@ -1,35 +1,47 @@
 import * as Y from "yjs";
+import type { TextPolicy } from "@homeostate/core";
 
 export type SharedType = Y.Map<unknown> | Y.Array<unknown> | Y.Text;
 
+export type Path = readonly (string | number)[];
+
 /**
- * Converts a plain JSON value into its shared counterpart: arrays become Y.Arrays,
- * objects Y.Maps, strings Y.Texts, and everything else is returned as is.
+ * Converts a plain JSON value at `path` into its shared counterpart: arrays become Y.Arrays,
+ * objects Y.Maps, strings the policy marks as text Y.Texts, and everything else, other strings
+ * included, is returned as is.
  */
-export const toSharedType = (value: unknown): unknown => {
-  if (Array.isArray(value)) return arrayToYArray(value);
-  if (typeof value === "string") return stringToYText(value);
+export const toSharedType = (
+  value: unknown,
+  path: Path,
+  text: TextPolicy,
+): unknown => {
+  if (Array.isArray(value)) return arrayToYArray(value, path, text);
+  if (typeof value === "string") return text(path) ? new Y.Text(value) : value;
   if (value !== null && typeof value === "object")
-    return objectToYMap(value as Record<string, unknown>);
+    return objectToYMap(value as Record<string, unknown>, path, text);
   return value;
 };
 
-export const arrayToYArray = (array: unknown[]): Y.Array<unknown> => {
+const arrayToYArray = (
+  array: unknown[],
+  path: Path,
+  text: TextPolicy,
+): Y.Array<unknown> => {
   const yarray = new Y.Array<unknown>();
-  yarray.push(array.map(toSharedType));
+  yarray.push(array.map((item, i) => toSharedType(item, [...path, i], text)));
   return yarray;
 };
 
-export const objectToYMap = (
+const objectToYMap = (
   object: Record<string, unknown>,
+  path: Path,
+  text: TextPolicy,
 ): Y.Map<unknown> => {
   const ymap = new Y.Map<unknown>();
   for (const [property, value] of Object.entries(object))
-    ymap.set(property, toSharedType(value));
+    ymap.set(property, toSharedType(value, [...path, property], text));
   return ymap;
 };
-
-export const stringToYText = (string: string): Y.Text => new Y.Text(string);
 
 /**
  * `toJSON` builds objects by assignment, so a map entry a peer named `__proto__` becomes the

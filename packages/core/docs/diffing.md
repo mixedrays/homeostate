@@ -1,5 +1,5 @@
 ---
-description: getChanges, Change and ChangeType, ordered array and UTF-16 string edits, toJsonValue, and applying changes in place with ApplyOps.
+description: getChanges, Change and ChangeType, ordered array and UTF-16 string edits, text policies, toJsonValue, and applying changes in place with ApplyOps.
 label: Diff and apply API
 order: 3
 ---
@@ -13,17 +13,26 @@ JSON snapshots into small edits while preserving existing containers where possi
 
 ```ts
 type Diffable = Record<string, unknown> | Array<unknown> | string;
+type TextPolicy = (path: readonly (string | number)[]) => boolean;
 
-declare const getChanges: (a: Diffable, b: Diffable) => Change[];
+interface DiffOptions {
+  text?: TextPolicy;
+}
+
+declare const getChanges: (
+  a: Diffable,
+  b: Diffable,
+  options?: DiffOptions,
+) => Change[];
 ```
 
 Returns an ordered edit script that transforms `a` into `b`, without mutating either input.
-There are no options or default arguments.
 
-| Parameter | Description                                        |
-| --------- | -------------------------------------------------- |
-| `a`       | The current plain record, array or string.         |
-| `b`       | The desired value, with the same root kind as `a`. |
+| Parameter      | Description                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `a`            | The current plain record, array or string.                                                                         |
+| `b`            | The desired value, with the same root kind as `a`.                                                                 |
+| `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
 
 Equal values produce `[]`. Different root kinds also produce `[]`: this API cannot express
 replacement of the root. Wrap a value in a record if its type may change, or handle root
@@ -103,6 +112,52 @@ console.log(getChanges("a", "abc"));
 As with arrays, offsets address the progressively edited string. Backends whose native
 text indexes are not UTF-16 must translate both offsets and lengths. String scripts use
 insertions and deletions; replacements are expressed as a combination of those steps.
+
+### Text policy
+
+A `TextPolicy` receives the path of a nested string from the root of `a`: record keys and
+array indices, such as `["todos", 0, "title"]`. An index is the item's position in `b`. A
+string at a path where it returns `true` is diffed character by character. Any other changed
+string is replaced whole by one `UPDATE`. Two strings passed directly to `getChanges` are
+always diffed character by character.
+
+The supplied backends pass their `text` option here, so a string outside it reaches the CRDT
+as one value, and concurrent writes keep one of them instead of merging their characters.
+
+```ts title="text-policy-example.ts"
+import { getChanges, type TextPolicy } from "@homeostate/core";
+
+const isTitle: TextPolicy = (path) => path[path.length - 1] === "title";
+const before = { status: "all", title: "Plan" };
+const after = { status: "done", title: "Plan it" };
+
+console.log(getChanges(before, after, { text: isTitle }));
+// [["update", "status", "done"], ["pending", "title", [["insert", 4, " it"]]]]
+
+console.log(getChanges(before, after));
+// Without a policy, "status" is edited character by character too.
+```
+
+## applyStringChanges
+
+```ts
+declare const applyStringChanges: (value: string, changes: Change[]) => string;
+```
+
+Returns `value` revised by a string edit script: what `getChanges` returns for two strings,
+or the script of a `PENDING` step on a string. Steps other than `INSERT` and `DELETE` are
+ignored.
+
+A backend needs it when a `PENDING` step reaches a string the document holds as a plain value
+rather than as text, for example one written by a peer with another policy. It stores the
+edited string as text instead.
+
+```ts title="apply-string-changes-example.ts"
+import { applyStringChanges, getChanges } from "@homeostate/core";
+
+console.log(applyStringChanges("Plan", getChanges("Plan", "Plan it")));
+// "Plan it"
+```
 
 ## toJsonValue
 

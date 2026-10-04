@@ -42,12 +42,12 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                          |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SyncEngine`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `Unsubscribe` |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                        |
-| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `Change`, `ChangeType`, `toJsonValue`, `applyChanges`, `ApplyOps`                                             |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`    |
+| Page                            | APIs and types                                                                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SyncEngine`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `Unsubscribe`        |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                               |
+| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `DiffOptions`, `TextPolicy`, `Change`, `ChangeType`, `toJsonValue`, `applyChanges`, `applyStringChanges`, `ApplyOps` |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`           |
 
 ## Persistence
 
@@ -70,6 +70,11 @@ backend without replication, and `createMemoryPersistenceAdapter()`. The
 `getChanges(current, next)` turns a `write(next)` into fine-grained changes, so a backend can
 apply small edits instead of replacing the document. Pass `next` through `toJsonValue` first,
 so `undefined` and functions never reach the CRDT library. `applyChanges` applies them to a
-mutable target through your own set, remove and splice operations. See the
+mutable target through your own set, remove and splice operations.
+
+Accept a `text` option as the supplied backends do, and pass it as
+`getChanges(current, next, { text })`. Store the strings it marks in your library's text type
+and every other string as a plain value, so concurrent writes of an id or a status keep one
+value instead of merging characters. See the
 [diff and apply reference](./diffing.md) for tuple formats, ordered array edits, UTF-16 string
-offsets and a complete `ApplyOps` example.
+offsets, text policies and a complete `ApplyOps` example.

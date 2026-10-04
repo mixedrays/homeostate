@@ -7,6 +7,7 @@ import {
   countTodos,
   createInitialTodoState,
   filterTodos,
+  isTodoTitle,
   SYNC_MAP_NAME,
   type FilterStatus,
   type TodoState,
@@ -93,7 +94,7 @@ export function createTodoStore(syncServerUrl: string) {
   const { ydoc, wsProvider, persistence, network } =
     connectSharedDoc(syncServerUrl);
   const adapter = createTanStackStoreAdapter(store);
-  const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+  const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
   const engine = createSyncEngine(backend, adapter);
 
   /** The store as the devtools panel sees it. */

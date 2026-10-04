@@ -4,7 +4,7 @@ import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createZustandAdapter } from "@homeostate/store-zustand";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import { EDITOR_ROOM, SYNC_MAP_NAME, connectSharedDoc } from "../../sync";
-import { seedDocument, sharedText } from "../document";
+import { isDocumentText, seedDocument, sharedText } from "../document";
 import {
   createIdentity,
   readStoredName,
@@ -32,7 +32,9 @@ const { ydoc, wsProvider, persistence, network } =
 seedDocument(ydoc);
 
 const adapter = createZustandAdapter(useEditorStore);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, {
+  text: isDocumentText,
+});
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();

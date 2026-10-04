@@ -3,7 +3,8 @@
 [Automerge](https://automerge.org) backend for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It maps the synced state onto one key of an Automerge document (objects become maps, arrays
-lists, strings text), one Automerge change per write.
+lists, and strings `ImmutableString`s or, where you choose, text), one Automerge change per
+write.
 
 ## Install
 
@@ -44,6 +45,15 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 `handle.doc()` returns the current document, `handle.change(fn)` applies a local change, and
 `handle.update(fn)` replaces the document with the result of any Automerge call. See the
 [documentation](https://homeostate.pages.dev/docs/crdt-automerge/introduction) for details.
+
+Strings are `ImmutableString` values, so concurrent writes keep one of them. Pass `text` to
+store chosen strings as Automerge text, whose concurrent edits merge character by character:
+
+```ts
+createAutomergeBackend(handle, "shared", {
+  text: (path) => path[0] === "todos" && path[2] === "title",
+});
+```
 
 To persist the document, pass `createAutomergePersistable(handle)` to `createPersistence`;
 see the [persistence guide](https://homeostate.pages.dev/docs/persistence).

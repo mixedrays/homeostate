@@ -1,7 +1,20 @@
 import * as Y from "yjs";
-import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import type { CrdtBackend, TextPolicy, Unsubscribe } from "@homeostate/core";
 import { withPlainPrototypes } from "./mapping.js";
 import { patchSharedType } from "./patching.js";
+
+/** Options for `createYjsBackend` */
+export interface YjsBackendOptions {
+  /**
+   * Which strings are stored as Y.Text, by their path from the synced map, such as
+   * `(path) => path[0] === "todos" && path[2] === "title"`. Concurrent edits to a Y.Text merge
+   * character by character. Every other string is a plain value, and concurrent writes keep
+   * one of them whole. Defaults to none.
+   */
+  text?: TextPolicy;
+}
+
+const noText: TextPolicy = () => false;
 
 /**
  * Creates a CrdtBackend over the Y.Map called `name` inside `doc`.
@@ -16,7 +29,12 @@ import { patchSharedType } from "./patching.js";
  * engine.connect();
  * ```
  */
-export const createYjsBackend = (doc: Y.Doc, name: string): CrdtBackend => {
+export const createYjsBackend = (
+  doc: Y.Doc,
+  name: string,
+  options: YjsBackendOptions = {},
+): CrdtBackend => {
+  const { text = noText } = options;
   const map = doc.getMap<unknown>(name);
   const origin = Symbol(`homeostate:${name}`);
 
@@ -24,7 +42,7 @@ export const createYjsBackend = (doc: Y.Doc, name: string): CrdtBackend => {
     read: () => withPlainPrototypes(map.toJSON()),
 
     write: (next) => {
-      doc.transact(() => patchSharedType(map, next), origin);
+      doc.transact(() => patchSharedType(map, next, text), origin);
     },
 
     subscribe: (onRemoteChange): Unsubscribe => {

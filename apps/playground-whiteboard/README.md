@@ -15,20 +15,21 @@ pnpm playground:react        # the same, with the React playground that links to
 ## How it syncs
 
 The board is a Zustand store holding `{ shapes: Record<id, Shape> }`, synced by homeostate
-into the room `homeostate-whiteboard-v1`. Keying shapes by id means tabs adding or deleting
+into the room `homeostate-whiteboard-v2`. Keying shapes by id means tabs adding or deleting
 shapes at once touch separate keys, and two edits to one shape merge field by field: a move
 and a recolour made at the same time both stay.
 
-Colours are palette indexes, not strings. Homeostate syncs strings as `Y.Text` and merges them
-character by character, which suits a text being typed but would blend two colours picked at
-once into an invalid one. A number is replaced whole.
+The body of a text shape is a `Y.Text` (`isShapeText` in
+[`src/board/shapes.ts`](src/board/shapes.ts)), so two people typing into one text merge
+character by character. Every other value, colours and a shape's kind included, is replaced
+whole, so two colours picked at once keep one of them.
 
 Names, pointers and selections are not board state: they travel over Yjs awareness and vanish
 with the tab. A tab that has not joined yet sends no presence, so nobody sees it.
 
 Every tab applies the same seed update for the starting shapes before it connects (see
-[`src/board/shapes.ts`](src/board/shapes.ts)). If you change `INITIAL_SHAPES`, bump the room
-version in [`src/sync.ts`](src/sync.ts). See the [playground README](../playground/README.md)
+[`src/board/shapes.ts`](src/board/shapes.ts)). If you change `INITIAL_SHAPES` or
+`isShapeText`, bump the room version in [`src/sync.ts`](src/sync.ts). See the [playground README](../playground/README.md)
 for configuration and deployment.
 
 ## Using it

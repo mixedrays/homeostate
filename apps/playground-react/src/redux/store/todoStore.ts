@@ -9,6 +9,7 @@ import { createReduxAdapter } from "@homeostate/store-redux";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, TodoState } from "../../types/todo";
 import {
+  isTodoTitle,
   SYNC_MAP_NAME,
   connectSharedDoc,
   createInitialTodoState,
@@ -71,7 +72,7 @@ export type AppDispatch = typeof store.dispatch;
 
 const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createReduxAdapter(store, setState);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
