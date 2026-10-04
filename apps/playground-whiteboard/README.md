@@ -1,13 +1,15 @@
 # @homeostate/playground-whiteboard
 
-Private React + Vite + Tailwind + shadcn/ui playground: one shared whiteboard. Draw boxes,
-arrows and text, recolour them, and see everyone else's named cursor move. Each tab joins
+Private React + Vite + Tailwind + shadcn/ui playground: one shared whiteboard, linked from the
+[React playground](../playground-react/README.md)'s landing page. Draw boxes, arrows and text,
+recolour them, and see everyone else's named cursor move. Each tab joins
 under a name, or anonymously under a generated one. The board mounts
 `@homeostate/tool-devtools`, opened with **Inspect state** in the header or the round button
 in the corner.
 
 ```bash
 pnpm playground:whiteboard   # http://localhost:5184, with the WebSocket server
+pnpm playground:react        # the same, with the React playground that links to it
 ```
 
 ## How it syncs

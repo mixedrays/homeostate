@@ -2,7 +2,6 @@ import angularIcon from "../shared/icons/angular.svg";
 import reactIcon from "../shared/icons/react.svg";
 import svelteIcon from "../shared/icons/svelte.svg";
 import vueIcon from "../shared/icons/vue.svg";
-import whiteboardIcon from "../shared/icons/whiteboard.svg";
 
 /** One playground: a separately built app with its own demos. */
 export interface Playground {
@@ -33,7 +32,7 @@ export const playgrounds: readonly Playground[] = [
     id: "react",
     name: "React",
     description:
-      "A shared todo list built with seven state managers, and a collaborative text editor with names and live cursors.",
+      "A shared todo list built with seven state managers, plus a collaborative text editor and a whiteboard, both with names and live cursors.",
     tags: [
       "Zustand",
       "MobX",
@@ -76,15 +75,5 @@ export const playgrounds: readonly Playground[] = [
     icon: svelteIcon,
     command: "pnpm playground:svelte",
     url: locate(env.VITE_PLAYGROUND_SVELTE_URL, 5183, "/svelte/"),
-  },
-  {
-    id: "whiteboard",
-    name: "Whiteboard",
-    description:
-      "A shared whiteboard in React, shadcn/ui and Tailwind: draw boxes, arrows and text together, with names and live cursors.",
-    tags: ["React", "Zustand", "Live cursors", "Names"],
-    icon: whiteboardIcon,
-    command: "pnpm playground:whiteboard",
-    url: locate(env.VITE_PLAYGROUND_WHITEBOARD_URL, 5184, "/whiteboard/"),
   },
 ];

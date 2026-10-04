@@ -37,7 +37,7 @@ import { SyncToggle } from "./components/SyncToggle";
 import { Toolbar } from "./components/Toolbar";
 import { usePeers } from "./hooks/usePeers";
 import { useSyncConnection } from "./hooks/useSyncConnection";
-import { PLAYGROUNDS_URL, WHITEBOARD_ROOM } from "./sync";
+import { REACT_PLAYGROUND_URL, WHITEBOARD_ROOM } from "./sync";
 
 const { updateShape, removeShape } = useBoardStore.getState();
 const publishPointer = createPointerPublisher(awareness);
@@ -146,11 +146,11 @@ export default function App() {
               variant="ghost"
               size="sm"
               nativeButton={false}
-              render={<a href={PLAYGROUNDS_URL} />}
-              aria-label="All playgrounds"
+              render={<a href={REACT_PLAYGROUND_URL} />}
+              aria-label="React playground"
             >
               <ArrowLeft aria-hidden />
-              <span className="max-md:hidden">All playgrounds</span>
+              <span className="max-md:hidden">React playground</span>
             </Button>
             <Separator
               orientation="vertical"

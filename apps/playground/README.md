@@ -1,9 +1,10 @@
 # @homeostate/playground
 
-Private landing page linking to every playground, plus the code they share. Each playground
-is a separate app in `apps/playground-<name>`. The framework playgrounds' todo demos all join
-the same Yjs room through the WebSocket server, so an edit in one shows up in the others; the
-whiteboard keeps a room of its own.
+Private landing page linking to each framework's playground, plus the code they share. Each
+playground is a separate app in `apps/playground-<name>`. The framework playgrounds' todo demos
+all join the same Yjs room through the WebSocket server, so an edit in one shows up in the
+others. The whiteboard is a React app of its own, linked from the React playground's landing
+page, and keeps a room of its own.
 
 | Playground                                       | Dev URL               | Production path |
 | ------------------------------------------------ | --------------------- | --------------- |
@@ -14,13 +15,15 @@ whiteboard keeps a room of its own.
 | [Svelte](../playground-svelte/README.md)         | http://localhost:5183 | `/svelte/`      |
 | [Whiteboard](../playground-whiteboard/README.md) | http://localhost:5184 | `/whiteboard/`  |
 
+The React playground links to the whiteboard, and the whiteboard back to it.
+
 ## Run
 
 From the repository root:
 
 ```bash
 pnpm playground          # this page, every playground and the WebSocket server on :9999
-pnpm playground:react    # one playground and the WebSocket server; also :angular, :vue, :svelte, :whiteboard
+pnpm playground:react    # React, the whiteboard and the WebSocket server; also :angular, :vue, :svelte, :whiteboard
 ```
 
 The Angular, Vue and Svelte playgrounds load the devtools from their built bundle, which these
@@ -33,6 +36,9 @@ scripts build first. After changing the devtools, restart them or run `pnpm buil
 | `VITE_PLAYGROUND_<NAME>_URL` | this page's links | the dev URL above, or the production path    |
 | `VITE_SYNC_SERVER_URL`       | each playground   | `ws://localhost:9999`; use `wss://` on HTTPS |
 | `VITE_PLAYGROUNDS_URL`       | each playground   | `http://localhost:5180`, or `/`              |
+
+The React playground's link to the whiteboard reads `VITE_PLAYGROUND_WHITEBOARD_URL`, and the
+whiteboard's link back reads `VITE_PLAYGROUND_REACT_URL`, instead of `VITE_PLAYGROUNDS_URL`.
 
 Angular reads the last two from `public/config.json` at startup instead (`syncServerUrl`,
 `playgroundUrl`), so they can change without a rebuild.

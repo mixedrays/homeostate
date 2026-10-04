@@ -5,10 +5,10 @@ export { SYNC_MAP_NAME } from "@homeostate/playground/shared";
 export const SYNC_SERVER_URL: string =
   import.meta.env.VITE_SYNC_SERVER_URL ?? "ws://localhost:9999";
 
-/** The landing page that links to every playground. */
-export const PLAYGROUNDS_URL: string =
-  import.meta.env.VITE_PLAYGROUNDS_URL ??
-  (import.meta.env.DEV ? "http://localhost:5180" : "/");
+/** The React playground, whose landing page links here. */
+export const REACT_PLAYGROUND_URL: string =
+  import.meta.env.VITE_PLAYGROUND_REACT_URL ??
+  (import.meta.env.DEV ? "http://localhost:5181" : "/react/");
 
 /**
  * The board's room, apart from the todo and editor rooms. Bump the version when changing

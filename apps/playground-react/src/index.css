@@ -176,6 +176,12 @@
   --ring: var(--color-teal-400);
 }
 
+.theme-amber {
+  --primary: var(--color-amber-600);
+  --primary-foreground: var(--color-white);
+  --ring: var(--color-amber-400);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
