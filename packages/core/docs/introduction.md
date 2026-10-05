@@ -68,12 +68,12 @@ backend without replication, and `createMemoryPersistenceAdapter()`. The
 ## Writing a backend
 
 `getChanges(current, next)` turns a `write(next)` into fine-grained changes, so a backend can
-apply small edits instead of replacing the document. Pass `next` through `toJsonValue` first,
-so `undefined` and functions never reach the CRDT library. `applyChanges` applies them to a
-mutable target through your own set, remove and splice operations.
+apply small edits instead of replacing the document. Pass `json: true`, so `undefined` and
+functions never reach the CRDT library. `applyChanges` applies them to a mutable target
+through your own set, remove and splice operations.
 
 Accept a `text` option as the supplied backends do, and pass it as
-`getChanges(current, next, { text })`. Store the strings it marks in your library's text type
+`getChanges(current, next, { text, json: true })`. Store the strings it marks in your library's text type
 and every other string as a plain value, so concurrent writes of an id or a status keep one
 value instead of merging characters. See the
 [diff and apply reference](./diffing.md) for tuple formats, ordered array edits, UTF-16 string

@@ -14,14 +14,19 @@ type Path = A.Prop[];
 const isRecord = (value: unknown): value is Container =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
-/** `current` is a `read()` snapshot, in which every string is a plain string. */
+/**
+ * `current` is a `read()` snapshot, in which every string is a plain string. `next` is diffed
+ * as JSON would store it.
+ */
 export const diff = (
   current: unknown,
   next: unknown,
   text: TextPolicy,
 ): Change[] | null => {
   if (!isRecord(next)) return [];
-  return isRecord(current) ? getChanges(current, next, { text }) : null;
+  return isRecord(current)
+    ? getChanges(current, next, { text, json: true })
+    : null;
 };
 
 /**

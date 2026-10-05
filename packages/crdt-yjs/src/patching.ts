@@ -3,7 +3,6 @@ import {
   applyStringChanges,
   ChangeType,
   getChanges,
-  toJsonValue,
   type Change,
   type Diffable,
   type TextPolicy,
@@ -12,8 +11,9 @@ import { toSharedType, type Path, type SharedType } from "./mapping.js";
 
 /**
  * Diffs sharedType against newState once and applies the resulting changes, recursing
- * into nested Y.Maps, Y.Arrays, and Y.Texts for every pending entry. newState is first
- * reduced to what JSON can hold, so no change is applied unless all of them can be.
+ * into nested Y.Maps, Y.Arrays, and Y.Texts for every pending entry. newState is diffed as
+ * JSON would store it, and every change is found before any is applied, so no change is
+ * applied unless all of them can be.
  *
  * Strings the policy marks as text are edited character by character in Y.Texts; any other
  * string is replaced whole as a plain value. A string held as the other kind becomes the
@@ -30,11 +30,10 @@ export const patchSharedType = (
 ): void => {
   applyChanges(
     sharedType,
-    getChanges(
-      sharedType.toJSON() as Diffable,
-      toJsonValue(newState) as Diffable,
-      { text },
-    ),
+    getChanges(sharedType.toJSON() as Diffable, newState as Diffable, {
+      text,
+      json: true,
+    }),
     [],
     text,
   );

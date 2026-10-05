@@ -3,7 +3,6 @@ import {
   applyStringChanges,
   ChangeType,
   getChanges,
-  toJsonValue,
   type Change,
   type Diffable,
   type TextPolicy,
@@ -16,8 +15,9 @@ import {
 } from "./mapping.js";
 
 /**
- * Diffs container against newState once and applies the resulting changes. newState is first
- * reduced to what JSON can hold, so no change is applied unless all of them can be.
+ * Diffs container against newState once and applies the resulting changes. newState is diffed
+ * as JSON would store it, and every change is found before any is applied, so no change is
+ * applied unless all of them can be.
  *
  * Strings the policy marks as text are edited character by character in LoroTexts; any other
  * string is replaced whole as a plain value. A string held as the other kind becomes the
@@ -30,11 +30,10 @@ export const patchContainer = (
 ): void => {
   applyChanges(
     container,
-    getChanges(
-      container.toJSON() as Diffable,
-      toJsonValue(newState) as Diffable,
-      { text },
-    ),
+    getChanges(container.toJSON() as Diffable, newState as Diffable, {
+      text,
+      json: true,
+    }),
     [],
     text,
   );

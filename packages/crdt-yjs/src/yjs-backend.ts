@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import type { CrdtBackend, TextPolicy, Unsubscribe } from "@homeostate/core";
-import { withPlainPrototypes } from "./mapping.js";
+import { toPlainValue } from "./mapping.js";
 import { patchSharedType } from "./patching.js";
 
 /** Options for `createYjsBackend` */
@@ -39,7 +39,7 @@ export const createYjsBackend = (
   const origin = Symbol(`homeostate:${name}`);
 
   return {
-    read: () => withPlainPrototypes(map.toJSON()),
+    read: () => toPlainValue(map),
 
     write: (next) => {
       doc.transact(() => patchSharedType(map, next, text), origin);

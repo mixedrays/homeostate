@@ -18,5 +18,6 @@ same state again produces no update.
 - Automerge threw on every write after the store held an `undefined` array item, so nothing
   synced from that store again, and stored nested functions as `{}`.
 
-`toJsonValue`, newly exported from `@homeostate/core`, applies the rule; custom backends should
-call it on `write(next)` before `getChanges`.
+`getChanges` takes `json: true` to diff the new state by that rule, passing only the values its
+changes carry through `toJsonValue`, newly exported from `@homeostate/core`, so a write does not
+copy the whole state. Custom backends should set it on `write(next)`.

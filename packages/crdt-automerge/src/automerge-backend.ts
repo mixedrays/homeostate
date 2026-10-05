@@ -36,14 +36,13 @@ export const createAutomergeBackend = <T extends Container>(
     read: () => current() ?? {},
 
     write: (next) => {
-      const value = toJsonValue(next);
-      const changes = diff(current(), value, text);
+      const changes = diff(current(), next, text);
       if (changes?.length === 0) return;
       writing = true;
       try {
         handle.change((doc) => {
           if (changes === null)
-            (doc as Container)[name] = toAutomerge(value, [], text);
+            (doc as Container)[name] = toAutomerge(toJsonValue(next), [], text);
           else applyChanges(doc as Container, name, [], changes, text);
         });
       } finally {

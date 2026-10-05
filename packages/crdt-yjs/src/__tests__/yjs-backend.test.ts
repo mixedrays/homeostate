@@ -355,6 +355,23 @@ describe("untrusted key names", () => {
     expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
     expect(prototypeHijacks(store.getState())).toEqual([]);
   });
+
+  it("never lets a __proto__ key in a value a peer stored whole reach the reader", () => {
+    const peer = new Y.Doc();
+    peer
+      .getMap(NAME)
+      .set(
+        "settings",
+        JSON.parse('{"theme":"dark","__proto__":{"isAdmin":true}}'),
+      );
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer));
+
+    const read = createYjsBackend(doc, NAME).read();
+
+    expect(read).toEqual({ settings: { theme: "dark" } });
+    expect(prototypeHijacks(read)).toEqual([]);
+  });
 });
 
 describe("Unicode replication", () => {

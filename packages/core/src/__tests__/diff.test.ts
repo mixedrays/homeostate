@@ -5,9 +5,10 @@ import {
   type Change,
   type Diffable,
   type TextPolicy,
+  toJsonValue,
 } from "../index.js";
 import { patchState } from "../patching.js";
-import { prototypeMemberKeys, todoTitles } from "./helpers.js";
+import { nonJsonWrites, prototypeMemberKeys, todoTitles } from "./helpers.js";
 
 const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
 
@@ -474,6 +475,68 @@ describe("getChanges", () => {
     it("always diffs two strings passed directly character by character", () => {
       expect(getChanges("ab", "abc", { text: () => false })).toEqual([
         [INSERT, 2, "c"],
+      ]);
+    });
+  });
+
+  describe("with json", () => {
+    const json = { json: true };
+
+    it.each(nonJsonWrites)(
+      "finds the changes toJsonValue would for %s, and none once they are applied",
+      (_, before, next, expected) => {
+        expect(getChanges(before as Diffable, next as Diffable, json)).toEqual(
+          getChanges(before as Diffable, toJsonValue(next) as Diffable),
+        );
+        expect(
+          getChanges(expected as Diffable, next as Diffable, json),
+        ).toEqual([]);
+      },
+    );
+
+    it("carries values as JSON would store them", () => {
+      expect(
+        getChanges(
+          { a: 1 },
+          { a: 2, o: { b: undefined, l: [() => 1, 1] } },
+          json,
+        ),
+      ).toEqual([
+        [UPDATE, "a", 2],
+        [INSERT, "o", { l: [null, 1] }],
+      ]);
+      expect(
+        getChanges({ l: [1] }, { l: [{ x: undefined, y: 1 }] }, json),
+      ).toEqual([[PENDING, "l", [[UPDATE, 0, { y: 1 }]]]]);
+    });
+
+    it("carries a value that is already JSON as it is", () => {
+      const kept = { x: [1] };
+      const [[, , value]] = getChanges({}, { kept }, json);
+      expect(value).toBe(kept);
+    });
+
+    it("tells an entry holding undefined from one holding null", () => {
+      expect(getChanges({ a: null }, { a: undefined }, json)).toEqual([
+        [DELETE, "a", undefined],
+      ]);
+      expect(
+        getChanges({ l: [{ a: null }] }, { l: [{ a: undefined }] }, json),
+      ).toEqual([[PENDING, "l", [[PENDING, 0, [[DELETE, "a", undefined]]]]]]);
+    });
+
+    it("matches items as JSON whichever array is longer", () => {
+      expect(
+        getChanges({ l: [null, 1, 2] }, { l: [undefined, 1] }, json),
+      ).toEqual(getChanges({ l: [null, 1, 2] }, { l: [null, 1] }));
+      expect(
+        getChanges({ l: [null] }, { l: [undefined, () => 1] }, json),
+      ).toEqual(getChanges({ l: [null] }, { l: [null, null] }));
+    });
+
+    it("is off by default", () => {
+      expect(getChanges({}, { a: undefined })).toEqual([
+        [INSERT, "a", undefined],
       ]);
     });
   });

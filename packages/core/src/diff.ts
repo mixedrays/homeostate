@@ -1,4 +1,5 @@
 import { ChangeType, type Change } from "./change.js";
+import { isAbsent, toJsonValue } from "./json.js";
 
 export type Diffable = Record<string, unknown> | Array<unknown> | string;
 
@@ -19,6 +20,13 @@ export interface DiffOptions {
    * replaced whole by one `UPDATE`. Without it, every string is diffed character by character.
    */
   text?: TextPolicy;
+  /**
+   * Diff `b` as `JSON.stringify` would store it, without copying it first: object entries
+   * holding `undefined` or a function are absent, and such array items, holes included, are
+   * `null`. The values the changes carry are passed through `toJsonValue`. A CRDT backend sets
+   * it on `write(next)`, so no change it applies holds a value JSON cannot.
+   */
+  json?: boolean;
 }
 
 type Path = (string | number)[];
@@ -59,12 +67,13 @@ const nestedChanges = (
   b: unknown,
   path: Path,
   key: string | number,
-  text: TextPolicy | undefined,
+  options: DiffOptions,
 ): Change[] | null => {
   if (!isDiffable(a) || !isDiffable(b) || !isSameKind(a, b)) return null;
   const at = [...path, key];
-  if (isString(a) && text !== undefined && !text(at)) return null;
-  return diff(a, b, at, text);
+  if (isString(a) && options.text !== undefined && !options.text(at))
+    return null;
+  return diff(a, b, at, options);
 };
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -90,6 +99,47 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
 const keyCount = (keys: string[], record: object): number =>
   hasOwn(record, PROTO_KEY) ? keys.length - 1 : keys.length;
 
+/** An array item as `JSON.stringify` stores it. */
+const jsonItem = (value: unknown): unknown => (isAbsent(value) ? null : value);
+
+/** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an object. */
+const jsonEqual = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (isArray(a) && isArray(b)) {
+    if (a.length !== b.length) return false;
+    // A loop, since `every` skips holes.
+    for (let i = 0; i < a.length; i++)
+      if (!jsonItemEqual(a[i], b[i])) return false;
+    return true;
+  }
+  if (isRecord(a) && isRecord(b)) {
+    let count = 0;
+    for (const key of Object.keys(a)) {
+      if (key === PROTO_KEY || isAbsent(a[key])) continue;
+      if (!hasOwn(b, key) || !jsonEqual(a[key], b[key])) return false;
+      count++;
+    }
+    return count === jsonKeyCount(b);
+  }
+  return false;
+};
+
+/** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
+const jsonItemEqual = (a: unknown, b: unknown): boolean =>
+  jsonEqual(jsonItem(a), jsonItem(b));
+
+/** The number of entries of `record` that `JSON.stringify` stores and the diff compares. */
+const jsonKeyCount = (record: Record<string, unknown>): number => {
+  let count = 0;
+  for (const key of Object.keys(record))
+    if (key !== PROTO_KEY && !isAbsent(record[key])) count++;
+  return count;
+};
+
+/** A value a change carries: with `options.json`, as JSON would store it. */
+const written = (value: unknown, options: DiffOptions): unknown =>
+  options.json ? toJsonValue(value) : value;
+
 /**
  * Returns the ordered edit script that turns `a` into `b`. Two strings passed directly are
  * always diffed character by character; `options.text` decides for the strings nested in them.
@@ -98,17 +148,17 @@ export const getChanges = (
   a: Diffable,
   b: Diffable,
   options: DiffOptions = {},
-): Change[] => diff(a, b, [], options.text);
+): Change[] => diff(a, b, [], options);
 
 const diff = (
   a: Diffable,
   b: Diffable,
   path: Path,
-  text: TextPolicy | undefined,
+  options: DiffOptions,
 ): Change[] => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
-  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, path, text);
-  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, path, text);
+  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, path, options);
+  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, path, options);
   return [];
 };
 
@@ -165,19 +215,21 @@ const getArrayChanges = (
   a: Array<unknown>,
   b: Array<unknown>,
   path: Path,
-  text: TextPolicy | undefined,
+  options: DiffOptions,
 ): Change[] => {
   const changes: Change[] = [];
   let index = 0;
   let deleted: number[] = [];
   let inserted: number[] = [];
+  const itemOf = options.json ? jsonItem : (value: unknown) => value;
 
   const flush = (): void => {
     const pairs = Math.min(deleted.length, inserted.length);
     for (let i = 0; i < pairs; i++) {
-      const next = b[inserted[i]];
-      const nested = nestedChanges(a[deleted[i]], next, path, index, text);
-      if (nested === null) changes.push([ChangeType.UPDATE, index, next]);
+      const next = itemOf(b[inserted[i]]);
+      const nested = nestedChanges(a[deleted[i]], next, path, index, options);
+      if (nested === null)
+        changes.push([ChangeType.UPDATE, index, written(next, options)]);
       else if (nested.length > 0)
         changes.push([ChangeType.PENDING, index, nested]);
       index++;
@@ -185,14 +237,16 @@ const getArrayChanges = (
     for (let i = pairs; i < deleted.length; i++)
       changes.push([ChangeType.DELETE, index, undefined]);
     for (let i = pairs; i < inserted.length; i++) {
-      changes.push([ChangeType.INSERT, index, b[inserted[i]]]);
+      const next = itemOf(b[inserted[i]]);
+      changes.push([ChangeType.INSERT, index, written(next, options)]);
       index++;
     }
     deleted = [];
     inserted = [];
   };
 
-  for (const { step, a: from, b: to } of editScript(a, b, deepEqual)) {
+  const equal = options.json ? jsonItemEqual : deepEqual;
+  for (const { step, a: from, b: to } of editScript(a, b, equal)) {
     if (step === "del") deleted.push(from);
     else if (step === "ins") inserted.push(to);
     else {
@@ -209,23 +263,26 @@ const getRecordChanges = (
   a: Record<string, unknown>,
   b: Record<string, unknown>,
   path: Path,
-  text: TextPolicy | undefined,
+  options: DiffOptions,
 ): Change[] => {
   const changes: Change[] = [];
+  // With `options.json`, an entry holding `undefined` or a function is absent.
+  const absent = (value: unknown): boolean =>
+    options.json === true && isAbsent(value);
 
   for (const property of Object.keys(a))
-    if (property !== PROTO_KEY && !hasOwn(b, property))
+    if (property !== PROTO_KEY && (!hasOwn(b, property) || absent(b[property])))
       changes.push([ChangeType.DELETE, property, undefined]);
 
   for (const [property, value] of Object.entries(b)) {
-    if (property === PROTO_KEY) continue;
+    if (property === PROTO_KEY || absent(value)) continue;
     if (!hasOwn(a, property))
-      changes.push([ChangeType.INSERT, property, value]);
+      changes.push([ChangeType.INSERT, property, written(value, options)]);
     else {
-      const nested = nestedChanges(a[property], value, path, property, text);
+      const nested = nestedChanges(a[property], value, path, property, options);
       if (nested === null) {
         if (a[property] !== value)
-          changes.push([ChangeType.UPDATE, property, value]);
+          changes.push([ChangeType.UPDATE, property, written(value, options)]);
       } else if (nested.length > 0)
         changes.push([ChangeType.PENDING, property, nested]);
     }
