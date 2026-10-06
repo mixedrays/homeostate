@@ -95,6 +95,7 @@ export const unicodeEdits: [string, string][] = [
   ["😀", ""],
   ["😀", "😃"],
   ["a😀", "a😃"],
+  ["a😀b", "a𝘀b"],
   ["a😀b", "ab"],
   ["a😀", "a"],
   ["😀😀", "😀"],

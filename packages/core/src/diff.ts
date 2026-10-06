@@ -121,7 +121,8 @@ const jsonEqual = (a: unknown, b: unknown): boolean => {
       if (!hasOwn(b, key) || !jsonEqual(a[key], b[key])) return false;
       count++;
     }
-    return count === jsonKeyCount(b);
+    // `b` rarely holds absent entries, so its own key count usually settles it.
+    return count === Object.keys(b).length || count === jsonKeyCount(b);
   }
   return false;
 };
@@ -164,6 +165,31 @@ const diff = (
   return [];
 };
 
+/**
+ * The length of the common prefix of two sequences, and of the common suffix of what remains,
+ * comparing item `i` of one with item `j` of the other. Edits are usually local, so only the
+ * part between them needs an edit script.
+ */
+const commonEnds = (
+  aLength: number,
+  bLength: number,
+  equal: (i: number, j: number) => boolean,
+): [number, number] => {
+  const max = Math.min(aLength, bLength);
+  let start = 0;
+  while (start < max && equal(start, start)) start++;
+  let end = 0;
+  while (end < max - start && equal(aLength - 1 - end, bLength - 1 - end))
+    end++;
+  return [start, end];
+};
+
+const isHighSurrogate = (code: number): boolean =>
+  code >= 0xd800 && code <= 0xdbff;
+
+const isLowSurrogate = (code: number): boolean =>
+  code >= 0xdc00 && code <= 0xdfff;
+
 const sharesCharacter = (a: string[], b: string[]): boolean => {
   const characters = new Set(a);
   for (const character of b) if (characters.has(character)) return true;
@@ -178,17 +204,28 @@ const deleteCharacter = (index: number, character: string): Change => [
 
 const getStringChanges = (a: string, b: string): Change[] => {
   if (a === b) return [];
+  // Trim the common ends by UTF-16 unit, but never between the halves of a surrogate pair.
+  let [start, end] = commonEnds(
+    a.length,
+    b.length,
+    (i, j) => a.charCodeAt(i) === b.charCodeAt(j),
+  );
+  if (start > 0 && isHighSurrogate(a.charCodeAt(start - 1))) start--;
+  if (end > 0 && isLowSurrogate(a.charCodeAt(a.length - end))) end--;
   // Compare whole code points, but keep Change offsets in JavaScript's UTF-16 units.
   // Comparing code units can retain half a surrogate pair and corrupt a CRDT text.
-  const from = Array.from(a);
-  const to = Array.from(b);
+  const from = Array.from(a.slice(start, a.length - end));
+  const to = Array.from(b.slice(start, b.length - end));
   if (!sharesCharacter(from, to)) {
-    const deletes = from.map((character) => deleteCharacter(0, character));
-    return b.length === 0 ? deletes : [...deletes, [ChangeType.INSERT, 0, b]];
+    const deletes = from.map((character) => deleteCharacter(start, character));
+    const inserted = to.join("");
+    return inserted.length === 0
+      ? deletes
+      : [...deletes, [ChangeType.INSERT, start, inserted]];
   }
 
   const changes: Change[] = [];
-  let index = 0;
+  let index = start;
 
   for (const { step, a: source, b: position } of editScript(
     from,
@@ -219,8 +256,14 @@ const getArrayChanges = (
   path: Path,
   options: DiffOptions,
 ): Change[] => {
+  const equal = options.json ? jsonItemEqual : deepEqual;
+  const [start, end] = commonEnds(a.length, b.length, (i, j) =>
+    equal(a[i], b[j]),
+  );
+  const from = a.slice(start, a.length - end);
+  const to = b.slice(start, b.length - end);
   const changes: Change[] = [];
-  let index = 0;
+  let index = start;
   let deleted: number[] = [];
   let inserted: number[] = [];
   const itemOf = options.json ? jsonItem : (value: unknown) => value;
@@ -228,8 +271,14 @@ const getArrayChanges = (
   const flush = (): void => {
     const pairs = Math.min(deleted.length, inserted.length);
     for (let i = 0; i < pairs; i++) {
-      const next = itemOf(b[inserted[i]]);
-      const nested = nestedChanges(a[deleted[i]], next, path, index, options);
+      const next = itemOf(to[inserted[i]]);
+      const nested = nestedChanges(
+        from[deleted[i]],
+        next,
+        path,
+        index,
+        options,
+      );
       if (nested === null)
         changes.push([ChangeType.UPDATE, index, written(next, options)]);
       else if (nested.length > 0)
@@ -239,7 +288,7 @@ const getArrayChanges = (
     for (let i = pairs; i < deleted.length; i++)
       changes.push([ChangeType.DELETE, index, undefined]);
     for (let i = pairs; i < inserted.length; i++) {
-      const next = itemOf(b[inserted[i]]);
+      const next = itemOf(to[inserted[i]]);
       changes.push([ChangeType.INSERT, index, written(next, options)]);
       index++;
     }
@@ -247,10 +296,9 @@ const getArrayChanges = (
     inserted = [];
   };
 
-  const equal = options.json ? jsonItemEqual : deepEqual;
-  for (const { step, a: from, b: to } of editScript(a, b, equal)) {
-    if (step === "del") deleted.push(from);
-    else if (step === "ins") inserted.push(to);
+  for (const { step, a: source, b: position } of editScript(from, to, equal)) {
+    if (step === "del") deleted.push(source);
+    else if (step === "ins") inserted.push(position);
     else {
       flush();
       index++;

@@ -87,6 +87,23 @@ describe("getChanges", () => {
       expect(getChanges("x", `x${paste}`)).toEqual([[INSERT, 1, paste]]);
     });
 
+    it("addresses an edit in a long string by its offset", () => {
+      const text = "lorem ipsum ".repeat(500);
+      const middle = text.length / 2;
+      const typed = `${text.slice(0, middle)}X${text.slice(middle)}`;
+      const deleted = text.slice(0, middle) + text.slice(middle + 1);
+
+      expect(getChanges(text, typed)).toEqual([[INSERT, middle, "X"]]);
+      expect(getChanges(text, deleted)).toEqual([[DELETE, middle, undefined]]);
+    });
+
+    it("replaces a changed middle that shares no character at its offset", () => {
+      expect(getChanges("abcd", "abXd")).toEqual([
+        [DELETE, 2, undefined],
+        [INSERT, 2, "X"],
+      ]);
+    });
+
     it("emits deletions at their position in the progressively edited string", () => {
       expect(getChanges("abc", "ac")).toEqual([[DELETE, 1, undefined]]);
       expect(getChanges("abcd", "ad")).toEqual([
