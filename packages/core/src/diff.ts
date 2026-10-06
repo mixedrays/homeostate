@@ -78,10 +78,12 @@ const nestedChanges = (
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
-  if (isArray(a) && isArray(b))
-    return (
-      a.length === b.length && a.every((value, i) => deepEqual(value, b[i]))
-    );
+  if (isArray(a) && isArray(b)) {
+    if (a.length !== b.length) return false;
+    // A loop, since `every` skips holes.
+    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false;
+    return true;
+  }
   if (isRecord(a) && isRecord(b)) {
     const keys = Object.keys(a);
     return (

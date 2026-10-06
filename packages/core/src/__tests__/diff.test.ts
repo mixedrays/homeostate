@@ -290,6 +290,17 @@ describe("getChanges", () => {
         [1, { a: 2 }],
       ],
     ])("transforms %j into %j when applied", appliesCleanly);
+
+    // `[1, , 3]`, built without a sparse literal.
+    const holey = (): unknown[] => Object.assign([], { 0: 1, 2: 3 });
+
+    it.each<[string, unknown[], unknown[]]>([
+      ["an array item", [holey()], [[1, 2, 3]]],
+      ["a record item's array", [{ cells: holey() }], [{ cells: [1, 2, 3] }]],
+      ["an array item of a shorter new array", [[1, 2, 3], 4], [holey()]],
+    ])("tells a hole from a value in %s", (_, before, after) =>
+      appliesCleanly(before, after),
+    );
   });
 
   describe("records", () => {
