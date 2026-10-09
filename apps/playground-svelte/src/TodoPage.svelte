@@ -2,6 +2,7 @@
   import { onDestroy } from "svelte";
   import { useSelector } from "@tanstack/svelte-store";
   import { TODO_ROOM, type FilterStatus } from "@homeostate/playground/shared";
+  import { mountDevtools } from "@homeostate/tool-devtools/mount";
   import { SYNC_SERVER_URL } from "./config";
   import { apps, demos } from "./demos";
   import { followLink, href } from "./router.svelte";
@@ -37,6 +38,15 @@
   /** The composer's text, held here so the Add button can follow it. */
   let draft = $state("");
   let inspecting = $state(false);
+
+  // The devtools render in a shadow root on the body; Inspect state opens and closes them.
+  const devtools = mountDevtools({
+    sources: [todoStore.devtoolsSource],
+    open: false,
+    onOpenChange: (open) => (inspecting = open),
+  });
+  $effect(() => devtools.update({ open: inspecting }));
+  onDestroy(devtools.unmount);
 
   const online = $derived(status.current !== "offline");
   const statusTitle = $derived.by(() => {
@@ -101,7 +111,7 @@
       <button
         class="bar-button outlined"
         type="button"
-        aria-pressed={!online}
+        class:offline={!online}
         title={online
           ? "Disconnect from the sync server to edit offline"
           : "Reconnect and merge the edits made while offline"}
@@ -128,8 +138,9 @@
       <h1 class="demo-title">{demo.title}</h1>
       <p class="demo-description">{demo.description}</p>
       <p class="demo-hint">
-        To see this store's shared state as JSON, open the inspector with
-        <strong>Inspect state</strong>.
+        To see this store, its Yjs document and a log of every change, and to
+        edit them, open the devtools with <strong>Inspect state</strong> or the
+        round button in the bottom-right corner.
       </p>
     </div>
   </div>
@@ -278,20 +289,3 @@
     second tab to watch changes propagate.
   </p>
 </main>
-
-{#if inspecting}
-  <aside class="inspector" aria-label="Shared state">
-    <div class="inspector-header">
-      <strong>Shared state</strong>
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Close"
-        onclick={() => (inspecting = false)}
-      >
-        ×
-      </button>
-    </div>
-    <pre>{JSON.stringify(shared.current, null, 2)}</pre>
-  </aside>
-{/if}

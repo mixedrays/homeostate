@@ -7,6 +7,7 @@ import {
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import {
   createStore,
+  isTitle,
   makeState,
   type BenchStore,
   type TodoState,
@@ -45,8 +46,14 @@ export const createPair = (
 
   const writer = createStore(makeState(size));
   const engines: SyncEngine[] = [
-    createSyncEngine(createYjsBackend(docA, "shared"), writer.adapter),
-    createSyncEngine(createYjsBackend(docB, "shared"), reader),
+    createSyncEngine(
+      createYjsBackend(docA, "shared", { text: isTitle }),
+      writer.adapter,
+    ),
+    createSyncEngine(
+      createYjsBackend(docB, "shared", { text: isTitle }),
+      reader,
+    ),
   ];
   engines.forEach((engine) => engine.connect());
 

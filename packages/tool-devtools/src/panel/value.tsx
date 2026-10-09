@@ -46,6 +46,18 @@ export function KeyStatusBadge({ status }: { status: KeyStatus }) {
   );
 }
 
+/** Marks a value that is not JSON with what it really is, such as `Date`. */
+export function NonJsonBadge({ kind }: { kind: string }) {
+  return (
+    <Badge
+      title={`Not JSON (${kind}): shown here as JSON would show it, and not synced as it is.`}
+      className="h-4 shrink-0 bg-amber-500/15 px-1.5 text-[10px] text-amber-700 dark:text-amber-400"
+    >
+      {kind}
+    </Badge>
+  );
+}
+
 const originInfo: Record<LogOrigin, { label: string; className: string }> = {
   initial: { label: "initial", className: "bg-muted text-muted-foreground" },
   local: {

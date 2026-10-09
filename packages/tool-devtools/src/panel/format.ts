@@ -1,5 +1,6 @@
 import type { KeyStatus } from "../inspector";
 import type { Json } from "../json";
+import type { NetworkSnapshot } from "../network";
 
 const MAX_STRING = 80;
 
@@ -12,6 +13,26 @@ export const previewOf = (value: Json | undefined): string => {
   }
   const text = JSON.stringify(value);
   return text.length > MAX_STRING ? `${text.slice(0, MAX_STRING - 1)}…"` : text;
+};
+
+/** `None`, `100 ms`, `2 s`. */
+export const formatDelay = (ms: number): string => {
+  if (ms === 0) return "None";
+  return ms >= 1000 ? `${ms / 1000} s` : `${ms} ms`;
+};
+
+/** Whether any condition slows down or cuts the link. */
+export const conditionsActive = ({ conditions }: NetworkSnapshot): boolean =>
+  conditions.latency > 0 ||
+  conditions.jitter > 0 ||
+  conditions.offline ||
+  conditions.flaky;
+
+/** `512 B`, `4.2 KB`, `1.3 MB`. */
+export const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 export const keyStatusInfo: Record<

@@ -7,6 +7,7 @@ import type {
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
 import { patchState } from "./patching.js";
+import { hasOwn, PROTO_KEY } from "./diff.js";
 
 type Plain = Record<string, unknown>;
 
@@ -23,6 +24,10 @@ type Plain = Record<string, unknown>;
  * backend owns the synced document: every write replaces it with the store's filtered
  * state, and a key removed from the backend is removed from the store.
  *
+ * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
+ * A local change made before the flush applies them first, and they replace the store's synced
+ * state, so the local change keeps only what it did to keys the engine does not sync.
+ *
  * @example
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
@@ -36,24 +41,38 @@ export function createSyncEngine<S extends object>(
   adapter: StoreAdapter<S>,
   config: SyncEngineConfig = {},
 ): SyncEngine {
-  const { filter = defaultSyncFilter, seed = "if-empty" } = config;
+  const { filter = defaultSyncFilter, seed = "if-empty", schedule } = config;
 
   let connected = false;
   let storeUnsubscribe: Unsubscribe | null = null;
   let backendUnsubscribe: Unsubscribe | null = null;
   let applyingRemote = false;
+  /**
+   * What the backend holds as far as the engine knows: the synced state it last wrote, or the
+   * whole state it last read. Passed to `backend.write` as `previous`; `undefined` when unknown.
+   */
+  let lastSynced: Plain | undefined;
+  /** Counts backend reads after remote changes, so a write can tell that one ran during it. */
+  let remoteReads = 0;
+  /** Whether a remote change waits for the scheduled flush. */
+  let applyPending = false;
+  /** The flush handed to `schedule` and not run yet; a flush that is no longer it does nothing. */
+  let scheduledFlush: (() => void) | null = null;
 
   const filterState = (state: object): Plain => {
     const filtered: Plain = {};
     for (const [key, value] of Object.entries(state)) {
-      if (filter(key, value)) filtered[key] = value;
+      if (key !== PROTO_KEY && filter(key, value)) filtered[key] = value;
     }
     return filtered;
   };
 
-  const readBackend = (): Plain => {
+  /** The backend's whole state, local keys included; `undefined` when it holds no object. */
+  const readBackend = (): Plain | undefined => {
     const value = backend.read();
-    return value !== null && typeof value === "object" ? (value as Plain) : {};
+    return value !== null && typeof value === "object"
+      ? (value as Plain)
+      : undefined;
   };
 
   /**
@@ -73,14 +92,9 @@ export function createSyncEngine<S extends object>(
 
     const merged: Plain = { ...current, ...patched };
     for (const key of Object.keys(synced)) {
-      if (!(key in patched)) delete merged[key];
+      if (!hasOwn(patched, key)) delete merged[key];
     }
     return merged as S;
-  };
-
-  const syncToBackend = (): void => {
-    if (applyingRemote) return;
-    backend.write(filterState(adapter.getState()));
   };
 
   const applyRemote = (remote: Plain, keepLocalOnly: boolean): void => {
@@ -95,14 +109,72 @@ export function createSyncEngine<S extends object>(
   };
 
   const syncToStore = (): void => {
-    applyRemote(filterState(readBackend()), false);
+    remoteReads++;
+    // Unknown should the read throw.
+    lastSynced = undefined;
+    // What was read, not the store's state after the apply: `setState` may reject or transform it.
+    lastSynced = readBackend();
+    applyRemote(filterState(lastSynced ?? {}), false);
+  };
+
+  /** Runs the apply deferred by `schedule`, if one is pending. */
+  const runPendingApply = (): void => {
+    if (!applyPending) return;
+    applyPending = false;
+    syncToStore();
+  };
+
+  const onRemoteChange = (): void => {
+    if (schedule === undefined) {
+      syncToStore();
+      return;
+    }
+    applyPending = true;
+    if (scheduledFlush !== null) return;
+    const flush = (): void => {
+      // A flush handed out before `disconnect()` does nothing.
+      if (scheduledFlush !== flush) return;
+      scheduledFlush = null;
+      runPendingApply();
+    };
+    scheduledFlush = flush;
+    try {
+      schedule(flush);
+    } catch (error) {
+      // Let the next remote change schedule again.
+      scheduledFlush = null;
+      throw error;
+    }
+  };
+
+  const syncToBackend = (): void => {
+    if (applyingRemote) return;
+    // Otherwise the write would revert the pending remote changes. They win: applying them
+    // replaces the store's synced state, local change included.
+    runPendingApply();
+    const next = filterState(adapter.getState());
+    const previous = lastSynced;
+    const reads = remoteReads;
+    // Unknown should the write throw.
+    lastSynced = undefined;
+    backend.write(next, previous);
+    // A remote change applied during the write has already recorded what it read.
+    if (remoteReads === reads) lastSynced = next;
+  };
+
+  const unsubscribeAll = (): void => {
+    backendUnsubscribe?.();
+    backendUnsubscribe = null;
+    storeUnsubscribe?.();
+    storeUnsubscribe = null;
   };
 
   return {
     connect: (): void => {
       if (connected) return;
 
-      const remote = filterState(readBackend());
+      let held = readBackend();
+      const remote = filterState(held ?? {});
       const local = filterState(adapter.getState());
       const remoteKeys = new Set(Object.keys(remote));
       const missing = Object.keys(local).filter((key) => !remoteKeys.has(key));
@@ -111,23 +183,37 @@ export function createSyncEngine<S extends object>(
         const seeded: Plain = { ...remote };
         for (const key of missing) seeded[key] = local[key];
         backend.write(seeded);
+        held = seeded;
       }
 
       applyRemote(remote, true);
+      lastSynced = held;
 
-      backendUnsubscribe = backend.subscribe(syncToStore);
-      storeUnsubscribe = adapter.subscribe(syncToBackend);
+      try {
+        backendUnsubscribe = backend.subscribe(onRemoteChange);
+        storeUnsubscribe = adapter.subscribe(syncToBackend);
+      } catch (error) {
+        // `disconnect()` cannot reach a subscription made before the throw, so drop it here.
+        unsubscribeAll();
+        lastSynced = undefined;
+        throw error;
+      }
       connected = true;
     },
 
     disconnect: (): void => {
       if (!connected) return;
 
-      backendUnsubscribe?.();
-      backendUnsubscribe = null;
-      storeUnsubscribe?.();
-      storeUnsubscribe = null;
-      connected = false;
+      // The store keeps what the backend held while connected; the scheduled flush is dropped.
+      scheduledFlush = null;
+      try {
+        runPendingApply();
+      } finally {
+        unsubscribeAll();
+        // A disconnected engine hears no remote change, so it reads the backend again on connect.
+        lastSynced = undefined;
+        connected = false;
+      }
     },
 
     isConnected: (): boolean => connected,

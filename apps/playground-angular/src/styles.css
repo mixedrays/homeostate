@@ -310,7 +310,7 @@ h1 {
   border-color: var(--border);
   background: white;
 }
-.bar-button[aria-pressed="true"] {
+.bar-button.offline {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
@@ -588,35 +588,6 @@ input.todo-title:focus {
 .empty-state p {
   font-size: 14px;
   margin: 0;
-}
-
-/* The panel Inspect state opens. */
-.inspector {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 20;
-  width: min(420px, calc(100vw - 32px));
-  max-height: 60vh;
-  overflow: auto;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 8px 28px #0f172a26;
-  font-size: 13px;
-}
-.inspector-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.inspector pre {
-  margin: 8px 0 0;
-  overflow: auto;
-  color: #334155;
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .sr-only {

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { create } from "zustand";
 import { createStore } from "zustand/vanilla";
 import {
   createMemoryBackend,
@@ -54,5 +55,16 @@ describe("homeostate middleware", () => {
     backend.receive({ count: 9 });
     expect(store.getState().count).toBe(1);
     expect(store.homeostate.isConnected()).toBe(false);
+  });
+
+  it("infers the state type in the documented curried form", () => {
+    const useStore = create<CounterState>()(
+      homeostate(createMemoryBackend(), (set) => ({
+        count: 0,
+        increment: () => set((s) => ({ count: s.count + 1 })),
+      })),
+    );
+
+    expectTypeOf(useStore.getState().count).toEqualTypeOf<number>();
   });
 });

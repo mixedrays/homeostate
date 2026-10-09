@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createSyncEngine } from "@homeostate/core";
-import { createMemoryBackend } from "@homeostate/core/testing";
+import {
+  createPersistence,
+  createSyncEngine,
+  type Persistence,
+} from "@homeostate/core";
+import {
+  createMemoryBackend,
+  createMemoryPersistenceAdapter,
+} from "@homeostate/core/testing";
 import { createInspector, type Inspector } from "../inspector";
-import { createTestStore, tick } from "./helpers";
+import { createTestDoc, createTestStore, tick } from "./helpers";
 
 interface State {
   todos: { title: string; done: boolean }[];
@@ -189,6 +196,7 @@ describe("createInspector", () => {
     ]);
     expect(inspector.getSnapshot().backend).toBeNull();
     expect(inspector.getSnapshot().connected).toBeNull();
+    expect(inspector.getSnapshot().storage).toBeNull();
   });
 
   it("stops watching after stop()", async () => {
@@ -197,5 +205,143 @@ describe("createInspector", () => {
     store.set({ ...store.get(), filter: "done" });
     await tick();
     expect(inspector.getSnapshot().store.filter).toBe("all");
+  });
+
+  it("flags values in synced keys that are not JSON, but not in local keys", async () => {
+    const store = createTestStore<Record<string, unknown>>({
+      when: new Date(0),
+      cache: new Map(),
+    });
+    inspector = createInspector({
+      name: "dates",
+      adapter: store.adapter,
+      filter: (key) => key !== "cache",
+    });
+    inspector.start();
+    expect(inspector.getSnapshot().warnings).toEqual([
+      { path: ["when"], kind: "Date" },
+    ]);
+
+    store.set({ when: "1970-01-01", cache: new Map() });
+    await tick();
+    expect(inspector.getSnapshot().warnings).toEqual([]);
+  });
+
+  it("flags a BigInt the JSON view cannot read", () => {
+    const store = createTestStore({ total: 1n });
+    inspector = createInspector({ name: "total", adapter: store.adapter });
+    const snapshot = inspector.getSnapshot();
+    expect(snapshot.storeError).toMatch(/BigInt/);
+    expect(snapshot.warnings).toEqual([{ path: ["total"], kind: "BigInt" }]);
+  });
+
+  it("replaces the log with imported entries and numbers new ones after them", async () => {
+    const { store, inspector } = setup();
+    inspector.importLog([
+      {
+        id: 7,
+        at: 1,
+        origin: "local",
+        state: { todos: [{ title: "a", done: false }], filter: "imported" },
+        diff: [],
+      },
+    ]);
+    expect(inspector.getSnapshot().log).toMatchObject([
+      { id: 7, imported: true },
+    ]);
+
+    store.set({ ...store.get(), filter: "done" });
+    await tick();
+    expect(inspector.getSnapshot().log.map(({ id }) => id)).toEqual([7, 8]);
+
+    inspector.restore(7);
+    await tick();
+    expect(store.get().filter).toBe("imported");
+  });
+});
+
+describe("storage", () => {
+  const setupStorage = async (
+    wrap: (persistence: Persistence) => Persistence = (p) => p,
+  ) => {
+    const store = createTestStore({ count: 0 });
+    const doc = createTestDoc();
+    const storage = createMemoryPersistenceAdapter();
+    const persistence = createPersistence(doc, storage, { key: "doc" });
+    await persistence.whenLoaded;
+    inspector = createInspector({
+      name: "count",
+      adapter: store.adapter,
+      persistence: wrap(persistence),
+    });
+    return { doc, storage, persistence, inspector };
+  };
+
+  it("reads what is stored", async () => {
+    const { doc, inspector } = await setupStorage();
+    expect(inspector.getSnapshot().storage).toEqual({
+      stats: null,
+      busy: null,
+      cleared: false,
+      error: null,
+    });
+
+    doc.add("a");
+    doc.add("b");
+    await inspector.refreshStorage();
+
+    expect(inspector.getSnapshot().storage?.stats?.updates).toBe(3);
+  });
+
+  it("reads again after a read in progress when asked meanwhile", async () => {
+    const { doc, inspector } = await setupStorage();
+    const first = inspector.refreshStorage();
+    doc.add("a");
+    await inspector.refreshStorage();
+    await first;
+
+    expect(inspector.getSnapshot().storage?.stats?.updates).toBe(2);
+  });
+
+  it("compacts the stored log", async () => {
+    const { doc, storage, inspector } = await setupStorage();
+    doc.add("a");
+    doc.add("b");
+
+    await inspector.compactStorage();
+
+    expect(storage.size("doc")).toBe(1);
+    expect(inspector.getSnapshot().storage).toMatchObject({
+      stats: { updates: 1 },
+      busy: null,
+    });
+  });
+
+  it("clears storage and stops storing", async () => {
+    const { doc, storage, persistence, inspector } = await setupStorage();
+    doc.add("a");
+
+    await inspector.clearStorage();
+    doc.add("b");
+    await persistence.flush();
+
+    expect(storage.size("doc")).toBe(0);
+    expect(inspector.getSnapshot().storage).toEqual({
+      stats: { updates: 0, bytes: 0 },
+      busy: null,
+      cleared: true,
+      error: null,
+    });
+  });
+
+  it("reports a read that fails", async () => {
+    const { inspector } = await setupStorage((persistence) => ({
+      ...persistence,
+      stats: () => Promise.reject(new Error("storage unavailable")),
+    }));
+
+    await inspector.refreshStorage();
+
+    expect(inspector.getSnapshot().storage?.error).toBe("storage unavailable");
   });
 });

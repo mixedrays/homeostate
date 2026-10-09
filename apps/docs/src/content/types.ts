@@ -1,7 +1,8 @@
 // Shapes shared by the build-time content code and the client components. Nothing here may
 // import from a `.server.ts` module.
 
-export type GroupId = "guides" | "core" | "crdt" | "store" | "tools";
+export type GroupId =
+  "guides" | "core" | "crdt" | "store" | "persist" | "tools";
 
 export type PageKind = "guide" | "package" | "changelog";
 

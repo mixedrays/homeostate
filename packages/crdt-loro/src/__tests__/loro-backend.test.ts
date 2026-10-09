@@ -1,144 +1,40 @@
-import { LoroDoc, type LoroList, type LoroMap } from "loro-crdt";
-import { describe, expect, it, vi } from "vitest";
-import { createSyncEngine, type SyncEngineConfig } from "@homeostate/core";
-import { createLoroBackend } from "../index.js";
+import { LoroDoc, LoroMap, LoroText, type LoroList } from "loro-crdt";
+import { describe, expect, it } from "vitest";
+import { createSyncEngine } from "@homeostate/core";
 import {
   addTodo,
   createTestStore,
   deleteTodo,
-  manyTodos,
+  describeCrdtBackend,
+  prototypeHijacks,
   renameTodo,
-  setSearchTerm,
-  snapshot,
   threeTodos,
   todo,
-  toggleTodo,
-  type TodoState,
-  unicodeEdits,
-} from "../../../core/src/__tests__/helpers.js";
+  todoTitles,
+} from "@homeostate/core/conformance";
+import { createLoroBackend } from "../index.js";
 
 const NAME = "shared";
 
-const createPeer = (
-  doc: LoroDoc,
-  initial: TodoState,
-  config?: SyncEngineConfig,
-) => {
-  const store = createTestStore(initial);
-  const backend = createLoroBackend(doc, NAME);
-  const engine = createSyncEngine(backend, store.adapter, config);
-  engine.connect();
-  return { doc, store, backend, engine };
-};
-
-const exchange = (a: LoroDoc, b: LoroDoc): void => {
-  b.import(a.export({ mode: "update", from: b.version() }));
-  a.import(b.export({ mode: "update", from: a.version() }));
-};
-
-const link = (a: LoroDoc, b: LoroDoc): void => {
-  a.subscribeLocalUpdates((update) => {
-    b.import(update);
-  });
-  b.subscribeLocalUpdates((update) => {
-    a.import(update);
-  });
-};
-
-const twoSyncedPeers = (
-  initial: () => TodoState = threeTodos,
-  idA = 1,
-  idB = 2,
-) => {
-  const docA = new LoroDoc();
-  const docB = new LoroDoc();
-  docA.setPeerId(idA);
-  docB.setPeerId(idB);
-  const a = createPeer(docA, initial());
-  exchange(docA, docB);
-  const b = createPeer(docB, initial());
-  return { a, b };
-};
+describeCrdtBackend("createLoroBackend", {
+  createDoc: (id) => {
+    const doc = new LoroDoc();
+    if (id !== undefined) doc.setPeerId(id);
+    return doc;
+  },
+  backend: (doc, options) => createLoroBackend(doc, NAME, options),
+  exchange: (a, b) => {
+    b.import(a.export({ mode: "update", from: b.version() }));
+    a.import(b.export({ mode: "update", from: a.version() }));
+  },
+  onLocalUpdate: (doc, listener) => doc.subscribeLocalUpdates(listener),
+  storeForeign: (doc, key, value) => {
+    doc.getMap(NAME).set(key, value);
+    doc.commit();
+  },
+});
 
 describe("createLoroBackend", () => {
-  it("reads an empty document as an empty object", () => {
-    expect(createLoroBackend(new LoroDoc(), NAME).read()).toEqual({});
-  });
-
-  it("ignores its own writes and reports remote imports", () => {
-    const doc = new LoroDoc();
-    const backend = createLoroBackend(doc, NAME);
-    const onRemoteChange = vi.fn();
-    backend.subscribe(onRemoteChange);
-
-    backend.write({ count: 1, label: "one" });
-    expect(onRemoteChange).not.toHaveBeenCalled();
-    expect(backend.read()).toEqual({ count: 1, label: "one" });
-
-    const other = new LoroDoc();
-    other.import(doc.export({ mode: "update" }));
-    other.getMap(NAME).set("count", 2);
-    other.commit();
-    doc.import(other.export({ mode: "update", from: doc.version() }));
-    expect(onRemoteChange).toHaveBeenCalledTimes(1);
-    expect(backend.read()).toEqual({ count: 2, label: "one" });
-  });
-
-  it("reports local commits that did not come through write", () => {
-    const doc = new LoroDoc();
-    const backend = createLoroBackend(doc, NAME);
-    const onRemoteChange = vi.fn();
-    backend.subscribe(onRemoteChange);
-
-    doc.getMap(NAME).set("count", 1);
-    doc.commit();
-
-    expect(onRemoteChange).toHaveBeenCalledTimes(1);
-    expect(backend.read()).toEqual({ count: 1 });
-  });
-
-  it.each([
-    [{ list: [1, 2, 3] }, { list: [0, 1] }],
-    [{ list: [2, 3] }, { list: [1, 2, 3, 4] }],
-    [{ list: [1, 2] }, { list: [] }],
-    [
-      {
-        list: [
-          { id: "1", done: false },
-          { id: "2", done: false },
-        ],
-      },
-      {
-        list: [
-          { id: "0", done: false },
-          { id: "1", done: false },
-          { id: "2", done: true },
-        ],
-      },
-    ],
-    [
-      { list: [{ id: "1" }, { id: "2" }, { id: "3" }] },
-      { list: [{ id: "1" }, { id: "3" }] },
-    ],
-    [
-      { v: { a: 1 }, s: "a" },
-      { v: [1], s: 1 },
-    ],
-    [{ v: "a" }, { v: { b: "c" } }],
-    [
-      { n: 1, b: true, z: null },
-      { n: 2, b: false, z: null },
-    ],
-  ])("writes %j -> %j so that read() matches", (before, after) => {
-    const doc = new LoroDoc();
-    const backend = createLoroBackend(doc, NAME);
-
-    backend.write(before);
-    expect(backend.read()).toEqual(before);
-    backend.write(after);
-    expect(backend.read()).toEqual(after);
-  });
-
   it("deletes a middle todo without rewriting the items after it", () => {
     const doc = new LoroDoc();
     const backend = createLoroBackend(doc, NAME);
@@ -152,188 +48,107 @@ describe("createLoroBackend", () => {
     expect((todos.get(1) as LoroMap).id).toBe(third);
   });
 
-  it("stops notifying after unsubscribe", () => {
+  it("diffs against previous instead of reading its document", () => {
     const doc = new LoroDoc();
     const backend = createLoroBackend(doc, NAME);
-    const onRemoteChange = vi.fn();
-    const unsubscribe = backend.subscribe(onRemoteChange);
-
-    unsubscribe();
-    doc.getMap(NAME).set("count", 1);
+    backend.write({ count: 1, label: "a" });
+    // Unreported, so a `previous` that misses it shows which side the write diffed against.
+    doc.getMap(NAME).set("count", 2);
     doc.commit();
 
-    expect(onRemoteChange).not.toHaveBeenCalled();
+    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+    expect(backend.read()).toEqual({ count: 2, label: "b" });
+  });
+
+  it("diffs against its document while edits by other code are uncommitted", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME);
+    backend.write({ count: 1, label: "a" });
+    // Reported only once committed, so `previous` cannot hold it yet.
+    doc.getMap(NAME).set("count", 2);
+
+    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+    expect(backend.read()).toEqual({ count: 1, label: "b" });
   });
 });
 
-describe("two peers over Loro", () => {
-  it("keeps a toggle on A and an add on B", () => {
-    const { a, b } = twoSyncedPeers();
+describe("untrusted key names", () => {
+  it("never lets a peer's __proto__ entry reach the store", () => {
+    const doc = new LoroDoc();
+    const store = createTestStore({ todos: [{ id: "1" }] });
+    const backend = createLoroBackend(doc, NAME);
+    createSyncEngine(backend, store.adapter).connect();
+    const todos = doc.getMap(NAME).get("todos") as LoroList;
 
-    a.store.update((s) => toggleTodo(s, "1"));
-    b.store.update((s) => addTodo(s, todo("4")));
-    exchange(a.doc, b.doc);
+    (todos.get(0) as LoroMap)
+      .setContainer("__proto__", new LoroMap())
+      .set("isAdmin", true);
+    const added = todos.insertContainer(1, new LoroMap());
+    added.set("id", "2");
+    added.setContainer("__proto__", new LoroMap()).set("isAdmin", true);
+    doc.commit();
 
-    const expected = addTodo(toggleTodo(threeTodos(), "1"), todo("4"));
-    expect(a.store.getState()).toEqual(expected);
-    expect(b.store.getState()).toEqual(expected);
+    expect(prototypeHijacks(backend.read())).toEqual([]);
+    expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
+    expect(prototypeHijacks(store.getState())).toEqual([]);
+  });
+});
+
+describe("strings", () => {
+  const map = (doc: LoroDoc) => doc.getMap(NAME);
+  const todoMap = (doc: LoroDoc, index: number) =>
+    (map(doc).get("todos") as LoroList).get(index) as LoroMap;
+
+  it("stores the strings the policy marks as LoroText and every other string as a value", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME, { text: todoTitles });
+    backend.write(threeTodos());
+    backend.write(addTodo(threeTodos(), todo("4")));
+
+    expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
+    expect(todoMap(doc, 3).get("title")).toBeInstanceOf(LoroText);
+    expect(todoMap(doc, 3).get("id")).toBe("4");
+    expect(map(doc).get("filterStatus")).toBe("all");
+
+    const version = doc.oplogVersion();
+    backend.write(addTodo(threeTodos(), todo("4")));
+    expect(doc.oplogVersion().compare(version)).toBe(0);
   });
 
-  it.each([
-    [1, 2],
-    [2, 1],
-  ])(
-    "keeps a delete of t2 on A and a toggle of t3 on B (peer ids %i and %i)",
-    (idA, idB) => {
-      const { a, b } = twoSyncedPeers(threeTodos, idA, idB);
+  it("reads strings held as LoroText by an earlier version, and stores each as a value once it changes", () => {
+    const doc = new LoroDoc();
+    createLoroBackend(doc, NAME, { text: () => true }).write(threeTodos());
+    const backend = createLoroBackend(doc, NAME);
+    expect(backend.read()).toEqual(threeTodos());
 
-      a.store.update((s) => deleteTodo(s, "2"));
-      b.store.update((s) => toggleTodo(s, "3"));
-      exchange(a.doc, b.doc);
+    const next = {
+      ...renameTodo(threeTodos(), "2", "Two"),
+      filterStatus: "active",
+    };
+    backend.write(next);
 
-      const expected = toggleTodo(deleteTodo(threeTodos(), "2"), "3");
-      expect(a.store.getState()).toEqual(expected);
-      expect(b.store.getState()).toEqual(expected);
-    },
-  );
-
-  it("keeps typed search text on A and a toggle on B", () => {
-    const { a, b } = twoSyncedPeers();
-
-    for (const term of ["a", "ab", "abc"])
-      a.store.update((s) => setSearchTerm(s, term));
-    b.store.update((s) => toggleTodo(s, "2"));
-    exchange(a.doc, b.doc);
-
-    const expected = toggleTodo(setSearchTerm(threeTodos(), "abc"), "2");
-    expect(a.store.getState()).toEqual(expected);
-    expect(b.store.getState()).toEqual(expected);
+    expect(backend.read()).toEqual(next);
+    expect(map(doc).get("filterStatus")).toBe("active");
+    expect(todoMap(doc, 1).get("title")).toBe("Two");
+    expect(map(doc).get("searchTerm")).toBeInstanceOf(LoroText);
+    expect(todoMap(doc, 0).get("title")).toBeInstanceOf(LoroText);
   });
 
-  it("merges concurrent renames of the same todo character-wise", () => {
-    const { a, b } = twoSyncedPeers();
-
-    a.store.update((s) => renameTodo(s, "1", "Todo 1 A"));
-    b.store.update((s) => renameTodo(s, "1", "B Todo 1"));
-    exchange(a.doc, b.doc);
-
-    expect(a.store.getState().todos[0].title).toBe("B Todo 1 A");
-    expect(b.store.getState().todos[0].title).toBe("B Todo 1 A");
-  });
-
-  it("gives the receiver new containers along the changed path only", () => {
-    const { a, b } = twoSyncedPeers();
-    const before = b.store.getState();
-    const beforeSnapshot = snapshot(before);
-
-    a.store.update((s) => toggleTodo(s, "1"));
-    exchange(a.doc, b.doc);
-
-    const after = b.store.getState();
-    expect(after).toEqual(toggleTodo(threeTodos(), "1"));
-    expect(after).not.toBe(before);
-    expect(after.todos).not.toBe(before.todos);
-    expect(after.todos[0]).not.toBe(before.todos[0]);
-    expect(after.todos[1]).toBe(before.todos[1]);
-    expect(after.todos[2]).toBe(before.todos[2]);
-    expect(before).toEqual(beforeSnapshot);
-  });
-
-  it.each([
-    [1, 2],
-    [2, 1],
-  ])(
-    "late joiner adopts existing todos without wiping them (peer ids %i and %i)",
-    (idA, idB) => {
-      const docA = new LoroDoc();
-      const docB = new LoroDoc();
-      docA.setPeerId(idA);
-      docB.setPeerId(idB);
-      const a = createPeer(docA, threeTodos());
-      exchange(docA, docB);
-
-      const b = createPeer(docB, {
-        ...threeTodos(),
-        todos: [todo("local", "Local sample")],
-      });
-      expect(b.store.getState()).toEqual(threeTodos());
-
-      exchange(docA, docB);
-      expect(a.store.getState()).toEqual(threeTodos());
-      expect(b.store.getState()).toEqual(threeTodos());
-      expect(a.backend.read()).toEqual(threeTodos());
-    },
-  );
-
-  it("sends one small update per toggle, add, keystroke, and middle delete with 50 todos", () => {
-    const { a, b } = twoSyncedPeers(() => manyTodos(50));
-    link(a.doc, b.doc);
-    const sizes: number[] = [];
-    a.doc.subscribeLocalUpdates((update) => {
-      sizes.push(update.byteLength);
+  it("turns a plain string at a text path into a LoroText when it next changes", () => {
+    const doc = new LoroDoc();
+    createLoroBackend(doc, NAME).write({ ...threeTodos(), tags: ["a"] });
+    const backend = createLoroBackend(doc, NAME, {
+      text: (path) => todoTitles(path) || path[0] === "tags",
     });
 
-    a.store.update((s) => toggleTodo(s, "25"));
-    expect(sizes).toHaveLength(1);
-    a.store.update((s) => addTodo(s, todo("51")));
-    expect(sizes).toHaveLength(2);
-    a.store.update((s) => setSearchTerm(s, "x"));
-    expect(sizes).toHaveLength(3);
-    a.store.update((s) => deleteTodo(s, "10"));
-    expect(sizes).toHaveLength(4);
+    const next = { ...renameTodo(threeTodos(), "2", "Todo 2!"), tags: ["ab"] };
+    backend.write(next);
 
-    expect(sizes.every((size) => size < 200)).toBe(true);
-    expect(b.store.getState()).toEqual(a.store.getState());
-  });
-});
-
-describe("Unicode replication", () => {
-  it.each(unicodeEdits)(
-    "replicates %j to %j through both stores",
-    (before, after) => {
-      const initial = () => {
-        const state = threeTodos();
-        state.todos[0].title = before;
-        state.searchTerm = before;
-        return state;
-      };
-      const { a, b } = twoSyncedPeers(initial);
-      try {
-        a.store.update((state) => ({
-          ...renameTodo(state, "1", after),
-          searchTerm: after,
-        }));
-        const expected = {
-          ...renameTodo(initial(), "1", after),
-          searchTerm: after,
-        };
-        expect(a.backend.read()).toEqual(expected);
-        exchange(a.doc, b.doc);
-        expect(b.backend.read()).toEqual(expected);
-        expect(a.store.getState()).toEqual(expected);
-        expect(b.store.getState()).toEqual(expected);
-      } finally {
-        a.engine.disconnect();
-        b.engine.disconnect();
-      }
-    },
-  );
-
-  it("merges an emoji replacement with a peer's surrounding text edits", () => {
-    const { a, b } = twoSyncedPeers(() => ({
-      ...threeTodos(),
-      searchTerm: "a😀b",
-    }));
-    try {
-      a.store.update((state) => setSearchTerm(state, "a😃b"));
-      b.store.update((state) => setSearchTerm(state, "prefix a😀b suffix"));
-      exchange(a.doc, b.doc);
-      expect(a.store.getState().searchTerm).toBe("prefix a😃b suffix");
-      expect(b.store.getState()).toEqual(a.store.getState());
-      expect(a.backend.read()).toEqual(b.backend.read());
-    } finally {
-      a.engine.disconnect();
-      b.engine.disconnect();
-    }
+    expect(backend.read()).toEqual(next);
+    expect(todoMap(doc, 1).get("title")).toBeInstanceOf(LoroText);
+    expect((map(doc).get("tags") as LoroList).get(0)).toBeInstanceOf(LoroText);
+    expect(todoMap(doc, 0).get("title")).toBe("Todo 1");
   });
 });

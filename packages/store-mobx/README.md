@@ -2,10 +2,7 @@
 
 [MobX](https://mobx.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It keeps chosen properties of an observable store in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs),
-[`@homeostate/crdt-loro`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-loro), or
-[`@homeostate/crdt-automerge`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-automerge).
+It keeps chosen properties of an observable store in sync with a CRDT backend such as Yjs, Loro or Automerge.
 
 ## Install
 
@@ -48,17 +45,11 @@ const engine = createSyncEngine(
 engine.connect();
 ```
 
-A remote change is reconciled into the observable tree instead of being assigned over it:
-only the fields, array elements and keys that differ are written, inside one action. Items
-that did not change keep their identity, so `observer` components, reactions and effects
-that depend on them stay quiet.
+Remote changes write only what differs, inside one action, so unchanged items keep their
+identity and `observer` components that read them do not re-render.
 
-When a peer removes a synced key, the adapter removes it from the store. A property of an
-`observable({...})` object is deleted. A class field made observable by `makeObservable` or
-`makeAutoObservable` cannot be deleted, so it is set to `undefined`; type such fields as
-optional. The adapter leaves every synced key whose value is `undefined` out of the synced
-state, as JSON would, so the removal is not written back, and assigning the field again syncs
-it again.
+When a peer removes a synced key, a class field cannot be deleted, so it is set to
+`undefined`; type such fields as optional.
 
 ## License
 

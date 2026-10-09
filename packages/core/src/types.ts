@@ -17,7 +17,11 @@ export type Unsubscribe = () => void;
  * are neither diffed nor synced.
  */
 export interface StoreAdapter<S extends object> {
-  /** Get the current state from the store */
+  /**
+   * Get the current state from the store. Its synced part must change immutably, with a new
+   * object for every container that changes: the engine diffs each write against the state it
+   * last wrote, so a container changed in place looks unchanged and is not written.
+   */
   getState: () => S;
 
   /**
@@ -45,8 +49,14 @@ export interface CrdtBackend {
   /**
    * Make the backend equal to `next` in one atomic transaction.
    * The backend decides the granularity of the operations; `getChanges` is exported for that.
+   *
+   * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
+   * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing.
+   * The sync engine passes the synced state it last wrote or read, so a backend can diff against
+   * it with `json: true` instead of reading its document, and unchanged subtrees of `next` match
+   * it by identity. A backend may ignore it.
    */
-  write: (next: unknown) => void;
+  write: (next: unknown, previous?: unknown) => void;
 
   /**
    * Notify about changes that did not come through this backend's own `write`.
@@ -76,6 +86,17 @@ export interface SyncEngineConfig {
   filter?: (key: string, value: unknown) => boolean;
   /** Seeding strategy used by `connect()`; defaults to `'if-empty'` */
   seed?: SeedStrategy;
+  /**
+   * Coalesces remote changes: the first one hands `schedule` a `flush` to call later, such as
+   * `(flush) => queueMicrotask(flush)`, and every remote change before that call is applied
+   * with one read of the backend and one `setState`. Without it, each remote change is applied
+   * synchronously, so `getState()` sees it at once.
+   *
+   * Local changes are still written synchronously. One made while an apply is pending runs that
+   * apply first, and the remote changes replace the store's synced state: the local change keeps
+   * only what it did to keys the engine does not sync. `disconnect()` runs a pending apply too.
+   */
+  schedule?: (flush: () => void) => void;
 }
 
 /**
@@ -96,3 +117,106 @@ export interface SyncEngine {
 export const defaultSyncFilter = (_key: string, value: unknown): boolean => {
   return typeof value !== "function";
 };
+
+/**
+ * A CRDT document seen as binary updates, which is what persistence stores. `crdt-*`
+ * packages implement it next to their `CrdtBackend`. Persisting the document rather than the
+ * JSON state keeps its history, so a restored document merges with its peers instead of
+ * competing with them.
+ */
+export interface PersistableDoc {
+  /** Encode the whole document as one update that `apply` accepts. */
+  encode: () => Uint8Array;
+
+  /**
+   * Merge an update or an `encode()` result into the document. Applying the same update
+   * twice, or updates out of order, must be safe.
+   */
+  apply: (update: Uint8Array) => void;
+
+  /**
+   * Report every change to the document, local or from a peer, as an update `apply`
+   * accepts. Changes made by `apply` itself are not reported.
+   * @returns Unsubscribe function
+   */
+  subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;
+}
+
+/** What a `PersistenceAdapter` holds under one key. */
+export interface StoredUpdates {
+  /** Every stored update, oldest first; empty when nothing is stored. */
+  updates: Uint8Array[];
+  /** Position of the newest update, handed back to `compact`; 0 when nothing is stored. */
+  version: number;
+}
+
+/**
+ * Storage for persisted documents: an append-only log of updates per key.
+ * `persist-*` packages implement it for localStorage and IndexedDB.
+ */
+export interface PersistenceAdapter {
+  /** Read every update stored under `key`. */
+  load: (key: string) => Promise<StoredUpdates>;
+
+  /** Store one more update under `key`. */
+  append: (key: string, update: Uint8Array) => Promise<void>;
+
+  /**
+   * In one atomic step, remove the updates under `key` up to and including `version`, and
+   * store `snapshot`. Updates appended after that `load` must be kept.
+   */
+  compact: (
+    key: string,
+    snapshot: Uint8Array,
+    version: number,
+  ) => Promise<void>;
+
+  /** Remove everything stored under `key`. */
+  clear: (key: string) => Promise<void>;
+}
+
+/** Configuration options for `createPersistence` */
+export interface PersistenceConfig {
+  /** Name the document is stored under, such as its room name. */
+  key: string;
+  /**
+   * Number of appended updates after which the stored log is merged into one snapshot;
+   * defaults to 100. `Infinity` only compacts on load.
+   */
+  compactAfter?: number;
+  /** Called when storage fails or a stored update cannot be applied; defaults to `console.error`. */
+  onError?: (error: unknown) => void;
+}
+
+/** What `Persistence.stats()` reports about the stored document. */
+export interface PersistenceStats {
+  /** Stored updates, compacted snapshots included. */
+  updates: number;
+  /** Their total size in bytes, as handed to the adapter. */
+  bytes: number;
+}
+
+/** A document kept in storage by `createPersistence` */
+export interface Persistence {
+  /**
+   * Resolves once the stored updates are applied to the document. It also resolves when
+   * loading fails, after `onError`, so the app still starts without its stored state.
+   */
+  whenLoaded: Promise<void>;
+  /** Resolves when every update reported so far has been written. */
+  flush: () => Promise<void>;
+  /**
+   * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
+   * once it is written; does nothing once storing has stopped.
+   */
+  compact: () => Promise<void>;
+  /**
+   * What is stored, read once every update reported so far has been written. Rejects when
+   * storage cannot be read.
+   */
+  stats: () => Promise<PersistenceStats>;
+  /** Stop storing updates; stored data is kept. Resolves once pending writes finish. */
+  destroy: () => Promise<void>;
+  /** Stop storing updates and remove the stored document. */
+  clear: () => Promise<void>;
+}

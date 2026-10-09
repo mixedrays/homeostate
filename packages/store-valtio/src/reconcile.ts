@@ -1,4 +1,5 @@
 import { getVersion } from "valtio/vanilla";
+import { applyChanges, type ApplyOps } from "@homeostate/core";
 
 type Plain = Record<string, unknown>;
 
@@ -19,46 +20,35 @@ const clone = <T>(value: T): T => {
   return copy as T;
 };
 
-const sameKind = (a: unknown, b: unknown): boolean =>
-  (Array.isArray(a) && Array.isArray(b)) ||
-  (isPlainObject(a) && isPlainObject(b));
+/**
+ * Writes into Valtio proxies. Only a proxy is edited in place; any other object, such as a
+ * `ref`, is replaced whole. Values are assigned as fresh plain copies so the proxy never wraps a
+ * snapshot object, whose non-writable properties would swallow later mutations.
+ */
+const valtioOps: ApplyOps = {
+  kind: (value) =>
+    isProxy(value) ? (Array.isArray(value) ? "list" : "record") : undefined,
+  get: (container, key) => (container as Plain)[key],
+  set: (container, key, value) => {
+    (container as Plain)[key] = clone(value);
+  },
+  remove: (container, key) => {
+    delete (container as Plain)[key];
+  },
+  splice: (list, index, deleteCount, inserted) => {
+    (list as unknown[]).splice(index, deleteCount, ...inserted.map(clone));
+  },
+};
 
 /**
- * Mutates the Valtio proxy `target` so that its snapshot equals `next`, touching only
- * the paths where `next` differs from `current`, the snapshot taken before the call.
- * Changed subtrees are assigned as fresh plain copies so the proxy never wraps a
- * snapshot object, whose non-writable properties would swallow later mutations.
+ * Mutates the Valtio proxy `target` so that its snapshot equals `next`, touching only the paths
+ * where `next` differs from `current`, the snapshot taken before the call. Removals and inserts
+ * splice arrays, so the proxies of the items around them keep their contents.
  */
 export const reconcile = (
   target: object,
   current: object,
   next: object,
 ): void => {
-  const dest = target as Plain;
-  const prev = current as Plain;
-  const keys = Array.isArray(next)
-    ? Array.from({ length: next.length }, (_, i) => String(i))
-    : Object.keys(next);
-
-  for (const key of keys) {
-    const value = (next as Plain)[key];
-    if (key in prev && Object.is(prev[key], value)) continue;
-
-    const previous = prev[key];
-    const child = dest[key];
-    if (sameKind(previous, value) && isProxy(child)) {
-      reconcile(child, previous as object, value as object);
-    } else {
-      dest[key] = clone(value);
-    }
-  }
-
-  if (Array.isArray(next)) {
-    const array = target as unknown[];
-    if (array.length > next.length) array.splice(next.length);
-  } else {
-    for (const key of Object.keys(prev)) {
-      if (!(key in next)) delete dest[key];
-    }
-  }
+  applyChanges(target, current, next, valtioOps);
 };

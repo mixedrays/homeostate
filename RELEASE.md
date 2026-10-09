@@ -46,6 +46,7 @@ every dependent as well.
 | `.changeset/config.json`        |                             | Changesets config: public npm access, `main` as base branch           |
 | `.github/workflows/ci.yml`      | every PR and push to main   | `format:check`, `lint`, `typecheck`, `test`                           |
 | `.github/workflows/version.yml` | push to main                | opens or updates the Version Packages PR                              |
+| `.github/workflows/docs.yml`    | every PR and push to main   | builds the docs site; deploys it to Cloudflare Pages from main        |
 | `scripts/release.sh`            | locally, via `pnpm release` | builds, tests, publishes to npm, pushes tags, creates GitHub releases |
 
 The Version Packages PR is opened with the workflow's own token, and GitHub does not run other

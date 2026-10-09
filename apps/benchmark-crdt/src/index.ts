@@ -9,6 +9,7 @@ export {
 } from "./candidates.js";
 export {
   scenarios,
+  isTitle,
   makeState,
   makeTodo,
   makeTodos,

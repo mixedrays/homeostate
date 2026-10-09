@@ -23,7 +23,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./conformance": "./src/__tests__/conformance.ts"
   },
   "sideEffects": false,
   "files": [

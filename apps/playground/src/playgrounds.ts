@@ -3,14 +3,14 @@ import reactIcon from "../shared/icons/react.svg";
 import svelteIcon from "../shared/icons/svelte.svg";
 import vueIcon from "../shared/icons/vue.svg";
 
-/** One framework's playground: a separately built app with its own landing page and demos. */
+/** One playground: a separately built app with its own demos. */
 export interface Playground {
   id: string;
   name: string;
   description: string;
   /** Short labels for the stores and demos the playground shows off. */
   tags: readonly string[];
-  /** The URL of the framework's logo. */
+  /** The URL of the playground's logo: its framework's, or its own. */
   icon: string;
   /** The root script that starts this playground on its own. */
   command: string;
@@ -32,7 +32,7 @@ export const playgrounds: readonly Playground[] = [
     id: "react",
     name: "React",
     description:
-      "A shared todo list built with seven state managers, and a collaborative text editor with names and live cursors.",
+      "A shared todo list built with seven state managers, plus a collaborative text editor and a whiteboard, both with names and live cursors.",
     tags: [
       "Zustand",
       "MobX",

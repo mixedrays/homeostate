@@ -1,11 +1,6 @@
 import { reaction, runInAction, toJS } from "mobx";
-import { applyChanges, getChanges } from "@homeostate/core";
-import type {
-  ApplyOps,
-  Diffable,
-  StoreAdapter,
-  Unsubscribe,
-} from "@homeostate/core";
+import { applyChanges } from "@homeostate/core";
+import type { ApplyOps, StoreAdapter, Unsubscribe } from "@homeostate/core";
 
 type Plain = Record<string, unknown>;
 
@@ -22,14 +17,17 @@ const sameKind = (a: unknown, b: unknown): boolean =>
  * assigned on an existing node keeps that node, which is the whole point of reconciling.
  */
 const mobxOps: ApplyOps = {
-  set: (target, key, value) => {
-    (target as Plain)[key as string] = value;
+  kind: (value) =>
+    Array.isArray(value) ? "list" : isRecord(value) ? "record" : undefined,
+  get: (container, key) => (container as Plain)[key],
+  set: (container, key, value) => {
+    (container as Plain)[key as string] = value;
   },
-  remove: (target, key) => {
-    delete (target as Plain)[key];
+  remove: (container, key) => {
+    delete (container as Plain)[key];
   },
-  splice: (target, index, deleteCount, inserted) => {
-    target.splice(index, deleteCount, ...inserted);
+  splice: (list, index, deleteCount, inserted) => {
+    (list as unknown[]).splice(index, deleteCount, ...inserted);
   },
 };
 
@@ -100,7 +98,8 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
         if (sameKind(previous[property], value) && sameKind(current, value))
           applyChanges(
             current as object,
-            getChanges(previous[property] as Diffable, value as Diffable),
+            previous[property] as object,
+            value as object,
             mobxOps,
           );
         else (this.store as Plain)[property] = value;

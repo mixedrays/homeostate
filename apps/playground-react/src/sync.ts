@@ -6,6 +6,7 @@ import {
 export {
   createInitialTodoState,
   EDITOR_ROOM,
+  isTodoTitle,
   SYNC_MAP_NAME,
   TODO_ROOM,
 } from "@homeostate/playground/shared";

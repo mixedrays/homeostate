@@ -3,7 +3,16 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { Layers, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  HardDrive,
+  Layers,
+  ListTree,
+  ScrollText,
+  TriangleAlert,
+  Wifi,
+  X,
+} from "lucide-react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import {
@@ -35,20 +44,24 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 import type { DevtoolsSource, Inspector } from "../inspector";
+import type { NetworkLink } from "../network";
+import { useNetworkSnapshot } from "../lib/use-network-snapshot";
 import { usePersistedState } from "../lib/use-persisted-state";
+import type { PanelPosition } from "../options";
 import { HomeostateMark } from "./mark";
 import { LogTab } from "./log-tab";
+import { conditionsActive } from "./format";
+import { NetworkTab } from "./network-tab";
 import { StateTab } from "./state-tab";
+import { StorageTab } from "./storage-tab";
 import { SyncTab } from "./sync-tab";
-
-export type PanelPosition = "right" | "left" | "bottom" | "top";
 
 export interface SourceInspector {
   source: DevtoolsSource;
   inspector: Inspector;
 }
 
-const TABS = ["state", "sync", "log"];
+const TABS = ["state", "sync", "log", "storage", "network"];
 const MIN_SIZE = 280;
 const RESIZE_STEP = 16;
 
@@ -153,7 +166,12 @@ export function DevtoolsPanel({
         </header>
 
         {current ? (
-          <SourceView key={current.source.name} inspector={current.inspector} />
+          <SourceView
+            key={current.source.name}
+            name={current.source.name}
+            inspector={current.inspector}
+            network={current.source.network}
+          />
         ) : (
           <Empty className="flex-1">
             <EmptyHeader>
@@ -176,8 +194,17 @@ function useInspectorSnapshot(inspector: Inspector) {
   return useSyncExternalStore(inspector.subscribe, inspector.getSnapshot);
 }
 
-function SourceView({ inspector }: { inspector: Inspector }) {
+function SourceView({
+  name,
+  inspector,
+  network,
+}: {
+  name: string;
+  inspector: Inspector;
+  network: NetworkLink | undefined;
+}) {
   const snapshot = useInspectorSnapshot(inspector);
+  const link = useNetworkSnapshot(network);
   const [stored, setTab] = usePersistedState<string>("tab", "state");
   const tab = TABS.includes(stored) ? stored : "state";
 
@@ -190,24 +217,74 @@ function SourceView({ inspector }: { inspector: Inspector }) {
           to keys it holds are dropped.
         </p>
       )}
+      {link && !link.connected && (
+        <p className="border-b bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+          {link.conditions.offline
+            ? "Network offline"
+            : "Network down for a moment"}
+          : changes made here wait, and peers&apos; changes do not arrive.
+          Coming back online merges both.
+        </p>
+      )}
       <Tabs
         value={tab}
         onValueChange={(value: string) => setTab(value)}
         className="min-h-0 flex-1 gap-0"
       >
-        <div className="border-b px-3 pt-1 pb-1.5">
+        <div className="overflow-x-auto border-b">
           <TabsList variant="line" className="h-7">
             <TabsTrigger value="state" className="text-xs">
+              <ListTree
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               State
+              {snapshot.warnings.length > 0 && (
+                <TriangleAlert
+                  role="img"
+                  aria-label={`${snapshot.warnings.length} not JSON`}
+                  className="size-3! text-amber-600 dark:text-amber-400"
+                />
+              )}
             </TabsTrigger>
             <TabsTrigger value="sync" className="text-xs">
+              <ArrowLeftRight
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               Sync
             </TabsTrigger>
             <TabsTrigger value="log" className="text-xs">
+              <ScrollText
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
               Log
               <span className="text-muted-foreground tabular-nums">
                 {snapshot.log.length}
               </span>
+            </TabsTrigger>
+            <TabsTrigger value="storage" className="text-xs">
+              <HardDrive
+                aria-hidden
+                data-icon="inline-start"
+                className="size-3.5"
+              />
+              Storage
+            </TabsTrigger>
+            <TabsTrigger value="network" className="text-xs">
+              <Wifi aria-hidden data-icon="inline-start" className="size-3.5" />
+              Network
+              {link && conditionsActive(link) && (
+                <span
+                  role="img"
+                  aria-label="conditions on"
+                  className="size-1.5 rounded-full bg-amber-500"
+                />
+              )}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -218,7 +295,13 @@ function SourceView({ inspector }: { inspector: Inspector }) {
           <SyncTab snapshot={snapshot} />
         </TabsContent>
         <TabsContent value="log" className="flex min-h-0 flex-col">
-          <LogTab snapshot={snapshot} inspector={inspector} />
+          <LogTab name={name} snapshot={snapshot} inspector={inspector} />
+        </TabsContent>
+        <TabsContent value="storage" className="flex min-h-0 flex-col">
+          <StorageTab snapshot={snapshot} inspector={inspector} />
+        </TabsContent>
+        <TabsContent value="network" className="flex min-h-0 flex-col">
+          <NetworkTab network={network} />
         </TabsContent>
       </Tabs>
     </>

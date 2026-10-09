@@ -10,13 +10,20 @@ import {
   it,
   vi,
 } from "vitest";
-import { createSyncEngine, type SyncEngine } from "@homeostate/core";
+import {
+  createPersistence,
+  createSyncEngine,
+  type SyncEngine,
+} from "@homeostate/core";
 import {
   createMemoryBackend,
+  createMemoryPersistenceAdapter,
   type MemoryBackend,
 } from "@homeostate/core/testing";
-import { HomeostateDevtools } from "../index";
-import { createTestStore, tick } from "./helpers";
+import { HomeostateDevtools, type DevtoolsSource } from "../index";
+import { serializeLog } from "../log-file";
+import { createNetworkLink } from "../network";
+import { createTestDoc, createTestStore, tick } from "./helpers";
 
 interface State {
   todos: { title: string; done: boolean }[];
@@ -63,6 +70,13 @@ const render = async (initialIsOpen = true) => {
         sources={[{ name: "Todos", adapter: store.adapter, backend, engine }]}
       />,
     );
+  });
+  await act(tick);
+};
+
+const renderSources = async (sources: DevtoolsSource[]) => {
+  await act(async () => {
+    root.render(<HomeostateDevtools initialIsOpen sources={sources} />);
   });
   await act(tick);
 };
@@ -139,6 +153,26 @@ describe("HomeostateDevtools", () => {
     expect((backend.read() as State).filter).toBe("done");
   });
 
+  it("keeps keys typed into a field from reaching page shortcuts", async () => {
+    await render();
+    await click(byLabel("Edit filter"));
+    const input = byLabel<HTMLInputElement>("Value of filter");
+    const pageKeys: string[] = [];
+    const onKeyDown = (event: KeyboardEvent) => pageKeys.push(event.key);
+    window.addEventListener("keydown", onKeyDown);
+    try {
+      for (const key of ["Backspace", "a", "Tab"]) {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true, composed: true }),
+        );
+      }
+    } finally {
+      window.removeEventListener("keydown", onKeyDown);
+    }
+
+    expect(pageKeys).toEqual(["Tab"]);
+  });
+
   it("toggles a boolean with one click", async () => {
     await render();
     await click(byLabel("Toggle todos[0].done"));
@@ -175,6 +209,15 @@ describe("HomeostateDevtools", () => {
     await click(buttonWithText("#0"));
     await click(buttonWithText("Restore this state"));
     expect(store.get().filter).toBe("all");
+  });
+
+  it("names the log's pause action without aria-pressed", async () => {
+    await render();
+    await click(buttonWithText("Log"));
+    expect(buttonWithText("Pause").getAttribute("aria-pressed")).toBeNull();
+
+    await click(buttonWithText("Pause"));
+    expect(buttonWithText("Resume").getAttribute("aria-pressed")).toBeNull();
   });
 
   it("disconnects and reconnects the engine", async () => {
@@ -217,5 +260,152 @@ describe("HomeostateDevtools", () => {
     await renderOpen(true);
     await act(tick);
     expect(byLabel("Store state").textContent).toContain("milk");
+  });
+
+  it("warns about values in synced keys that are not JSON", async () => {
+    const dated = createTestStore({ title: "a", due: new Date(0) });
+    await renderSources([{ name: "Dated", adapter: dated.adapter }]);
+
+    expect(shadow().textContent).toContain("1 value is not JSON");
+    expect(byLabel("Store state").textContent).toContain("Date");
+    expect(byLabel("1 not JSON")).toBeTruthy();
+  });
+
+  it("exports the log as a JSON file", async () => {
+    const blobs: Blob[] = [];
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      blobs.push(blob);
+      return "blob:log";
+    });
+    URL.revokeObjectURL = vi.fn();
+    const downloads: string[] = [];
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        downloads.push(this.download);
+      });
+
+    try {
+      await render();
+      await act(async () => {
+        store.set({ ...store.get(), filter: "active" });
+      });
+      await act(tick);
+      await click(buttonWithText("Log"));
+      await click(buttonWithText("Export"));
+    } finally {
+      anchorClick.mockRestore();
+    }
+
+    expect(downloads).toEqual([
+      expect.stringMatching(/^homeostate-log-todos-.+\.json$/),
+    ]);
+    const file = JSON.parse(await blobs[0].text()) as {
+      source: string;
+      entries: { origin: string }[];
+    };
+    expect(file.source).toBe("Todos");
+    expect(file.entries.map(({ origin }) => origin)).toEqual([
+      "initial",
+      "local",
+    ]);
+  });
+
+  it("imports an exported log and restores its states", async () => {
+    await render();
+    await click(buttonWithText("Log"));
+    const text = serializeLog("Todos", [
+      {
+        id: 4,
+        at: 0,
+        origin: "local",
+        state: { todos: [], filter: "imported" },
+        diff: [],
+      },
+    ]);
+    const input = byLabel<HTMLInputElement>("Log file to import");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File([text], "log.json", { type: "application/json" })],
+    });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(tick);
+
+    const log = byLabel("Changes, newest first");
+    expect(log.textContent).toContain("imported");
+    expect(log.textContent).not.toContain("Initial state");
+
+    await click(buttonWithText("#4"));
+    await click(buttonWithText("Restore this state"));
+    expect(store.get()).toEqual({ todos: [], filter: "imported" });
+  });
+
+  it("reports a file it cannot import", async () => {
+    await render();
+    await click(buttonWithText("Log"));
+    const input = byLabel<HTMLInputElement>("Log file to import");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["{}"], "log.json")],
+    });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(tick);
+
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
+      "Import failed: The file is not a Homeostate devtools log.",
+    );
+  });
+
+  it("shows what is stored and compacts it", async () => {
+    const doc = createTestDoc();
+    const storage = createMemoryPersistenceAdapter();
+    const persistence = createPersistence(doc, storage, { key: "todos" });
+    await persistence.whenLoaded;
+    doc.add("a");
+    doc.add("b");
+    await persistence.flush();
+
+    await renderSources([
+      { name: "Todos", adapter: store.adapter, persistence },
+    ]);
+    await click(buttonWithText("Storage"));
+    await act(tick);
+    expect(shadow().textContent).toMatch(/Updates\s*3/);
+
+    await click(buttonWithText("Compact"));
+    await act(tick);
+    expect(storage.size("todos")).toBe(1);
+    expect(shadow().textContent).toMatch(/Updates\s*1/);
+  });
+
+  it("explains the Storage tab without persistence", async () => {
+    await render();
+    await click(buttonWithText("Storage"));
+    expect(shadow().textContent).toContain("No persistence");
+  });
+
+  it("changes network conditions from the Network tab", async () => {
+    const network = createNetworkLink(createTestDoc(), createTestDoc());
+    await renderSources([{ name: "Todos", adapter: store.adapter, network }]);
+    await click(buttonWithText("Network"));
+
+    await click(byLabel("Offline"));
+    expect(network.getSnapshot().conditions.offline).toBe(true);
+    expect(shadow().textContent).toContain("Network offline");
+
+    await click(byLabel("Latency 500 ms"));
+    expect(network.getSnapshot().conditions.latency).toBe(500);
+    expect(byLabel("conditions on")).toBeTruthy();
+    network.destroy();
+  });
+
+  it("explains the Network tab without a link", async () => {
+    await render();
+    await click(buttonWithText("Network"));
+    expect(shadow().textContent).toContain("No network link");
   });
 });

@@ -15,6 +15,20 @@ describe("reconcile", () => {
     expect(snapshot(state)).toEqual({ a: 2, c: true, d: null });
   });
 
+  it("deletes keys named after Object.prototype members", () => {
+    const state = proxy<Record<string, unknown>>({
+      constructor: 1,
+      toString: 1,
+      valueOf: 1,
+      hasOwnProperty: 1,
+      a: 1,
+    });
+
+    apply(state, { a: 1 });
+
+    expect(Object.keys(snapshot(state))).toEqual(["a"]);
+  });
+
   it("recurses into nested objects and keeps untouched siblings", () => {
     const state = proxy({
       user: { name: "a", age: 1 },

@@ -16,6 +16,7 @@
     "@homeostate/crdt-yjs": "workspace:^",
     "@homeostate/playground": "workspace:^",
     "@homeostate/store-tanstack": "workspace:^",
+    "@homeostate/tool-devtools": "workspace:^",
     "@tanstack/store": "^0.11.1",
     "@tanstack/svelte-store": "^0.12.2",
     "svelte": "^5.57.1",

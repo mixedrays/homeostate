@@ -10,7 +10,7 @@ Homeostate keeps a store you already use in sync with a CRDT document. It is one
 manager and a backend per CRDT library, each published as its own package.
 
 - **Source:** [github.com/mixedrays/homeostate](https://github.com/mixedrays/homeostate), a pnpm
-  workspace with every package, the playground and the benchmarks. Issues and pull requests go
+  workspace with every package, the playgrounds and the benchmarks. Issues and pull requests go
   there.
 - **Packages:** [npmjs.com/org/homeostate](https://www.npmjs.com/org/homeostate). Each package is
   versioned and released on its own; its changelog is the last page of its section.

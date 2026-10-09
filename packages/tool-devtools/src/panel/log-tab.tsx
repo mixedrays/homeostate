@@ -1,6 +1,15 @@
-import { useState } from "react";
-import { ChevronRight, History, Pause, Play, Trash2 } from "lucide-react";
+import { useRef, useState, type ChangeEvent } from "react";
+import {
+  ChevronRight,
+  Download,
+  History,
+  Pause,
+  Play,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { cn } from "cn";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
   Collapsible,
@@ -9,6 +18,7 @@ import {
 } from "../components/ui/collapsible";
 import type { Inspector, InspectorSnapshot, LogEntry } from "../inspector";
 import { deepEqual, formatPath, type DiffLine } from "../json";
+import { parseLog, serializeLog } from "../log-file";
 import { CopyButton } from "./copy-button";
 import { JsonValue, OriginBadge } from "./value";
 
@@ -24,6 +34,30 @@ const formatTime = (at: number): string =>
 
 const SUMMARY_PATHS = 3;
 
+const messageOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+/** `homeostate-log-todos-2026-10-03T14-05-09.json` */
+const fileNameFor = (source: string, at: Date): string => {
+  const name = source.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const time = at.toISOString().slice(0, 19).replace(/:/g, "-");
+  return `homeostate-log-${name.replace(/^-|-$/g, "") || "source"}-${time}.json`;
+};
+
+const download = (fileName: string, text: string): void => {
+  const url = URL.createObjectURL(
+    new Blob([text], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoking right away can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
 const summarize = (entry: LogEntry): string => {
   if (entry.label) return entry.label;
   if (entry.origin === "initial") return "Initial state";
@@ -35,13 +69,17 @@ const summarize = (entry: LogEntry): string => {
 };
 
 export function LogTab({
+  name,
   snapshot,
   inspector,
 }: {
+  /** The source's name, for the exported file. */
+  name: string;
   snapshot: InspectorSnapshot;
   inspector: Inspector;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const { log, paused } = snapshot;
 
   const restore = (id: number): void => {
@@ -49,17 +87,35 @@ export function LogTab({
       inspector.restore(id);
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(`Restore failed: ${messageOf(caught)}`);
+    }
+  };
+
+  const exportLog = (): void => {
+    const now = new Date();
+    download(fileNameFor(name, now), serializeLog(name, log, now.getTime()));
+  };
+
+  const importLog = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    // So choosing the same file again imports it again.
+    input.value = "";
+    if (!file) return;
+    try {
+      inspector.importLog(parseLog(await file.text()).entries);
+      setError(null);
+    } catch (caught) {
+      setError(`Import failed: ${messageOf(caught)}`);
     }
   };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1.5 border-b px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-b p-1.5">
         <Button
           size="xs"
           variant="outline"
-          aria-pressed={paused}
           onClick={() => inspector.setPaused(!paused)}
         >
           {paused ? <Play /> : <Pause />}
@@ -74,6 +130,33 @@ export function LogTab({
           <Trash2 />
           Clear
         </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={log.length === 0}
+          onClick={exportLog}
+          title="Save the log as a JSON file"
+        >
+          <Download />
+          Export
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => fileInput.current?.click()}
+          title="Replace the log with an exported file, to inspect and restore its states"
+        >
+          <Upload />
+          Import
+        </Button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          aria-label="Log file to import"
+          hidden
+          onChange={(event) => void importLog(event)}
+        />
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
           {log.length} {log.length === 1 ? "entry" : "entries"}
           {paused && " · paused"}
@@ -85,7 +168,7 @@ export function LogTab({
           role="alert"
           className="border-b px-3 py-1.5 text-xs text-destructive"
         >
-          Restore failed: {error}
+          {error}
         </p>
       )}
 
@@ -144,6 +227,14 @@ function LogRow({
             #{entry.id}
           </span>
           <OriginBadge origin={entry.origin} />
+          {entry.imported && (
+            <Badge
+              title="Read from an exported log file"
+              className="h-4 bg-muted px-1.5 text-[10px] text-muted-foreground"
+            >
+              imported
+            </Badge>
+          )}
           <span className="min-w-0 flex-1 truncate font-mono">
             {summarize(entry)}
           </span>

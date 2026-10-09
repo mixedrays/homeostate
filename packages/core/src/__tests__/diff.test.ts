@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ChangeType,
   getChanges,
   type Change,
   type Diffable,
+  type TextPolicy,
+  toJsonValue,
 } from "../index.js";
 import { patchState } from "../patching.js";
+import { nonJsonWrites, prototypeMemberKeys, todoTitles } from "./helpers.js";
 
 const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
 
@@ -82,6 +85,23 @@ describe("getChanges", () => {
       const paste = "lorem ipsum dolor sit amet";
 
       expect(getChanges("x", `x${paste}`)).toEqual([[INSERT, 1, paste]]);
+    });
+
+    it("addresses an edit in a long string by its offset", () => {
+      const text = "lorem ipsum ".repeat(500);
+      const middle = text.length / 2;
+      const typed = `${text.slice(0, middle)}X${text.slice(middle)}`;
+      const deleted = text.slice(0, middle) + text.slice(middle + 1);
+
+      expect(getChanges(text, typed)).toEqual([[INSERT, middle, "X"]]);
+      expect(getChanges(text, deleted)).toEqual([[DELETE, middle, undefined]]);
+    });
+
+    it("replaces a changed middle that shares no character at its offset", () => {
+      expect(getChanges("abcd", "abXd")).toEqual([
+        [DELETE, 2, undefined],
+        [INSERT, 2, "X"],
+      ]);
     });
 
     it("emits deletions at their position in the progressively edited string", () => {
@@ -287,6 +307,17 @@ describe("getChanges", () => {
         [1, { a: 2 }],
       ],
     ])("transforms %j into %j when applied", appliesCleanly);
+
+    // `[1, , 3]`, built without a sparse literal.
+    const holey = (): unknown[] => Object.assign([], { 0: 1, 2: 3 });
+
+    it.each<[string, unknown[], unknown[]]>([
+      ["an array item", [holey()], [[1, 2, 3]]],
+      ["a record item's array", [{ cells: holey() }], [{ cells: [1, 2, 3] }]],
+      ["an array item of a shorter new array", [[1, 2, 3], 4], [holey()]],
+    ])("tells a hole from a value in %s", (_, before, after) =>
+      appliesCleanly(before, after),
+    );
   });
 
   describe("records", () => {
@@ -370,6 +401,37 @@ describe("getChanges", () => {
       ]);
     });
 
+    it.each(prototypeMemberKeys)(
+      "inserts and deletes a key named %s",
+      (key) => {
+        expect(getChanges({ [key]: 1 }, {})).toEqual([
+          [DELETE, key, undefined],
+        ]);
+        expect(getChanges({}, { [key]: "x" })).toEqual([[INSERT, key, "x"]]);
+        expect(getChanges({ o: { [key]: 1 } }, { o: {} })).toEqual([
+          [PENDING, "o", [[DELETE, key, undefined]]],
+        ]);
+      },
+    );
+
+    it("never diffs a __proto__ key", () => {
+      const withProto = (json: string): Record<string, unknown> =>
+        JSON.parse(json);
+
+      expect(
+        getChanges({ a: 1 }, withProto('{"a":1,"__proto__":{"isAdmin":true}}')),
+      ).toEqual([]);
+      expect(
+        getChanges(withProto('{"__proto__":{"isAdmin":true}}'), {}),
+      ).toEqual([]);
+      expect(
+        getChanges(
+          { l: [{ id: "1" }] },
+          withProto('{"l":[{"id":"1","__proto__":{"isAdmin":true}}]}'),
+        ),
+      ).toEqual([]);
+    });
+
     it.each([
       [
         { a: 1, b: 2 },
@@ -384,6 +446,127 @@ describe("getChanges", () => {
       [{}, { a: { b: { c: [1, "x"] } } }],
       [{ a: { b: { c: [1, "x"] } } }, {}],
     ])("transforms %j into %j when applied", appliesCleanly);
+  });
+
+  describe("with a text policy", () => {
+    const text = todoTitles;
+
+    it("replaces a changed string outside the policy whole", () => {
+      expect(
+        getChanges(
+          { filterStatus: "all" },
+          { filterStatus: "active" },
+          { text },
+        ),
+      ).toEqual([[UPDATE, "filterStatus", "active"]]);
+      expect(getChanges({ tags: ["ab"] }, { tags: ["abc"] }, { text })).toEqual(
+        [[PENDING, "tags", [[UPDATE, 0, "abc"]]]],
+      );
+      expect(getChanges({ id: "1" }, { id: "1" }, { text })).toEqual([]);
+    });
+
+    it("diffs a string the policy marks as text character by character", () => {
+      expect(
+        getChanges(
+          { todos: [{ id: "1", title: "ab" }] },
+          { todos: [{ id: "2", title: "abc" }] },
+          { text },
+        ),
+      ).toEqual([
+        [
+          PENDING,
+          "todos",
+          [
+            [
+              PENDING,
+              0,
+              [
+                [UPDATE, "id", "2"],
+                [PENDING, "title", [[INSERT, 2, "c"]]],
+              ],
+            ],
+          ],
+        ],
+      ]);
+    });
+
+    it("asks with the path from the root, array indices as numbers", () => {
+      const policy = vi.fn<TextPolicy>(() => true);
+      getChanges(
+        { todos: [{ title: "a" }, { title: "b" }], term: "x" },
+        { todos: [{ title: "a" }, { title: "c" }], term: "y" },
+        { text: policy },
+      );
+      expect(policy.mock.calls).toEqual([[["todos", 1, "title"]], [["term"]]]);
+    });
+
+    it("always diffs two strings passed directly character by character", () => {
+      expect(getChanges("ab", "abc", { text: () => false })).toEqual([
+        [INSERT, 2, "c"],
+      ]);
+    });
+  });
+
+  describe("with json", () => {
+    const json = { json: true };
+
+    it.each(nonJsonWrites)(
+      "finds the changes toJsonValue would for %s, and none once they are applied",
+      (_, before, next, expected) => {
+        expect(getChanges(before as Diffable, next as Diffable, json)).toEqual(
+          getChanges(before as Diffable, toJsonValue(next) as Diffable),
+        );
+        expect(
+          getChanges(expected as Diffable, next as Diffable, json),
+        ).toEqual([]);
+      },
+    );
+
+    it("carries values as JSON would store them", () => {
+      expect(
+        getChanges(
+          { a: 1 },
+          { a: 2, o: { b: undefined, l: [() => 1, 1] } },
+          json,
+        ),
+      ).toEqual([
+        [UPDATE, "a", 2],
+        [INSERT, "o", { l: [null, 1] }],
+      ]);
+      expect(
+        getChanges({ l: [1] }, { l: [{ x: undefined, y: 1 }] }, json),
+      ).toEqual([[PENDING, "l", [[UPDATE, 0, { y: 1 }]]]]);
+    });
+
+    it("carries a value that is already JSON as it is", () => {
+      const kept = { x: [1] };
+      const [[, , value]] = getChanges({}, { kept }, json);
+      expect(value).toBe(kept);
+    });
+
+    it("tells an entry holding undefined from one holding null", () => {
+      expect(getChanges({ a: null }, { a: undefined }, json)).toEqual([
+        [DELETE, "a", undefined],
+      ]);
+      expect(
+        getChanges({ l: [{ a: null }] }, { l: [{ a: undefined }] }, json),
+      ).toEqual([[PENDING, "l", [[PENDING, 0, [[DELETE, "a", undefined]]]]]]);
+    });
+
+    it("matches items as JSON whichever array is longer", () => {
+      expect(
+        getChanges({ l: [null, 1, 2] }, { l: [undefined, 1] }, json),
+      ).toEqual(getChanges({ l: [null, 1, 2] }, { l: [null, 1] }));
+      expect(
+        getChanges({ l: [null] }, { l: [undefined, () => 1] }, json),
+      ).toEqual(getChanges({ l: [null] }, { l: [null, null] }));
+    });
+
+    it("is off by default", () => {
+      expect(getChanges({}, { a: undefined })).toEqual([
+        [INSERT, "a", undefined],
+      ]);
+    });
   });
 
   describe("known limitations", () => {

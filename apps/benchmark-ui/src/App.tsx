@@ -270,8 +270,12 @@ function App() {
     >
       <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-          <h1 className="mr-auto font-heading text-base font-semibold tracking-tight">
-            Homeostate <span className="text-muted-foreground">benchmark</span>
+          <h1 className="mr-auto flex items-center gap-2 font-heading text-base font-semibold tracking-tight">
+            <img src="/homeostate.svg" alt="" width={24} height={24} />
+            <span>
+              Homeostate{" "}
+              <span className="text-muted-foreground">benchmark</span>
+            </span>
           </h1>
           {runs.length > 0 && current && activeTab !== "renders" && (
             <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">

@@ -1,18 +1,53 @@
 import type { LoroDoc } from "loro-crdt";
-import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
-import { patchContainer } from "./patching.js";
+import {
+  applyChanges,
+  type CrdtBackend,
+  type TextPolicy,
+  type Unsubscribe,
+} from "@homeostate/core";
+import { withPlainPrototypes } from "./mapping.js";
+import { createLoroOps } from "./patching.js";
+
+/** Options for `createLoroBackend` */
+export interface LoroBackendOptions {
+  /**
+   * Which strings are stored as LoroText, by their path from the synced map, such as
+   * `(path) => path[0] === "todos" && path[2] === "title"`. Concurrent edits to a LoroText
+   * merge character by character. Every other string is a plain value, and concurrent writes
+   * keep one of them whole. Defaults to none.
+   */
+  text?: TextPolicy;
+}
+
+const noText: TextPolicy = () => false;
 
 let instances = 0;
 
-export const createLoroBackend = (doc: LoroDoc, name: string): CrdtBackend => {
+export const createLoroBackend = (
+  doc: LoroDoc,
+  name: string,
+  options: LoroBackendOptions = {},
+): CrdtBackend => {
+  const { text = noText } = options;
   const map = doc.getMap(name);
   const origin = `homeostate:${name}#${instances++}`;
+  const ops = createLoroOps(text);
 
   return {
-    read: () => map.toJSON(),
+    read: () => withPlainPrototypes(map.toJSON()),
 
-    write: (next) => {
-      patchContainer(map, next);
+    write: (next, previous) => {
+      // Edits other code has not committed are reported only once committed, so `previous`
+      // may lack them.
+      const current = (
+        previous !== undefined && doc.getPendingTxnLength() === 0
+          ? previous
+          : map.toJSON()
+      ) as object;
+      applyChanges(map, current, next as object, ops, {
+        text,
+        json: true,
+      });
       doc.commit({ origin });
     },
 

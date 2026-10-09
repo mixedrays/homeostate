@@ -6,6 +6,7 @@ import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, TodoState } from "../../types/todo";
 import { countTodos, filterTodos } from "../../lib/todos";
 import {
+  isTodoTitle,
   SYNC_MAP_NAME,
   connectSharedDoc,
   createInitialTodoState,
@@ -70,9 +71,9 @@ export const todoCountsAtom = createAtom(() =>
   countTodos(todoStore.state.todos),
 );
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createTanStackStoreAdapter(todoStore);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
@@ -83,6 +84,8 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
+  network,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

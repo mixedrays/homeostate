@@ -92,6 +92,7 @@ function groupOf(slug: string): GroupId {
   if (slug === "core") return "core";
   if (slug.startsWith("crdt-")) return "crdt";
   if (slug.startsWith("store-")) return "store";
+  if (slug.startsWith("persist-")) return "persist";
   if (slug.startsWith("tool-")) return "tools";
   return "core";
 }

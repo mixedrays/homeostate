@@ -2,16 +2,15 @@
 
 [Yjs](https://github.com/yjs/yjs) backend for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It maps the synced state onto a `Y.Map` (nested objects become `Y.Map`, arrays `Y.Array`,
-strings `Y.Text`) and writes fine-grained operations derived from `getChanges`.
+It maps the synced state onto a `Y.Map` (objects become `Y.Map`, arrays `Y.Array`, and strings
+plain values or, where you choose, `Y.Text`), so a toggle or a keystroke produces one small
+update.
 
 ## Install
 
 ```bash
 npm install @homeostate/core @homeostate/crdt-yjs yjs
 ```
-
-`yjs` is a peer dependency.
 
 ## Usage
 
@@ -25,8 +24,23 @@ const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter);
 engine.connect();
 ```
 
-The synced state lives in `doc.getMap('shared')`; a middle-of-array delete, a toggle, or a
-keystroke each produce one small update.
+The synced state lives in `doc.getMap("shared")`. Attach any Yjs provider to `doc` for
+replication.
+
+`undefined` and functions are not JSON, so the backend leaves out object entries holding
+either and stores such array items as `null`, as `JSON.stringify` does.
+
+Strings are plain values, so concurrent writes keep one of them. Pass `text` to store chosen
+strings as `Y.Text`, whose concurrent edits merge character by character:
+
+```ts
+createYjsBackend(doc, "shared", {
+  text: (path) => path[0] === "todos" && path[2] === "title",
+});
+```
+
+To persist the document, pass `createYjsPersistable(doc)` to `createPersistence`; see the
+[persistence guide](https://homeostate.pages.dev/docs/persistence).
 
 ## License
 

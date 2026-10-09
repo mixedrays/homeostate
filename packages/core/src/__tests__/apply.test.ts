@@ -1,36 +1,69 @@
 import { describe, expect, it } from "vitest";
 import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
-import { ChangeType, type Change } from "../change.js";
-import { getChanges, type Diffable } from "../diff.js";
+import { ChangeType } from "../change.js";
+import { getChanges } from "../diff.js";
 import { snapshot } from "./helpers.js";
 
 type Plain = Record<string, unknown>;
 
-/** The ops a plain mutable object needs, and the log of what the walk asked for. */
+/** Text a test container holds, edited in place by `editText`; its JSON is the string. */
+class Text {
+  constructor(public value: string) {}
+  toJSON(): string {
+    return this.value;
+  }
+}
+
+/** A value a test container holds whole, as a document holds a value other code stored. */
+class Opaque {
+  constructor(public json: object) {}
+  toJSON(): object {
+    return this.json;
+  }
+}
+
+/** Ops over plain objects, arrays and `Text`s, with the log of what the walk asked for. */
 const createOps = () => {
   const log: string[] = [];
+  const at = (path: readonly (string | number)[], key?: string | number) =>
+    [...path, ...(key === undefined ? [] : [key])].join(".") || "$";
   const ops: ApplyOps = {
-    set: (target, key, value) => {
-      log.push(`set ${String(key)}`);
-      (target as Plain)[key as string] = value;
+    kind: (value) =>
+      value instanceof Text
+        ? "text"
+        : Array.isArray(value)
+          ? "list"
+          : value !== null && Object.getPrototypeOf(value) === Object.prototype
+            ? "record"
+            : undefined,
+    get: (container, key) => (container as Plain)[key],
+    set: (container, key, value, path) => {
+      log.push(`set ${at(path, key)}`);
+      (container as Plain)[key] = value;
     },
-    remove: (target, key) => {
-      log.push(`remove ${key}`);
-      delete (target as Plain)[key];
+    remove: (container, key, path) => {
+      log.push(`remove ${at(path, key)}`);
+      delete (container as Plain)[key];
     },
-    splice: (target, index, deleteCount, inserted) => {
-      log.push(`splice ${index} ${deleteCount} ${inserted.length}`);
-      target.splice(index, deleteCount, ...inserted);
+    splice: (list, index, deleteCount, inserted, path) => {
+      log.push(`splice ${at(path)} ${index} ${deleteCount} ${inserted.length}`);
+      (list as unknown[]).splice(index, deleteCount, ...inserted);
+    },
+    editText: (text, index, deleteCount, inserted, path) => {
+      log.push(`editText ${at(path)} ${index} ${deleteCount} ${inserted}`);
+      const { value } = text as Text;
+      (text as Text).value =
+        value.slice(0, index) + inserted + value.slice(index + deleteCount);
     },
   };
   return { ops, log };
 };
 
-/** Applies the edit script from `before` to `after` onto a fresh copy of `before`. */
+/** Applies the changes from `before` to `after` onto a fresh copy of `before`. */
 const reconcile = <T extends object>(before: T, after: T) => {
   const { ops, log } = createOps();
   const target = snapshot(before);
-  applyChanges(target, getChanges(before as Diffable, after as Diffable), ops);
+  applyChanges(target, before, after, ops);
   return { target, log };
 };
 
@@ -73,7 +106,7 @@ describe("applyChanges", () => {
     const { target, log } = reconcile(before, after);
 
     expect(target).toEqual(after);
-    expect(log).toEqual(["splice 0 1 0", "splice 2 0 1"]);
+    expect(log).toEqual(["splice list 0 1 0", "splice list 2 0 1"]);
   });
 
   it("recurses into a container instead of replacing it", () => {
@@ -94,20 +127,103 @@ describe("applyChanges", () => {
     const edited = target.list[0];
     const { ops, log } = createOps();
 
-    applyChanges(target, getChanges(before, after), ops);
+    applyChanges(target, before, after, ops);
 
     expect(target).toEqual(after);
     // Only the field the diff named was written; both elements are the objects that were there.
-    expect(log).toEqual(["set done"]);
+    expect(log).toEqual(["set list.0.done"]);
     expect(target.list[0]).toBe(edited);
     expect(target.list[1]).toBe(untouched);
   });
 
-  it("rebuilds a string field through its nested edit script", () => {
+  it("replaces a string field whole when the target holds it as a plain value", () => {
     const { target, log } = reconcile({ title: "todo" }, { title: "todos" });
 
     expect(target).toEqual({ title: "todos" });
     expect(log).toEqual(["set title"]);
+  });
+
+  it("replaces a child the ops treat as a plain value with its next value", () => {
+    // Its JSON is a record, but the target holds it whole, as a document holds a value other
+    // code stored.
+    const { ops, log } = createOps();
+    const target = { list: [new Opaque({ a: 1 }), new Opaque({ a: 1 })] };
+    const next = { list: [{ a: 2 }, { a: 1 }] };
+
+    applyChanges(target, snapshot(target), next, ops);
+
+    expect(target.list[0]).toEqual({ a: 2 });
+    expect(target.list[1]).toBeInstanceOf(Opaque);
+    expect(log).toEqual(["set list.0"]);
+  });
+
+  it("edits text in place, character by character, at its path", () => {
+    const { ops, log } = createOps();
+    const title = new Text("Plan the trip");
+    const target = { todos: [{ title }] };
+
+    applyChanges(
+      target,
+      snapshot(target),
+      { todos: [{ title: "Plan a 😀 trip" }] },
+      ops,
+    );
+
+    expect(target.todos[0].title).toBe(title);
+    expect(title.value).toBe("Plan a 😀 trip");
+    // The diff deletes "the" one character at a time, then inserts the new run.
+    expect(log).toEqual([
+      "editText todos.0.title 5 1 ",
+      "editText todos.0.title 5 1 ",
+      "editText todos.0.title 5 1 ",
+      "editText todos.0.title 5 0 a 😀",
+    ]);
+  });
+
+  it("replaces text whole when the ops cannot edit it", () => {
+    const { ops, log } = createOps();
+    delete ops.editText;
+    const target = { title: new Text("Plan") };
+
+    applyChanges(target, snapshot(target), { title: "Plan it" }, ops);
+
+    expect(target).toEqual({ title: "Plan it" });
+    expect(log).toEqual(["set title"]);
+  });
+
+  it("edits only the strings the text policy marks as text", () => {
+    const { ops, log } = createOps();
+    const target = { title: new Text("a"), id: new Text("x") };
+
+    applyChanges(target, snapshot(target), { title: "ab", id: "y" }, ops, {
+      text: (path) => path[0] === "title",
+    });
+
+    expect(target).toEqual({ title: new Text("ab"), id: "y" });
+    expect(log).toEqual(["editText title 1 0 b", "set id"]);
+  });
+
+  it("writes every value as JSON would store it with options.json", () => {
+    const { ops } = createOps();
+    const target = { list: [1], kept: new Opaque({ a: 1 }) };
+
+    applyChanges(
+      target,
+      snapshot(target),
+      {
+        list: [1, undefined],
+        kept: { a: 2, fn: () => 1 },
+        added: { b: undefined, c: 1 },
+      },
+      ops,
+      { json: true },
+    );
+
+    expect(target).toStrictEqual({
+      list: [1, null],
+      kept: { a: 2 },
+      added: { c: 1 },
+    });
   });
 
   it("replaces an element whose kind changed", () => {
@@ -118,18 +234,6 @@ describe("applyChanges", () => {
     });
 
     expect(target).toEqual({ list: [7, { b: 8 }] });
-  });
-
-  it("leaves a pending step unapplied when the target does not mirror the diff", () => {
-    // `PENDING` carries no replacement value, so a target that has already diverged is left
-    // alone rather than being written something wrong.
-    const target = { list: 3 } as unknown as object;
-    const changes: Change[] = [
-      [ChangeType.PENDING, "list", [[ChangeType.UPDATE, 0, 1]]],
-    ];
-
-    expect(() => applyChanges(target, changes, createOps().ops)).not.toThrow();
-    expect(target).toEqual({ list: 3 });
   });
 
   it("reaches the target state for every shape the diff can produce", () => {

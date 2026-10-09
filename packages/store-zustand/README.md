@@ -2,10 +2,7 @@
 
 [Zustand](https://github.com/pmndrs/zustand) store adapter and middleware for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It keeps a Zustand store in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs),
-[`@homeostate/crdt-loro`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-loro), or
-[`@homeostate/crdt-automerge`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-automerge).
+It keeps a Zustand store in sync with a CRDT backend such as Yjs, Loro or Automerge.
 
 ## Install
 
@@ -39,7 +36,8 @@ const useCounter = create<CounterState>()(
 useCounter.homeostate.disconnect(); // stop syncing
 ```
 
-The optional third argument is the engine's `SyncEngineConfig` (`filter`, `seed`).
+The optional third argument is the engine's `SyncEngineConfig` (`filter`, `seed`,
+`schedule`).
 
 To sync a store you already have, create the engine yourself with `createZustandAdapter`:
 
@@ -54,8 +52,7 @@ const engine = createSyncEngine(
 engine.connect();
 ```
 
-Actions and other functions in the state are skipped by the default sync filter, so only
-data is synced. Remote changes replace the state with `setState(state, true)`.
+Only data is synced; actions and other functions in the state are skipped.
 
 ## License
 

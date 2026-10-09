@@ -6,6 +6,7 @@ import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, Todo } from "../../types/todo";
 import { countTodos, filterTodos } from "../../lib/todos";
 import {
+  isTodoTitle,
   SYNC_MAP_NAME,
   connectSharedDoc,
   createInitialTodoState,
@@ -75,9 +76,9 @@ export type TodoStoreInstance = Instance<typeof TodoStore>;
 
 export const todoStore = TodoStore.create(createInitialTodoState());
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createMobxStateTreeAdapter(todoStore);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
@@ -88,6 +89,8 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
+  network,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

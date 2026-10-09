@@ -1,6 +1,25 @@
 import * as Y from "yjs";
-import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
-import { patchSharedType } from "./patching.js";
+import {
+  applyChanges,
+  type CrdtBackend,
+  type TextPolicy,
+  type Unsubscribe,
+} from "@homeostate/core";
+import { toPlainValue } from "./mapping.js";
+import { createYjsOps } from "./patching.js";
+
+/** Options for `createYjsBackend` */
+export interface YjsBackendOptions {
+  /**
+   * Which strings are stored as Y.Text, by their path from the synced map, such as
+   * `(path) => path[0] === "todos" && path[2] === "title"`. Concurrent edits to a Y.Text merge
+   * character by character. Every other string is a plain value, and concurrent writes keep
+   * one of them whole. Defaults to none.
+   */
+  text?: TextPolicy;
+}
+
+const noText: TextPolicy = () => false;
 
 /**
  * Creates a CrdtBackend over the Y.Map called `name` inside `doc`.
@@ -15,15 +34,35 @@ import { patchSharedType } from "./patching.js";
  * engine.connect();
  * ```
  */
-export const createYjsBackend = (doc: Y.Doc, name: string): CrdtBackend => {
+export const createYjsBackend = (
+  doc: Y.Doc,
+  name: string,
+  options: YjsBackendOptions = {},
+): CrdtBackend => {
+  const { text = noText } = options;
   const map = doc.getMap<unknown>(name);
   const origin = Symbol(`homeostate:${name}`);
+  const ops = createYjsOps(text);
 
   return {
-    read: () => map.toJSON(),
+    read: () => toPlainValue(map),
 
-    write: (next) => {
-      doc.transact(() => patchSharedType(map, next), origin);
+    write: (next, previous) => {
+      // Inside another transaction, its changes so far are reported only once it ends, so
+      // `previous` may lack them.
+      const current = (
+        previous !== undefined && doc._transaction === null
+          ? previous
+          : map.toJSON()
+      ) as object;
+      doc.transact(
+        () =>
+          applyChanges(map, current, next as object, ops, {
+            text,
+            json: true,
+          }),
+        origin,
+      );
     },
 
     subscribe: (onRemoteChange): Unsubscribe => {

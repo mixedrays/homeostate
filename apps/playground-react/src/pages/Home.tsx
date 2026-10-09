@@ -105,8 +105,8 @@ export default function Home() {
                     <code>pnpm playground:react</code>
                   </pre>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    This starts the React app together with the WebSocket sync
-                    server the demos connect to at{" "}
+                    This starts the React app and the whiteboard together with
+                    the WebSocket sync server the demos connect to at{" "}
                     <InlineCode>{SYNC_SERVER_URL}</InlineCode>.{" "}
                     <InlineCode>pnpm playground</InlineCode> starts every
                     framework's playground at once.

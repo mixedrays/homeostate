@@ -1,94 +1,59 @@
 import * as Y from "yjs";
-import {
-  ChangeType,
-  getChanges,
-  type Change,
-  type Diffable,
-} from "@homeostate/core";
-import { toSharedType, type SharedType } from "./mapping.js";
+import type { ApplyOps, TextPolicy } from "@homeostate/core";
+import { toSharedType } from "./mapping.js";
 
 /**
- * Diffs sharedType against newState once and applies the resulting changes, recursing
- * into nested Y.Maps, Y.Arrays, and Y.Texts for every pending entry.
+ * How `applyChanges` writes into Yjs shared types. Every value it writes becomes its shared
+ * counterpart per the text policy: strings the policy marks as text are Y.Texts, edited
+ * character by character, and any other string is a plain value. A string held as the other
+ * kind becomes the configured one when it next changes.
  *
- * @param sharedType The Yjs shared type to patch.
- * @param newState The new state to patch the shared type into.
+ * @param text Which strings, by path from the synced map, are Y.Texts.
  */
-export const patchSharedType = (
-  sharedType: SharedType,
-  newState: unknown,
-): void => {
-  applyChanges(
-    sharedType,
-    getChanges(sharedType.toJSON() as Diffable, newState as Diffable),
-  );
-};
+export const createYjsOps = (text: TextPolicy): ApplyOps => ({
+  kind: (value) =>
+    value instanceof Y.Map
+      ? "record"
+      : value instanceof Y.Array
+        ? "list"
+        : value instanceof Y.Text
+          ? "text"
+          : undefined,
 
-const applyChanges = (sharedType: SharedType, changes: Change[]): void => {
-  for (const [type, key, value] of changes) {
-    if (sharedType instanceof Y.Map)
-      applyToMap(sharedType, type, key as string, value);
-    else if (sharedType instanceof Y.Array)
-      applyToArray(sharedType, type, key as number, value);
-    else applyToText(sharedType, type, key as number, value);
-  }
-};
+  get: (container, key) =>
+    container instanceof Y.Map
+      ? container.get(key as string)
+      : (container as Y.Array<unknown>).get(key as number),
 
-const applyToMap = (
-  map: Y.Map<unknown>,
-  type: ChangeType,
-  key: string,
-  value: unknown,
-): void => {
-  switch (type) {
-    case ChangeType.INSERT:
-    case ChangeType.UPDATE:
-      map.set(key, toSharedType(value));
-      break;
+  set: (container, key, value, path) => {
+    const shared = toSharedType(value, [...path, key], text);
+    if (container instanceof Y.Map) container.set(key as string, shared);
+    else {
+      const array = container as Y.Array<unknown>;
+      array.delete(key as number);
+      array.insert(key as number, [shared]);
+    }
+  },
 
-    case ChangeType.DELETE:
-      map.delete(key);
-      break;
+  remove: (container, key) => {
+    (container as Y.Map<unknown>).delete(key);
+  },
 
-    case ChangeType.PENDING:
-      applyChanges(map.get(key) as SharedType, value as Change[]);
-      break;
-  }
-};
+  splice: (list, index, deleteCount, inserted, path) => {
+    const array = list as Y.Array<unknown>;
+    if (deleteCount > 0) array.delete(index, deleteCount);
+    if (inserted.length > 0)
+      array.insert(
+        index,
+        inserted.map((value, i) =>
+          toSharedType(value, [...path, index + i], text),
+        ),
+      );
+  },
 
-const applyToArray = (
-  array: Y.Array<unknown>,
-  type: ChangeType,
-  index: number,
-  value: unknown,
-): void => {
-  switch (type) {
-    case ChangeType.INSERT:
-      array.insert(index, [toSharedType(value)]);
-      break;
-
-    case ChangeType.UPDATE:
-      array.delete(index);
-      array.insert(index, [toSharedType(value)]);
-      break;
-
-    case ChangeType.DELETE:
-      array.delete(index);
-      break;
-
-    case ChangeType.PENDING:
-      applyChanges(array.get(index) as SharedType, value as Change[]);
-      break;
-  }
-};
-
-const applyToText = (
-  text: Y.Text,
-  type: ChangeType,
-  index: number,
-  value: unknown,
-): void => {
-  if (type === ChangeType.INSERT) text.insert(index, value as string);
-  else if (type === ChangeType.DELETE)
-    text.delete(index, typeof value === "number" ? value : 1);
-};
+  editText: (shared, index, deleteCount, inserted) => {
+    const ytext = shared as Y.Text;
+    if (deleteCount > 0) ytext.delete(index, deleteCount);
+    if (inserted.length > 0) ytext.insert(index, inserted);
+  },
+});

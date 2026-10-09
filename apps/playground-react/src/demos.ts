@@ -5,6 +5,7 @@ import {
   ListTodo,
   Orbit,
   Package,
+  Shapes,
   TextCursorInput,
   TreePine,
   Waves,
@@ -15,6 +16,11 @@ import {
 export const PLAYGROUNDS_URL: string =
   import.meta.env.VITE_PLAYGROUNDS_URL ??
   (import.meta.env.DEV ? "http://localhost:5180" : "/");
+
+/** The whiteboard, a React app built on its own that this landing page links to. */
+export const WHITEBOARD_URL: string =
+  import.meta.env.VITE_PLAYGROUND_WHITEBOARD_URL ??
+  (import.meta.env.DEV ? "http://localhost:5184" : "/whiteboard/");
 
 export type DemoId =
   | "zustand"
@@ -33,7 +39,8 @@ export type DemoAccent =
   | "orange"
   | "fuchsia"
   | "indigo"
-  | "teal";
+  | "teal"
+  | "amber";
 
 /** What a page needs to present itself: its heading, blurb, colour and icon. */
 export interface PageMeta {
@@ -51,16 +58,20 @@ export interface DemoMeta extends PageMeta {
   adapter: string;
 }
 
-export type AppId = "todo" | "editor";
+export type AppId = "todo" | "editor" | "whiteboard";
+
+/** Where a card leads: a page of this app, or an app built on its own. */
+export type CardTarget = { path: string } | { url: string };
 
 /** One of the apps the landing page offers. */
-export interface AppMeta extends PageMeta {
-  id: AppId;
-  /** Short labels for what the app is built with or shows off. */
-  tags: readonly string[];
-  /** The label of the card's call to action. */
-  action: string;
-}
+export type AppMeta = Omit<PageMeta, "path"> &
+  CardTarget & {
+    id: AppId;
+    /** Short labels for what the app is built with or shows off. */
+    tags: readonly string[];
+    /** The label of the card's call to action. */
+    action: string;
+  };
 
 export const demos: Record<DemoId, DemoMeta> = {
   zustand: {
@@ -152,7 +163,7 @@ export const demoList: readonly DemoMeta[] = [
   demos["mobx-state-tree"],
 ];
 
-export const apps: Record<AppId, AppMeta> = {
+export const apps = {
   todo: {
     id: "todo",
     path: "/todo",
@@ -177,9 +188,25 @@ export const apps: Record<AppId, AppMeta> = {
     tags: ["Zustand", "Y.Text", "Live cursors", "Names"],
     action: "Open the editor",
   },
-};
+  whiteboard: {
+    id: "whiteboard",
+    url: WHITEBOARD_URL,
+    name: "Whiteboard",
+    title: "Whiteboard",
+    description:
+      "One board drawn on from several tabs at once: boxes, arrows and text, with every artist's name and cursor. A separate app built with shadcn/ui and Tailwind, whose Zustand store keys shapes by id, so a move and a recolour made at once both stay.",
+    accent: "amber",
+    icon: Shapes,
+    tags: ["Zustand", "shadcn/ui", "Live cursors", "Names"],
+    action: "Open the whiteboard",
+  },
+} satisfies Record<AppId, AppMeta>;
 
-export const appList: readonly AppMeta[] = [apps.todo, apps.editor];
+export const appList: readonly AppMeta[] = [
+  apps.todo,
+  apps.editor,
+  apps.whiteboard,
+];
 
 export const accentClass: Record<DemoAccent, string> = {
   blue: "theme-blue",
@@ -191,4 +218,5 @@ export const accentClass: Record<DemoAccent, string> = {
   fuchsia: "theme-fuchsia",
   indigo: "theme-indigo",
   teal: "theme-teal",
+  amber: "theme-amber",
 };

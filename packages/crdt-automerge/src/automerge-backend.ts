@@ -1,28 +1,62 @@
-import type { CrdtBackend, Unsubscribe } from "@homeostate/core";
+import {
+  applyChanges,
+  toJsonValue,
+  type CrdtBackend,
+  type TextPolicy,
+  type Unsubscribe,
+} from "@homeostate/core";
 import type { AutomergeHandle } from "./handle.js";
-import { applyChanges, diff, toJson, type Container } from "./patching.js";
+import {
+  createAutomergeOps,
+  isRecord,
+  toAutomerge,
+  type Container,
+} from "./patching.js";
 import { createSnapshot } from "./snapshot.js";
+
+/** Options for `createAutomergeBackend` */
+export interface AutomergeBackendOptions {
+  /**
+   * Which strings are stored as Automerge text, by their path from the synced key, such as
+   * `(path) => path[0] === "todos" && path[2] === "title"`. Concurrent edits to text merge
+   * character by character. Every other string is an `ImmutableString`, and concurrent writes
+   * keep one of them whole. Defaults to none.
+   */
+  text?: TextPolicy;
+}
+
+const noText: TextPolicy = () => false;
 
 export const createAutomergeBackend = <T extends Container>(
   handle: AutomergeHandle<T>,
   name: string,
+  options: AutomergeBackendOptions = {},
 ): CrdtBackend => {
+  const { text = noText } = options;
   const snapshot = createSnapshot();
   let writing = false;
 
-  const current = (): unknown => (handle.doc() as Container)[name];
+  const current = (): unknown => snapshot((handle.doc() as Container)[name]);
 
   return {
-    read: () => snapshot(current()) ?? {},
+    read: () => current() ?? {},
 
-    write: (next) => {
-      const changes = diff(current(), next);
-      if (changes?.length === 0) return;
+    write: (next, previous) => {
+      if (!isRecord(next)) return;
+      // `current()` is a `read()` snapshot, in which every string is a plain string.
+      const before = previous ?? current();
       writing = true;
       try {
         handle.change((doc) => {
-          if (changes === null) (doc as Container)[name] = toJson(next);
-          else applyChanges(doc as Container, [name], changes);
+          const root = doc as Container;
+          const ops = createAutomergeOps(root, name, text);
+          // The document's own key decides: `previous` is `{}` when the key is missing.
+          if (ops.kind(root[name]) === "record")
+            applyChanges(root[name] as object, before as object, next, ops, {
+              text,
+              json: true,
+            });
+          else root[name] = toAutomerge(toJsonValue(next), [], text);
         });
       } finally {
         writing = false;

@@ -67,6 +67,11 @@ Fence languages: ts, tsx, js, jsx, json, bash, sh, diff, yaml, md, text.
 H1, raw HTML, an unknown fence language or meta, or shiki's `// [!code …]` comments (they would
 show up in the `.md`).
 
+The getting-started guide's `src/counter.ts` and `src/App.tsx` snippets are also checked against
+the executable fixtures in `apps/playground-react/src/__tests__/fixtures/quickstart/`. Update
+both together: CI typechecks the fixtures and tests the counter UI, two-peer synchronization,
+and a new peer joining an existing room.
+
 ## How it works
 
 React Router in framework mode with `ssr: false`: [src/routes.ts](src/routes.ts) registers a

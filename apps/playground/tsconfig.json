@@ -6,5 +6,9 @@
     "allowImportingTsExtensions": true
   },
   "include": ["src", "shared"],
-  "references": [{ "path": "../../packages/crdt-yjs" }]
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/crdt-yjs" },
+    { "path": "../../packages/persist-local-storage" }
+  ]
 }

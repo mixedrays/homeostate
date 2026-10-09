@@ -336,9 +336,18 @@ importers:
       '@fontsource-variable/geist-mono':
         specifier: ^5.3.0
         version: 5.3.0
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../../packages/core
       '@homeostate/crdt-yjs':
         specifier: workspace:^
         version: link:../../packages/crdt-yjs
+      '@homeostate/persist-local-storage':
+        specifier: workspace:^
+        version: link:../../packages/persist-local-storage
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       y-websocket:
         specifier: ^2.1.0
         version: 2.1.0(yjs@13.6.27)
@@ -388,6 +397,9 @@ importers:
       '@homeostate/store-ngrx-signals':
         specifier: workspace:^
         version: link:../../packages/store-ngrx-signals
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       '@ngrx/signals':
         specifier: ^21.0.0
         version: 21.1.1(@angular/core@21.2.24(@angular/compiler@21.2.24)(rxjs@7.8.2))(rxjs@7.8.2)
@@ -570,6 +582,9 @@ importers:
       '@homeostate/store-tanstack':
         specifier: workspace:^
         version: link:../../packages/store-tanstack
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       '@tanstack/store':
         specifier: ^0.11.1
         version: 0.11.2
@@ -625,6 +640,9 @@ importers:
       '@homeostate/store-tanstack':
         specifier: workspace:^
         version: link:../../packages/store-tanstack
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
       '@tanstack/vue-store':
         specifier: ^0.11.2
         version: 0.11.2(vue@3.5.43(typescript@5.9.3))
@@ -659,6 +677,85 @@ importers:
       zustand:
         specifier: ^4.5.2
         version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
+
+  apps/playground-whiteboard:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.8.0
+        version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../../packages/core
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../../packages/crdt-yjs
+      '@homeostate/playground':
+        specifier: workspace:^
+        version: link:../playground
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../../packages/store-zustand
+      '@homeostate/tool-devtools':
+        specifier: workspace:^
+        version: link:../../packages/tool-devtools
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      cn:
+        specifier: ^0.2.6
+        version: 0.2.6
+      lucide-react:
+        specifier: ^1.45.0
+        version: 1.45.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+      shadcn:
+        specifier: ^4.21.0
+        version: 4.21.0(typescript@5.9.3)
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      y-websocket:
+        specifier: ^2.1.0
+        version: 2.1.0(yjs@13.6.27)
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1))
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1))
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: ^5.5.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.0
+        version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)
 
   apps/websocket-server-yjs:
     dependencies:
@@ -703,6 +800,28 @@ importers:
       yjs:
         specifier: ^13.6.23
         version: 13.6.27
+
+  packages/persist-indexeddb:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../crdt-yjs
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.27
+
+  packages/persist-local-storage:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
 
   packages/store-jotai:
     dependencies:
@@ -841,6 +960,37 @@ importers:
       vite:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.3)(tsx@4.23.13)(yaml@2.9.1)
+
+  packages/tool-simulator:
+    dependencies:
+      '@homeostate/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@automerge/automerge':
+        specifier: ^3.4.1
+        version: 3.4.1
+      '@homeostate/crdt-automerge':
+        specifier: workspace:^
+        version: link:../crdt-automerge
+      '@homeostate/crdt-loro':
+        specifier: workspace:^
+        version: link:../crdt-loro
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../crdt-yjs
+      '@homeostate/store-zustand':
+        specifier: workspace:^
+        version: link:../store-zustand
+      loro-crdt:
+        specifier: ^1.16.1
+        version: 1.16.1
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@19.3.0)(immer@11.0.1)(react@19.3.0)
 
 packages:
 
@@ -3795,6 +3945,10 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
+
+  fake-indexeddb@6.2.5:
+    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
+    engines: {node: '>=18'}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -9200,6 +9354,8 @@ snapshots:
   exsolve@1.1.1: {}
 
   extend@3.0.2: {}
+
+  fake-indexeddb@6.2.5: {}
 
   fast-deep-equal@3.1.3: {}
 

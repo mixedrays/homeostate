@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { diffJson, formatPath, setIn, share, toJsonObject } from "../json";
+import {
+  diffJson,
+  findNonJson,
+  formatPath,
+  setIn,
+  share,
+  toJsonObject,
+} from "../json";
 
 describe("toJsonObject", () => {
   it("drops functions and undefined, as JSON does", () => {
@@ -11,6 +18,55 @@ describe("toJsonObject", () => {
   it("returns an empty object for a non-object state", () => {
     expect(toJsonObject(null)).toEqual({});
     expect(toJsonObject([1, 2])).toEqual({});
+  });
+});
+
+describe("findNonJson", () => {
+  it("finds class instances, BigInts, symbols and non-finite numbers by path", () => {
+    class Point {
+      x = 1;
+    }
+    const at = new Date(0);
+    expect(
+      findNonJson({
+        todos: [{ title: "a", at }],
+        tags: new Set(["x"]),
+        point: new Point(),
+        big: 1n,
+        id: Symbol("id"),
+        ratio: NaN,
+        limit: -Infinity,
+      }),
+    ).toEqual([
+      { path: ["todos", 0, "at"], kind: "Date" },
+      { path: ["tags"], kind: "Set" },
+      { path: ["point"], kind: "Point" },
+      { path: ["big"], kind: "BigInt" },
+      { path: ["id"], kind: "Symbol" },
+      { path: ["ratio"], kind: "NaN" },
+      { path: ["limit"], kind: "-Infinity" },
+    ]);
+  });
+
+  it("accepts plain JSON, functions, undefined and null-prototype objects", () => {
+    const bare = Object.assign(Object.create(null) as object, { a: 1 });
+    expect(
+      findNonJson({
+        list: [1, "a", null, true, { nested: [] }],
+        bare,
+        add: () => {},
+        missing: undefined,
+      }),
+    ).toEqual([]);
+  });
+
+  it("reports a circular reference but not a shared one", () => {
+    const shared = { a: 1 };
+    const node: Record<string, unknown> = { shared, again: shared };
+    node.self = node;
+    expect(findNonJson(node)).toEqual([
+      { path: ["self"], kind: "circular reference" },
+    ]);
   });
 });
 

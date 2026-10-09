@@ -5,6 +5,7 @@ import { createZustandAdapter } from "@homeostate/store-zustand";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, TodoState } from "../../types/todo";
 import {
+  isTodoTitle,
   SYNC_MAP_NAME,
   connectSharedDoc,
   createInitialTodoState,
@@ -55,9 +56,9 @@ export const useTodoStore = create<TodoStore>((set) => ({
   setFilterStatus: (filterStatus) => set({ filterStatus }),
 }));
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createZustandAdapter(useTodoStore);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
@@ -68,6 +69,8 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
+  network,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

@@ -5,6 +5,7 @@ import { createValtioAdapter } from "@homeostate/store-valtio";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, TodoState } from "../../types/todo";
 import {
+  isTodoTitle,
   SYNC_MAP_NAME,
   connectSharedDoc,
   createInitialTodoState,
@@ -44,9 +45,9 @@ export const todoActions = {
   },
 };
 
-const { ydoc, wsProvider } = connectSharedDoc();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createValtioAdapter(todoState);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME);
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 
 syncEngine.connect();
@@ -57,6 +58,8 @@ const devtoolsSource: DevtoolsSource = {
   adapter,
   backend,
   engine: syncEngine,
+  persistence,
+  network,
 };
 
 export { devtoolsSource, syncEngine, ydoc, wsProvider };

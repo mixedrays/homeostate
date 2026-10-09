@@ -1,5 +1,4 @@
 import { playgrounds, type Playground } from "./playgrounds.ts";
-import "./styles.css";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,

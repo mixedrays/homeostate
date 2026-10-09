@@ -8,9 +8,8 @@ label: Introduction
 [Redux](https://redux.js.org) store adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps a Redux store in sync with a CRDT backend such as
-[`@homeostate/crdt-yjs`](../../crdt-yjs/docs/introduction.md),
-[`@homeostate/crdt-loro`](../../crdt-loro/docs/introduction.md), or
-[`@homeostate/crdt-automerge`](../../crdt-automerge/docs/introduction.md).
+[Yjs](../../crdt-yjs/docs/introduction.md), [Loro](../../crdt-loro/docs/introduction.md) or
+[Automerge](../../crdt-automerge/docs/introduction.md).
 
 ## Install
 

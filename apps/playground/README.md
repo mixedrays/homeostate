@@ -1,51 +1,70 @@
 # @homeostate/playground
 
-Private Vite page that links to every framework's playground, plus the
-[code those playgrounds share](#shared-code). Each playground is a
-separate app in `apps/playground-<framework>` with its own landing page and demos; they
-all join the same Yjs rooms through the shared WebSocket server.
+Private landing page linking to each framework's playground, plus the code they share. Each
+playground is a separate app in `apps/playground-<name>`. The framework playgrounds' todo demos
+all join the same Yjs room through the WebSocket server, so an edit in one shows up in the
+others. The whiteboard is a React app of its own, linked from the React playground's landing
+page, and keeps a room of its own.
 
-| Playground                                 | Dev URL               | Production path |
-| ------------------------------------------ | --------------------- | --------------- |
-| This landing page                          | http://localhost:5180 | `/`             |
-| [React](../playground-react/README.md)     | http://localhost:5181 | `/react/`       |
-| [Angular](../playground-angular/README.md) | http://localhost:4200 | `/angular/`     |
-| [Vue](../playground-vue/README.md)         | http://localhost:5182 | `/vue/`         |
-| [Svelte](../playground-svelte/README.md)   | http://localhost:5183 | `/svelte/`      |
+| Playground                                       | Dev URL               | Production path |
+| ------------------------------------------------ | --------------------- | --------------- |
+| This landing page                                | http://localhost:5180 | `/`             |
+| [React](../playground-react/README.md)           | http://localhost:5181 | `/react/`       |
+| [Angular](../playground-angular/README.md)       | http://localhost:4200 | `/angular/`     |
+| [Vue](../playground-vue/README.md)               | http://localhost:5182 | `/vue/`         |
+| [Svelte](../playground-svelte/README.md)         | http://localhost:5183 | `/svelte/`      |
+| [Whiteboard](../playground-whiteboard/README.md) | http://localhost:5184 | `/whiteboard/`  |
+
+The React playground links to the whiteboard, and the whiteboard back to it.
 
 ## Run
 
 From the repository root:
 
 ```bash
-pnpm playground          # this page, every playground and the WebSocket server
-pnpm playground:react    # React and the WebSocket server only
-pnpm playground:angular  # Angular and the WebSocket server only
-pnpm playground:vue      # Vue and the WebSocket server only
-pnpm playground:svelte   # Svelte and the WebSocket server only
+pnpm playground          # this page, every playground and the WebSocket server on :9999
+pnpm playground:react    # React, the whiteboard and the WebSocket server; also :angular, :vue, :svelte, :whiteboard
 ```
 
-## Configuration
+The Angular, Vue and Svelte playgrounds load the devtools from their built bundle, which these
+scripts build first. After changing the devtools, restart them or run `pnpm build:devtools`.
 
-The links default to the dev URLs above in development and to the production paths in a
-build. Override one with `VITE_PLAYGROUND_REACT_URL`, `VITE_PLAYGROUND_ANGULAR_URL`,
-`VITE_PLAYGROUND_VUE_URL` or `VITE_PLAYGROUND_SVELTE_URL` when
-that playground is hosted elsewhere.
+## Configuration and deployment
+
+| Variable                     | Used by           | Default                                      |
+| ---------------------------- | ----------------- | -------------------------------------------- |
+| `VITE_PLAYGROUND_<NAME>_URL` | this page's links | the dev URL above, or the production path    |
+| `VITE_SYNC_SERVER_URL`       | each playground   | `ws://localhost:9999`; use `wss://` on HTTPS |
+| `VITE_PLAYGROUNDS_URL`       | each playground   | `http://localhost:5180`, or `/`              |
+
+The React playground's link to the whiteboard reads `VITE_PLAYGROUND_WHITEBOARD_URL`, and the
+whiteboard's link back reads `VITE_PLAYGROUND_REACT_URL`, instead of `VITE_PLAYGROUNDS_URL`.
+
+Angular reads the last two from `public/config.json` at startup instead (`syncServerUrl`,
+`playgroundUrl`), so they can change without a rebuild.
+
+To serve a playground under its production path, build with that base (`vite build --base
+/vue/`, or `ng build --base-href /angular/`) and fall back unknown paths to its `index.html`.
+The repository does not deploy the playgrounds.
 
 ## Shared code
 
-`shared/` holds the framework-independent helpers every playground imports from
-`@homeostate/playground/shared`: todo types, filtering/counting, room names, and identical
-Yjs document initialization.
+`shared/` is imported as `@homeostate/playground/shared`: todo types, filtering, room names,
+and `connectSharedDoc(serverUrl, room?)`, which creates a seeded Yjs document and its
+WebSocket provider. The caller destroys both on teardown.
 
-`connectSharedDoc(serverUrl, room?)` creates a seeded document and its WebSocket
-provider. The caller owns both and must destroy the provider and document on teardown.
-The sync server URL is supplied by each app's configuration.
+Where localStorage is available, `connectSharedDoc` also persists the room, so it survives
+every tab closing and the server restarting. To start over from the seed, remove the
+`homeostate:` entries from localStorage.
 
-All todo demos use `homeostate-todos-v1` and the `shared-ydoc` map. The seed's CRDT
-history must remain identical in every playground. If defaults or their encoding change in
-[`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there. The editor room remains
-separate.
+Every playground must seed through `connectSharedDoc`: matching JSON inserted independently
+does not produce the same CRDT history, so joining tabs would lose edits. If the seed or its
+encoding changes in [`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there; that
+starts a fresh room.
+
+Todo titles are collaborative text and every other string a plain value. Every todo backend
+must pass the shared policy, `createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle })`, so
+that tabs agree on how each string is stored.
 
 ## Adding a playground
 
