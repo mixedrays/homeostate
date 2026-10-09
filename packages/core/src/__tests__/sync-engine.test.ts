@@ -529,6 +529,152 @@ describe("createSyncEngine", () => {
     });
   });
 
+  describe("schedule", () => {
+    /** A scheduler that holds each flush until the test runs it. */
+    const manualScheduler = () => {
+      const queued: (() => void)[] = [];
+      return {
+        schedule: (flush: () => void) => {
+          queued.push(flush);
+        },
+        queued: () => queued.length,
+        run: () => queued.splice(0).forEach((flush) => flush()),
+      };
+    };
+
+    it("applies a burst of remote changes with one read and one setState", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      }).connect();
+      const read = vi.spyOn(backend, "read");
+      const setState = vi.spyOn(store.adapter, "setState");
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      backend.receive(toggleTodo(toggleTodo(threeTodos(), "1"), "2"));
+      backend.receive(
+        addTodo(toggleTodo(toggleTodo(threeTodos(), "1"), "2"), todo("4")),
+      );
+
+      expect(store.getState()).toEqual(threeTodos());
+      expect(scheduler.queued()).toBe(1);
+      scheduler.run();
+
+      expect(store.getState()).toEqual(
+        addTodo(toggleTodo(toggleTodo(threeTodos(), "1"), "2"), todo("4")),
+      );
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(setState).toHaveBeenCalledTimes(1);
+    });
+
+    it("applies pending remote changes before a local change, which they override", () => {
+      // Also checks that the write's `previous` is what the backend holds.
+      const { backend } = checkedBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      }).connect();
+
+      const remote = addTodo(toggleTodo(threeTodos(), "1"), todo("4"));
+      backend.receive(remote);
+      store.update((s) => toggleTodo(s, "2"));
+
+      expect(store.getState()).toEqual(remote);
+      expect(backend.read()).toEqual(remote);
+      scheduler.run();
+      expect(store.getState()).toEqual(remote);
+    });
+
+    it("keeps a local change to a key it does not sync while remote changes are pending", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "searchTerm",
+        schedule: scheduler.schedule,
+      }).connect();
+
+      const remote = toggleTodo(threeTodos(), "1");
+      backend.receive(remote);
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(store.getState()).toEqual(setSearchTerm(remote, "x"));
+      expect(backend.read()).toMatchObject({ todos: remote.todos });
+    });
+
+    it("writes nothing back for a scheduled apply", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      }).connect();
+      const write = vi.spyOn(backend, "write");
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      scheduler.run();
+
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it("schedules again for a remote change after the flush", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      }).connect();
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      scheduler.run();
+      backend.receive(threeTodos());
+
+      expect(scheduler.queued()).toBe(1);
+      scheduler.run();
+      expect(store.getState()).toEqual(threeTodos());
+    });
+
+    it("leaves nothing for the flush once a local change applied the remote one", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      }).connect();
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      store.update((s) => setSearchTerm(s, "x"));
+      const read = vi.spyOn(backend, "read");
+      const setState = vi.spyOn(store.adapter, "setState");
+      scheduler.run();
+
+      expect(read).not.toHaveBeenCalled();
+      expect(setState).not.toHaveBeenCalled();
+    });
+
+    it("applies a pending remote change on disconnect", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      const engine = createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      });
+      engine.connect();
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      engine.disconnect();
+
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+      const read = vi.spyOn(backend, "read");
+      scheduler.run();
+      expect(read).not.toHaveBeenCalled();
+    });
+  });
+
   describe("failed connect", () => {
     /** Wraps `target.subscribe` and returns how many of its listeners are still attached. */
     const trackSubscriptions = (target: {

@@ -125,6 +125,10 @@ _Avoid_: Incoming change, peer change
 A store notification raised while the sync engine applies a remote change. The engine ignores echoes, so a store adapter needs no echo suppression of its own.
 _Avoid_: Feedback loop
 
+**Pending apply**:
+Remote changes the sync engine defers, with its `schedule` option, to the next flush, which applies them all with one read of the CRDT backend. A local change made before the flush runs the apply first, which overrides what that change did to synced keys.
+_Avoid_: Queued update, batch
+
 **Offline editing**:
 Editing while the provider is disconnected and the sync engine stays connected, so the document records the edits and merges them when the provider reconnects.
 Disconnecting the engine instead drops those edits for every key the backend holds, because reconnecting runs reconciliation again.

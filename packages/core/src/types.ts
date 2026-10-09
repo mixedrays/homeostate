@@ -86,6 +86,17 @@ export interface SyncEngineConfig {
   filter?: (key: string, value: unknown) => boolean;
   /** Seeding strategy used by `connect()`; defaults to `'if-empty'` */
   seed?: SeedStrategy;
+  /**
+   * Coalesces remote changes: the first one hands `schedule` a `flush` to call later, such as
+   * `(flush) => queueMicrotask(flush)`, and every remote change before that call is applied
+   * with one read of the backend and one `setState`. Without it, each remote change is applied
+   * synchronously, so `getState()` sees it at once.
+   *
+   * Local changes are still written synchronously. One made while an apply is pending runs that
+   * apply first, and the remote changes replace the store's synced state: the local change keeps
+   * only what it did to keys the engine does not sync. `disconnect()` runs a pending apply too.
+   */
+  schedule?: (flush: () => void) => void;
 }
 
 /**

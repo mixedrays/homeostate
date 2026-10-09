@@ -29,8 +29,9 @@ watching both sides. Creation alone does not read, write or subscribe to either 
 | `config`  | No       | Sync options. Defaults to `{}`.                           |
 
 Returns a `SyncEngine`. The engine is synchronous: adapter, backend and filter errors
-propagate to the caller of the operation that triggered them. There is no engine-level
-`onError` option or retry mechanism.
+propagate to the caller of the operation that triggered them, which is whoever calls `flush`
+for an apply deferred by `schedule`. There is no engine-level `onError` option or retry
+mechanism.
 
 ### Example
 
@@ -69,15 +70,17 @@ console.log(engine.isConnected()); // false
 interface SyncEngineConfig {
   filter?: (key: string, value: unknown) => boolean;
   seed?: SeedStrategy;
+  schedule?: (flush: () => void) => void;
 }
 
 type SeedStrategy = "if-empty" | "never";
 ```
 
-| Option   | Default             | Behavior                                                                                                             |
-| -------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `filter` | `defaultSyncFilter` | Selects top-level keys independently in the store and backend, in both directions. Excluded keys stay local.         |
-| `seed`   | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
+| Option     | Default             | Behavior                                                                                                             |
+| ---------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `filter`   | `defaultSyncFilter` | Selects top-level keys independently in the store and backend, in both directions. Excluded keys stay local.         |
+| `seed`     | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
+| `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.    |
 
 A custom filter replaces the default. Call `defaultSyncFilter` within it if you also want
 to exclude functions. Filtering is top-level; it does not remove nested functions or turn
@@ -87,6 +90,32 @@ Despite its name, `"if-empty"` works per key, even when the backend already hold
 keys. With either strategy, a backend key wins over the corresponding store value, and a
 store-only key remains in the store during connection. With `"never"`, the next local
 change still writes the store's entire filtered state, including those store-only keys.
+
+### Coalescing remote changes
+
+Without `schedule`, each backend notification is applied to the store at once: a provider that
+applies 50 queued updates as 50 transactions makes the engine read the backend, diff it and
+call `setState` 50 times. With `schedule`, the first notification hands it a `flush` and later
+ones wait for it, so the whole burst is applied with one read and one `setState`:
+
+```ts
+createSyncEngine(backend, adapter, {
+  schedule: (flush) => queueMicrotask(flush),
+});
+```
+
+`queueMicrotask` coalesces what arrives in one task; `requestAnimationFrame` applies at most
+once per frame. Until the flush, `getState()` does not show the pending remote changes, so
+code that reads the store right after a remote update must wait for it.
+
+Local changes are still written synchronously. One made while an apply is pending runs that
+apply first, so its write does not revert the remote changes. The remote changes win: the
+apply replaces the store's synced state, so what the local change did to synced keys is lost,
+and only its changes to keys the filter excludes stay. With `queueMicrotask`, that affects
+only code that changes the store in the same task as a remote update; a longer delay, such as
+`requestAnimationFrame`, lets user input fall in the window too. `disconnect()` also runs a
+pending apply, so the store keeps what the backend held while connected, and a flush called
+after it does nothing.
 
 ## SyncEngine
 
@@ -98,18 +127,18 @@ interface SyncEngine {
 }
 ```
 
-| Method          | Returns   | Behavior                                                                                                                                  |
-| --------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `connect()`     | `void`    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.            |
-| `disconnect()`  | `void`    | Removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `isConnected()` | `boolean` | Whether the engine is subscribed. This does not report network connectivity or whether a provider has received the room's state.          |
+| Method          | Returns   | Behavior                                                                                                                                                                        |
+| --------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`     | `void`    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
+| `disconnect()`  | `void`    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
+| `isConnected()` | `boolean` | Whether the engine is subscribed. This does not report network connectivity or whether a provider has received the room's state.                                                |
 
 After connection, each local notification writes the full filtered store state to the
 backend, along with what the backend holds, so the backend can diff against it instead of
-reading its document; see [CrdtBackend](#crdtbackend). Each backend notification applies its
-full filtered state to the store, including deletions. Unchanged subtrees keep their
-identity. Store notifications raised synchronously while the engine applies remote state are
-ignored to avoid echoing that state back.
+reading its document; see [CrdtBackend](#crdtbackend). Each backend notification, or each
+flush with `schedule`, applies the backend's full filtered state to the store, including
+deletions. Unchanged subtrees keep their identity. Store notifications raised synchronously
+while the engine applies remote state are ignored to avoid echoing that state back.
 
 Reconnecting runs reconciliation again: backend values replace disconnected local edits
 for matching keys. For offline editing, leave the engine connected and disconnect the
