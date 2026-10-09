@@ -367,4 +367,93 @@ describe("createSyncEngine", () => {
       );
     });
   });
+
+  describe("failed connect", () => {
+    /** Wraps `target.subscribe` and returns how many of its listeners are still attached. */
+    const trackSubscriptions = (target: {
+      subscribe: (listener: () => void) => () => void;
+    }): (() => number) => {
+      const subscribe = target.subscribe;
+      let active = 0;
+      target.subscribe = (listener) => {
+        const unsubscribe = subscribe(listener);
+        active += 1;
+        return () => {
+          active -= 1;
+          unsubscribe();
+        };
+      };
+      return () => active;
+    };
+
+    it("removes the backend listener when the adapter subscription throws", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore({ a: 1 });
+      const setState = vi.fn();
+      const engine = createSyncEngine(backend, {
+        ...store.adapter,
+        setState,
+        subscribe: () => {
+          throw new Error("boom");
+        },
+      });
+
+      expect(() => engine.connect()).toThrow("boom");
+      engine.disconnect();
+      backend.receive({ a: 2 });
+
+      expect(setState).not.toHaveBeenCalled();
+      expect(engine.isConnected()).toBe(false);
+    });
+
+    it("leaves no adapter subscription when the backend subscription throws", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const storeSubscriptions = trackSubscriptions(store.adapter);
+      backend.subscribe = () => {
+        throw new Error("boom");
+      };
+      const engine = createSyncEngine(backend, store.adapter);
+
+      expect(() => engine.connect()).toThrow("boom");
+
+      expect(storeSubscriptions()).toBe(0);
+      expect(engine.isConnected()).toBe(false);
+    });
+
+    it("leaves no subscriptions when seeding the backend throws", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const backendSubscriptions = trackSubscriptions(backend);
+      const storeSubscriptions = trackSubscriptions(store.adapter);
+      vi.spyOn(backend, "write").mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      const engine = createSyncEngine(backend, store.adapter);
+
+      expect(() => engine.connect()).toThrow("boom");
+
+      expect(backendSubscriptions()).toBe(0);
+      expect(storeSubscriptions()).toBe(0);
+      expect(engine.isConnected()).toBe(false);
+    });
+
+    it("subscribes once to each side when connecting again", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const backendSubscriptions = trackSubscriptions(backend);
+      const storeSubscriptions = trackSubscriptions(store.adapter);
+      vi.spyOn(store.adapter, "subscribe").mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      const engine = createSyncEngine(backend, store.adapter);
+
+      expect(() => engine.connect()).toThrow("boom");
+      engine.connect();
+
+      expect(backendSubscriptions()).toBe(1);
+      expect(storeSubscriptions()).toBe(1);
+      expect(engine.isConnected()).toBe(true);
+    });
+  });
 });

@@ -99,6 +99,13 @@ export function createSyncEngine<S extends object>(
     applyRemote(filterState(readBackend()), false);
   };
 
+  const unsubscribeAll = (): void => {
+    backendUnsubscribe?.();
+    backendUnsubscribe = null;
+    storeUnsubscribe?.();
+    storeUnsubscribe = null;
+  };
+
   return {
     connect: (): void => {
       if (connected) return;
@@ -116,18 +123,21 @@ export function createSyncEngine<S extends object>(
 
       applyRemote(remote, true);
 
-      backendUnsubscribe = backend.subscribe(syncToStore);
-      storeUnsubscribe = adapter.subscribe(syncToBackend);
+      try {
+        backendUnsubscribe = backend.subscribe(syncToStore);
+        storeUnsubscribe = adapter.subscribe(syncToBackend);
+      } catch (error) {
+        // `disconnect()` cannot reach a subscription made before the throw, so drop it here.
+        unsubscribeAll();
+        throw error;
+      }
       connected = true;
     },
 
     disconnect: (): void => {
       if (!connected) return;
 
-      backendUnsubscribe?.();
-      backendUnsubscribe = null;
-      storeUnsubscribe?.();
-      storeUnsubscribe = null;
+      unsubscribeAll();
       connected = false;
     },
 
