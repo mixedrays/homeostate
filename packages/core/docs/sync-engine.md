@@ -105,9 +105,11 @@ interface SyncEngine {
 | `isConnected()` | `boolean` | Whether the engine is subscribed. This does not report network connectivity or whether a provider has received the room's state.          |
 
 After connection, each local notification writes the full filtered store state to the
-backend. Each backend notification applies its full filtered state to the store, including
-deletions. Unchanged subtrees keep their identity. Store notifications raised synchronously
-while the engine applies remote state are ignored to avoid echoing that state back.
+backend, along with what the backend holds, so the backend can diff against it instead of
+reading its document; see [CrdtBackend](#crdtbackend). Each backend notification applies its
+full filtered state to the store, including deletions. Unchanged subtrees keep their
+identity. Store notifications raised synchronously while the engine applies remote state are
+ignored to avoid echoing that state back.
 
 Reconnecting runs reconciliation again: backend values replace disconnected local edits
 for matching keys. For offline editing, leave the engine connected and disconnect the
@@ -142,21 +144,38 @@ interface StoreAdapter<S extends object> {
 Use a `store-*` package for your state manager, or implement this interface for your own
 store. `S` may include local actions, but the part selected for sync must be plain JSON.
 
+Update the synced state immutably, with a new object for every container that changes. The
+engine diffs each write against the state it last wrote, and a container that is the same
+object in both is taken as unchanged, so an array or object changed in place is not written.
+Adapters whose `getState()` returns a fresh copy, such as the MobX adapter, meet this anyway.
+
 ## CrdtBackend
 
 ```ts
 interface CrdtBackend {
   read: () => unknown;
-  write: (next: unknown) => void;
+  write: (next: unknown, previous?: unknown) => void;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
 
-| Member                | Contract                                                                                                                                                         |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read()`              | Returns a plain JSON snapshot that does not alias mutable backend internals. For the sync engine, expose the synced top-level state as an object.                |
-| `write(next)`         | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                          |
-| `subscribe(callback)` | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
+| Member                   | Contract                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read()`                 | Returns a plain JSON snapshot that does not alias mutable backend internals. For the sync engine, expose the synced top-level state as an object.                |
+| `write(next, previous?)` | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                          |
+| `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
+
+`previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would store
+it. The engine passes the synced state it last wrote, or the whole state it last read after a
+remote change, local keys included, so the next write still removes those keys from the
+backend as before. A backend can diff `next` against it, with `getChanges` and `json: true`,
+instead of reading its document; unchanged subtrees of `next` are then the same objects and
+compare by identity. Like `next`, it may hold `undefined` and functions where the
+subtree holds nothing, which `json: true` treats as absent. The engine passes nothing for the
+seed write during `connect()` and after a write that threw. A backend may ignore `previous`.
+The engine keeps it exact only when `subscribe` reports every other change synchronously, so a
+backend must read its document while a change may still be unreported: the Yjs backend does
+inside another transaction, and the Loro backend while other code has uncommitted edits.
 
 Although `read()` has return type `unknown`, the engine treats a `null` or non-object
 result as an empty state. Objects in the snapshot must inherit from `Object.prototype`: a

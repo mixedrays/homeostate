@@ -1,152 +1,55 @@
 import { LoroList, LoroMap, LoroText } from "loro-crdt";
-import {
-  applyStringChanges,
-  ChangeType,
-  getChanges,
-  type Change,
-  type Diffable,
-  type TextPolicy,
-} from "@homeostate/core";
-import {
-  insertListItem,
-  setMapEntry,
-  type Path,
-  type SharedContainer,
-} from "./mapping.js";
+import type { ApplyOps, TextPolicy } from "@homeostate/core";
+import { insertListItem, setMapEntry } from "./mapping.js";
 
 /**
- * Diffs container against newState once and applies the resulting changes. newState is diffed
- * as JSON would store it, and every change is found before any is applied, so no change is
- * applied unless all of them can be.
+ * How `applyChanges` writes into Loro containers. Every value it writes becomes its container
+ * counterpart per the text policy: strings the policy marks as text are LoroTexts, edited
+ * character by character, and any other string is a plain value. A string held as the other
+ * kind becomes the configured one when it next changes.
  *
- * Strings the policy marks as text are edited character by character in LoroTexts; any other
- * string is replaced whole as a plain value. A string held as the other kind becomes the
- * configured one when it next changes.
+ * @param text Which strings, by path from the synced map, are LoroTexts.
  */
-export const patchContainer = (
-  container: SharedContainer,
-  newState: unknown,
-  text: TextPolicy,
-): void => {
-  applyChanges(
-    container,
-    getChanges(container.toJSON() as Diffable, newState as Diffable, {
-      text,
-      json: true,
-    }),
-    [],
-    text,
-  );
-};
+export const createLoroOps = (text: TextPolicy): ApplyOps => ({
+  kind: (value) =>
+    value instanceof LoroMap
+      ? "record"
+      : value instanceof LoroList
+        ? "list"
+        : value instanceof LoroText
+          ? "text"
+          : undefined,
 
-const applyChanges = (
-  container: SharedContainer,
-  changes: Change[],
-  path: Path,
-  text: TextPolicy,
-): void => {
-  for (const [type, key, value] of changes) {
+  get: (container, key) =>
+    container instanceof LoroMap
+      ? container.get(key as string)
+      : (container as LoroList).get(key as number),
+
+  set: (container, key, value, path) => {
     if (container instanceof LoroMap)
-      applyToMap(container, type, key as string, value, path, text);
-    else if (container instanceof LoroList)
-      applyToList(container, type, key as number, value, path, text);
-    else applyToText(container, type, key as number, value);
-  }
-};
-
-const applyToMap = (
-  map: LoroMap,
-  type: ChangeType,
-  key: string,
-  value: unknown,
-  path: Path,
-  text: TextPolicy,
-): void => {
-  switch (type) {
-    case ChangeType.INSERT:
-    case ChangeType.UPDATE:
-      setMapEntry(map, key, value, path, text);
-      break;
-
-    case ChangeType.DELETE:
-      map.delete(key);
-      break;
-
-    case ChangeType.PENDING: {
-      const child = map.get(key);
-      // Text held as a plain string, by a peer with another policy or an older version.
-      if (typeof child === "string")
-        setMapEntry(
-          map,
-          key,
-          applyStringChanges(child, value as Change[]),
-          path,
-          text,
-        );
-      else
-        applyChanges(
-          child as SharedContainer,
-          value as Change[],
-          [...path, key],
-          text,
-        );
-      break;
+      setMapEntry(container, key as string, value, path, text);
+    else {
+      const list = container as LoroList;
+      list.delete(key as number, 1);
+      insertListItem(list, key as number, value, path, text);
     }
-  }
-};
+  },
 
-const applyToList = (
-  list: LoroList,
-  type: ChangeType,
-  index: number,
-  value: unknown,
-  path: Path,
-  text: TextPolicy,
-): void => {
-  switch (type) {
-    case ChangeType.INSERT:
-      insertListItem(list, index, value, path, text);
-      break;
+  remove: (container, key) => {
+    (container as LoroMap).delete(key);
+  },
 
-    case ChangeType.UPDATE:
-      list.delete(index, 1);
-      insertListItem(list, index, value, path, text);
-      break;
+  splice: (list, index, deleteCount, inserted, path) => {
+    const loroList = list as LoroList;
+    if (deleteCount > 0) loroList.delete(index, deleteCount);
+    inserted.forEach((value, i) =>
+      insertListItem(loroList, index + i, value, path, text),
+    );
+  },
 
-    case ChangeType.DELETE:
-      list.delete(index, 1);
-      break;
-
-    case ChangeType.PENDING: {
-      const child = list.get(index);
-      if (typeof child === "string") {
-        list.delete(index, 1);
-        insertListItem(
-          list,
-          index,
-          applyStringChanges(child, value as Change[]),
-          path,
-          text,
-        );
-      } else
-        applyChanges(
-          child as SharedContainer,
-          value as Change[],
-          [...path, index],
-          text,
-        );
-      break;
-    }
-  }
-};
-
-const applyToText = (
-  text: LoroText,
-  type: ChangeType,
-  index: number,
-  value: unknown,
-): void => {
-  if (type === ChangeType.INSERT) text.insert(index, value as string);
-  else if (type === ChangeType.DELETE)
-    text.delete(index, typeof value === "number" ? value : 1);
-};
+  editText: (shared, index, deleteCount, inserted) => {
+    const loroText = shared as LoroText;
+    if (deleteCount > 0) loroText.delete(index, deleteCount);
+    if (inserted.length > 0) loroText.insert(index, inserted);
+  },
+});

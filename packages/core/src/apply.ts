@@ -1,25 +1,57 @@
 import { ChangeType, type Change } from "./change.js";
+import { getChanges, type Diffable, type DiffOptions } from "./diff.js";
+import { toJsonValue } from "./json.js";
 
-type Plain = Record<string, unknown>;
+type Path = readonly (string | number)[];
+
+/** How `applyChanges` edits a container: by key, by position, or by character. */
+export type ContainerKind = "record" | "list" | "text";
 
 /**
- * How one store writes into its containers. `applyChanges` decides *what* to write; an
- * implementation of this decides *how*, so the same edit script drives a MobX observable
- * tree, a Valtio proxy, or a plain object.
+ * How one store or document writes into its containers. `applyChanges` decides *what* to write;
+ * an implementation of this decides *how*, so the same edit script drives a Y.Map, an Automerge
+ * document, a MobX observable tree, a Valtio proxy, or a plain object.
  *
- * Every method receives a container that already lives in the store, never a copy.
+ * Every container passed in already lives in the target, never a copy. `path` is that
+ * container's path from the target, so a backend can convert the values it writes per path, as
+ * a text policy needs.
  */
 export interface ApplyOps {
-  /** Assign `value` at `key`, creating the property if the target is a record. */
-  set(target: object, key: string | number, value: unknown): void;
-  /** Remove the record property `key`. */
-  remove(target: object, key: string): void;
-  /** `Array.prototype.splice`: drop `deleteCount` elements at `index`, then add `inserted`. */
+  /**
+   * What `value`, the target or a child read with `get`, is to the walk: a container it edits in
+   * place, or `undefined` for a plain value, which it replaces whole.
+   */
+  kind(value: unknown): ContainerKind | undefined;
+  /** The child at `key` of the record or list `container`. */
+  get(container: object, key: string | number): unknown;
+  /** Assign `value` at `key` of the record or list `container`, creating a record property. */
+  set(
+    container: object,
+    key: string | number,
+    value: unknown,
+    path: Path,
+  ): void;
+  /** Remove the property `key` of the record `container`. */
+  remove(container: object, key: string, path: Path): void;
+  /** `Array.prototype.splice` on the list `container`: drop `deleteCount` items at `index`, then add `inserted`. */
   splice(
-    target: unknown[],
+    list: object,
     index: number,
     deleteCount: number,
     inserted: unknown[],
+    path: Path,
+  ): void;
+  /**
+   * Delete `deleteCount` UTF-16 units at `index` of the text `text`, then insert `inserted` there.
+   * `path` is the text's own path. Omit it for a store without text: `kind` then never returns
+   * `"text"`, and a text it does return is replaced whole.
+   */
+  editText?(
+    text: unknown,
+    index: number,
+    deleteCount: number,
+    inserted: string,
+    path: Path,
   ): void;
 }
 
@@ -41,51 +73,123 @@ export const applyStringChanges = (value: string, changes: Change[]): string =>
     return revised;
   }, value);
 
+/** The kind of container a diff edits `value` as. */
+const expectedKind = (value: unknown): ContainerKind | undefined =>
+  typeof value === "string"
+    ? "text"
+    : Array.isArray(value)
+      ? "list"
+      : value !== null && typeof value === "object"
+        ? "record"
+        : undefined;
+
 /**
- * Applies `changes` to `target` in place, mutating only the paths the edit script names.
- * Everything else keeps its identity, which is what fine-grained stores react to.
- *
- * `changes` must be `getChanges(before, after)` where `before` describes the shape `target`
- * currently holds — an adapter gets that by diffing against the snapshot it last handed out.
- * A `PENDING` step carries no replacement value, so it can only be followed by recursing into
- * the container already there; a target that does not mirror `before` leaves such a step
- * unapplied rather than writing something wrong.
- *
- * @param target The container to mutate — a record, or an array for a positional edit script.
- * @param changes The edit script to apply, in order.
- * @param ops How this store writes; see {@link ApplyOps}.
+ * Applies `changes` to `container`, whose next value is `next`. A pending step edits the child
+ * in place when it is the kind of container the diff expects; any other child, such as a string
+ * held as a plain value or a plain value other code stored, is replaced whole by its next value.
  */
-export const applyChanges = (
-  target: object,
+const walk = (
+  container: object,
+  kind: ContainerKind,
   changes: Change[],
+  next: unknown,
+  path: Path,
   ops: ApplyOps,
+  options: DiffOptions,
 ): void => {
-  const array = Array.isArray(target) ? (target as unknown[]) : null;
+  if (kind === "text") {
+    for (const [type, index, value] of changes) {
+      if (type === ChangeType.INSERT)
+        ops.editText?.(container, index as number, 0, value as string, path);
+      else if (type === ChangeType.DELETE)
+        ops.editText?.(
+          container,
+          index as number,
+          typeof value === "number" ? value : 1,
+          "",
+          path,
+        );
+    }
+    return;
+  }
+
+  const list = kind === "list";
 
   for (const [type, key, value] of changes) {
     switch (type) {
       case ChangeType.PENDING: {
-        const child = (target as Plain)[key as string];
-        if (typeof child === "string")
-          ops.set(target, key, applyStringChanges(child, value as Change[]));
-        else if (child !== null && typeof child === "object")
-          applyChanges(child, value as Change[], ops);
+        // Steps before a pending one are final, so `key` is also its index in `next`.
+        const nextChild = (next as Record<string | number, unknown>)[key];
+        const child = ops.get(container, key);
+        const childKind = ops.kind(child);
+        if (
+          childKind !== undefined &&
+          childKind === expectedKind(nextChild) &&
+          (childKind !== "text" || ops.editText !== undefined)
+        )
+          walk(
+            child as object,
+            childKind,
+            value as Change[],
+            nextChild,
+            [...path, key],
+            ops,
+            options,
+          );
+        else
+          ops.set(
+            container,
+            key,
+            options.json ? toJsonValue(nextChild) : nextChild,
+            path,
+          );
         break;
       }
 
       case ChangeType.DELETE:
-        if (array) ops.splice(array, key as number, 1, []);
-        else ops.remove(target, key as string);
+        if (list) ops.splice(container, key as number, 1, [], path);
+        else ops.remove(container, key as string, path);
         break;
 
       case ChangeType.INSERT:
-        if (array) ops.splice(array, key as number, 0, [value]);
-        else ops.set(target, key, value);
+        if (list) ops.splice(container, key as number, 0, [value], path);
+        else ops.set(container, key, value, path);
         break;
 
       case ChangeType.UPDATE:
-        ops.set(target, key, value);
+        ops.set(container, key, value, path);
         break;
     }
   }
+};
+
+/**
+ * Makes `target` equal to `next` in place, writing only what differs from `current`, the plain
+ * JSON `target` holds. Everything else keeps its identity, which is what fine-grained stores
+ * react to and what keeps a CRDT update small.
+ *
+ * @param target The record or list to mutate.
+ * @param current What `target` holds now, as plain JSON.
+ * @param next What `target` should hold.
+ * @param ops How this store or document writes; see {@link ApplyOps}.
+ * @param options Passed to `getChanges`.
+ */
+export const applyChanges = (
+  target: object,
+  current: object,
+  next: object,
+  ops: ApplyOps,
+  options: DiffOptions = {},
+): void => {
+  const kind = ops.kind(target);
+  if (kind !== "record" && kind !== "list") return;
+  walk(
+    target,
+    kind,
+    getChanges(current as Diffable, next as Diffable, options),
+    next,
+    [],
+    ops,
+    options,
+  );
 };

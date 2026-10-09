@@ -55,7 +55,7 @@ A `CrdtBackend` holds the synced part of the state in a CRDT or any other replic
 ```ts
 interface CrdtBackend {
   read: () => unknown;
-  write: (next: unknown) => void;
+  write: (next: unknown, previous?: unknown) => void;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
@@ -63,7 +63,9 @@ interface CrdtBackend {
 - `read` returns a plain JSON snapshot that does not alias the backend's internals.
 - `write` makes the backend equal to `next` in one atomic transaction. The backend decides
   how fine-grained the operations are; core exports `getChanges` so a backend can turn a
-  `write` into small edits instead of replacing the document.
+  `write` into small edits instead of replacing the document. The engine also passes
+  `previous`, what the backend holds as far as the engine knows, so the backend can diff
+  against it instead of reading its document.
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 

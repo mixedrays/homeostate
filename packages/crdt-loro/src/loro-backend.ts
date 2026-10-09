@@ -1,7 +1,12 @@
 import type { LoroDoc } from "loro-crdt";
-import type { CrdtBackend, TextPolicy, Unsubscribe } from "@homeostate/core";
+import {
+  applyChanges,
+  type CrdtBackend,
+  type TextPolicy,
+  type Unsubscribe,
+} from "@homeostate/core";
 import { withPlainPrototypes } from "./mapping.js";
-import { patchContainer } from "./patching.js";
+import { createLoroOps } from "./patching.js";
 
 /** Options for `createLoroBackend` */
 export interface LoroBackendOptions {
@@ -26,12 +31,23 @@ export const createLoroBackend = (
   const { text = noText } = options;
   const map = doc.getMap(name);
   const origin = `homeostate:${name}#${instances++}`;
+  const ops = createLoroOps(text);
 
   return {
     read: () => withPlainPrototypes(map.toJSON()),
 
-    write: (next) => {
-      patchContainer(map, next, text);
+    write: (next, previous) => {
+      // Edits other code has not committed are reported only once committed, so `previous`
+      // may lack them.
+      const current = (
+        previous !== undefined && doc.getPendingTxnLength() === 0
+          ? previous
+          : map.toJSON()
+      ) as object;
+      applyChanges(map, current, next as object, ops, {
+        text,
+        json: true,
+      });
       doc.commit({ origin });
     },
 

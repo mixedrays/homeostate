@@ -17,7 +17,11 @@ export type Unsubscribe = () => void;
  * are neither diffed nor synced.
  */
 export interface StoreAdapter<S extends object> {
-  /** Get the current state from the store */
+  /**
+   * Get the current state from the store. Its synced part must change immutably, with a new
+   * object for every container that changes: the engine diffs each write against the state it
+   * last wrote, so a container changed in place looks unchanged and is not written.
+   */
   getState: () => S;
 
   /**
@@ -45,8 +49,14 @@ export interface CrdtBackend {
   /**
    * Make the backend equal to `next` in one atomic transaction.
    * The backend decides the granularity of the operations; `getChanges` is exported for that.
+   *
+   * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
+   * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing.
+   * The sync engine passes the synced state it last wrote or read, so a backend can diff against
+   * it with `json: true` instead of reading its document, and unchanged subtrees of `next` match
+   * it by identity. A backend may ignore it.
    */
-  write: (next: unknown) => void;
+  write: (next: unknown, previous?: unknown) => void;
 
   /**
    * Notify about changes that did not come through this backend's own `write`.

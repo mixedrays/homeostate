@@ -43,10 +43,6 @@ describeCrdtBackend("createYjsBackend", {
     doc.getMap(NAME).set(key, value);
   },
   knownFailures: {
-    "adopts a foreign plain array on the next write":
-      "write sends changes for a plain array to the Y.Text applier (task 063)",
-    "adopts a foreign plain object on the next write":
-      "write drops changes for a plain object (task 063)",
     "keeps the document when a read of a foreign value is mutated":
       "read() returns plain values other code stored by reference (task 073)",
   },
@@ -64,6 +60,32 @@ describe("createYjsBackend", () => {
 
     expect(todos.toJSON()).toEqual(deleteTodo(threeTodos(), "2").todos);
     expect(todos.get(1)).toBe(third);
+  });
+
+  it("diffs against previous instead of reading its document", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1, label: "a" });
+    // Unreported, so a `previous` that misses it shows which side the write diffed against.
+    doc.getMap(NAME).set("count", 2);
+
+    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+    expect(backend.read()).toEqual({ count: 2, label: "b" });
+  });
+
+  it("diffs against its document when written inside another transaction", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1, label: "a" });
+
+    doc.transact(() => {
+      // Reported only once the outer transaction ends, so `previous` cannot hold it yet.
+      doc.getMap(NAME).set("count", 2);
+      backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+    });
+
+    expect(backend.read()).toEqual({ count: 1, label: "b" });
   });
 });
 

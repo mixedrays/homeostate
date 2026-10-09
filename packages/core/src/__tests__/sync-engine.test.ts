@@ -14,6 +14,22 @@ import {
   toggleTodo,
 } from "./helpers.js";
 
+/**
+ * A memory backend that records the `previous` of every write and checks that it is what the
+ * backend held, as JSON would store it, which is what `CrdtBackend.write` promises.
+ */
+const checkedBackend = (initial?: unknown) => {
+  const backend = createMemoryBackend(initial);
+  const write = backend.write;
+  const previous: unknown[] = [];
+  backend.write = (next, held) => {
+    previous.push(held);
+    if (held !== undefined) expect(snapshot(held)).toEqual(backend.read());
+    write(next);
+  };
+  return { backend, previous };
+};
+
 describe("createSyncEngine", () => {
   describe("connect", () => {
     it("seeds an empty backend with the filtered initial state", () => {
@@ -240,6 +256,151 @@ describe("createSyncEngine", () => {
       expect(() => backend.receive(remote)).not.toThrow();
       expect(store.getState()).toEqual(remote);
       expect(Object.isFrozen(store.getState().todos)).toBe(true);
+    });
+  });
+
+  describe("previous state given to write", () => {
+    it("passes the synced state it last wrote, so unchanged todos match by identity", () => {
+      const { backend, previous } = checkedBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      const written = store.getState();
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(previous).toHaveLength(2);
+      const [, last] = previous as (typeof written)[];
+      expect(last.todos[1]).toBe(written.todos[1]);
+      expect(last.todos[1]).toBe(store.getState().todos[1]);
+    });
+
+    it("keeps local keys the backend holds, so the next write still deletes them", () => {
+      const { backend, previous } = checkedBackend({
+        ...threeTodos(),
+        secret: "remote",
+      });
+      const store = createTestStore<object>(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "secret",
+      }).connect();
+
+      store.update((s) => toggleTodo(s as ReturnType<typeof threeTodos>, "1"));
+
+      expect(previous).toEqual([{ ...threeTodos(), secret: "remote" }]);
+      expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
+    });
+
+    it("passes nothing to the seed write, and what it seeded to the next one", () => {
+      const { backend, previous } = checkedBackend({
+        todos: [todo("remote")],
+        secret: "remote",
+      });
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "secret",
+      }).connect();
+      const seeded = { ...threeTodos(), todos: [todo("remote")] };
+      expect(backend.read()).toEqual(seeded);
+
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(previous).toEqual([undefined, seeded]);
+    });
+
+    it("passes what it read after a remote change, local keys included", () => {
+      const { backend, previous } = checkedBackend();
+      const store = createTestStore<object>(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "secret",
+      }).connect();
+      const remote = { ...toggleTodo(threeTodos(), "2"), secret: "remote" };
+      backend.receive(remote);
+
+      store.update((s) => ({ ...s, searchTerm: "x" }));
+
+      expect(previous.at(-1)).toEqual(remote);
+      expect(backend.read()).toEqual(
+        setSearchTerm(toggleTodo(threeTodos(), "2"), "x"),
+      );
+    });
+
+    it("passes what it read when the store rejects a remote change", () => {
+      const { backend, previous } = checkedBackend();
+      const store = createTestStore(threeTodos());
+      const adapter = {
+        ...store.adapter,
+        setState: () => {
+          throw new Error("invalid snapshot");
+        },
+      };
+      createSyncEngine(backend, adapter).connect();
+      const remote = addTodo(threeTodos(), todo("4"));
+      expect(() => backend.receive(remote)).toThrow("invalid snapshot");
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(previous.at(-1)).toEqual(remote);
+      expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
+    });
+
+    it("passes what it read when the store transforms a remote change", () => {
+      const { backend, previous } = checkedBackend();
+      const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
+        ...s,
+        todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
+      });
+      const store = createTestStore(threeTodos(), trimTitles);
+      createSyncEngine(backend, store.adapter).connect();
+      const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
+      backend.receive(remote);
+      expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(previous.at(-1)).toEqual(remote);
+      expect(backend.read()).toEqual(
+        toggleTodo(addTodo(threeTodos(), todo("4")), "1"),
+      );
+    });
+
+    it("passes what it read when a remote change arrives during its own write", () => {
+      const { backend, previous } = checkedBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      const write = backend.write;
+      const relayed = addTodo(toggleTodo(threeTodos(), "1"), todo("4"));
+      backend.write = (next, held) => {
+        write(next, held);
+        backend.write = write;
+        // A peer's change, relayed synchronously while the write's notifications run.
+        backend.receive(relayed);
+      };
+      store.update((s) => toggleTodo(s, "1"));
+      expect(store.getState()).toEqual(relayed);
+
+      store.update((s) => toggleTodo(s, "2"));
+
+      expect(previous.at(-1)).toEqual(relayed);
+      expect(backend.read()).toEqual(toggleTodo(relayed, "2"));
+    });
+
+    it("passes nothing after a write that threw", () => {
+      const { backend, previous } = checkedBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      const write = backend.write;
+      backend.write = () => {
+        backend.write = write;
+        throw new Error("boom");
+      };
+      expect(() => store.update((s) => toggleTodo(s, "1"))).toThrow("boom");
+
+      store.update((s) => toggleTodo(s, "2"));
+
+      expect(previous.at(-1)).toBeUndefined();
+      expect(backend.read()).toEqual(
+        toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+      );
     });
   });
 

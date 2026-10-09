@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSyncEngine,
+  defaultSyncFilter,
   type CrdtBackend,
   type TextPolicy,
   type Unsubscribe,
@@ -102,6 +103,155 @@ const replicaOrders: [number, number][] = [
   [2, 1],
 ];
 
+/** Seeded pseudo-random choices (mulberry32), so a failing run replays from its seed. */
+interface Random {
+  /** An integer in `[0, n)`. */
+  int: (n: number) => number;
+  pick: <T>(items: readonly T[]) => T;
+}
+
+const seededRandom = (seed: number): Random => {
+  let state = seed >>> 0;
+  const next = (): number => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const int = (n: number): number => Math.floor(next() * n);
+  return { int, pick: (items) => items[int(items.length)] };
+};
+
+interface EditedTodo {
+  id: string;
+  title: string;
+  completed: boolean;
+  note?: unknown;
+}
+
+/** What the random edits change: nested containers, text, `undefined`, functions, a local key. */
+interface EditedState {
+  todos: EditedTodo[];
+  tags: unknown[];
+  meta: { count: number; owner?: string; nested?: object };
+  later?: number;
+  action?: () => void;
+  /** A local key, which a peer that does not filter it may still write. */
+  draft?: string;
+}
+
+const onSelect = (): void => {};
+
+const initialEdited = (): EditedState => ({
+  todos: [
+    { id: "1", title: "Todo 1", completed: false },
+    { id: "2", title: "Todo 2", completed: true, note: undefined },
+  ],
+  tags: ["a", "b"],
+  meta: { count: 0 },
+  action: onSelect,
+});
+
+const withoutDraft = (key: string, value: unknown): boolean =>
+  defaultSyncFilter(key, value) && key !== "draft";
+
+/** A store that does not always hold what it is given: it resets `meta.count` past 3. */
+const resetCount = (state: EditedState): EditedState =>
+  state.meta.count > 3
+    ? { ...state, meta: { ...state.meta, count: 0 } }
+    : state;
+
+const replaceAt = <T>(items: T[], index: number, item: T): T[] =>
+  items.map((existing, i) => (i === index ? item : existing));
+
+/** Immutable edits, as a store makes them, which hold `undefined` and functions at every depth. */
+const edits: ((state: EditedState, random: Random) => EditedState)[] = [
+  (s, r) => {
+    if (s.todos.length === 0) return s;
+    const i = r.int(s.todos.length);
+    const toggled = { ...s.todos[i], completed: !s.todos[i].completed };
+    return { ...s, todos: replaceAt(s.todos, i, toggled) };
+  },
+  (s, r) => {
+    const i = r.int(s.todos.length + 1);
+    const added: EditedTodo = {
+      id: `t${r.int(100)}`,
+      title: "New",
+      completed: false,
+      ...r.pick([{}, { note: undefined }, { note: onSelect }, { note: "n" }]),
+    };
+    return {
+      ...s,
+      todos: [...s.todos.slice(0, i), added, ...s.todos.slice(i)],
+    };
+  },
+  (s, r) => {
+    const i = r.int(s.todos.length + 1);
+    return { ...s, todos: s.todos.filter((_, j) => j !== i) };
+  },
+  (s, r) => {
+    if (s.todos.length === 0) return s;
+    const i = r.int(s.todos.length);
+    const { title } = s.todos[i];
+    const at = r.int(title.length + 1);
+    const renamed = r.pick([
+      `${title.slice(0, at)}x${title.slice(at)}`,
+      title.slice(0, at) + title.slice(at + 1),
+    ]);
+    return {
+      ...s,
+      todos: replaceAt(s.todos, i, { ...s.todos[i], title: renamed }),
+    };
+  },
+  (s, r) => {
+    if (s.todos.length === 0) return s;
+    const i = r.int(s.todos.length);
+    const edited = {
+      ...s.todos[i],
+      note: r.pick([undefined, onSelect, "note", null]),
+    };
+    if (r.int(4) === 0) delete edited.note;
+    return { ...s, todos: replaceAt(s.todos, i, edited) };
+  },
+  (s, r) => {
+    const i = r.int(s.tags.length);
+    const tags = r.pick([
+      [...s.tags, `t${r.int(10)}`],
+      s.tags.slice(1),
+      replaceAt(s.tags, i, undefined),
+      replaceAt(s.tags, i, onSelect),
+    ]);
+    return { ...s, tags };
+  },
+  (s, r) => ({
+    ...s,
+    meta: {
+      ...s.meta,
+      count: s.meta.count + 1,
+      owner: r.pick([undefined, "a", "b"]),
+    },
+  }),
+  (s, r) => ({
+    ...s,
+    meta: {
+      ...s.meta,
+      nested: r.pick([undefined, { x: r.int(3), list: [1, r.int(3)] }]),
+    },
+  }),
+  (s, r) => {
+    const withoutLater = { ...s };
+    delete withoutLater.later;
+    return r.pick<EditedState>([
+      { ...s, later: undefined },
+      { ...s, later: r.int(5) },
+      withoutLater,
+      { ...s, action: r.pick([onSelect, undefined]) },
+    ]);
+  },
+  (s, r) => ({ ...s, draft: `d${r.int(5)}` }),
+];
+
 /**
  * Scenarios every `CrdtBackend` must pass, alone and through the sync engine: `read()` matches
  * what was written, as JSON would store it, and replicas that exchange their documents converge.
@@ -190,6 +340,99 @@ export const describeCrdtBackend = <D>(
         onLocalUpdate?.(doc, onUpdate);
         written.write(next);
         expect(onUpdate).not.toHaveBeenCalled();
+      },
+    );
+
+    if (onLocalUpdate)
+      scenario("rewrites %s given it as previous, without an update").each(
+        nonJsonWrites,
+        (_, before, next, expected) => {
+          const doc = createDoc();
+          const written = backend(doc);
+          written.write(before);
+          written.write(next);
+          const onUpdate = vi.fn();
+          onLocalUpdate(doc, onUpdate);
+
+          written.write(next, next);
+
+          expect(onUpdate).not.toHaveBeenCalled();
+          expect(written.read()).toEqual(expected);
+        },
+      );
+
+    /**
+     * A peer whose engine passes `previous` to `write`, or drops it so that the backend diffs
+     * against its own document, with a second replica for remote edits when `exchange` is given.
+     */
+    const editingPeer = (passPrevious: boolean) => {
+      const doc = createDoc(1);
+      const own = backend(doc, { text: todoTitles });
+      const store = createTestStore(initialEdited(), resetCount);
+      const engine = createSyncEngine(
+        passPrevious ? own : { ...own, write: (next) => own.write(next) },
+        store.adapter,
+        { filter: withoutDraft },
+      );
+      engine.connect();
+      const peerDoc = createDoc(2);
+      const peer = backend(peerDoc, { text: todoTitles });
+      exchange?.(doc, peerDoc);
+
+      const steps = [
+        "local",
+        "local",
+        "reconnect",
+        ...(exchange ? ["remote", "remote"] : []),
+        ...(storeForeign ? ["foreign"] : []),
+      ];
+      const remoteEdit = (r: Random): void => {
+        if (!exchange) return;
+        peer.write(r.pick(edits)(peer.read() as EditedState, r));
+        exchange(doc, peerDoc);
+      };
+
+      const step = (r: Random): string => {
+        const kind = r.pick(steps);
+        if (kind === "local") store.update((s) => r.pick(edits)(s, r));
+        else if (kind === "remote") remoteEdit(r);
+        else if (kind === "foreign")
+          storeForeign?.(
+            doc,
+            ...r.pick<[string, unknown]>([
+              ["later", r.int(5)],
+              ["draft", "foreign"],
+              ["meta", { count: r.int(5) }],
+            ]),
+          );
+        else {
+          engine.disconnect();
+          store.update((s) => r.pick(edits)(s, r));
+          if (r.int(2) === 0) remoteEdit(r);
+          engine.connect();
+        }
+        return kind;
+      };
+
+      return { read: () => own.read(), store, step };
+    };
+
+    scenario(
+      "leaves the same document as diffing against its own, over random edits (seed %i)",
+    ).each(
+      [1, 2, 3, 4, 5, 6, 7, 8].map((seed): [number] => [seed]),
+      (seed) => {
+        const peers = [editingPeer(true), editingPeer(false)];
+        const randoms = [seededRandom(seed), seededRandom(seed)];
+
+        for (let i = 0; i < 40; i++) {
+          const [kind] = peers.map((peer, p) => peer.step(randoms[p]));
+          const label = `seed ${seed}, step ${i}: ${kind}`;
+          expect(peers[0].read(), label).toEqual(peers[1].read());
+          expect(snapshot(peers[0].store.getState()), label).toEqual(
+            snapshot(peers[1].store.getState()),
+          );
+        }
       },
     );
 

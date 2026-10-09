@@ -34,7 +34,7 @@ Returns an ordered edit script that transforms `a` into `b`, without mutating ei
 | `a`            | The current plain record, array or string.                                                                         |
 | `b`            | The desired value, with the same root kind as `a`.                                                                 |
 | `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
-| `options.json` | Diff `b` as `JSON.stringify` would store it; see [toJsonValue](#tojsonvalue). Defaults to `false`.                 |
+| `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`.       |
 
 Equal values produce `[]`. Different root kinds also produce `[]`: this API cannot express
 replacement of the root. Wrap a value in a record if its type may change, or handle root
@@ -172,14 +172,16 @@ function are left out, and such array items, holes included, become `null`. Own 
 keys are left out too. The input is never mutated: only the containers on a path to a removed
 or replaced value are copied, and a value that is already JSON is returned as is.
 
-`getChanges` with `json: true` applies the same rule as it diffs: entries holding `undefined`
-or a function count as absent, such array items and holes compare equal to `null`, and only
-the values its changes carry go through `toJsonValue`. A backend sets it on `write(next)`. CRDT
-libraries reject `undefined` or functions, often after applying the operations before them, so
-diffing by the rule means a write applies in full. It also keeps rewrites idle: the document
-holds `null` where the store holds an `undefined` array item, and a plain diff against the raw
-value would replace that item on every write. Calling `toJsonValue` on the whole state first
-gives the same changes, but copies the state on every write.
+`getChanges` with `json: true` applies the same rule to both sides as it diffs: entries holding
+`undefined` or a function count as absent, such array items and holes compare equal to `null`,
+and only the values its changes carry go through `toJsonValue`. A backend sets it on
+`write(next, previous)`. CRDT libraries reject `undefined` or functions, often after applying
+the operations before them, so diffing by the rule means a write applies in full. It also keeps
+rewrites idle: the document holds `null` where the store holds an `undefined` array item, and a
+plain diff against the raw value would replace that item on every write. On the `a` side, it
+lets a backend diff against `previous`, the store's state as last written, without deleting an
+entry the document never held. Calling `toJsonValue` on the whole state first gives the same
+changes, but copies the state on every write.
 
 ```ts title="to-json-value-example.ts"
 import { toJsonValue } from "@homeostate/core";
@@ -193,57 +195,73 @@ console.log(toJsonValue({ a: undefined, list: [1, undefined], fn: () => 1 }));
 ```ts
 declare const applyChanges: (
   target: object,
-  changes: Change[],
+  current: object,
+  next: object,
   ops: ApplyOps,
+  options?: DiffOptions,
 ) => void;
 ```
 
-Mutates a record or array in place through `ops` and returns `void`. Only paths named by
-the script are written; untouched containers keep their identity. There are no default
-operations: provide all three `ApplyOps` methods.
+Makes `target` equal to `next` in place and returns `void`. It diffs `current` against `next`
+with `getChanges`, then walks the edit script through `ops`, so only the paths that differ are
+written and untouched containers keep their identity.
 
-| Parameter | Description                                                                     |
-| --------- | ------------------------------------------------------------------------------- |
-| `target`  | A mutable record or array matching the state used as `a` in `getChanges(a, b)`. |
-| `changes` | The ordered edit script returned by `getChanges`.                               |
-| `ops`     | How to set properties, remove keys and splice arrays in your store.             |
+| Parameter | Description                                                                             |
+| --------- | --------------------------------------------------------------------------------------- |
+| `target`  | The record or list to mutate: a store's container or a document's root map.             |
+| `current` | What `target` holds now, as JSON, such as a store's snapshot or a backend's `previous`. |
+| `next`    | What `target` should hold.                                                              |
+| `ops`     | How to read and write your containers; see [ApplyOps](#applyops).                       |
+| `options` | Passed to `getChanges`. A CRDT backend passes its `text` policy and `json: true`.       |
 
-Nested strings are rebuilt and assigned through `ops.set`. A root string is not accepted;
-wrap it in a record or interpret its string script in your backend.
+A `PENDING` step edits the child in place when `ops.kind` reports the kind of container the
+diff expects: a record for a record, a list for an array, and text for a string. Any other child
+is replaced whole with its next value through `ops.set`. That covers a string a store holds as a
+plain value, text stored by a peer with another text policy, and a plain array or object that
+other code stored in a document. With `options.json`, replacement values are passed through
+[toJsonValue](#tojsonvalue) first.
 
-Keep `target` aligned with the diff's starting state. A nested `PENDING` step whose target
-is no longer a container or string is left unapplied; the function cannot recover the
-desired replacement from that step. It does not validate or rebase stale edit scripts.
+When `ops.kind(target)` is not a record or a list, nothing is written. Different root kinds in
+`current` and `next` produce no changes, as in `getChanges`.
 
-Operations run synchronously. If an operation throws, the error propagates and prior
-mutations remain; wrap the call in your store's transaction when atomicity is needed.
+Operations run synchronously, after the whole diff is computed. If an operation throws, the
+error propagates and prior mutations remain; wrap the call in your store's or library's
+transaction when atomicity is needed.
 
 ### Example
 
-These operations use ordinary JavaScript mutations. An observable store can provide its
-own operations with the same signatures:
+These operations use ordinary JavaScript mutations. Strings are plain values here, so `kind`
+never returns `"text"` and `editText` is omitted:
 
 ```ts title="apply-changes-example.ts"
-import { applyChanges, getChanges, type ApplyOps } from "@homeostate/core";
+import { applyChanges, type ApplyOps } from "@homeostate/core";
+
+type Container = Record<string | number, unknown>;
 
 const ops: ApplyOps = {
-  set: (target, key, value) => {
-    (target as Record<string | number, unknown>)[key] = value;
+  kind: (value) =>
+    Array.isArray(value)
+      ? "list"
+      : value !== null && typeof value === "object"
+        ? "record"
+        : undefined,
+  get: (container, key) => (container as Container)[key],
+  set: (container, key, value) => {
+    (container as Container)[key] = value;
   },
-  remove: (target, key) => {
-    delete (target as Record<string, unknown>)[key];
+  remove: (container, key) => {
+    delete (container as Container)[key];
   },
-  splice: (target, index, deleteCount, inserted) => {
-    target.splice(index, deleteCount, ...inserted);
+  splice: (list, index, deleteCount, inserted) => {
+    (list as unknown[]).splice(index, deleteCount, ...inserted);
   },
 };
 
 const target = { todos: [{ title: "Read docs", done: false }], count: 0 };
 const next = { todos: [{ title: "Read docs", done: true }], count: 1 };
 const originalTodo = target.todos[0];
-const changes = getChanges(target, next);
 
-applyChanges(target, changes, ops);
+applyChanges(target, structuredClone(target), next, ops);
 
 console.log(target.todos[0].done, target.count); // true, 1
 console.log(target.todos[0] === originalTodo); // true: updated in place
@@ -252,27 +270,55 @@ console.log(target.todos[0] === originalTodo); // true: updated in place
 ## ApplyOps
 
 ```ts
+type ContainerKind = "record" | "list" | "text";
+type Path = readonly (string | number)[];
+
 interface ApplyOps {
-  set(target: object, key: string | number, value: unknown): void;
-  remove(target: object, key: string): void;
+  kind(value: unknown): ContainerKind | undefined;
+  get(container: object, key: string | number): unknown;
+  set(
+    container: object,
+    key: string | number,
+    value: unknown,
+    path: Path,
+  ): void;
+  remove(container: object, key: string, path: Path): void;
   splice(
-    target: unknown[],
+    list: object,
     index: number,
     deleteCount: number,
     inserted: unknown[],
+    path: Path,
+  ): void;
+  editText?(
+    text: unknown,
+    index: number,
+    deleteCount: number,
+    inserted: string,
+    path: Path,
   ): void;
 }
 ```
 
-| Method   | Contract                                                                                                                  |
-| -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `set`    | Assigns a record property or array item. Also creates newly inserted record properties and replaces edited string fields. |
-| `remove` | Deletes a record property. Array deletions go through `splice`.                                                           |
-| `splice` | Removes `deleteCount` items at `index`, then inserts the values in `inserted`, like `Array.prototype.splice`.             |
+| Method     | Contract                                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`     | Classifies the target or a child read with `get`: a container to edit in place, or `undefined` for a plain value to replace whole. |
+| `get`      | Returns the child at `key` of a record or list.                                                                                    |
+| `set`      | Assigns a record property or list item, creating a new record property. Also receives every replaced child.                        |
+| `remove`   | Deletes a record property. List deletions go through `splice`.                                                                     |
+| `splice`   | Removes `deleteCount` items at `index`, then inserts the values in `inserted`, like `Array.prototype.splice`.                      |
+| `editText` | Deletes `deleteCount` UTF-16 units at `index` of a text, then inserts `inserted`. Omit it for a store without text.                |
 
-Every target passed to an operation is a container already in the store. The walker does
-not clone it. For `PENDING`, it descends into that existing container instead of replacing
-it. If your store requires batched notifications, apply the entire script within one batch.
+`path` is the path of the container an operation acts on, from `target`; for `editText` it is
+the text's own path. A backend uses it to convert each value it writes, for example to store
+the strings its text policy marks as text: the value `set` writes sits at `[...path, key]`, and
+the `i`th value `splice` inserts at `[...path, index + i]`. Automerge, which edits text by path
+rather than through a text object, uses it in `editText`.
+
+Every container passed to an operation is one already in the target. The walker does not clone
+it, and it never clones values: convert or copy them in `set` and `splice` when your store
+needs ownership. If your store requires batched notifications, apply the entire script within
+one batch.
 
 Source: [diff.ts](../src/diff.ts), [change.ts](../src/change.ts), [json.ts](../src/json.ts) and
 [apply.ts](../src/apply.ts).
