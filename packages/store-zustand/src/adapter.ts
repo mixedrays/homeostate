@@ -26,9 +26,17 @@ class ZustandAdapter<S extends object> implements StoreAdapter<S> {
  *
  * @example
  * ```typescript
+ * import * as Y from "yjs";
+ * import { create } from "zustand";
+ * import { createSyncEngine } from "@homeostate/core";
+ * import { createYjsBackend } from "@homeostate/crdt-yjs";
+ * import { createZustandAdapter } from "@homeostate/store-zustand";
+ *
  * const zustandStore = create(() => ({ count: 0 }));
  * const adapter = createZustandAdapter(zustandStore);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * // Any `CrdtBackend` works here; Yjs is one example.
+ * const backend = createYjsBackend(new Y.Doc(), "shared");
+ * const engine = createSyncEngine(backend, adapter);
  * engine.connect();
  * ```
  */
