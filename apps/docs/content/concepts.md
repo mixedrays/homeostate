@@ -6,13 +6,11 @@ order: 2
 # Concepts
 
 Homeostate is one engine and two contracts. The engine,
-[`createSyncEngine`](../../../packages/core/docs/sync-engine.md#createsyncengine), sits between a store and a
-replicated document and moves plain JSON between them. It knows nothing about any particular
-state manager or CRDT library: `store-*` packages implement `StoreAdapter` for a state manager,
-and `crdt-*` packages implement `CrdtBackend` for a CRDT library.
-
-The [sync engine reference](../../../packages/core/docs/sync-engine.md) lists the complete
-signatures, options and lifecycle methods.
+[`createSyncEngine`](../../../packages/core/docs/sync-engine.md#createsyncengine), sits between
+a store and a replicated document and moves plain JSON between them. It knows nothing about
+any particular state manager or CRDT library: `store-*` packages implement `StoreAdapter` for
+a state manager, and `crdt-*` packages implement `CrdtBackend` for a CRDT library. The
+[sync engine reference](../../../packages/core/docs/sync-engine.md) has the complete API.
 
 ```ts
 import { createSyncEngine } from "@homeostate/core";
@@ -61,11 +59,10 @@ interface CrdtBackend {
 ```
 
 - `read` returns a plain JSON snapshot that does not alias the backend's internals.
-- `write` makes the backend equal to `next` in one atomic transaction. The backend decides
-  how fine-grained the operations are; core exports `getChanges` so a backend can turn a
-  `write` into small edits instead of replacing the document. The engine also passes
-  `previous`, what the backend holds as far as the engine knows, so the backend can diff
-  against it instead of reading its document.
+- `write` makes the backend equal to `next` in one atomic transaction. The engine also passes
+  `previous`, what the backend holds as far as it knows. The supplied backends diff the two
+  with core's `applyChanges`, so a write becomes small edits instead of replacing the
+  document.
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 
@@ -76,8 +73,7 @@ interface CrdtBackend {
 
 Concurrent writes to one value keep one of them, whatever the backend. Strings are values by
 default too: two peers setting a status to `"active"` and `"completed"` at once end with one
-of the two, never a blend of their characters such as `"compctiveeted"`. The same holds for
-ids and timestamps.
+of the two, never a blend of their characters.
 
 For prose such as a title or a note, mark the string as collaborative text with the backend's
 `text` option. Text is stored in the library's text type (`Y.Text`, `LoroText` or Automerge
@@ -109,8 +105,8 @@ createSyncEngine(backend, adapter, {
 });
 ```
 
-The default, `defaultSyncFilter`, excludes functions. Keys the filter excludes are never read
-into the store from the backend and never written out, so they stay local to each peer.
+The default, `defaultSyncFilter`, excludes functions. Excluded keys are never read from the
+backend or written to it, so they stay local to each peer.
 
 ## Connecting
 
@@ -145,6 +141,5 @@ createSyncEngine(backend, adapter, {
 
 Until the flush, the store does not show the pending changes. A local change made in the
 meantime applies them first, and they win: what the local change did to synced keys is lost.
-See
-[Coalescing remote changes](../../../packages/core/docs/sync-engine.md#coalescing-remote-changes)
+See [Coalescing remote changes](../../../packages/core/docs/sync-engine.md#coalescing-remote-changes)
 for when that can happen.

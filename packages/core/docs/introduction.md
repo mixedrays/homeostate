@@ -42,43 +42,30 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                                 |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SyncEngine`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `Unsubscribe`        |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                               |
-| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `DiffOptions`, `TextPolicy`, `Change`, `ChangeType`, `toJsonValue`, `applyChanges`, `applyStringChanges`, `ApplyOps` |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`           |
+| Page                            | APIs and types                                                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SyncEngine`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `Unsubscribe`                         |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                            |
+| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `DiffOptions`, `TextPolicy`, `Change`, `ChangeType`, `toJsonValue`, `applyChanges`, `applyStringChanges`, `ApplyOps`, `ContainerKind` |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                            |
 
-## Persistence
-
-`createPersistence(doc, adapter, { key })` keeps a CRDT document in browser storage, so its
-state survives reloads, offline starts and every peer leaving the room. `doc` comes from a
-backend package, such as `createYjsPersistable(ydoc)`, and `adapter` from
+`createPersistence` keeps the document in browser storage through
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or
-[`@homeostate/persist-local-storage`](../../persist-local-storage/docs/introduction.md). See
-the [persistence guide](/docs/persistence) for setup and the
-[persistence reference](./persistence.md) for configuration, lifecycle and error handling.
-
-## Testing
-
-`@homeostate/core/testing` has in-memory doubles: `createMemoryBackend()`, a plain JSON
-backend without replication, and `createMemoryPersistenceAdapter()`. The
-[testing reference](./testing.md) covers their methods and examples.
+[`@homeostate/persist-local-storage`](../../persist-local-storage/docs/introduction.md); the
+[persistence guide](/docs/persistence) shows the setup.
 
 ## Writing a backend
 
-`applyChanges(root, current, next, ops, { text, json: true })` turns a `write(next, previous)`
-into small edits instead of replacing the document: it diffs `current`, the JSON the document
-holds, against `next`, and applies the result through your `ApplyOps`, which classify, read and
-write your library's maps, lists and texts. Pass `previous` as `current` when the engine gives
-it, and read your document only when it does not: unchanged subtrees then match by identity
-instead of being compared item by item. `json: true` keeps `undefined` and functions out of the
-CRDT library, on both sides of the diff. A plain value where the diff expects a container, such
-as a string held as a value at a text path or an object other code stored, is replaced whole.
+Implement `write(next, previous)` with `applyChanges(root, current, next, ops, { text, json: true })`.
+It diffs `current` against `next` and applies only the difference through your `ApplyOps`,
+which read and write your library's maps, lists and texts:
 
-Accept a `text` option as the supplied backends do, and pass it to `applyChanges`. In `set` and
-`splice`, store the strings it marks in your library's text type and every other string as a
-plain value, so concurrent writes of an id or a status keep one value instead of merging
-characters; text is then edited through `editText`. See the
-[diff and apply reference](./diffing.md) for tuple formats, ordered array edits, UTF-16 string
-offsets, text policies and a complete `ApplyOps` example.
+- Pass `previous` as `current` when the engine gives it, and read your document only when it
+  does not. Unchanged subtrees then match by identity instead of item by item.
+- `json: true` keeps `undefined` and functions out of the CRDT library.
+- Accept a `text` policy and pass it on. In `set` and `splice`, store the strings it marks in
+  your library's text type and every other string as a plain value; text is then edited
+  through `editText`.
+
+The [diff and apply reference](./diffing.md) covers the edit script format and has a complete
+`ApplyOps` example.

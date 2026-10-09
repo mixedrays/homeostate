@@ -36,7 +36,8 @@ const useCounter = create<CounterState>()(
 useCounter.homeostate.disconnect(); // stop syncing
 ```
 
-The optional third argument is the engine's `SyncEngineConfig` (`filter`, `seed`).
+The optional third argument is the engine's `SyncEngineConfig` (`filter`, `seed`,
+`schedule`).
 
 To sync a store you already have, create the engine yourself with `createZustandAdapter`:
 

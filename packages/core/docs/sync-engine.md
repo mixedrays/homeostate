@@ -93,10 +93,10 @@ change still writes the store's entire filtered state, including those store-onl
 
 ### Coalescing remote changes
 
-Without `schedule`, each backend notification is applied to the store at once: a provider that
-applies 50 queued updates as 50 transactions makes the engine read the backend, diff it and
-call `setState` 50 times. With `schedule`, the first notification hands it a `flush` and later
-ones wait for it, so the whole burst is applied with one read and one `setState`:
+Without `schedule`, each backend notification is applied to the store at once, so a provider
+that applies 50 queued updates as 50 transactions causes 50 reads and 50 `setState` calls.
+With `schedule`, the first notification hands it a `flush` and later ones wait for it, so the
+whole burst is applied with one read and one `setState`:
 
 ```ts
 createSyncEngine(backend, adapter, {
@@ -105,17 +105,14 @@ createSyncEngine(backend, adapter, {
 ```
 
 `queueMicrotask` coalesces what arrives in one task; `requestAnimationFrame` applies at most
-once per frame. Until the flush, `getState()` does not show the pending remote changes, so
-code that reads the store right after a remote update must wait for it.
+once per frame. Until the flush, `getState()` does not show the pending remote changes.
 
 Local changes are still written synchronously. One made while an apply is pending runs that
-apply first, so its write does not revert the remote changes. The remote changes win: the
-apply replaces the store's synced state, so what the local change did to synced keys is lost,
-and only its changes to keys the filter excludes stay. With `queueMicrotask`, that affects
-only code that changes the store in the same task as a remote update; a longer delay, such as
+apply first, and the remote changes win: what the local change did to synced keys is lost,
+and only its changes to keys the filter excludes stay. With `queueMicrotask` that only affects
+code that changes the store in the same task as a remote update; a longer delay, such as
 `requestAnimationFrame`, lets user input fall in the window too. `disconnect()` also runs a
-pending apply, so the store keeps what the backend held while connected, and a flush called
-after it does nothing.
+pending apply, and a flush called after it does nothing.
 
 ## SyncEngine
 
@@ -194,24 +191,23 @@ interface CrdtBackend {
 | `write(next, previous?)` | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                          |
 | `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
 
-`previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would store
-it. The engine passes the synced state it last wrote, or the whole state it last read after a
-remote change, local keys included, so the next write still removes those keys from the
-backend as before. A backend can diff `next` against it, with `getChanges` and `json: true`,
-instead of reading its document; unchanged subtrees of `next` are then the same objects and
-compare by identity. Like `next`, it may hold `undefined` and functions where the
-subtree holds nothing, which `json: true` treats as absent. The engine passes nothing for the
-seed write during `connect()` and after a write that threw. A backend may ignore `previous`.
-The engine keeps it exact only when `subscribe` reports every other change synchronously, so a
+`previous`, when given, is what the synced subtree holds now: the synced state the engine last
+wrote, or the whole state it last read after a remote change. A backend can diff `next`
+against it with `applyChanges` and `json: true` instead of reading its document; unchanged
+subtrees of `next` are then the same objects and compare by identity. Like `next`, it may
+hold `undefined` and functions, which `json: true` treats as absent. The engine passes nothing
+for the seed write during `connect()` and after a write that threw, and a backend may ignore
+`previous`.
+
+`previous` is exact only when `subscribe` reports every other change synchronously, so a
 backend must read its document while a change may still be unreported: the Yjs backend does
 inside another transaction, and the Loro backend while other code has uncommitted edits.
 
-Although `read()` has return type `unknown`, the engine treats a `null` or non-object
-result as an empty state. Objects in the snapshot must inherit from `Object.prototype`: a
-library that builds them by assignment turns a peer's `__proto__` entry into the prototype,
-which the Yjs and Loro backends undo before returning. Keep document replication in your CRDT
-provider. For writing a backend that applies small edits, see
-[Diff and apply API](./diffing.md).
+The engine treats a `null` or non-object `read()` result as an empty state. Objects in the
+snapshot must inherit from `Object.prototype`: a library that builds them by assignment turns
+a peer's `__proto__` entry into the prototype, which the Yjs and Loro backends undo before
+returning. Keep document replication in your CRDT provider. To write small edits instead of
+replacing the document, see the [Diff and apply API](./diffing.md).
 
 ## Unsubscribe
 

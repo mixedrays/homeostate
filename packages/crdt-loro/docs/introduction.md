@@ -8,8 +8,8 @@ label: Introduction
 [Loro](https://github.com/loro-dev/loro) backend for
 [`@homeostate/core`](../../core/docs/introduction.md). It maps the synced state onto a
 `LoroMap` (objects become `LoroMap`, arrays `LoroList`, and strings plain values or, where you
-choose, `LoroText`) and commits fine-grained operations as one transaction per write, so a middle-of-array delete, a toggle or
-a keystroke each produce one small update.
+choose, `LoroText`) and commits fine-grained operations as one transaction per write, so a
+middle-of-array delete, a toggle or a keystroke each produce one small update.
 
 ## Install
 

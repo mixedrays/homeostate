@@ -19,9 +19,8 @@ declare function createPersistence(
 ): Persistence;
 ```
 
-Subscribes to document updates immediately and queues the initial load. Returns a
-`Persistence` handle synchronously; await its `whenLoaded` promise before connecting a sync
-engine that could seed initial state.
+Subscribes to document updates immediately and queues the initial load. Await `whenLoaded`
+before connecting a sync engine that could seed initial state.
 
 | Parameter | Required | Description                                                                                                                     |
 | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,9 +28,9 @@ engine that could seed initial state.
 | `adapter` | Yes      | Storage implementing the append-only update log contract below.                                                                 |
 | `config`  | Yes      | The storage key and optional compaction/error settings.                                                                         |
 
-The initial load merges stored updates into the document and compacts them into a snapshot.
-This also stores any state the document already held. Later local and remote updates are
-appended serially. Updates made during loading are queued, so they are not missed.
+The initial load merges stored updates into the document and compacts them into one
+snapshot, which also stores whatever the document already held. Later updates, local and from
+peers, are appended one at a time, including those made during the load.
 
 ### Example
 
@@ -80,11 +79,7 @@ interface PersistenceConfig {
 | `onError`      | Logs through `console.error` | Receives storage failures and errors applying stored updates. Supply a handler that reports the error without throwing.          |
 
 Compaction loads the current log, merges it into the document, and replaces the loaded
-portion with one snapshot. Updates appended by another writer after that load must remain.
-The initial load compacts even when `compactAfter` is `Infinity`.
-
-These options are not validated at runtime. Choose a positive threshold; the implementation
-compares its append count directly with `compactAfter`.
+portion with one snapshot; updates another writer appended after that load remain.
 
 ## Persistence
 
@@ -106,26 +101,20 @@ interface PersistenceStats {
 
 ### whenLoaded
 
-Resolves once the initial stored updates have been applied. It also resolves if loading
-fails, after the error is reported, so the app can start without its saved state. It does
-not reject and is not a success indicator for storage.
-
-On a successful load it can resolve before the initial compacted snapshot has finished
-writing. Await `flush()` when you need to wait for queued storage work as well. It does not
-wait for synchronization with network peers.
+Resolves once the stored updates have been applied. If loading fails, it resolves after
+`onError`, so the app starts without its saved state; it never rejects. It may resolve before
+the initial snapshot is written, and it does not wait for network peers. Await `flush()` to
+wait for storage work too.
 
 ### flush
 
-Waits for storage work queued at the time of the call, including any compaction that work
-triggers. Updates arriving later may require another call. Returns `Promise<void>` and
-keeps the document subscription active.
+Waits for storage work queued at the time of the call, including any compaction it
+triggers. Updates arriving later need another call.
 
 ### compact
 
-Queues a compaction now, as every `compactAfter` appends do: loads the stored log, merges it
-into the document, and replaces it with one snapshot. Returns `Promise<void>`, which resolves
-once that work is done. Failures go to `onError`. After `destroy()` or `clear()` it does
-nothing.
+Queues a compaction now, as every `compactAfter` appends do, and resolves once it is written.
+Failures go to `onError`. After `destroy()` or `clear()` it does nothing.
 
 ### stats
 
@@ -137,31 +126,23 @@ the other methods, it rejects when storage cannot be read, rather than calling `
 
 ### destroy
 
-Stops accepting document updates immediately and waits for already queued work. Returns
-`Promise<void>`; calling it again is safe. Stored data stays available for a future
-`createPersistence` call with the same adapter and key.
-
-It does not destroy the CRDT document, disconnect its provider or sync engine, or close the
-storage adapter. Clean up those resources separately.
+Stops storing updates immediately and waits for queued work; calling it again is safe. The
+stored data stays for a later `createPersistence` with the same adapter and key. It does not
+destroy the document, disconnect its provider or sync engine, or close the storage adapter.
 
 ### clear
 
-Stops accepting updates and queues removal of the stored document after pending work.
-Returns `Promise<void>`. It can also be called after `destroy()`.
-
-Clearing storage does not erase the live document or other peers' state. Other active
-persistence instances using the same key can write it again. Create a new persistence
-instance if you want to resume saving after `clear()` or `destroy()`.
+Stops storing updates and removes the stored document after pending work, also after
+`destroy()`. The live document and other peers keep their state, and other persistence
+instances using the same key can write it again. To resume storing after `clear()` or
+`destroy()`, create a new persistence.
 
 ### Error handling
 
-Storage errors go to `onError`; with a non-throwing handler, failed queued operations are
-skipped and later work continues. The lifecycle promises wait for the queue; their
-resolution does not guarantee that every write succeeded. An invalid stored update is
-reported and skipped while the remaining updates are attempted.
-
-A custom `onError` that throws can reject queued work. Keep it non-throwing and track
-failures in your application if you need to show whether persistence is available.
+Storage errors and stored updates that cannot be applied go to `onError`, and the queue
+moves on to the next operation. So the lifecycle promises resolving does not mean every
+write succeeded: track failures in `onError` if the app needs to show whether persistence
+works. Keep `onError` from throwing, or queued work rejects.
 
 ## PersistableDoc
 
@@ -179,10 +160,9 @@ interface PersistableDoc {
 | `apply(update)`       | Merges binary updates or snapshots. Repeated and out-of-order updates must be safe.                                                                                                     |
 | `subscribe(callback)` | Reports local changes and changes received from peers as binary updates. Changes made through this interface's own `apply` must not be reported again. Returns an unsubscribe function. |
 
-The suppression on `apply` prevents restored updates from being saved again. Use
+Not reporting `apply`'s own changes keeps restored updates from being stored again. Use
 `createYjsPersistable`, `createLoroPersistable` or `createAutomergePersistable` from the
-corresponding backend package. They preserve document history, including shared data outside
-the subtree used by the sync engine.
+backend package; they store the whole document, including data outside the synced subtree.
 
 ## PersistenceAdapter and StoredUpdates
 

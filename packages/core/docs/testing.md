@@ -20,8 +20,7 @@ interface MemoryBackend extends CrdtBackend {
 ```
 
 Returns a [CrdtBackend](./sync-engine.md#crdtbackend) with an extra `receive` method. The
-optional initial state defaults to `{}`. Use plain JSON values; the helper copies values
-using JSON serialization, so it is not a general-purpose object clone or a real CRDT.
+initial state defaults to `{}`. Values are copied through JSON, so use plain JSON.
 
 | Member                | Returns       | Behavior                                                                                                                        |
 | --------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -30,8 +29,7 @@ using JSON serialization, so it is not a general-purpose object clone or a real 
 | `receive(next)`       | `void`        | Replaces the held state with a copy, then synchronously notifies every subscriber. Models a full snapshot arriving from a peer. |
 | `subscribe(callback)` | `Unsubscribe` | Registers a callback; the returned function removes it.                                                                         |
 
-`receive` replaces the entire snapshot, rather than merging a partial patch. Separate
-memory backends do not exchange state automatically. See the
+Separate memory backends do not exchange state. See the
 [sync engine example](./sync-engine.md#example) for testing local and remote changes together.
 
 ```ts title="memory-backend-example.ts"
@@ -62,14 +60,9 @@ interface MemoryPersistenceAdapter extends PersistenceAdapter {
 }
 ```
 
-Takes no arguments. Returns a [PersistenceAdapter](./persistence.md#persistenceadapter-and-storedupdates)
-with an extra `size(key)` method that synchronously counts stored updates, including
-compacted snapshots. Missing keys have size `0`.
-
-Each factory call creates independent storage. Reuse the same adapter when testing a
-document being destroyed and restored, or several documents writing to the same storage.
-The data remains while that adapter is retained in memory; it does not survive a process
-restart or browser reload.
+Returns a [PersistenceAdapter](./persistence.md#persistenceadapter-and-storedupdates) with an
+extra `size(key)` method. Each call creates independent storage: reuse one adapter to test a
+document being destroyed and restored, or several documents sharing storage.
 
 | Member                            | Returns                  | Behavior                                                                            |
 | --------------------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
@@ -94,10 +87,6 @@ console.log(storage.size("room")); // 2: the later update and the snapshot
 await storage.clear("room");
 console.log(await storage.load("room")); // { updates: [], version: 0 }
 ```
-
-The bytes above illustrate storage operations. When using this adapter with
-[`createPersistence`](./persistence.md#createpersistence), updates and snapshots must be
-valid encodings for your `PersistableDoc`.
 
 Source: [memory-backend.ts](../src/memory-backend.ts) and
 [memory-persistence.ts](../src/memory-persistence.ts).

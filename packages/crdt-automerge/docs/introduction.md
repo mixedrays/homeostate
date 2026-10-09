@@ -8,8 +8,8 @@ label: Introduction
 [Automerge](https://automerge.org) backend for
 [`@homeostate/core`](../../core/docs/introduction.md). It maps the synced state onto one key of
 an Automerge document (objects become maps, arrays lists, and strings `ImmutableString`s or,
-where you choose, text) and writes fine-grained operations as one Automerge change per write, so a middle-of-array delete, a
-toggle or a keystroke each produce one small change.
+where you choose, text) and writes fine-grained operations as one Automerge change per write,
+so a middle-of-array delete, a toggle or a keystroke each produce one small change.
 
 ## Install
 

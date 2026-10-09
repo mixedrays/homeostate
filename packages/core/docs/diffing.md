@@ -6,8 +6,8 @@ order: 3
 
 # Diff and apply API
 
-Import these APIs and types from `@homeostate/core`. They let adapters and backends translate
-JSON snapshots into small edits while preserving existing containers where possible.
+Import these APIs and types from `@homeostate/core`. Backends and store adapters use them to
+turn a JSON snapshot into small edits that keep unchanged containers in place.
 
 ## getChanges
 
@@ -36,13 +36,12 @@ Returns an ordered edit script that transforms `a` into `b`, without mutating ei
 | `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
 | `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`.       |
 
-Equal values produce `[]`. Different root kinds also produce `[]`: this API cannot express
-replacement of the root. Wrap a value in a record if its type may change, or handle root
-replacement in your adapter. Nested values that change kind produce an `UPDATE`.
+Equal values produce `[]`, and so do different root kinds, since an edit script cannot
+replace its root. Nested values that change kind produce an `UPDATE`.
 
-Use plain JSON data. `Date`, `Map` and `Set` contents are not compared, and cyclic data is
-unsupported. Unless `options.json` is set, this helper does not filter functions for you. Record
-keys are compared as own properties, and a `__proto__` key is ignored on both sides.
+Use plain JSON data: `Date`, `Map` and `Set` contents are not compared, and cyclic data is
+unsupported. Record keys are compared as own properties, and a `__proto__` key is ignored on
+both sides.
 
 ```ts title="get-changes-example.ts"
 import { getChanges } from "@homeostate/core";
@@ -83,16 +82,13 @@ are numbers.
 | `DELETE`  | Removes a record key, one array item or part of a string.                 | `undefined` for records and arrays; a UTF-16 deletion length for strings, with `undefined` meaning `1`. |
 | `PENDING` | Applies a nested script to the existing object, array or string at `key`. | A `Change[]`, not a replacement value.                                                                  |
 
-`PENDING` already contains the nested changes; it does not ask the consumer to compute
-another diff. Inserted and replacement values may refer to objects in `b`; clone or convert
-them in your operations when your store needs ownership of those values.
+Inserted and replacement values may be objects from `b`; clone or convert them when your
+store needs to own them.
 
 ### Array positions
 
-Apply steps in their original order. Each index refers to the array after all preceding
-steps, so deleting several adjacent items can repeat an index. Do not reorder or clamp the
-indices. Array matching compares values structurally; it does not use an `id` field as an
-identity key.
+Apply steps in order: each index refers to the array after all preceding steps, so deleting
+several adjacent items repeats an index. Items are matched by value, not by an `id` field.
 
 ### String offsets
 
@@ -111,9 +107,9 @@ console.log(getChanges("a", "abc"));
 // [["insert", 1, "bc"]]: insert a run of text in one step
 ```
 
-As with arrays, offsets address the progressively edited string. Backends whose native
-text indexes are not UTF-16 must translate both offsets and lengths. String scripts use
-insertions and deletions; replacements are expressed as a combination of those steps.
+As with arrays, each offset addresses the string as edited so far. String scripts hold only
+inserts and deletes. Backends whose text indexes are not UTF-16 must translate offsets and
+lengths.
 
 ### Text policy
 
@@ -150,10 +146,6 @@ Returns `value` revised by a string edit script: what `getChanges` returns for t
 or the script of a `PENDING` step on a string. Steps other than `INSERT` and `DELETE` are
 ignored.
 
-A backend needs it when a `PENDING` step reaches a string the document holds as a plain value
-rather than as text, for example one written by a peer with another policy. It stores the
-edited string as text instead.
-
 ```ts title="apply-string-changes-example.ts"
 import { applyStringChanges, getChanges } from "@homeostate/core";
 
@@ -167,21 +159,16 @@ console.log(applyStringChanges("Plan", getChanges("Plan", "Plan it")));
 declare const toJsonValue: (value: unknown) => unknown;
 ```
 
-Returns `value` as `JSON.stringify` would store it. Object entries holding `undefined` or a
-function are left out, and such array items, holes included, become `null`. Own `__proto__`
-keys are left out too. The input is never mutated: only the containers on a path to a removed
-or replaced value are copied, and a value that is already JSON is returned as is.
+Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
+function are left out, such array items, holes included, become `null`, and own `__proto__`
+keys are dropped. Only the containers on a path to a changed value are copied, and a value
+that is already JSON is returned as is.
 
-`getChanges` with `json: true` applies the same rule to both sides as it diffs: entries holding
-`undefined` or a function count as absent, such array items and holes compare equal to `null`,
-and only the values its changes carry go through `toJsonValue`. A backend sets it on
-`write(next, previous)`. CRDT libraries reject `undefined` or functions, often after applying
-the operations before them, so diffing by the rule means a write applies in full. It also keeps
-rewrites idle: the document holds `null` where the store holds an `undefined` array item, and a
-plain diff against the raw value would replace that item on every write. On the `a` side, it
-lets a backend diff against `previous`, the store's state as last written, without deleting an
-entry the document never held. Calling `toJsonValue` on the whole state first gives the same
-changes, but copies the state on every write.
+`getChanges` with `json: true` applies the same rule to both sides as it diffs, and passes only
+the values its changes carry through `toJsonValue`. CRDT libraries reject `undefined` and
+functions, so a backend sets it on `write(next, previous)`. Without it, an `undefined` array
+item the document holds as `null` would be rewritten on every write, and diffing against
+`previous` could delete entries the document never held.
 
 ```ts title="to-json-value-example.ts"
 import { toJsonValue } from "@homeostate/core";
@@ -202,9 +189,9 @@ declare const applyChanges: (
 ) => void;
 ```
 
-Makes `target` equal to `next` in place and returns `void`. It diffs `current` against `next`
-with `getChanges`, then walks the edit script through `ops`, so only the paths that differ are
-written and untouched containers keep their identity.
+Makes `target` equal to `next` in place. It diffs `current` against `next` with `getChanges`
+and walks the edit script through `ops`, so only the paths that differ are written and
+untouched containers keep their identity.
 
 | Parameter | Description                                                                             |
 | --------- | --------------------------------------------------------------------------------------- |
@@ -215,18 +202,15 @@ written and untouched containers keep their identity.
 | `options` | Passed to `getChanges`. A CRDT backend passes its `text` policy and `json: true`.       |
 
 A `PENDING` step edits the child in place when `ops.kind` reports the kind of container the
-diff expects: a record for a record, a list for an array, and text for a string. Any other child
-is replaced whole with its next value through `ops.set`. That covers a string a store holds as a
-plain value, text stored by a peer with another text policy, and a plain array or object that
-other code stored in a document. With `options.json`, replacement values are passed through
-[toJsonValue](#tojsonvalue) first.
+diff expects: a record for a record, a list for an array, and text for a string. Any other
+child, such as a string held as a plain value or text written under another text policy, is
+replaced whole with its next value through `ops.set`, passed through
+[toJsonValue](#tojsonvalue) with `options.json`.
 
-When `ops.kind(target)` is not a record or a list, nothing is written. Different root kinds in
-`current` and `next` produce no changes, as in `getChanges`.
-
-Operations run synchronously, after the whole diff is computed. If an operation throws, the
-error propagates and prior mutations remain; wrap the call in your store's or library's
-transaction when atomicity is needed.
+Nothing is written when `ops.kind(target)` is not a record or a list, or when `current` and
+`next` have different root kinds. Operations run synchronously after the whole diff is
+computed; if one throws, earlier mutations remain, so wrap the call in a transaction when it
+must be atomic.
 
 ### Example
 
@@ -315,10 +299,9 @@ the strings its text policy marks as text: the value `set` writes sits at `[...p
 the `i`th value `splice` inserts at `[...path, index + i]`. Automerge, which edits text by path
 rather than through a text object, uses it in `editText`.
 
-Every container passed to an operation is one already in the target. The walker does not clone
-it, and it never clones values: convert or copy them in `set` and `splice` when your store
-needs ownership. If your store requires batched notifications, apply the entire script within
-one batch.
+Every container passed to an operation is already in the target, and values are never
+cloned: convert or copy them in `set` and `splice` when your store needs to own them. If your
+store batches notifications, run the whole call in one batch.
 
 Source: [diff.ts](../src/diff.ts), [change.ts](../src/change.ts), [json.ts](../src/json.ts) and
 [apply.ts](../src/apply.ts).

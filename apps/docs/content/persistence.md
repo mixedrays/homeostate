@@ -10,8 +10,8 @@ disconnects, or the server restarts, the room and its state are gone. Persistenc
 copy of the document in each browser: on the next start the page restores it, works offline
 from it, and hands it back to the server once it reconnects.
 
-For complete signatures, options and method behavior, see the
-[persistence API reference](../../../packages/core/docs/persistence.md).
+The [persistence API reference](../../../packages/core/docs/persistence.md) has the complete
+API.
 
 ## What is stored
 
@@ -103,22 +103,9 @@ kept, so no tab loses another's edits.
 
 ## Custom storage
 
-A `PersistenceAdapter` is an append-only log of binary updates per key:
-
-```ts
-interface PersistenceAdapter {
-  load: (key: string) => Promise<{ updates: Uint8Array[]; version: number }>;
-  append: (key: string, update: Uint8Array) => Promise<void>;
-  compact: (
-    key: string,
-    snapshot: Uint8Array,
-    version: number,
-  ) => Promise<void>;
-  clear: (key: string) => Promise<void>;
-}
-```
-
-`version` identifies the newest update `load` returned. `compact` must, atomically, remove
-the updates up to that version and store the snapshot, keeping anything appended since.
+A [`PersistenceAdapter`](../../../packages/core/docs/persistence.md#persistenceadapter-and-storedupdates)
+is an append-only log of binary updates per key, with `load`, `append`, `compact` and `clear`.
+`compact` must atomically replace the updates up to the version `load` returned with one
+snapshot, keeping anything appended since.
 [`createMemoryPersistenceAdapter()`](../../../packages/core/docs/testing.md#creatememorypersistenceadapter)
 from `@homeostate/core/testing` is an in-memory one for tests.
