@@ -14,7 +14,7 @@
       <button
         class="bar-button outlined"
         type="button"
-        [attr.aria-pressed]="!online()"
+        [class.offline]="!online()"
         [title]="
           online()
             ? 'Disconnect from the sync server to edit offline'

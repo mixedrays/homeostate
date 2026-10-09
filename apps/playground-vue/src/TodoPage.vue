@@ -107,7 +107,7 @@ function editTodo(id: string, input: HTMLInputElement) {
         <button
           class="bar-button outlined"
           type="button"
-          :aria-pressed="!online"
+          :class="{ offline: !online }"
           :title="
             online
               ? 'Disconnect from the sync server to edit offline'

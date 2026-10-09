@@ -111,7 +111,7 @@
       <button
         class="bar-button outlined"
         type="button"
-        aria-pressed={!online}
+        class:offline={!online}
         title={online
           ? "Disconnect from the sync server to edit offline"
           : "Reconnect and merge the edits made while offline"}
