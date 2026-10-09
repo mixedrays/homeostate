@@ -310,7 +310,7 @@ h1 {
   border-color: var(--border);
   background: white;
 }
-.bar-button[aria-pressed="true"] {
+.bar-button.offline {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
