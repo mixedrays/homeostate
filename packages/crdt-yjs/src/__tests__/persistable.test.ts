@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { describePersistableDoc } from "../../../core/src/__tests__/persistable-doc-suite.js";
+import { describePersistableDoc } from "@homeostate/core/conformance";
 import { createYjsBackend, createYjsPersistable } from "../index.js";
 
 describePersistableDoc("createYjsPersistable", {

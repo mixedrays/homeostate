@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { describePersistenceAdapter } from "../../../core/src/__tests__/persistence-adapter-suite.js";
+import { describePersistenceAdapter } from "@homeostate/core/conformance";
 import { createLocalStorageAdapter } from "../index.js";
 import { fromBase64, toBase64 } from "../base64.js";
 

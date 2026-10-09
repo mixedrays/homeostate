@@ -4,7 +4,7 @@ import * as Y from "yjs";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPersistence } from "@homeostate/core";
 import { createYjsPersistable } from "@homeostate/crdt-yjs";
-import { describePersistenceAdapter } from "../../../core/src/__tests__/persistence-adapter-suite.js";
+import { describePersistenceAdapter } from "@homeostate/core/conformance";
 import { createIndexedDbAdapter, type IndexedDbAdapter } from "../index.js";
 
 let factory = new IDBFactory();

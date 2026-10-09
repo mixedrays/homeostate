@@ -1,5 +1,5 @@
 import * as A from "@automerge/automerge";
-import { describePersistableDoc } from "../../../core/src/__tests__/persistable-doc-suite.js";
+import { describePersistableDoc } from "@homeostate/core/conformance";
 import {
   createAutomergeBackend,
   createAutomergeHandle,

@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryBackend } from "../testing.js";
+import { describeCrdtBackend } from "./crdt-backend-suite.js";
+
+describeCrdtBackend("createMemoryBackend", {
+  createDoc: () => createMemoryBackend(),
+  backend: (doc) => doc,
+  storeForeign: (doc, key, value) => {
+    doc.receive({ ...(doc.read() as object), [key]: value });
+  },
+});
 
 describe("createMemoryBackend", () => {
   it("starts as an empty object by default", () => {
