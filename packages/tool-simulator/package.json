@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/tool-simulator",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Test homeostate peers on a simulated network with latency, drops, reordering and partitions, and check that they converge",
   "license": "MIT",
   "type": "module",

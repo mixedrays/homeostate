@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/store-ngrx-signals",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NgRx Signals adapter for @homeostate/core",
   "license": "MIT",
   "type": "module",
