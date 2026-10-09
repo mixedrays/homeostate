@@ -36,8 +36,15 @@ export const createLoroBackend = (
   return {
     read: () => withPlainPrototypes(map.toJSON()),
 
-    write: (next) => {
-      applyChanges(map, map.toJSON(), next as object, ops, {
+    write: (next, previous) => {
+      // Edits other code has not committed are reported only once committed, so `previous`
+      // may lack them.
+      const current = (
+        previous !== undefined && doc.getPendingTxnLength() === 0
+          ? previous
+          : map.toJSON()
+      ) as object;
+      applyChanges(map, current, next as object, ops, {
         text,
         json: true,
       });

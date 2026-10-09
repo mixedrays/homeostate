@@ -26,7 +26,7 @@ using JSON serialization, so it is not a general-purpose object clone or a real 
 | Member                | Returns       | Behavior                                                                                                                        |
 | --------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `read()`              | `unknown`     | A fresh copy of the held state.                                                                                                 |
-| `write(next)`         | `void`        | Replaces the held state with a copy, without notifying subscribers. Models the engine's own write.                              |
+| `write(next)`         | `void`        | Replaces the held state with a copy, without notifying subscribers, and ignores `previous`. Models the engine's own write.      |
 | `receive(next)`       | `void`        | Replaces the held state with a copy, then synchronously notifies every subscriber. Models a full snapshot arriving from a peer. |
 | `subscribe(callback)` | `Unsubscribe` | Registers a callback; the returned function removes it.                                                                         |
 

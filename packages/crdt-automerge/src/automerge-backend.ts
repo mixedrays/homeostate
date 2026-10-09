@@ -41,22 +41,21 @@ export const createAutomergeBackend = <T extends Container>(
   return {
     read: () => current() ?? {},
 
-    write: (next) => {
+    write: (next, previous) => {
       if (!isRecord(next)) return;
       // `current()` is a `read()` snapshot, in which every string is a plain string.
-      const before = current();
+      const before = previous ?? current();
       writing = true;
       try {
         handle.change((doc) => {
           const root = doc as Container;
-          if (isRecord(before))
-            applyChanges(
-              root[name] as object,
-              before,
-              next,
-              createAutomergeOps(root, name, text),
-              { text, json: true },
-            );
+          const ops = createAutomergeOps(root, name, text);
+          // The document's own key decides: `previous` is `{}` when the key is missing.
+          if (ops.kind(root[name]) === "record")
+            applyChanges(root[name] as object, before as object, next, ops, {
+              text,
+              json: true,
+            });
           else root[name] = toAutomerge(toJsonValue(next), [], text);
         });
       } finally {

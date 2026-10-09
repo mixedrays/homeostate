@@ -47,10 +47,17 @@ export const createYjsBackend = (
   return {
     read: () => toPlainValue(map),
 
-    write: (next) => {
+    write: (next, previous) => {
+      // Inside another transaction, its changes so far are reported only once it ends, so
+      // `previous` may lack them.
+      const current = (
+        previous !== undefined && doc._transaction === null
+          ? previous
+          : map.toJSON()
+      ) as object;
       doc.transact(
         () =>
-          applyChanges(map, map.toJSON(), next as object, ops, {
+          applyChanges(map, current, next as object, ops, {
             text,
             json: true,
           }),

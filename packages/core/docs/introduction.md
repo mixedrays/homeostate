@@ -67,12 +67,14 @@ backend without replication, and `createMemoryPersistenceAdapter()`. The
 
 ## Writing a backend
 
-`applyChanges(root, current, next, ops, { text, json: true })` turns a `write(next)` into small
-edits instead of replacing the document: it diffs `current`, the JSON the document holds,
-against `next`, and applies the result through your `ApplyOps`, which classify, read and write
-your library's maps, lists and texts. `json: true` keeps `undefined` and functions out of the
-CRDT library. A plain value where the diff expects a container, such as a string held as a
-value at a text path or an object other code stored, is replaced whole.
+`applyChanges(root, current, next, ops, { text, json: true })` turns a `write(next, previous)`
+into small edits instead of replacing the document: it diffs `current`, the JSON the document
+holds, against `next`, and applies the result through your `ApplyOps`, which classify, read and
+write your library's maps, lists and texts. Pass `previous` as `current` when the engine gives
+it, and read your document only when it does not: unchanged subtrees then match by identity
+instead of being compared item by item. `json: true` keeps `undefined` and functions out of the
+CRDT library, on both sides of the diff. A plain value where the diff expects a container, such
+as a string held as a value at a text path or an object other code stored, is replaced whole.
 
 Accept a `text` option as the supplied backends do, and pass it to `applyChanges`. In `set` and
 `splice`, store the strings it marks in your library's text type and every other string as a

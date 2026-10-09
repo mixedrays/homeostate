@@ -76,6 +76,28 @@ describe("createAutomergeBackend", () => {
     expect(A.getObjectId(todos()[1])).toBe(third);
   });
 
+  it("diffs against previous instead of reading its document", () => {
+    const handle = createHandle();
+    const backend = createAutomergeBackend(handle, NAME);
+    backend.write({ count: 1, label: "a" });
+    // Unreported, so a `previous` that misses it shows which side the write diffed against.
+    handle.change((doc) => {
+      (doc[NAME] as Root).count = 2;
+    });
+
+    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+    expect(backend.read()).toEqual({ count: 2, label: "b" });
+  });
+
+  it("creates the synced key when given previous for a document without it", () => {
+    const backend = createAutomergeBackend(createHandle(), NAME);
+    // What the engine passes after `read()` reported the missing key as an empty object.
+    backend.write({ count: 1 }, {});
+
+    expect(backend.read()).toEqual({ count: 1 });
+  });
+
   it("shares unchanged subtrees between reads and copies the changed path", () => {
     const backend = createAutomergeBackend(createHandle(), NAME);
     backend.write(threeTodos());

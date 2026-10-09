@@ -34,7 +34,7 @@ Returns an ordered edit script that transforms `a` into `b`, without mutating ei
 | `a`            | The current plain record, array or string.                                                                         |
 | `b`            | The desired value, with the same root kind as `a`.                                                                 |
 | `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
-| `options.json` | Diff `b` as `JSON.stringify` would store it; see [toJsonValue](#tojsonvalue). Defaults to `false`.                 |
+| `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`.       |
 
 Equal values produce `[]`. Different root kinds also produce `[]`: this API cannot express
 replacement of the root. Wrap a value in a record if its type may change, or handle root
@@ -172,14 +172,16 @@ function are left out, and such array items, holes included, become `null`. Own 
 keys are left out too. The input is never mutated: only the containers on a path to a removed
 or replaced value are copied, and a value that is already JSON is returned as is.
 
-`getChanges` with `json: true` applies the same rule as it diffs: entries holding `undefined`
-or a function count as absent, such array items and holes compare equal to `null`, and only
-the values its changes carry go through `toJsonValue`. A backend sets it on `write(next)`. CRDT
-libraries reject `undefined` or functions, often after applying the operations before them, so
-diffing by the rule means a write applies in full. It also keeps rewrites idle: the document
-holds `null` where the store holds an `undefined` array item, and a plain diff against the raw
-value would replace that item on every write. Calling `toJsonValue` on the whole state first
-gives the same changes, but copies the state on every write.
+`getChanges` with `json: true` applies the same rule to both sides as it diffs: entries holding
+`undefined` or a function count as absent, such array items and holes compare equal to `null`,
+and only the values its changes carry go through `toJsonValue`. A backend sets it on
+`write(next, previous)`. CRDT libraries reject `undefined` or functions, often after applying
+the operations before them, so diffing by the rule means a write applies in full. It also keeps
+rewrites idle: the document holds `null` where the store holds an `undefined` array item, and a
+plain diff against the raw value would replace that item on every write. On the `a` side, it
+lets a backend diff against `previous`, the store's state as last written, without deleting an
+entry the document never held. Calling `toJsonValue` on the whole state first gives the same
+changes, but copies the state on every write.
 
 ```ts title="to-json-value-example.ts"
 import { toJsonValue } from "@homeostate/core";
@@ -207,7 +209,7 @@ written and untouched containers keep their identity.
 | Parameter | Description                                                                             |
 | --------- | --------------------------------------------------------------------------------------- |
 | `target`  | The record or list to mutate: a store's container or a document's root map.             |
-| `current` | What `target` holds now, as plain JSON, such as the snapshot the store last handed out. |
+| `current` | What `target` holds now, as JSON, such as a store's snapshot or a backend's `previous`. |
 | `next`    | What `target` should hold.                                                              |
 | `ops`     | How to read and write your containers; see [ApplyOps](#applyops).                       |
 | `options` | Passed to `getChanges`. A CRDT backend passes its `text` policy and `json: true`.       |

@@ -61,6 +61,32 @@ describe("createYjsBackend", () => {
     expect(todos.toJSON()).toEqual(deleteTodo(threeTodos(), "2").todos);
     expect(todos.get(1)).toBe(third);
   });
+
+  it("diffs against previous instead of reading its document", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1, label: "a" });
+    // Unreported, so a `previous` that misses it shows which side the write diffed against.
+    doc.getMap(NAME).set("count", 2);
+
+    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+    expect(backend.read()).toEqual({ count: 2, label: "b" });
+  });
+
+  it("diffs against its document when written inside another transaction", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1, label: "a" });
+
+    doc.transact(() => {
+      // Reported only once the outer transaction ends, so `previous` cannot hold it yet.
+      doc.getMap(NAME).set("count", 2);
+      backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+    });
+
+    expect(backend.read()).toEqual({ count: 1, label: "b" });
+  });
 });
 
 describe("untrusted key names", () => {

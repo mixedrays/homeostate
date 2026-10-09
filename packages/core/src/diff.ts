@@ -21,10 +21,11 @@ export interface DiffOptions {
    */
   text?: TextPolicy;
   /**
-   * Diff `b` as `JSON.stringify` would store it, without copying it first: object entries
-   * holding `undefined` or a function are absent, and such array items, holes included, are
-   * `null`. The values the changes carry are passed through `toJsonValue`. A CRDT backend sets
-   * it on `write(next)`, so no change it applies holds a value JSON cannot.
+   * Diff `a` and `b` as `JSON.stringify` would store them, without copying either first: object
+   * entries holding `undefined` or a function are absent, and such array items, holes included,
+   * are `null`. The values the changes carry are passed through `toJsonValue`. A CRDT backend
+   * sets it on `write(next, previous)`, so no change it applies holds a value JSON cannot, and
+   * none removes an entry its document never held.
    */
   json?: boolean;
 }
@@ -321,12 +322,16 @@ const getRecordChanges = (
     options.json === true && isAbsent(value);
 
   for (const property of Object.keys(a))
-    if (property !== PROTO_KEY && (!hasOwn(b, property) || absent(b[property])))
+    if (
+      property !== PROTO_KEY &&
+      !absent(a[property]) &&
+      (!hasOwn(b, property) || absent(b[property]))
+    )
       changes.push([ChangeType.DELETE, property, undefined]);
 
   for (const [property, value] of Object.entries(b)) {
     if (property === PROTO_KEY || absent(value)) continue;
-    if (!hasOwn(a, property))
+    if (!hasOwn(a, property) || absent(a[property]))
       changes.push([ChangeType.INSERT, property, written(value, options)]);
     else {
       const nested = nestedChanges(a[property], value, path, property, options);
