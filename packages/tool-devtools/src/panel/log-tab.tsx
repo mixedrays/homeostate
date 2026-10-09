@@ -116,7 +116,6 @@ export function LogTab({
         <Button
           size="xs"
           variant="outline"
-          aria-pressed={paused}
           onClick={() => inspector.setPaused(!paused)}
         >
           {paused ? <Play /> : <Pause />}

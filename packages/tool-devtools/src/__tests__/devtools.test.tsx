@@ -211,6 +211,15 @@ describe("HomeostateDevtools", () => {
     expect(store.get().filter).toBe("all");
   });
 
+  it("names the log's pause action without aria-pressed", async () => {
+    await render();
+    await click(buttonWithText("Log"));
+    expect(buttonWithText("Pause").getAttribute("aria-pressed")).toBeNull();
+
+    await click(buttonWithText("Pause"));
+    expect(buttonWithText("Resume").getAttribute("aria-pressed")).toBeNull();
+  });
+
   it("disconnects and reconnects the engine", async () => {
     await render();
     const toggle = byLabel("Sync engine connected");
