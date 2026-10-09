@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/store-zustand",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zustand adapter and middleware for @homeostate/core",
   "license": "MIT",
   "type": "module",
