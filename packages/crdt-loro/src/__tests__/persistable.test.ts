@@ -1,5 +1,5 @@
 import { LoroDoc } from "loro-crdt";
-import { describePersistableDoc } from "../../../core/src/__tests__/persistable-doc-suite.js";
+import { describePersistableDoc } from "@homeostate/core/conformance";
 import { createLoroBackend, createLoroPersistable } from "../index.js";
 
 describePersistableDoc("createLoroPersistable", {
