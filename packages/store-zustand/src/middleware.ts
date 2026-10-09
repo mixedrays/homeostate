@@ -47,9 +47,24 @@ const homeostateImpl: HomeostateMiddlewareImpl =
  * Any `CrdtBackend` works: `@homeostate/crdt-yjs`, `@homeostate/crdt-loro`, `@homeostate/crdt-automerge`.
  * The engine is exposed as `store.homeostate`, so `store.homeostate.disconnect()` stops syncing.
  *
+ * Use the curried `create<T>()(...)` form: Zustand cannot infer the state type through a
+ * middleware, so `create(homeostate(...))` types the state as `object`.
+ *
  * @example
- * const useStore = create(
- *   homeostate(createYjsBackend(new Y.Doc(), 'shared'), (set) => ({ count: 0, increment: () => set((s) => ({ count: s.count + 1 })) }))
+ * ```typescript
+ * import * as Y from "yjs";
+ * import { create } from "zustand";
+ * import { createYjsBackend } from "@homeostate/crdt-yjs";
+ * import { homeostate } from "@homeostate/store-zustand";
+ *
+ * type CounterState = { count: number; increment: () => void };
+ *
+ * const useStore = create<CounterState>()(
+ *   homeostate(createYjsBackend(new Y.Doc(), "shared"), (set) => ({
+ *     count: 0,
+ *     increment: () => set((s) => ({ count: s.count + 1 })),
+ *   })),
  * );
+ * ```
  */
 export const homeostate = homeostateImpl as unknown as HomeostateMiddleware;
