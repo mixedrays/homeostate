@@ -130,3 +130,21 @@ store's filtered state, and a key removed from the backend is removed from the s
 > dropped for every key the backend holds. To edit offline, disconnect the CRDT library's
 > provider instead and keep the engine connected: the document records the edits and merges
 > them when the provider reconnects.
+
+## Coalescing remote changes
+
+By default the engine applies each remote change to the store as it arrives, so a burst of
+updates, such as a peer catching up after a slow connection, re-renders once per update. The
+`schedule` option applies the burst once:
+
+```ts
+createSyncEngine(backend, adapter, {
+  schedule: (flush) => queueMicrotask(flush),
+});
+```
+
+Until the flush, the store does not show the pending changes. A local change made in the
+meantime applies them first, and they win: what the local change did to synced keys is lost.
+See
+[Coalescing remote changes](../../../packages/core/docs/sync-engine.md#coalescing-remote-changes)
+for when that can happen.

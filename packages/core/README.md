@@ -27,6 +27,9 @@ a populated room adopts it. Keys only the store has are written to the backend (
 "if-empty"`, the default) or left for the next local change (`seed: "never"`). A reconnect
 adopts the backend again, so edits made while disconnected to keys it holds are dropped.
 
+Remote changes are applied to the store as they arrive. Pass
+`schedule: (flush) => queueMicrotask(flush)` to apply a burst of them with one store update.
+
 `createPersistence` keeps the CRDT document in browser storage so it survives reloads; see
 the [persistence guide](https://homeostate.pages.dev/docs/persistence).
 `@homeostate/core/testing` exports in-memory doubles for tests.
