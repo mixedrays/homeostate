@@ -32,12 +32,6 @@ describeCrdtBackend("createLoroBackend", {
     doc.getMap(NAME).set(key, value);
     doc.commit();
   },
-  knownFailures: {
-    "adopts a foreign plain array on the next write":
-      "write sends changes for a plain array to the LoroText applier (task 063)",
-    "adopts a foreign plain object on the next write":
-      "write drops changes for a plain object (task 063)",
-  },
 });
 
 describe("createLoroBackend", () => {

@@ -43,10 +43,6 @@ describeCrdtBackend("createYjsBackend", {
     doc.getMap(NAME).set(key, value);
   },
   knownFailures: {
-    "adopts a foreign plain array on the next write":
-      "write sends changes for a plain array to the Y.Text applier (task 063)",
-    "adopts a foreign plain object on the next write":
-      "write drops changes for a plain object (task 063)",
     "keeps the document when a read of a foreign value is mutated":
       "read() returns plain values other code stored by reference (task 073)",
   },

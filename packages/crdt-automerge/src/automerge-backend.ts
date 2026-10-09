@@ -1,11 +1,17 @@
 import {
+  applyChanges,
   toJsonValue,
   type CrdtBackend,
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
 import type { AutomergeHandle } from "./handle.js";
-import { applyChanges, diff, toAutomerge, type Container } from "./patching.js";
+import {
+  createAutomergeOps,
+  isRecord,
+  toAutomerge,
+  type Container,
+} from "./patching.js";
 import { createSnapshot } from "./snapshot.js";
 
 /** Options for `createAutomergeBackend` */
@@ -36,14 +42,22 @@ export const createAutomergeBackend = <T extends Container>(
     read: () => current() ?? {},
 
     write: (next) => {
-      const changes = diff(current(), next, text);
-      if (changes?.length === 0) return;
+      if (!isRecord(next)) return;
+      // `current()` is a `read()` snapshot, in which every string is a plain string.
+      const before = current();
       writing = true;
       try {
         handle.change((doc) => {
-          if (changes === null)
-            (doc as Container)[name] = toAutomerge(toJsonValue(next), [], text);
-          else applyChanges(doc as Container, name, [], changes, text);
+          const root = doc as Container;
+          if (isRecord(before))
+            applyChanges(
+              root[name] as object,
+              before,
+              next,
+              createAutomergeOps(root, name, text),
+              { text, json: true },
+            );
+          else root[name] = toAutomerge(toJsonValue(next), [], text);
         });
       } finally {
         writing = false;

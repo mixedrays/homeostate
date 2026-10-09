@@ -1,33 +1,12 @@
 import * as A from "@automerge/automerge";
-import {
-  applyStringChanges,
-  ChangeType,
-  getChanges,
-  type Change,
-  type TextPolicy,
-} from "@homeostate/core";
+import type { ApplyOps, TextPolicy } from "@homeostate/core";
 
 export type Container = Record<string, unknown>;
 
-type Path = A.Prop[];
+type Path = readonly A.Prop[];
 
-const isRecord = (value: unknown): value is Container =>
+export const isRecord = (value: unknown): value is Container =>
   value !== null && typeof value === "object" && !Array.isArray(value);
-
-/**
- * `current` is a `read()` snapshot, in which every string is a plain string. `next` is diffed
- * as JSON would store it.
- */
-export const diff = (
-  current: unknown,
-  next: unknown,
-  text: TextPolicy,
-): Change[] | null => {
-  if (!isRecord(next)) return [];
-  return isRecord(current)
-    ? getChanges(current, next, { text, json: true })
-    : null;
-};
 
 /**
  * Returns `value` at `path` as it is assigned in `A.change`: strings the policy marks as text
@@ -53,125 +32,51 @@ export const toAutomerge = (
 };
 
 /**
- * Applies `changes` to the container at `path` under `doc[root]`. Paths given to the policy
- * start below `root`.
+ * How `applyChanges` writes into `doc[root]` inside `A.change`. Every value it writes is
+ * converted by `toAutomerge`. Text reads as a string and is edited character by character
+ * through its path, since Automerge splices text by path; an `ImmutableString`, held by a peer
+ * with another policy or an older version, is a plain value and is replaced whole. Paths given to
+ * the policy start below `root`.
  */
-export const applyChanges = (
+export const createAutomergeOps = (
   doc: Container,
   root: string,
-  path: Path,
-  changes: Change[],
   text: TextPolicy,
-): void => {
-  const container = path.reduce<unknown>(
-    (value, prop) => (value as Container)[prop],
-    doc[root],
-  );
-  const target = { doc, root, path, text };
-  for (const [type, key, value] of changes) {
-    if (typeof container === "string")
-      applyToText(target, type, key as number, value);
-    else if (Array.isArray(container))
-      applyToList(target, container, type, key as number, value);
-    else applyToMap(target, container as Container, type, key as string, value);
-  }
-};
+): ApplyOps => ({
+  kind: (value) => {
+    if (typeof value === "string") return "text";
+    if (Array.isArray(value)) return "list";
+    // A list proxy claims every property, so `isImmutableString` alone accepts one.
+    return isRecord(value) && !A.isImmutableString(value)
+      ? "record"
+      : undefined;
+  },
 
-interface Target {
-  doc: Container;
-  root: string;
-  path: Path;
-  text: TextPolicy;
-}
+  get: (container, key) => (container as Container)[key],
 
-/**
- * Follows a pending step into the child at `key`. Text held as an `ImmutableString`, by a peer
- * with another policy or an older version, is replaced by the edited string instead.
- */
-const applyPending = (
-  { doc, root, path, text }: Target,
-  parent: Container | unknown[],
-  key: string | number,
-  changes: Change[],
-): void => {
-  const at = [...path, key];
-  const child = (parent as Container)[key];
-  // A list proxy claims every property, so `isImmutableString` alone accepts one.
-  if (!Array.isArray(child) && A.isImmutableString(child))
-    (parent as Container)[key] = toAutomerge(
-      applyStringChanges(child.val, changes),
-      at,
-      text,
-    );
-  else applyChanges(doc, root, at, changes, text);
-};
+  set: (container, key, value, path) => {
+    (container as Container)[key] = toAutomerge(value, [...path, key], text);
+  },
 
-const applyToMap = (
-  target: Target,
-  map: Container,
-  type: ChangeType,
-  key: string,
-  value: unknown,
-): void => {
-  switch (type) {
-    case ChangeType.INSERT:
-    case ChangeType.UPDATE:
-      map[key] = toAutomerge(value, [...target.path, key], target.text);
-      break;
+  remove: (container, key) => {
+    delete (container as Container)[key];
+  },
 
-    case ChangeType.DELETE:
-      delete map[key];
-      break;
-
-    case ChangeType.PENDING:
-      applyPending(target, map, key, value as Change[]);
-      break;
-  }
-};
-
-const applyToList = (
-  target: Target,
-  list: unknown[],
-  type: ChangeType,
-  index: number,
-  value: unknown,
-): void => {
-  switch (type) {
-    case ChangeType.INSERT:
+  splice: (list, index, deleteCount, inserted, path) => {
+    if (deleteCount > 0) A.deleteAt(list as unknown[], index, deleteCount);
+    if (inserted.length > 0)
       A.insertAt(
-        list,
+        list as unknown[],
         index,
-        toAutomerge(value, [...target.path, index], target.text),
+        ...inserted.map((value, i) =>
+          toAutomerge(value, [...path, index + i], text),
+        ),
       );
-      break;
+  },
 
-    case ChangeType.UPDATE:
-      list[index] = toAutomerge(value, [...target.path, index], target.text);
-      break;
-
-    case ChangeType.DELETE:
-      A.deleteAt(list, index, 1);
-      break;
-
-    case ChangeType.PENDING:
-      applyPending(target, list, index, value as Change[]);
-      break;
-  }
-};
-
-const applyToText = (
-  { doc, root, path }: Target,
-  type: ChangeType,
-  index: number,
-  value: unknown,
-): void => {
-  if (type === ChangeType.INSERT)
-    A.splice(doc, [root, ...path], index, 0, value as string);
-  else if (type === ChangeType.DELETE)
-    A.splice(
-      doc,
-      [root, ...path],
-      index,
-      typeof value === "number" ? value : 1,
-    );
-};
+  editText: (_text, index, deleteCount, inserted, path) => {
+    if (inserted.length > 0)
+      A.splice(doc, [root, ...path], index, deleteCount, inserted);
+    else A.splice(doc, [root, ...path], index, deleteCount);
+  },
+});

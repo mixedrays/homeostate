@@ -166,7 +166,7 @@ A `write` that applies an edit script as small CRDT operations, so a toggle or a
 _Avoid_: Partial write, incremental write
 
 **Apply operations**:
-The `ApplyOps` functions, `set`, `remove` and `splice`, through which `applyChanges` applies an edit script to a store in place.
+The `ApplyOps` functions, `kind`, `get`, `set`, `remove`, `splice` and, for text, `editText`, through which `applyChanges` applies an edit script to a store or a document in place.
 
 ## Persistence
 

@@ -67,14 +67,16 @@ backend without replication, and `createMemoryPersistenceAdapter()`. The
 
 ## Writing a backend
 
-`getChanges(current, next)` turns a `write(next)` into fine-grained changes, so a backend can
-apply small edits instead of replacing the document. Pass `json: true`, so `undefined` and
-functions never reach the CRDT library. `applyChanges` applies them to a mutable target
-through your own set, remove and splice operations.
+`applyChanges(root, current, next, ops, { text, json: true })` turns a `write(next)` into small
+edits instead of replacing the document: it diffs `current`, the JSON the document holds,
+against `next`, and applies the result through your `ApplyOps`, which classify, read and write
+your library's maps, lists and texts. `json: true` keeps `undefined` and functions out of the
+CRDT library. A plain value where the diff expects a container, such as a string held as a
+value at a text path or an object other code stored, is replaced whole.
 
-Accept a `text` option as the supplied backends do, and pass it as
-`getChanges(current, next, { text, json: true })`. Store the strings it marks in your library's text type
-and every other string as a plain value, so concurrent writes of an id or a status keep one
-value instead of merging characters. See the
+Accept a `text` option as the supplied backends do, and pass it to `applyChanges`. In `set` and
+`splice`, store the strings it marks in your library's text type and every other string as a
+plain value, so concurrent writes of an id or a status keep one value instead of merging
+characters; text is then edited through `editText`. See the
 [diff and apply reference](./diffing.md) for tuple formats, ordered array edits, UTF-16 string
 offsets, text policies and a complete `ApplyOps` example.

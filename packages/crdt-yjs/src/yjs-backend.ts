@@ -1,7 +1,12 @@
 import * as Y from "yjs";
-import type { CrdtBackend, TextPolicy, Unsubscribe } from "@homeostate/core";
+import {
+  applyChanges,
+  type CrdtBackend,
+  type TextPolicy,
+  type Unsubscribe,
+} from "@homeostate/core";
 import { toPlainValue } from "./mapping.js";
-import { patchSharedType } from "./patching.js";
+import { createYjsOps } from "./patching.js";
 
 /** Options for `createYjsBackend` */
 export interface YjsBackendOptions {
@@ -37,12 +42,20 @@ export const createYjsBackend = (
   const { text = noText } = options;
   const map = doc.getMap<unknown>(name);
   const origin = Symbol(`homeostate:${name}`);
+  const ops = createYjsOps(text);
 
   return {
     read: () => toPlainValue(map),
 
     write: (next) => {
-      doc.transact(() => patchSharedType(map, next, text), origin);
+      doc.transact(
+        () =>
+          applyChanges(map, map.toJSON(), next as object, ops, {
+            text,
+            json: true,
+          }),
+        origin,
+      );
     },
 
     subscribe: (onRemoteChange): Unsubscribe => {
