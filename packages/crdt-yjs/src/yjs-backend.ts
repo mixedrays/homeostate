@@ -55,12 +55,15 @@ const noText: TextPolicy = () => false;
  * ```
  */
 export function createYjsBackend(
-  doc: Y.Doc,
-  name: string,
+  map: Y.Map<unknown>,
   options?: YjsBackendOptions,
 ): YjsBackend;
+// Last, so that `Parameters` and other inference from `typeof createYjsBackend` see this form,
+// as they did before the map form existed.
+/** Creates a CrdtBackend over the Y.Map called `name` inside `doc`. */
 export function createYjsBackend(
-  map: Y.Map<unknown>,
+  doc: Y.Doc,
+  name: string,
   options?: YjsBackendOptions,
 ): YjsBackend;
 export function createYjsBackend(

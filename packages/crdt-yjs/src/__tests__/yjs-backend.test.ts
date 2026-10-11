@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createSyncEngine } from "@homeostate/core";
 import {
   addTodo,
@@ -13,7 +13,7 @@ import {
   todoTitles,
   toggleTodo,
 } from "@homeostate/core/conformance";
-import { createYjsBackend } from "../index.js";
+import { createYjsBackend, type YjsBackendOptions } from "../index.js";
 
 const NAME = "shared";
 
@@ -185,6 +185,12 @@ describe("map and origin", () => {
 
   it("throws a TypeError for a map outside any document", () => {
     expect(() => createYjsBackend(new Y.Map())).toThrow(TypeError);
+  });
+
+  it("keeps the document form as the one inferred from its type", () => {
+    expectTypeOf<Parameters<typeof createYjsBackend>>().toEqualTypeOf<
+      [doc: Y.Doc, name: string, options?: YjsBackendOptions]
+    >();
   });
 });
 
