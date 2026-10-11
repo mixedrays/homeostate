@@ -39,6 +39,21 @@ createYjsBackend(doc, "shared", {
 });
 ```
 
+The backend also exposes `map`, the synced `Y.Map`, and `origin`, which tags its writes. To
+undo the store's own edits, track that origin with `Y.UndoManager`, created after `connect()`.
+An undo reaches the store as a remote change:
+
+```ts
+const backend = createYjsBackend(doc, "shared");
+createSyncEngine(backend, adapter).connect();
+const undoManager = new Y.UndoManager(backend.map, {
+  trackedOrigins: new Set([backend.origin]),
+});
+```
+
+To sync into a map you already have, such as one nested in another map, pass it instead of a
+document and a name: `createYjsBackend(map, options)`. It must already be part of a document.
+
 To persist the document, pass `createYjsPersistable(doc)` to `createPersistence`; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).
 
