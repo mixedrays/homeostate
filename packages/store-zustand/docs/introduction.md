@@ -22,7 +22,8 @@ npm install @homeostate/core @homeostate/store-zustand zustand @homeostate/crdt-
 ## Usage
 
 Wrap the state creator with the `homeostate` middleware. The store connects as soon as it
-is created, and the engine is exposed as `store.homeostate`:
+is created, or once [`persist`](#combining-with-other-middlewares) has hydrated it, and the
+engine is exposed as `store.homeostate`:
 
 ```ts
 import * as Y from "yjs";
@@ -62,3 +63,60 @@ engine.connect();
 
 Only data is synced: the default filter skips actions and other functions in the state, and
 remote changes leave them in place.
+
+## Combining with other middlewares
+
+Put `persist` inside `homeostate`:
+
+```ts
+import { createJSONStorage, persist } from "zustand/middleware";
+
+const useCounter = create<CounterState>()(
+  homeostate(
+    createYjsBackend(doc, "shared"),
+    persist(
+      (set) => ({
+        count: 0,
+        increment: () => set((state) => ({ count: state.count + 1 })),
+      }),
+      { name: "counter", storage: createJSONStorage(() => localStorage) },
+    ),
+  ),
+);
+```
+
+| Middleware              | Order                                       | Notes                                         |
+| ----------------------- | ------------------------------------------- | --------------------------------------------- |
+| `persist`               | Inside: `homeostate(backend, persist(...))` | Outside, creating the store throws            |
+| `devtools`              | Either; outermost, as Zustand recommends    | Remote changes show up as `anonymous` actions |
+| `immer`                 | Either                                      |                                               |
+| `subscribeWithSelector` | Either                                      |                                               |
+
+All four together:
+
+```ts
+devtools(
+  subscribeWithSelector(
+    homeostate(backend, persist(immer(creator), persistOptions)),
+  ),
+);
+```
+
+`persist` outside `homeostate` hydrates the store only after the middleware has connected it,
+so the creator's state would overwrite storage, or the persisted state the room. The middleware
+detects that order and throws when the store is created, naming the right one.
+
+With `persist` inside, the store connects once it is hydrated: at once with synchronous
+storage such as `localStorage`, and after the read with asynchronous storage such as React
+Native's `AsyncStorage` or an IndexedDB wrapper. Until then `store.homeostate.isConnected()`
+is `false`, and calling `store.homeostate.connect()` or `disconnect()` cancels the pending
+connect. If hydration fails, the store stays disconnected until you call
+`store.homeostate.connect()`; Zustand passes the error to the callback returned by
+`onRehydrateStorage`.
+
+Connecting then works as on any [`connect()`](/docs/concepts#connecting): the room wins over
+the persisted state, and persisted keys the room lacks seed it. So edits persisted while
+offline are lost when the room already has state; keeping them across a reconnect is not
+supported yet. For offline apps, persist the CRDT document with
+[`createPersistence`](/docs/persistence) instead of the store: the document records offline
+edits and merges them with the room's.
