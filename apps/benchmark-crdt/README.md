@@ -16,6 +16,21 @@ pnpm bench:crdt -- --help
 Progress goes to stderr and the Markdown report to stdout, so `pnpm bench:crdt > report.md`
 leaves a pasteable document.
 
+### Core diff workloads
+
+```bash
+pnpm --filter @homeostate/benchmark-crdt bench:diff > diff.md
+```
+
+This measures `getChanges` directly at 100, 1000 and 10,000 rows, with and without JSON
+semantics: a scalar edit alongside an unchanged record or array, one todo toggled in a
+normalized map or array, and equal arrays whose rows do not share identity. Inputs are built
+and their edit scripts checked before timing; text policies store strings as values. The
+report includes mean, margin of error, p99 and sample count. Compare reports from the same
+machine before and after a change.
+These timings exclude the sync engine, CRDT backends and rendering; the main matrix measures
+their effect on writes, roundtrips and row identity.
+
 ## Save, view and compare
 
 ```bash

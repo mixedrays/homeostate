@@ -39,6 +39,11 @@ Returns an ordered edit script that transforms `a` into `b`, without mutating ei
 Equal values produce `[]`, and so do different root kinds, since an edit script cannot
 replace its root. Nested values that change kind produce an `UPDATE`.
 
+Records and arrays shared by identity are skipped without visiting their contents, including
+their text-policy paths. Update containers immutably to retain this shortcut: copy each
+container along a changed path and reuse the rest. A changed record still compares its own
+keys, and a changed array still matches items by value.
+
 Use plain JSON data: `Date`, `Map` and `Set` contents are not compared, and cyclic data is
 unsupported. Record keys are compared as own properties, and a `__proto__` key is ignored on
 both sides.
