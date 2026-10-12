@@ -54,6 +54,12 @@ The map must already be part of a document, or `createYjsBackend` throws a `Type
 Create a nested map once, such as in the document's initial state: two peers that each set a
 new map under the same key keep only one of them.
 
+When a peer replaces the synced map, or a map holding it, the backend calls `onRemoved` once,
+with an `Error`; by default it logs the error with `console.error`. No peer sees a write to the
+removed map, so to keep syncing, disconnect the engine and connect a new one over the map that
+replaced it. A backend notices the removal only while subscribed, as it is while its engine is
+connected.
+
 ## Undo and redo
 
 `Y.UndoManager` tracks only transactions without an origin by default, so it records none of

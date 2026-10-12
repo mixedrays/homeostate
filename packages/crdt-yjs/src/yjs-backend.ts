@@ -22,6 +22,13 @@ export interface YjsBackendOptions {
    * origin, so it must be unique to this backend. Defaults to a private Symbol.
    */
   origin?: unknown;
+  /**
+   * Called once when the synced map is removed from its document, as when a peer replaces it,
+   * or a map holding it, with a new map. No peer sees a write to the removed map, so create a
+   * backend over the map that replaced it. Only a nested map can be removed, and a backend
+   * notices only while subscribed. Defaults to logging the error with `console.error`.
+   */
+  onRemoved?: (error: Error) => void;
 }
 
 /** The `CrdtBackend` `createYjsBackend` returns, with the Yjs objects it works on. */
@@ -36,6 +43,21 @@ export interface YjsBackend extends CrdtBackend {
 }
 
 const noText: TextPolicy = () => false;
+
+const reportRemoved = (error: Error): void => {
+  console.error("[homeostate] Yjs backend lost its map:", error);
+};
+
+/**
+ * Whether `map` was deleted from its document. Deleting a map also deletes every type it holds,
+ * so this covers a peer replacing any map on the way to it. A root map is never deleted.
+ */
+const isRemoved = (map: Y.Map<unknown>): boolean => map._item?.deleted === true;
+
+const removedError = (): Error =>
+  new Error(
+    "The synced Y.Map was removed from its document, as when a peer replaces it with a new map",
+  );
 
 /**
  * Creates a CrdtBackend over the Y.Map called `name` inside `doc`, or over `map`, which may be
@@ -78,15 +100,17 @@ export function createYjsBackend(
     : (source as Y.Map<unknown>);
   const options = (named ? docOptions : nameOrOptions) ?? {};
   const doc = map.doc;
-  if (!doc)
+  if (!doc || isRemoved(map))
     throw new TypeError(
       "createYjsBackend needs a Y.Doc and a name, or a Y.Map that is part of a Y.Doc",
     );
   const {
     text = noText,
     origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`),
+    onRemoved = reportRemoved,
   } = options;
   const ops = createYjsOps(text);
+  let reported = false;
 
   return {
     map,
@@ -116,8 +140,19 @@ export function createYjsBackend(
       const handler = (_events: unknown, transaction: Y.Transaction): void => {
         if (transaction.origin !== origin) onRemoteChange();
       };
+      // Yjs sends a deleted map no event, so look for the removal after every transaction.
+      const watchRemoval = (): void => {
+        if (reported || !isRemoved(map)) return;
+        reported = true;
+        onRemoved(removedError());
+      };
       map.observeDeep(handler);
-      return () => map.unobserveDeep(handler);
+      const nested = map._item !== null;
+      if (nested) doc.on("afterTransaction", watchRemoval);
+      return () => {
+        map.unobserveDeep(handler);
+        if (nested) doc.off("afterTransaction", watchRemoval);
+      };
     },
   };
 }

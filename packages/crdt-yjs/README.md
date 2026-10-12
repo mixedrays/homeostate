@@ -53,6 +53,9 @@ const undoManager = new Y.UndoManager(backend.map, {
 
 To sync into a map you already have, such as one nested in another map, pass it instead of a
 document and a name: `createYjsBackend(map, options)`. It must already be part of a document.
+If a peer later replaces it, or a map holding it, the backend calls `onRemoved` (by default it
+logs with `console.error`): no peer sees its writes from then on, so connect a new engine over
+the map that replaced it.
 
 To persist the document, pass `createYjsPersistable(doc)` to `createPersistence`; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).

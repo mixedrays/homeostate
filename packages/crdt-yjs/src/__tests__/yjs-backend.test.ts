@@ -123,6 +123,121 @@ describe("createYjsBackend", () => {
   });
 });
 
+describe("a removed map", () => {
+  /** A replica of `update`, the layout every peer starts from. */
+  const replica = (update = layout): Y.Doc => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, update);
+    return doc;
+  };
+
+  /** Like `layout`, with the synced map one level deeper, under `app.section.todos`. */
+  const deepLayout = (() => {
+    const doc = new Y.Doc();
+    doc.clientID = 0;
+    const section = new Y.Map<unknown>();
+    doc.getMap("app").set("section", section);
+    section.set("todos", new Y.Map());
+    return Y.encodeStateAsUpdate(doc);
+  })();
+
+  /** A connected backend over the nested map, and a peer that replaces the map under `key`. */
+  const replacedBy = (
+    key: "todos" | "section",
+    options?: YjsBackendOptions,
+  ) => {
+    const deep = key === "section";
+    const update = deep ? deepLayout : layout;
+    const doc = replica(update);
+    const peer = replica(update);
+    const synced = deep
+      ? ((doc.getMap("app").get("section") as Y.Map<unknown>).get(
+          "todos",
+        ) as Y.Map<unknown>)
+      : nestedMap(doc);
+    const backend = createYjsBackend(synced, options);
+    const store = createTestStore(threeTodos());
+    createSyncEngine(backend, store.adapter).connect();
+    replication.exchange(doc, peer);
+
+    const replace = (): void => {
+      peer.getMap("app").set(key, new Y.Map());
+      replication.exchange(doc, peer);
+    };
+    return { doc, backend, store, replace };
+  };
+
+  it("reports once when a peer replaces the synced map", () => {
+    const onRemoved = vi.fn();
+    const { doc, replace } = replacedBy("todos", { onRemoved });
+
+    replace();
+    doc.getMap("app").set("title", "Mine");
+
+    expect(onRemoved).toHaveBeenCalledTimes(1);
+    expect(onRemoved).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("reports when a peer replaces a map holding the synced map", () => {
+    const onRemoved = vi.fn();
+    const { replace } = replacedBy("section", { onRemoved });
+
+    replace();
+
+    expect(onRemoved).toHaveBeenCalledTimes(1);
+  });
+
+  it("only reports the removal: reads and store changes after it do not throw", () => {
+    const { backend, store, replace } = replacedBy("todos", {
+      onRemoved: () => {},
+    });
+
+    replace();
+
+    expect(() => backend.read()).not.toThrow();
+    expect(() => store.update((s) => toggleTodo(s, "1"))).not.toThrow();
+  });
+
+  it("logs the removal with console.error by default", () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      replacedBy("todos").replace();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Error),
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("stops watching for the removal once unsubscribed", () => {
+    const doc = replica();
+    const peer = replica();
+    const onRemoved = vi.fn();
+    const unsubscribe = createYjsBackend(nestedMap(doc), {
+      onRemoved,
+    }).subscribe(() => {});
+
+    unsubscribe();
+    peer.getMap("app").set("todos", new Y.Map());
+    replication.exchange(doc, peer);
+
+    expect(onRemoved).not.toHaveBeenCalled();
+  });
+
+  it("throws a TypeError for a map already removed from its document", () => {
+    const doc = replica();
+    const removed = nestedMap(doc);
+    doc.getMap("app").delete("todos");
+
+    expect(() => createYjsBackend(removed)).toThrow(TypeError);
+  });
+});
+
 /** The origins of the transactions `doc` runs while `run` does. */
 const originsDuring = (doc: Y.Doc, run: () => void): unknown[] => {
   const origins: unknown[] = [];
