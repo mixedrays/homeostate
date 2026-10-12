@@ -48,6 +48,18 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "prebundle": {
+              "exclude": [
+                "@homeostate/core",
+                "@homeostate/crdt-yjs",
+                "@homeostate/persist-local-storage",
+                "@homeostate/playground",
+                "@homeostate/store-ngrx-signals",
+                "@homeostate/tool-devtools"
+              ]
+            }
+          },
           "configurations": {
             "development": {
               "buildTarget": "playground-angular:build:development"
