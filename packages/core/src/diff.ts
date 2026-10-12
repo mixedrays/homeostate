@@ -164,6 +164,7 @@ const diff = (
   path: Path,
   options: DiffOptions,
 ): Change[] => {
+  if (a === b) return [];
   if (isString(a) && isString(b)) return getStringChanges(a, b);
   if (isArray(a) && isArray(b)) return getArrayChanges(a, b, path, options);
   if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, path, options);

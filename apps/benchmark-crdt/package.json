@@ -12,7 +12,8 @@
     "./types": "./src/types.ts"
   },
   "scripts": {
-    "bench": "tsx src/cli.ts"
+    "bench": "tsx src/cli.ts",
+    "bench:diff": "tsx src/diff-benchmark.ts"
   },
   "dependencies": {
     "@automerge/automerge": "^3.4.1",
