@@ -141,7 +141,8 @@ export interface PersistableDoc {
 
   /**
    * Report every change to the document, local or from a peer, as an update `apply`
-   * accepts. Changes made by `apply` itself are not reported.
+   * accepts. Changes made by `apply` itself are not reported, but a change made in response
+   * while it runs, such as a sync engine's write, is.
    * @returns Unsubscribe function
    */
   subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;
