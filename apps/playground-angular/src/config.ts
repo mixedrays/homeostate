@@ -1,4 +1,5 @@
 import { InjectionToken } from "@angular/core";
+import { onPageHost } from "@homeostate/playground/shared";
 
 export interface PlaygroundConfig {
   syncServerUrl: string;
@@ -13,8 +14,11 @@ export async function loadConfig(): Promise<PlaygroundConfig> {
   const response = await fetch(new URL("config.json", document.baseURI));
   if (!response.ok) throw new Error("Could not load playground configuration.");
   const config: PlaygroundConfig = await response.json();
-  const syncUrl = new URL(config.syncServerUrl);
-  const playgroundUrl = new URL(config.playgroundUrl, document.baseURI);
+  const syncUrl = new URL(onPageHost(config.syncServerUrl));
+  const playgroundUrl = new URL(
+    onPageHost(config.playgroundUrl),
+    document.baseURI,
+  );
   if (
     !["ws:", "wss:"].includes(syncUrl.protocol) ||
     !["http:", "https:"].includes(playgroundUrl.protocol)

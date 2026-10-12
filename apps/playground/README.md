@@ -29,6 +29,11 @@ pnpm playground:react    # React, the whiteboard and the WebSocket server; also 
 The Angular, Vue and Svelte playgrounds load the devtools from their built bundle, which these
 scripts build first. After changing the devtools, restart them or run `pnpm build:devtools`.
 
+To try the playgrounds from other devices on your network, run `pnpm playground --host` and
+open this page at the machine's address, such as `http://192.168.1.10:5180`. The playgrounds
+turn every `localhost` URL they use, default or configured, into one on the host the page was
+loaded from, so the links and the sync server work from any device.
+
 ## Configuration and deployment
 
 | Variable                     | Used by           | Default                                      |

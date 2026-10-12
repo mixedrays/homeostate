@@ -11,16 +11,19 @@ import {
   Waves,
   type LucideIcon,
 } from "lucide-react";
+import { onPageHost } from "@homeostate/playground/shared";
 
 /** The landing page that links to every framework's playground. */
-export const PLAYGROUNDS_URL: string =
+export const PLAYGROUNDS_URL: string = onPageHost(
   import.meta.env.VITE_PLAYGROUNDS_URL ??
-  (import.meta.env.DEV ? "http://localhost:5180" : "/");
+    (import.meta.env.DEV ? "http://localhost:5180" : "/"),
+);
 
 /** The whiteboard, a React app built on its own that this landing page links to. */
-export const WHITEBOARD_URL: string =
+export const WHITEBOARD_URL: string = onPageHost(
   import.meta.env.VITE_PLAYGROUND_WHITEBOARD_URL ??
-  (import.meta.env.DEV ? "http://localhost:5184" : "/whiteboard/");
+    (import.meta.env.DEV ? "http://localhost:5184" : "/whiteboard/"),
+);
 
 export type DemoId =
   | "zustand"
