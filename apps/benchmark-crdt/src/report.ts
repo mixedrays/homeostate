@@ -355,8 +355,12 @@ export const compareReports = (
   return { baseline: baseline.meta, current: current.meta, threshold, rows };
 };
 
-const isRegression = (delta: MetricDelta): boolean =>
+/** Significant and grew; growth from zero, whose `change` is `NaN`, counts as growth. */
+export const isRegression = (delta: MetricDelta): boolean =>
   delta.significant && (Number.isNaN(delta.change) || delta.change > 0);
+
+export const isImprovement = (delta: MetricDelta): boolean =>
+  delta.significant && delta.change < 0;
 
 /** True when any timing or byte metric grew beyond the threshold, or a render count grew. */
 export const hasRegression = (comparison: Comparison): boolean =>

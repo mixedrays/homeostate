@@ -55,11 +55,21 @@ import { OverviewView } from "./views/OverviewView";
 import { RendersView } from "./views/RendersView";
 import { ReplicasView } from "./views/ReplicasView";
 import { ScalingView } from "./views/ScalingView";
+import { TrendView } from "./views/TrendView";
 
 type Tab =
-  "overview" | "operations" | "scaling" | "replicas" | "compare" | "renders";
+  | "overview"
+  | "operations"
+  | "scaling"
+  | "replicas"
+  | "compare"
+  | "trend"
+  | "renders";
 
-/** `renders` reads the render benchmark; every other tab reads the backend matrix. */
+/**
+ * `renders` reads the render benchmark; every other tab reads the backend matrix, and `trend`
+ * reads every loaded run of it rather than the one chosen in the header.
+ */
 const TABS: Array<{ key: Tab; label: string; hint: string }> = [
   {
     key: "overview",
@@ -85,6 +95,11 @@ const TABS: Array<{ key: Tab; label: string; hint: string }> = [
     key: "compare",
     label: "Compare",
     hint: "before and after between two runs",
+  },
+  {
+    key: "trend",
+    label: "Trend",
+    hint: "how each metric moves across a set of runs, such as one per commit",
   },
   {
     key: "renders",
@@ -141,6 +156,9 @@ function App() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [renderId, setRenderId] = useState<string | null>(null);
   const [baselineId, setBaselineId] = useState<string | null>(null);
+  const [trendExcluded, setTrendExcluded] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [tab, setTab] = useState<Tab>("overview");
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,6 +223,9 @@ function App() {
   const tabs =
     current === null ? TABS.filter((item) => item.key === "renders") : TABS;
   const activeTab = tabs.some((item) => item.key === tab) ? tab : tabs[0].key;
+  // The header's run picker and the meta strip describe one run, which these tabs do not show.
+  const singleRun = activeTab !== "renders" && activeTab !== "trend";
+  const trendCount = runs.filter((run) => !trendExcluded.has(run.id)).length;
 
   useEffect(() => {
     if (!current) return;
@@ -277,7 +298,7 @@ function App() {
               <span className="text-muted-foreground">benchmark</span>
             </span>
           </h1>
-          {runs.length > 0 && current && activeTab !== "renders" && (
+          {runs.length > 0 && current && singleRun && (
             <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
               <span className="hidden sm:inline">Run</span>
               <Select
@@ -306,7 +327,7 @@ function App() {
               </Select>
             </div>
           )}
-          {current && activeTab !== "renders" && (
+          {current && singleRun && (
             <Button
               variant="ghost"
               size="icon"
@@ -370,7 +391,7 @@ function App() {
           <EmptyState onOpen={() => fileInput.current?.click()} />
         ) : (
           <div className="space-y-6">
-            {current && activeTab !== "renders" && <MetaStrip run={current} />}
+            {current && singleRun && <MetaStrip run={current} />}
 
             <Tabs
               value={activeTab}
@@ -396,6 +417,15 @@ function App() {
                         className="h-4 px-1.5 text-[10px] tabular-nums"
                       >
                         {runs.length}
+                      </Badge>
+                    )}
+                    {item.key === "trend" && runs.length > 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1.5 text-[10px] tabular-nums"
+                        title="runs in the trend"
+                      >
+                        {trendCount}
                       </Badge>
                     )}
                     {item.key === "renders" && renderRuns.length > 1 && (
@@ -430,6 +460,19 @@ function App() {
                       runs={runs}
                       baselineId={baselineId}
                       onBaselineChange={setBaselineId}
+                      slots={slots}
+                    />
+                  </TabsContent>
+                  <TabsContent value="trend">
+                    <TrendView
+                      runs={runs}
+                      excluded={trendExcluded}
+                      onExcludedChange={setTrendExcluded}
+                      onCompare={(baseline, currentRun) => {
+                        setBaselineId(baseline);
+                        setCurrentId(currentRun);
+                        setTab("compare");
+                      }}
                       slots={slots}
                     />
                   </TabsContent>

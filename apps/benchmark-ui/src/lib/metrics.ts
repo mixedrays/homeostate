@@ -1,4 +1,8 @@
-import { formatBytes, formatDuration } from "@homeostate/benchmark-crdt/report";
+import {
+  formatBytes,
+  formatDuration,
+  formatPercent,
+} from "@homeostate/benchmark-crdt/report";
 import type {
   OperationResult,
   ReplicaResult,
@@ -6,7 +10,8 @@ import type {
 } from "@homeostate/benchmark-crdt/types";
 import type { RenderResult } from "@homeostate/benchmark-store/types";
 
-export type Unit = "duration" | "bytes" | "count";
+/** `ratio` is a change relative to a base value, such as `0.1` for +10%. */
+export type Unit = "duration" | "bytes" | "count" | "ratio";
 
 export interface Metric<Row> {
   key: string;
@@ -232,6 +237,7 @@ export const formatValue = (
 ): string => {
   if (value === null || !Number.isFinite(value)) return "—";
   if (unit === "count") return value.toLocaleString("en-US");
+  if (unit === "ratio") return formatPercent(value);
   return unit === "duration"
     ? formatDuration(value)
     : formatBytes(value, signed);
@@ -240,6 +246,8 @@ export const formatValue = (
 /** Compact axis tick: no trailing `.0`, bytes in 1024 units. */
 export const formatTick = (unit: Unit, value: number): string => {
   if (value === 0) return "0";
+  if (unit === "ratio")
+    return `${value > 0 ? "+" : ""}${Number((value * 100).toFixed(1))}%`;
   if (unit === "count")
     return Number.isInteger(value)
       ? value.toLocaleString("en-US")

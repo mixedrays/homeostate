@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -112,5 +113,33 @@ export function ChoiceGroup<T extends string | number>({
         </ToggleGroupItem>
       ))}
     </ToggleGroup>
+  );
+}
+
+interface ThresholdFieldProps {
+  /** Percent, such as 5. */
+  value: number;
+  onChange(value: number): void;
+}
+
+/** The percentage a change must exceed to count, as `--threshold` sets it for the CLI. */
+export function ThresholdField({ value, onChange }: ThresholdFieldProps) {
+  const id = useId();
+  return (
+    <Field orientation="horizontal" className="w-auto">
+      <FieldLabel htmlFor={id} className="font-normal text-muted-foreground">
+        Threshold
+      </FieldLabel>
+      <Input
+        id={id}
+        type="number"
+        min={0}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-7 w-16 tabular-nums"
+      />
+      <span className="text-sm text-muted-foreground">%</span>
+    </Field>
   );
 }

@@ -31,6 +31,24 @@ regressions and ▼ improvements beyond `--threshold` (default 5 %) and, for tim
 runs' margins of error. Render counts are exact, so any change in them is reported. `results/`
 is git-ignored; compare runs from the same machine.
 
+## Follow core across commits
+
+Save one report per commit and the viewer's Trend tab charts every metric across them and lists
+what changed at each step:
+
+```bash
+for commit in $(git rev-list --reverse main~10..main -- packages/core); do
+  git checkout -q "$commit" && pnpm install --frozen-lockfile &&
+    pnpm bench:crdt -- --quick --json "results/$(git rev-parse --short HEAD).json" > /dev/null
+done
+git switch -q develop
+```
+
+A report records its commit and the commit's date, and Trend orders runs by that date, so a commit
+benchmarked later still falls into place. A report from before the commit date existed is ordered
+by when it ran, which is why the loop goes oldest first. Each commit runs its own copy of this
+benchmark, so a change to the benchmark itself also shows up as a step.
+
 ## What is measured
 
 A **peer** is a minimal store, a `createSyncEngine`, and one **replica** of a backend. Two

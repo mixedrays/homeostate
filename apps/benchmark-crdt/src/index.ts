@@ -32,6 +32,8 @@ export { garbageCollector, retainedHeap, settledHeap } from "./memory.js";
 export {
   compareReports,
   hasRegression,
+  isImprovement,
+  isRegression,
   renderComparison,
   renderReport,
   formatBytes,

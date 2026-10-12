@@ -21,6 +21,7 @@ import { OverviewView } from "../views/OverviewView";
 import { RendersView } from "../views/RendersView";
 import { ReplicasView } from "../views/ReplicasView";
 import { ScalingView } from "../views/ScalingView";
+import { TrendView } from "../views/TrendView";
 
 const timing = (mean: number): Timing => ({
   mean,
@@ -207,6 +208,63 @@ describe("views", () => {
   });
 });
 
+describe("trend view", () => {
+  const at = (
+    id: string,
+    date: string,
+    commitDate: string,
+    yjsToggle: number,
+  ): Run => {
+    const r = report(yjsToggle);
+    return run(id, {
+      ...r,
+      meta: { ...r.meta, commit: id, date, commitDate },
+    });
+  };
+  // Benchmarked out of order: the newest run measures the oldest commit.
+  const runs = [
+    at("c3c3c3c", "2026-10-03T00:00:00Z", "2026-10-03T00:00:00Z", 1),
+    at("b2b2b2b", "2026-10-02T00:00:00Z", "2026-10-02T00:00:00Z", 2),
+    at("a1a1a1a", "2026-10-04T00:00:00Z", "2026-10-01T00:00:00Z", 1),
+  ];
+  const trend = (excluded: string[] = [], list = runs): string =>
+    render(
+      createElement(TrendView, {
+        runs: list,
+        excluded: new Set(excluded),
+        onExcludedChange: () => {},
+        onCompare: () => {},
+        slots,
+      }),
+    );
+
+  it("asks for a second run", () => {
+    expect(trend([], runs.slice(0, 1))).toContain("Load two or more reports");
+  });
+
+  it("asks for two selected runs", () => {
+    const html = trend([runs[0].id, runs[1].id]);
+    expect(html).toContain("1 of 3 in the trend");
+    expect(html).toContain("Select at least two runs");
+  });
+
+  it("charts every run in commit order and lists each step's changes", () => {
+    const html = trend();
+    expect(html).toContain("3 of 3 in the trend");
+    expect(html).toContain("write, change from the first run");
+    expect(html).toContain("Changes between consecutive runs");
+    const order = ["a1a1a1a", "b2b2b2b", "c3c3c3c"].map((commit) =>
+      html.indexOf(`>${commit}</span>`),
+    );
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(html).toContain("write · toggle · yjs · 1,000 todos");
+    expect(html).toContain("+100%");
+    expect(html).toContain("-50%");
+    expect(html).toContain("regression beyond the threshold");
+    expect(html).toContain("improvement beyond the threshold");
+  });
+});
+
 describe("renders view", () => {
   const html = render(
     createElement(RendersView, {
@@ -303,5 +361,35 @@ describe("charts at a fixed width", () => {
     expect(count(html, "<path")).toBe(1);
     expect(count(html, "<circle")).toBe(3);
     expect(html).toContain("1,000");
+  });
+
+  it("draws whiskers and thins x labels that would overlap", () => {
+    const xs = Array.from({ length: 40 }, (_, i) => i);
+    const html = render(
+      createElement(LineChart, {
+        width: 640,
+        xs,
+        xKind: "linear",
+        formatX: (i: number) => `c${String(i).padStart(6, "0")}`,
+        xLabel: "run",
+        unit: "duration",
+        kind: "linear",
+        ariaLabel: "test",
+        series: [
+          {
+            key: "a",
+            label: "a",
+            color: "#2a78d6",
+            points: xs.map((x) => ({ x, y: 1, low: 0.9, high: 1.1 })),
+          },
+        ],
+      }),
+    );
+    expect(count(html, "<circle")).toBe(40);
+    expect(count(html, 'opacity="0.55"')).toBe(40);
+    expect(html).toContain("c000000");
+    const labels = count(html, ">c0000");
+    expect(labels).toBeGreaterThan(1);
+    expect(labels).toBeLessThan(10);
   });
 });

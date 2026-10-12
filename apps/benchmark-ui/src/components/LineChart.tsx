@@ -8,6 +8,9 @@ import { Tooltip } from "./Tooltip";
 export interface LinePoint {
   x: number;
   y: number | null;
+  /** Mean ± margin of error, drawn as a whisker. */
+  low?: number;
+  high?: number;
 }
 
 export interface LineSeries {
@@ -25,6 +28,12 @@ interface LineChartProps {
   unit: Unit;
   signed?: boolean;
   kind: ScaleKind;
+  /** Scale of the x axis; log by default when every x is positive. */
+  xKind?: ScaleKind;
+  /** Tick text for an x position; the number by default. */
+  formatX?(x: number): string;
+  /** Tooltip title for an x position; the number and `xLabel` by default. */
+  describeX?(x: number): string;
   ariaLabel: string;
   /** Fixed width in pixels; measured from the container when omitted. */
   width?: number;
@@ -36,6 +45,11 @@ const AXIS = 34;
 const LEFT_PAD = 12;
 const RIGHT_PAD = 24;
 const LABEL_GAP = 14;
+/** Width of one character of an 11px tick label, and the room left between two labels. */
+const CHAR = 7;
+const TICK_GAP = 12;
+
+const formatNumber = (x: number): string => x.toLocaleString("en-US");
 
 /** Multi-series lines over discrete x positions, with a crosshair readout listing every series. */
 export function LineChart({
@@ -45,6 +59,9 @@ export function LineChart({
   unit,
   signed = false,
   kind,
+  xKind: xKindChoice,
+  formatX = formatNumber,
+  describeX,
   ariaLabel,
   width: fixedWidth,
 }: LineChartProps) {
@@ -53,7 +70,9 @@ export function LineChart({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const values = series.flatMap((s) =>
-    s.points.flatMap((p) => (p.y === null ? [] : [p.y])),
+    s.points.flatMap((p) =>
+      p.y === null ? [] : [p.y, p.low ?? p.y, p.high ?? p.y],
+    ),
   );
   const longestTick = Math.max(
     3,
@@ -71,12 +90,23 @@ export function LineChart({
   );
   const positiveXs = xs.filter((v) => v > 0);
   const xKind: ScaleKind =
-    positiveXs.length === xs.length && xs.length > 1 ? "log" : "linear";
+    xKindChoice ??
+    (positiveXs.length === xs.length && xs.length > 1 ? "log" : "linear");
   const xDomain: [number, number] =
     xs.length > 1 ? [xs[0], xs[xs.length - 1]] : [xs[0] ?? 0, (xs[0] ?? 0) + 1];
   const x = makeScale(xKind, xDomain, xs, [leftAxis, plotRight]);
   const visible = (v: number | null): v is number =>
     v !== null && (y.kind !== "log" || v > 0);
+
+  // Every n-th tick when the labels would overlap, as they do over a long series of runs.
+  const longestX = Math.max(1, ...xs.map((v) => formatX(v).length));
+  const narrowest = Math.min(
+    ...xs.slice(1).map((v, i) => Math.abs(x(v) - x(xs[i]))),
+  );
+  const tickEvery = Math.max(
+    1,
+    Math.ceil((CHAR * longestX + TICK_GAP) / narrowest),
+  );
 
   const endLabels = series
     .map((s) => {
@@ -147,19 +177,21 @@ export function LineChart({
             stroke={INK.axis}
             shapeRendering="crispEdges"
           />
-          {xs.map((tick) => (
-            <text
-              key={tick}
-              x={x(tick)}
-              y={plotBottom + 18}
-              textAnchor="middle"
-              fontSize={11}
-              fill={INK.muted}
-              style={{ fontVariantNumeric: "tabular-nums" }}
-            >
-              {tick.toLocaleString("en-US")}
-            </text>
-          ))}
+          {xs
+            .filter((_, i) => i % tickEvery === 0)
+            .map((tick) => (
+              <text
+                key={tick}
+                x={x(tick)}
+                y={plotBottom + 18}
+                textAnchor="middle"
+                fontSize={11}
+                fill={INK.muted}
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {formatX(tick)}
+              </text>
+            ))}
           <text
             x={(leftAxis + plotRight) / 2}
             y={plotBottom + AXIS - 2}
@@ -182,7 +214,7 @@ export function LineChart({
           )}
 
           {series.map((s) => {
-            const shown = s.points.filter((p): p is { x: number; y: number } =>
+            const shown = s.points.filter((p): p is LinePoint & { y: number } =>
               visible(p.y),
             );
             const path = shown
@@ -199,6 +231,25 @@ export function LineChart({
                     strokeLinejoin="round"
                     strokeLinecap="round"
                   />
+                )}
+                {shown.map(
+                  (p) =>
+                    p.low !== undefined &&
+                    p.high !== undefined &&
+                    p.high > p.low &&
+                    visible(p.low) && (
+                      <line
+                        key={p.x}
+                        x1={x(p.x)}
+                        x2={x(p.x)}
+                        y1={y(p.low)}
+                        y2={y(p.high)}
+                        stroke={s.color}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        opacity={0.55}
+                      />
+                    ),
                 )}
                 {shown.map((p) => (
                   <circle
@@ -246,7 +297,7 @@ export function LineChart({
           x={x(hoverX)}
           y={TOP + 8}
           width={width}
-          title={`${hoverX.toLocaleString("en-US")} ${xLabel}`}
+          title={describeX?.(hoverX) ?? `${formatNumber(hoverX)} ${xLabel}`}
           rows={series.map((s) => {
             const point = s.points.find((p) => p.x === hoverX);
             const value = point?.y ?? null;

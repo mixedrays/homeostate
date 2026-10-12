@@ -1,12 +1,12 @@
 import { useId, useMemo, useState } from "react";
-import { TrendingDown, TrendingUp } from "lucide-react";
 import {
   compareReports,
   formatPercent,
+  isImprovement,
+  isRegression,
   type ComparisonRow,
   type MetricDelta,
 } from "@homeostate/benchmark-crdt/report";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardAction,
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -27,13 +26,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Controls, SelectField } from "../components/Controls";
+import { Controls, SelectField, ThresholdField } from "../components/Controls";
+import { DeltaBadge } from "../components/DeltaBadge";
 import { Heatmap, type HeatCell } from "../components/Heatmap";
 import { Note } from "../components/Note";
 import { SeriesLabel } from "../components/SeriesLabel";
 import { StatTile } from "../components/StatTile";
 import { inkFor, mix } from "../lib/color";
-import { DIVERGING, STATUS, colorFor } from "../lib/palette";
+import { DIVERGING, colorFor } from "../lib/palette";
 import {
   backendsOf,
   runLabel,
@@ -61,11 +61,6 @@ const OPERATION_METRICS = [
   "heap Δ / op",
 ];
 
-const isRegression = (delta: MetricDelta): boolean =>
-  delta.significant && (Number.isNaN(delta.change) || delta.change > 0);
-const isImprovement = (delta: MetricDelta): boolean =>
-  delta.significant && delta.change < 0;
-
 const columnsFor = (rows: ComparisonRow[], metrics: string[]): string[] =>
   metrics.filter((metric) =>
     rows.some((row) => row.deltas.some((d) => d.metric === metric)),
@@ -73,8 +68,6 @@ const columnsFor = (rows: ComparisonRow[], metrics: string[]): string[] =>
 
 function DeltaCell({ delta }: { delta: MetricDelta | undefined }) {
   if (!delta) return <TableCell className="text-muted-foreground">—</TableCell>;
-  const regression = isRegression(delta);
-  const improvement = isImprovement(delta);
   return (
     <TableCell>
       <span className="inline-flex items-center gap-2">
@@ -91,25 +84,7 @@ function DeltaCell({ delta }: { delta: MetricDelta | undefined }) {
             {delta.format(delta.after)}
           </span>
         </span>
-        <Badge
-          variant={regression ? "destructive" : "secondary"}
-          className={cn(
-            "tabular-nums",
-            !delta.significant && "text-muted-foreground",
-          )}
-          style={improvement ? { color: STATUS.goodText } : undefined}
-          title={
-            delta.significant
-              ? regression
-                ? "regression beyond the threshold"
-                : "improvement beyond the threshold"
-              : "within the threshold or the margin of error"
-          }
-        >
-          {regression && <TrendingUp aria-hidden />}
-          {improvement && <TrendingDown aria-hidden />}
-          {formatPercent(delta.change)}
-        </Badge>
+        <DeltaBadge delta={delta} />
       </span>
     </TableCell>
   );
@@ -125,7 +100,6 @@ export function CompareView({
   const [thresholdPct, setThresholdPct] = useState(5);
   const [onlySignificant, setOnlySignificant] = useState(false);
   const [heatMetric, setHeatMetric] = useState("write");
-  const thresholdId = useId();
   const significantId = useId();
 
   const others = runs.filter((run) => run.id !== current.id);
@@ -244,24 +218,7 @@ export function CompareView({
           onChange={onBaselineChange}
           placeholder="choose a run…"
         />
-        <Field orientation="horizontal" className="w-auto">
-          <FieldLabel
-            htmlFor={thresholdId}
-            className="font-normal text-muted-foreground"
-          >
-            Threshold
-          </FieldLabel>
-          <Input
-            id={thresholdId}
-            type="number"
-            min={0}
-            step={1}
-            value={thresholdPct}
-            onChange={(event) => setThresholdPct(Number(event.target.value))}
-            className="h-7 w-16 tabular-nums"
-          />
-          <span className="text-sm text-muted-foreground">%</span>
-        </Field>
+        <ThresholdField value={thresholdPct} onChange={setThresholdPct} />
         <Field orientation="horizontal" className="w-auto">
           <Checkbox
             id={significantId}
