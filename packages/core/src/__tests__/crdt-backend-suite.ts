@@ -521,10 +521,15 @@ export const describeCrdtBackend = <D>(
         "never lets a __proto__ key in a value other code stored reach the store",
       ).run(() => {
         const doc = createDoc();
+        // At the top, and deeper in an object and in an array item.
         storeForeign(
           doc,
           "settings",
-          JSON.parse('{"theme":"dark","__proto__":{"isAdmin":true}}'),
+          JSON.parse(
+            '{"theme":"dark","__proto__":{"isAdmin":true},' +
+              '"layout":{"main":{"__proto__":{"isAdmin":true}}},' +
+              '"panels":[{"id":"p","__proto__":{"isAdmin":true}}]}',
+          ),
         );
         // A peer decodes the value from an update, which may build it by assignment.
         const docs = [doc];
@@ -536,7 +541,13 @@ export const describeCrdtBackend = <D>(
 
         for (const reader of docs) {
           const { store } = peer(reader, {});
-          expect(store.getState()).toEqual({ settings: { theme: "dark" } });
+          expect(store.getState()).toEqual({
+            settings: {
+              theme: "dark",
+              layout: { main: {} },
+              panels: [{ id: "p" }],
+            },
+          });
           expect(prototypeHijacks(store.getState())).toEqual([]);
         }
       });

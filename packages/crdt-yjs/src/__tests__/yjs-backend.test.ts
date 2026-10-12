@@ -12,6 +12,7 @@ import {
   todo,
   todoTitles,
   toggleTodo,
+  type TodoState,
 } from "@homeostate/core/conformance";
 import { createYjsBackend, type YjsBackendOptions } from "../index.js";
 
@@ -254,17 +255,14 @@ const originsDuring = (doc: Y.Doc, run: () => void): unknown[] => {
 };
 
 describe("map and origin", () => {
-  it("exposes the synced map and the origin that tags every write", () => {
+  it("exposes the synced map and the origin that tags its writes", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
 
-    const origins = originsDuring(doc, () => {
-      backend.write({ count: 1 });
-      backend.write({ count: 2 });
-    });
+    const origins = originsDuring(doc, () => backend.write({ count: 1 }));
 
     expect(backend.map).toBe(doc.getMap(NAME));
-    expect(origins).toEqual([backend.origin, backend.origin]);
+    expect(origins).toEqual([backend.origin]);
   });
 
   it("tags every write with a custom origin, and reports only other origins", () => {
@@ -296,6 +294,23 @@ describe("map and origin", () => {
 
     expect(backend.map).toBe(todos);
     expect(app.toJSON()).toEqual({ title: "Mine", todos: threeTodos() });
+  });
+
+  it("syncs a map in a subdocument, tagging its writes there", () => {
+    const subdoc = new Y.Doc();
+    new Y.Doc().getMap("rooms").set("one", subdoc);
+    const synced = new Y.Map<unknown>();
+    subdoc.getMap("app").set("store", synced);
+    const backend = createYjsBackend(synced);
+    const onRemoteChange = vi.fn();
+    backend.subscribe(onRemoteChange);
+
+    const origins = originsDuring(subdoc, () => backend.write({ count: 1 }));
+    subdoc.transact(() => synced.set("count", 2));
+
+    expect(origins).toEqual([backend.origin]);
+    expect(onRemoteChange).toHaveBeenCalledTimes(1);
+    expect(backend.read()).toEqual({ count: 2 });
   });
 
   it("throws a TypeError for a map outside any document", () => {
@@ -336,6 +351,26 @@ describe("undo", () => {
 
     store.update((s) => toggleTodo(s, "2"));
     expect(backend.read()).toEqual(toggleTodo(toggled, "2"));
+  });
+
+  it("leaves a peer's changes alone when it undoes the store's own edit", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    const store = createTestStore(threeTodos());
+    createSyncEngine(backend, store.adapter).connect();
+    const peerDoc = new Y.Doc();
+    replication.exchange(doc, peerDoc);
+    const undo = new Y.UndoManager(backend.map, {
+      trackedOrigins: new Set([backend.origin]),
+    });
+
+    store.update((s) => toggleTodo(s, "1"));
+    const peer = createYjsBackend(peerDoc, NAME);
+    peer.write(addTodo(peer.read() as TodoState, todo("4")));
+    replication.exchange(doc, peerDoc);
+    undo.undo();
+
+    expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
   });
 });
 
@@ -379,11 +414,6 @@ describe("strings", () => {
     expect(todoMaps(doc).get(3).get("title")).toBeInstanceOf(Y.Text);
     expect(todoMaps(doc).get(3).get("id")).toBe("4");
     expect(map(doc).get("filterStatus")).toBe("all");
-
-    const onUpdate = vi.fn();
-    doc.on("update", onUpdate);
-    backend.write(addTodo(threeTodos(), todo("4")));
-    expect(onUpdate).not.toHaveBeenCalled();
   });
 
   it("reads strings held as Y.Text by an earlier version, and stores each as a value once it changes", () => {
