@@ -160,8 +160,8 @@ declare const toJsonValue: (value: unknown) => unknown;
 ```
 
 Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
-function are left out, such array items, holes included, become `null`, and own `__proto__`
-keys are dropped. Only the containers on a path to a changed value are copied, and a value
+function are left out, such array items, holes included, become `null`, so do `NaN` and
+infinite numbers, and own `__proto__` keys are dropped. Only the containers on a path to a changed value are copied, and a value
 that is already JSON is returned as is.
 
 `getChanges` with `json: true` applies the same rule to both sides as it diffs, and passes only

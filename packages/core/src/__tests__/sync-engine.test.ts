@@ -156,6 +156,18 @@ describe("createSyncEngine", () => {
       expect(store.getState()).toBe(before);
     });
 
+    it("leaves the store object untouched when it holds NaN", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore({ ...threeTodos(), progress: NaN });
+      const before = store.getState();
+      const setState = vi.spyOn(store.adapter, "setState");
+
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(setState).not.toHaveBeenCalled();
+      expect(store.getState()).toBe(before);
+    });
+
     it("seeds an empty backend with what the store holds at connect time", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());

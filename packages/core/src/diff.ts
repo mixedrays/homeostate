@@ -1,5 +1,5 @@
 import { ChangeType, type Change } from "./change.js";
-import { isAbsent, toJsonValue } from "./json.js";
+import { isAbsent, toJsonPrimitive, toJsonValue } from "./json.js";
 
 export type Diffable = Record<string, unknown> | Array<unknown> | string;
 
@@ -22,10 +22,10 @@ export interface DiffOptions {
   text?: TextPolicy;
   /**
    * Diff `a` and `b` as `JSON.stringify` would store them, without copying either first: object
-   * entries holding `undefined` or a function are absent, and such array items, holes included,
-   * are `null`. The values the changes carry are passed through `toJsonValue`. A CRDT backend
-   * sets it on `write(next, previous)`, so no change it applies holds a value JSON cannot, and
-   * none removes an entry its document never held.
+   * entries holding `undefined` or a function are absent, such array items, holes included, are
+   * `null`, and so are `NaN` and infinite numbers. The values the changes carry are passed
+   * through `toJsonValue`. A CRDT backend sets it on `write(next, previous)`, so no change it
+   * applies holds a value JSON cannot, and none removes an entry its document never held.
    */
   json?: boolean;
 }
@@ -77,8 +77,12 @@ const nestedChanges = (
   return diff(a, b, at, options);
 };
 
+/** `===`, except that `NaN` equals itself, so a store that keeps holding it has not changed. */
+const isSame = (a: unknown, b: unknown): boolean =>
+  a === b || (Number.isNaN(a) && Number.isNaN(b));
+
 const deepEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
+  if (isSame(a, b)) return true;
   if (isArray(a) && isArray(b)) {
     if (a.length !== b.length) return false;
     // A loop, since `every` skips holes.
@@ -125,7 +129,7 @@ const jsonEqual = (a: unknown, b: unknown): boolean => {
     // `b` rarely holds absent entries, so its own key count usually settles it.
     return count === Object.keys(b).length || count === jsonKeyCount(b);
   }
-  return false;
+  return toJsonPrimitive(a) === toJsonPrimitive(b);
 };
 
 /** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
@@ -320,6 +324,9 @@ const getRecordChanges = (
   // With `options.json`, an entry holding `undefined` or a function is absent.
   const absent = (value: unknown): boolean =>
     options.json === true && isAbsent(value);
+  // With `options.json`, `NaN` and infinite numbers are `null`.
+  const same = (x: unknown, y: unknown): boolean =>
+    options.json ? toJsonPrimitive(x) === toJsonPrimitive(y) : isSame(x, y);
 
   for (const property of Object.keys(a))
     if (
@@ -336,7 +343,7 @@ const getRecordChanges = (
     else {
       const nested = nestedChanges(a[property], value, path, property, options);
       if (nested === null) {
-        if (a[property] !== value)
+        if (!same(a[property], value))
           changes.push([ChangeType.UPDATE, property, written(value, options)]);
       } else if (nested.length > 0)
         changes.push([ChangeType.PENDING, property, nested]);

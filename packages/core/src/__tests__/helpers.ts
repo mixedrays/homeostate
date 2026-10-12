@@ -164,6 +164,12 @@ export const nonJsonWrites: [string, object, object, object][] = [
     { list: Object.assign([], { 0: 1, 2: 2 }) },
     { list: [1, null, 2] },
   ],
+  [
+    "non-finite numbers",
+    { a: 1 },
+    { a: NaN, list: [Infinity, -Infinity] },
+    { a: null, list: [null, null] },
+  ],
 ];
 
 /** Keys that `in` finds on every object, because `Object.prototype` has members by these names. */

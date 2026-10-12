@@ -2,11 +2,16 @@
 export const isAbsent = (value: unknown): boolean =>
   value === undefined || typeof value === "function";
 
+/** A primitive as `JSON.stringify` stores it: `NaN` and infinite numbers become `null`. */
+export const toJsonPrimitive = (value: unknown): unknown =>
+  typeof value === "number" && !Number.isFinite(value) ? null : value;
+
 /**
  * Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
- * function are left out, and such array items, holes included, become `null`. Own `__proto__`
- * keys are left out too, since the sync engine never syncs them. Only the containers on a path
- * to such a value are copied, so a value that is already JSON is returned as is.
+ * function are left out, such array items, holes included, become `null`, and so do `NaN` and
+ * infinite numbers. Own `__proto__` keys are left out too, since the sync engine never syncs
+ * them. Only the containers on a path to such a value are copied, so a value that is already
+ * JSON is returned as is.
  *
  * `getChanges` with `json: true` applies the same rule as it diffs, and calls it only on the
  * values its changes carry, so a backend need not copy the whole state on every write.
@@ -21,7 +26,8 @@ export const toJsonValue = (value: unknown): unknown => {
     return copy ?? value;
   }
 
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object")
+    return toJsonPrimitive(value);
 
   const source = value as Record<string, unknown>;
   let copy: Record<string, unknown> | undefined;

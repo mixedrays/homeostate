@@ -48,6 +48,10 @@ describe("getChanges", () => {
     expect(getChanges({ a: 1 }, "a")).toEqual([]);
   });
 
+  it("finds no change in a NaN that stays NaN", () => {
+    expect(getChanges({ a: NaN, l: [NaN] }, { a: NaN, l: [NaN] })).toEqual([]);
+  });
+
   describe("strings", () => {
     it("returns no changes for equal strings", () => {
       expect(getChanges("same", "same")).toEqual([]);

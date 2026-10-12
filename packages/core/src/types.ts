@@ -51,7 +51,8 @@ export interface CrdtBackend {
    * The backend decides the granularity of the operations; `getChanges` is exported for that.
    *
    * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
-   * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing.
+   * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing,
+   * and `NaN` or infinite numbers where it holds `null`.
    * The sync engine passes the synced state it last wrote or read, so a backend can diff against
    * it with `json: true` instead of reading its document, and unchanged subtrees of `next` match
    * it by identity. A backend may ignore it.

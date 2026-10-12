@@ -65,7 +65,7 @@ _Avoid_: Channel, session
 
 **Plain JSON**:
 Values made only of objects, arrays, strings, finite numbers, booleans and `null`; the only values synced state may hold.
-`Date`, `Map`, `Set` and class instances are neither diffed nor synced. `undefined` and nested functions are stored as `JSON.stringify` stores them.
+`Date`, `Map`, `Set` and class instances are neither diffed nor synced. `undefined`, nested functions, `NaN` and infinite numbers are stored as `JSON.stringify` stores them.
 _Avoid_: Serializable state, POJO
 
 **Synced state**:

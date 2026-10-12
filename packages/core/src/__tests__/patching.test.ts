@@ -11,6 +11,12 @@ describe("patchState", () => {
     );
   });
 
+  it("returns the same reference for a NaN that stays NaN", () => {
+    const state = { progress: NaN, list: [NaN] };
+
+    expect(patchState(state, { progress: NaN, list: [NaN] })).toBe(state);
+  });
+
   it("never mutates its inputs", () => {
     const oldState = { todos: [{ id: "1", done: false }], term: "ab" };
     const newState = {
