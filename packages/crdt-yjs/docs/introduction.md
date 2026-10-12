@@ -35,6 +35,46 @@ The synced state lives in `doc.getMap("shared")`. Attach any Yjs provider, such 
 `undefined` and functions are not JSON, so the backend leaves out object entries holding
 either and stores such array items as `null`, as `JSON.stringify` does.
 
+## Map and origin
+
+Besides `read`, `write` and `subscribe`, the backend has `map`, the synced `Y.Map`, and
+`origin`, which tags every transaction its `write` runs. `subscribe` skips transactions with
+that origin, so the engine hears only other changes. Pass `origin` to choose the value; it
+must be unique to this backend.
+
+To keep the synced state in a map you already have, such as one nested in another map or in
+a subdocument, pass the map instead of a document and a name:
+
+```ts
+const synced = doc.getMap("app").get("store") as Y.Map<unknown>;
+const backend = createYjsBackend(synced, { origin: "store" });
+```
+
+The map must already be part of a document, or `createYjsBackend` throws a `TypeError`.
+Create a nested map once, such as in the document's initial state: two peers that each set a
+new map under the same key keep only one of them.
+
+## Undo and redo
+
+`Y.UndoManager` tracks only transactions without an origin by default, so it records none of
+the backend's writes. Track the backend's origin instead:
+
+```ts
+const backend = createYjsBackend(doc, "shared");
+createSyncEngine(backend, adapter).connect();
+const undoManager = new Y.UndoManager(backend.map, {
+  trackedOrigins: new Set([backend.origin]),
+});
+
+undoManager.undo();
+```
+
+Create the undo manager after `connect()`, so seeding is not a step to undo. It undoes only
+this peer's writes; changes from other peers stay. An undo runs with the undo manager as its
+origin, so the backend reports it as a remote change and the store follows. One step covers
+the writes made within `captureTimeout`, 500 ms by default; `undoManager.stopCapturing()`
+ends a step early.
+
 ## Strings and text
 
 Strings are plain values by default, so two peers changing an id, a status or a timestamp at
