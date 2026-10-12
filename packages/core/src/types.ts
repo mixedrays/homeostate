@@ -27,7 +27,11 @@ export interface StoreAdapter<S extends object> {
   /**
    * Replace the store state. Called only for changes coming from the backend; the
    * engine ignores store notifications raised while it runs, so the adapter needs no
-   * echo suppression of its own.
+   * echo suppression of its own. When it returns, the engine writes the store's synced
+   * state once if it differs from what was applied, such as a key the store normalised or
+   * derived meanwhile, so the backend ends up equal to it. If `getState()` then returns the
+   * same object as before the call, the store is taken to have ignored the change, and nothing
+   * is written.
    */
   setState: (state: S) => void;
 

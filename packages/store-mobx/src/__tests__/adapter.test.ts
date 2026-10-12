@@ -236,6 +236,40 @@ describe("MobxAdapter", () => {
     expect(store.filter).toBe("active");
   });
 
+  it("writes a field a reaction derives during a remote apply", () => {
+    class CountedStore {
+      todos: Todo[] = new TodoStore().todos.map((todo) => ({ ...todo }));
+      filter = "all";
+      count = 2;
+
+      constructor() {
+        makeAutoObservable(this);
+      }
+    }
+    const store = new CountedStore();
+    const backend = createMemoryBackend();
+    createSyncEngine(
+      backend,
+      createMobxAdapter(store, ["todos", "filter", "count"]),
+    ).connect();
+    const stop = reaction(
+      () => store.todos.length,
+      (length) =>
+        runInAction(() => {
+          store.count = length;
+        }),
+    );
+
+    backend.receive({
+      ...held(backend),
+      todos: [...held(backend).todos, { id: "3", title: "c", done: false }],
+    });
+
+    expect(store.count).toBe(3);
+    expect((backend.read() as { count: number }).count).toBe(3);
+    stop();
+  });
+
   it("still sends local changes to the backend after a remote apply", () => {
     const store = new TodoStore();
     const { backend } = connect(store);
