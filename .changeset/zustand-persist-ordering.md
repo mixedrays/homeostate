@@ -1,5 +1,5 @@
 ---
-"@homeostate/store-zustand": patch
+"@homeostate/store-zustand": minor
 ---
 
 The `homeostate` middleware works with Zustand's `persist` placed inside it,
