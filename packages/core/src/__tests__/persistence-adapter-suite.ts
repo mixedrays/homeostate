@@ -55,6 +55,18 @@ export const describePersistenceAdapter = (
       expect([...update]).toEqual([1, 2]);
     });
 
+    it("keeps what it stored when the caller changes an appended or loaded array", async () => {
+      const adapter = create();
+      const update = bytes(1, 2);
+      await adapter.append("doc", update);
+      update[0] = 9;
+
+      const [loaded] = (await adapter.load("doc")).updates;
+      loaded[1] = 9;
+
+      expect(sorted((await create().load("doc")).updates)).toEqual([[1, 2]]);
+    });
+
     it("outlives the adapter that wrote it", async () => {
       await create().append("doc", bytes(1));
 

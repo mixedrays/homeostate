@@ -6,8 +6,8 @@ describe("toJsonValue", () => {
   it.each(nonJsonWrites)(
     "stores %s as JSON.stringify does",
     (_, _before, next, expected) => {
-      expect(toJsonValue(next)).toEqual(expected);
-      expect(toJsonValue(next)).toEqual(JSON.parse(JSON.stringify(next)));
+      expect(toJsonValue(next)).toStrictEqual(expected);
+      expect(toJsonValue(next)).toStrictEqual(JSON.parse(JSON.stringify(next)));
     },
   );
 

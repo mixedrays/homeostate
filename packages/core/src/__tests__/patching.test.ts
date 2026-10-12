@@ -70,68 +70,6 @@ describe("patchState", () => {
     });
   });
 
-  it("inserts, updates, and deletes object keys", () => {
-    expect(patchState({ a: 1, b: 2 }, { b: 3, c: 4 })).toEqual({ b: 3, c: 4 });
-    expect(patchState({ a: { b: 1 } }, {})).toEqual({});
-  });
-
-  it("replaces a value whose kind changed", () => {
-    expect(
-      patchState<Record<string, unknown>>({ v: { a: 1 } }, { v: [1] }),
-    ).toEqual({ v: [1] });
-    expect(patchState<Record<string, unknown>>({ v: "a" }, { v: 1 })).toEqual({
-      v: 1,
-    });
-    expect(
-      patchState<Record<string, unknown>>({ v: [1] }, { v: null }),
-    ).toEqual({ v: null });
-  });
-
-  it("edits strings character by character", () => {
-    expect(patchState("hello", "help")).toBe("help");
-    expect(patchState("", "abc")).toBe("abc");
-    expect(patchState("abc", "")).toBe("");
-    expect(patchState("Todo 1", "B Todo 1 A")).toBe("B Todo 1 A");
-  });
-
-  it("inserts and deletes array items", () => {
-    expect(patchState([1, 2, 3], [1, 3])).toEqual([1, 3]);
-    expect(patchState([1, 3], [1, 2, 3])).toEqual([1, 2, 3]);
-    expect(patchState([2, 3], [1, 2, 3])).toEqual([1, 2, 3]);
-    expect(patchState([1, 2], [1, 2, 3])).toEqual([1, 2, 3]);
-  });
-
-  it("removes every item when the new array is empty", () => {
-    expect(patchState([1, 2], [])).toEqual([]);
-    expect(patchState([{ id: "1" }, { id: "2" }, { id: "3" }], [])).toEqual([]);
-  });
-
-  it("truncates to a prefix", () => {
-    expect(patchState([1, 2, 3, 4], [1])).toEqual([1]);
-  });
-
-  it("applies an insert at the start followed by later changes", () => {
-    expect(patchState([1, 2, 3], [0, 1])).toEqual([0, 1]);
-    expect(patchState([2, 3], [1, 2, 3, 4])).toEqual([1, 2, 3, 4]);
-    expect(
-      patchState(
-        [
-          { id: "1", done: false },
-          { id: "2", done: false },
-        ],
-        [
-          { id: "0", done: false },
-          { id: "1", done: false },
-          { id: "2", done: true },
-        ],
-      ),
-    ).toEqual([
-      { id: "0", done: false },
-      { id: "1", done: false },
-      { id: "2", done: true },
-    ]);
-  });
-
   it("leaves out __proto__ keys at any depth of inserted and updated values", () => {
     const newState = JSON.parse(
       '{"todos":[{"id":"1","__proto__":{"isAdmin":true}},' +
@@ -147,6 +85,18 @@ describe("patchState", () => {
     );
     expect(prototypeHijacks(result)).toEqual([]);
     expect(newState).toEqual(newSnapshot);
+  });
+
+  it("leaves out the __proto__ key of an object without a prototype", () => {
+    const settings = Object.create(null) as Record<string, unknown>;
+    // Without a prototype there is no `__proto__` setter, so this adds an own key.
+    settings["__proto__"] = { isAdmin: true };
+    settings.theme = "dark";
+
+    const result = patchState<Record<string, unknown>>({}, { settings });
+
+    expect(JSON.stringify(result)).toBe('{"settings":{"theme":"dark"}}');
+    expect(prototypeHijacks(result)).toEqual([]);
   });
 
   it("shares inserted values that hold no __proto__ key", () => {

@@ -334,7 +334,7 @@ export const describeCrdtBackend = <D>(
         written.write(before);
 
         expect(() => written.write(next)).not.toThrow();
-        expect(written.read()).toEqual(expected);
+        expect(written.read()).toStrictEqual(expected);
 
         const onUpdate = vi.fn();
         onLocalUpdate?.(doc, onUpdate);
@@ -357,7 +357,7 @@ export const describeCrdtBackend = <D>(
           written.write(next, next);
 
           expect(onUpdate).not.toHaveBeenCalled();
-          expect(written.read()).toEqual(expected);
+          expect(written.read()).toStrictEqual(expected);
         },
       );
 
@@ -441,6 +441,16 @@ export const describeCrdtBackend = <D>(
       backend(doc).write({ obj: { a: [1] } });
 
       (backend(doc).read() as { obj: { a: number[] } }).obj.a.push(2);
+
+      expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
+    });
+
+    scenario("keeps the document when a written value is mutated").run(() => {
+      const doc = createDoc();
+      const value = { obj: { a: [1] } };
+      backend(doc).write(value);
+
+      value.obj.a.push(2);
 
       expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
     });

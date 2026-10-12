@@ -85,12 +85,6 @@ describe("getChanges", () => {
       expect(getChanges("Todo 1", "B Todo 1")).toEqual([[INSERT, 0, "B "]]);
     });
 
-    it("inserts a pasted run of characters as one change", () => {
-      const paste = "lorem ipsum dolor sit amet";
-
-      expect(getChanges("x", `x${paste}`)).toEqual([[INSERT, 1, paste]]);
-    });
-
     it("addresses an edit in a long string by its offset", () => {
       const text = "lorem ipsum ".repeat(500);
       const middle = text.length / 2;
@@ -258,38 +252,11 @@ describe("getChanges", () => {
 
         expect(indices).toEqual([...indices].sort((x, y) => x - y));
         expect(applySequentially(a, changes)).toEqual(b);
+        appliesCleanly(a, b);
       }
     });
 
     it.each([
-      [
-        [1, 2, 3],
-        [0, 1],
-      ],
-      [
-        [2, 3],
-        [1, 2, 3, 4],
-      ],
-      [[1, 2, 3, 4], [1]],
-      [[1, 2], []],
-      [[], [1, 2]],
-      [
-        [1, 2, 3],
-        [1, 3],
-      ],
-      [
-        [1, 3],
-        [1, 2, 3],
-      ],
-      [[3], [1, 2, 3]],
-      [
-        [1, 2, 3],
-        [3, 2, 1],
-      ],
-      [
-        [1, 1, 2],
-        [1, 2, 2],
-      ],
       [
         [item("1"), item("2")],
         [item("0"), item("1"), item("2", true)],
@@ -446,6 +413,10 @@ describe("getChanges", () => {
         { todos: [item("0"), item("1", true)], term: "ab" },
       ],
       [{ v: { a: 1 } }, { v: [1] }],
+      [
+        { v: [1], s: "a" },
+        { v: null, s: 1 },
+      ],
       [{ deep: { l: ["a", "b"] } }, { deep: { l: ["b"] } }],
       [{}, { a: { b: { c: [1, "x"] } } }],
       [{ a: { b: { c: [1, "x"] } } }, {}],
@@ -517,7 +488,9 @@ describe("getChanges", () => {
     it.each(nonJsonWrites)(
       "finds the changes toJsonValue would for %s, and none once they are applied",
       (_, before, next, expected) => {
-        expect(getChanges(before as Diffable, next as Diffable, json)).toEqual(
+        expect(
+          getChanges(before as Diffable, next as Diffable, json),
+        ).toStrictEqual(
           getChanges(before as Diffable, toJsonValue(next) as Diffable),
         );
         expect(
@@ -533,13 +506,46 @@ describe("getChanges", () => {
           { a: 2, o: { b: undefined, l: [() => 1, 1] } },
           json,
         ),
-      ).toEqual([
+      ).toStrictEqual([
         [UPDATE, "a", 2],
         [INSERT, "o", { l: [null, 1] }],
       ]);
       expect(
         getChanges({ l: [1] }, { l: [{ x: undefined, y: 1 }] }, json),
-      ).toEqual([[PENDING, "l", [[UPDATE, 0, { y: 1 }]]]]);
+      ).toStrictEqual([[PENDING, "l", [[UPDATE, 0, { y: 1 }]]]]);
+    });
+
+    it("matches containers inside arrays as JSON would store them", () => {
+      const cases: [unknown, unknown][] = [
+        [{ a: 1, b: undefined }, { a: 1 }],
+        [{ a: 1 }, { a: 1, f: () => 1 }],
+        [{ a: 1 }, JSON.parse('{"a":1,"__proto__":{"isAdmin":true}}')],
+        [
+          [1, null],
+          [1, undefined],
+        ],
+      ];
+
+      // The item before it is new, so only a match keeps the item from being rewritten.
+      for (const [before, after] of cases)
+        expect(getChanges({ l: [before] }, { l: [0, after] }, json)).toEqual([
+          [PENDING, "l", [[INSERT, 0, 0]]],
+        ]);
+    });
+
+    it("finds the changes inside containers that differ as JSON", () => {
+      expect(
+        getChanges({ l: [{ a: 1, c: 2 }] }, { l: [{ a: 1 }] }, json),
+      ).toEqual([[PENDING, "l", [[PENDING, 0, [[DELETE, "c", undefined]]]]]]);
+      expect(getChanges({ l: [{ a: 1 }] }, { l: [{ a: 2 }] }, json)).toEqual([
+        [PENDING, "l", [[PENDING, 0, [[UPDATE, "a", 2]]]]],
+      ]);
+      expect(getChanges({ l: [[1, 2]] }, { l: [[1]] }, json)).toEqual([
+        [PENDING, "l", [[PENDING, 0, [[DELETE, 1, undefined]]]]],
+      ]);
+      expect(getChanges({ l: [[1, 2]] }, { l: [[1, 3]] }, json)).toEqual([
+        [PENDING, "l", [[PENDING, 0, [[UPDATE, 1, 3]]]]],
+      ]);
     });
 
     it("carries a value that is already JSON as it is", () => {

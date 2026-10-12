@@ -186,6 +186,53 @@ describe("createPersistence", () => {
     await expect(persistence.stats()).rejects.toBe(error);
   });
 
+  it("compacts only on load with compactAfter Infinity", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const doc = createToyDoc();
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      compactAfter: Infinity,
+    });
+    for (let i = 0; i < 150; i++) doc.add(`op-${i}`);
+    await persistence.flush();
+
+    expect(adapter.size("doc")).toBe(151);
+  });
+
+  it("never runs two storage calls at once", async () => {
+    const memory = createMemoryPersistenceAdapter();
+    let running = 0;
+    let overlapped = false;
+    const tracked =
+      <A extends unknown[], R>(call: (...args: A) => Promise<R>) =>
+      async (...args: A): Promise<R> => {
+        overlapped ||= running > 0;
+        running++;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        try {
+          return await call(...args);
+        } finally {
+          running--;
+        }
+      };
+    const adapter: PersistenceAdapter = {
+      load: tracked(memory.load),
+      append: tracked(memory.append),
+      compact: tracked(memory.compact),
+      clear: tracked(memory.clear),
+    };
+    const doc = createToyDoc();
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      compactAfter: 2,
+    });
+    for (const op of ["a", "b", "c"]) doc.add(op);
+    await persistence.flush();
+
+    expect(overlapped).toBe(false);
+    expect((await restore(memory)).doc.ops()).toEqual(["a", "b", "c"]);
+  });
+
   it("keeps every document's updates when several share a key", async () => {
     const adapter = createMemoryPersistenceAdapter();
     const config = { key: "doc", compactAfter: 2 };
@@ -238,6 +285,18 @@ describe("createPersistence", () => {
     expect(adapter.size("doc")).toBe(0);
   });
 
+  it("still removes the stored document on clear after destroy", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const { doc, persistence } = await restore(adapter);
+    doc.add("a");
+    await persistence.destroy();
+    await persistence.destroy();
+
+    await persistence.clear();
+
+    expect(adapter.size("doc")).toBe(0);
+  });
+
   it("still loads when storage fails, and reports the error", async () => {
     const error = new Error("storage unavailable");
     const onError = vi.fn();
@@ -263,6 +322,71 @@ describe("createPersistence", () => {
 
     expect(doc.ops()).toEqual(["valid"]);
     expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("reports a failed append and keeps storing later updates", async () => {
+    const error = new Error("quota exceeded");
+    const onError = vi.fn();
+    const memory = createMemoryPersistenceAdapter();
+    const adapter: PersistenceAdapter = {
+      ...memory,
+      append: vi.fn(memory.append).mockRejectedValueOnce(error),
+    };
+    const doc = createToyDoc();
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      onError,
+    });
+    await persistence.whenLoaded;
+
+    doc.add("lost");
+    doc.add("kept");
+    await persistence.flush();
+
+    expect(onError).toHaveBeenCalledWith(error);
+    expect((await restore(memory)).doc.ops()).toEqual(["kept"]);
+  });
+
+  it("reports a failed compaction and keeps the log it could not replace", async () => {
+    const error = new Error("quota exceeded");
+    const onError = vi.fn();
+    const memory = createMemoryPersistenceAdapter();
+    const compact = vi.fn(memory.compact);
+    const adapter: PersistenceAdapter = { ...memory, compact };
+    const doc = createToyDoc();
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      onError,
+    });
+    doc.add("a");
+    await persistence.flush();
+    compact.mockRejectedValueOnce(error);
+
+    await persistence.compact();
+
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(memory.size("doc")).toBe(2);
+    expect((await restore(memory)).doc.ops()).toEqual(["a"]);
+  });
+
+  it("logs storage failures to the console by default", async () => {
+    const error = new Error("storage unavailable");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const adapter: PersistenceAdapter = {
+      ...createMemoryPersistenceAdapter(),
+      load: () => Promise.reject(error),
+    };
+
+    try {
+      await createPersistence(createToyDoc(), adapter, { key: "doc" })
+        .whenLoaded;
+
+      expect(consoleError).toHaveBeenCalledWith(expect.any(String), error);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
 

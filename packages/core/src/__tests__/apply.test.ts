@@ -157,6 +157,30 @@ describe("applyChanges", () => {
     expect(log).toEqual(["set list.0"]);
   });
 
+  it("replaces a child that is another kind of container than the diff expects", () => {
+    // The target holds a list where `current` says a record, as when other code replaced it.
+    const { ops, log } = createOps();
+    const target = { item: ["stale"] };
+
+    applyChanges(target, { item: { a: 1 } }, { item: { a: 2 } }, ops);
+
+    expect(target).toEqual({ item: { a: 2 } });
+    expect(log).toEqual(["set item"]);
+  });
+
+  it("leaves a target that is not a record or a list alone", () => {
+    const { ops, log } = createOps();
+    const opaque = new Opaque({ a: 1 });
+    const text = new Text("a");
+
+    applyChanges(opaque, { a: 1 }, { a: 2 }, ops);
+    applyChanges(text, {}, { a: 1 }, ops);
+
+    expect(opaque.json).toEqual({ a: 1 });
+    expect(text.value).toBe("a");
+    expect(log).toEqual([]);
+  });
+
   it("edits text in place, character by character, at its path", () => {
     const { ops, log } = createOps();
     const title = new Text("Plan the trip");

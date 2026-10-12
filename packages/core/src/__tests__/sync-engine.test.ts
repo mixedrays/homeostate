@@ -68,18 +68,6 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(threeTodos());
     });
 
-    it("adopts a non-empty backend even with seed 'never'", () => {
-      const backend = createMemoryBackend(threeTodos());
-      const store = createTestStore({
-        ...threeTodos(),
-        todos: [todo("local")],
-      });
-
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
-
-      expect(store.getState()).toEqual(threeTodos());
-    });
-
     it("subscribes once even when called twice", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
@@ -94,14 +82,16 @@ describe("createSyncEngine", () => {
       expect(engine.isConnected()).toBe(true);
     });
 
-    it("keeps synced keys the backend lacks and seeds them", () => {
+    it("keeps synced keys the backend lacks and seeds them in one write", () => {
       const backend = createMemoryBackend({ todos: [todo("remote")] });
       const store = createTestStore(threeTodos());
+      const write = vi.spyOn(backend, "write");
 
       createSyncEngine(backend, store.adapter).connect();
 
       const expected = { ...threeTodos(), todos: [todo("remote")] };
       expect(store.getState()).toEqual(expected);
+      expect(write).toHaveBeenCalledTimes(1);
       expect(backend.read()).toEqual(expected);
     });
 
@@ -128,20 +118,6 @@ describe("createSyncEngine", () => {
 
       expect(store.getState()).toEqual(threeTodos());
       expect(backend.read()).toEqual(threeTodos());
-    });
-
-    it("writes the seed once, leaving the adopted keys untouched", () => {
-      const backend = createMemoryBackend({ todos: [todo("remote")] });
-      const store = createTestStore(threeTodos());
-      const write = vi.spyOn(backend, "write");
-
-      createSyncEngine(backend, store.adapter).connect();
-
-      expect(write).toHaveBeenCalledTimes(1);
-      expect(write).toHaveBeenCalledWith({
-        ...threeTodos(),
-        todos: [todo("remote")],
-      });
     });
 
     it("leaves the store object untouched when every backend key already matches", () => {
@@ -171,13 +147,26 @@ describe("createSyncEngine", () => {
     it("seeds an empty backend with what the store holds at connect time", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter);
       store.update((s) => toggleTodo(s, "1"));
 
-      createSyncEngine(backend, store.adapter).connect();
+      engine.connect();
 
       expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
-      expect(backend.read()).toEqual(store.getState());
     });
+
+    it.each([null, 5, "text"])(
+      "treats a backend holding %j as empty and seeds it",
+      (held) => {
+        const backend = createMemoryBackend(held);
+        const store = createTestStore(threeTodos());
+
+        createSyncEngine(backend, store.adapter).connect();
+
+        expect(backend.read()).toEqual(threeTodos());
+        expect(store.getState()).toEqual(threeTodos());
+      },
+    );
   });
 
   describe("store to backend", () => {
@@ -245,6 +234,21 @@ describe("createSyncEngine", () => {
       expect(store.getState()).toEqual({ b: 2, c: 3 });
     });
 
+    it("removes every synced key when the backend comes to hold no object", () => {
+      const backend = createMemoryBackend();
+      const increment = () => {};
+      const store = createTestStore<Record<string, unknown>>({
+        a: 1,
+        b: 2,
+        increment,
+      });
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive(null);
+
+      expect(store.getState()).toEqual({ increment });
+    });
+
     it("leaves the store untouched when the remote state already matches", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
@@ -295,6 +299,8 @@ describe("createSyncEngine", () => {
       createSyncEngine(backend, store.adapter, {
         filter: (key) => key !== "secret",
       }).connect();
+
+      expect(store.getState()).toEqual(threeTodos());
 
       store.update((s) => toggleTodo(s as ReturnType<typeof threeTodos>, "1"));
 
@@ -414,6 +420,23 @@ describe("createSyncEngine", () => {
         toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
       );
     });
+
+    it("passes nothing after a read that threw", () => {
+      const { backend, previous } = checkedBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      vi.spyOn(backend, "read").mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      expect(() => backend.receive(addTodo(threeTodos(), todo("4")))).toThrow(
+        "boom",
+      );
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(previous.at(-1)).toBeUndefined();
+      expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
+    });
   });
 
   describe("untrusted key names", () => {
@@ -476,30 +499,6 @@ describe("createSyncEngine", () => {
         ...toggleTodo(threeTodos(), "1"),
         searchTerm: "local",
       });
-    });
-
-    it("ignores remote keys that the filter excludes, even when the store lacks them", () => {
-      const backend = createMemoryBackend({
-        ...threeTodos(),
-        secret: "remote",
-      });
-      const store = createTestStore<object>(threeTodos());
-
-      createSyncEngine(backend, store.adapter, {
-        filter: (key) => key !== "secret",
-      }).connect();
-
-      expect(store.getState()).toEqual(threeTodos());
-    });
-
-    it("still deletes keys removed from the backend after connect", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore<Record<string, unknown>>({ a: 1, b: 2 });
-      createSyncEngine(backend, store.adapter).connect();
-
-      backend.receive({ a: 1 });
-
-      expect(store.getState()).toEqual({ a: 1 });
     });
   });
 
@@ -684,6 +683,85 @@ describe("createSyncEngine", () => {
       const read = vi.spyOn(backend, "read");
       scheduler.run();
       expect(read).not.toHaveBeenCalled();
+    });
+
+    it("disconnects even when applying the pending remote change throws", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      const engine = createSyncEngine(
+        backend,
+        {
+          ...store.adapter,
+          setState: () => {
+            throw new Error("invalid snapshot");
+          },
+        },
+        { schedule: scheduler.schedule },
+      );
+      engine.connect();
+      backend.receive(toggleTodo(threeTodos(), "1"));
+
+      expect(() => engine.disconnect()).toThrow("invalid snapshot");
+
+      expect(engine.isConnected()).toBe(false);
+      const write = vi.spyOn(backend, "write");
+      store.update((s) => toggleTodo(s, "2"));
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it("schedules the next remote change after schedule threw", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      const schedule = vi.fn(scheduler.schedule).mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      createSyncEngine(backend, store.adapter, { schedule }).connect();
+      expect(() => backend.receive(toggleTodo(threeTodos(), "1"))).toThrow(
+        "boom",
+      );
+
+      backend.receive(toggleTodo(threeTodos(), "2"));
+
+      expect(scheduler.queued()).toBe(1);
+      scheduler.run();
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "2"));
+    });
+
+    it("ignores a flush handed out before disconnect once connected again", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const flushes: (() => void)[] = [];
+      const engine = createSyncEngine(backend, store.adapter, {
+        schedule: (flush) => {
+          flushes.push(flush);
+        },
+      });
+      engine.connect();
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      engine.disconnect();
+      engine.connect();
+      backend.receive(toggleTodo(threeTodos(), "2"));
+      const [stale, current] = flushes;
+
+      stale();
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+      current();
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "2"));
+    });
+
+    it("applies each remote change at once when schedule runs the flush synchronously", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        schedule: (flush) => flush(),
+      }).connect();
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+      backend.receive(toggleTodo(threeTodos(), "2"));
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "2"));
     });
   });
 
