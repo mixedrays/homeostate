@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { site } from "@/site.config.ts";
 import { GithubIcon } from "./github-icon.tsx";
+import { NpmIcon } from "./npm-icon.tsx";
 import { SearchDialog } from "./search-dialog.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
 
@@ -62,6 +63,13 @@ export function SiteHeader({ start }: { start?: ReactNode }) {
             render={<a href={site.repo} aria-label="GitHub repository" />}
           >
             <GithubIcon className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            render={<a href={site.npmOrg} aria-label="npm packages" />}
+          >
+            <NpmIcon className="size-4" />
           </Button>
           <ThemeToggle />
         </div>

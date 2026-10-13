@@ -2,6 +2,7 @@ import { ArrowRightIcon } from "lucide-react";
 import { Link } from "react-router";
 import type { Route } from "./+types/home";
 import { GithubIcon } from "@/components/layout/github-icon.tsx";
+import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
 import { Markdown } from "@/components/markdown/markdown.tsx";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <Button size="lg" variant="outline" render={<a href={site.repo} />}>
               <GithubIcon className="size-4" /> GitHub
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              render={<a href={site.npmOrg} />}
+            >
+              <NpmIcon className="size-4" /> npm
+            </Button>
           </div>
           <div className="mt-10 max-w-2xl">
             <Markdown hast={install} />
@@ -139,6 +147,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </a>
           <a href={site.repo} className="hover:text-foreground">
             GitHub
+          </a>
+          <a href={site.npmOrg} className="hover:text-foreground">
+            npm
           </a>
         </div>
       </footer>
