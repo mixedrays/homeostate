@@ -27,7 +27,11 @@ export interface StoreAdapter<S extends object> {
   /**
    * Replace the store state. Called only for changes coming from the backend; the
    * engine ignores store notifications raised while it runs, so the adapter needs no
-   * echo suppression of its own.
+   * echo suppression of its own. When it returns, the engine writes the store's synced
+   * state once if it differs from what was applied, such as a key the store normalised or
+   * derived meanwhile, so the backend ends up equal to it. If `getState()` then returns the
+   * same object as before the call, the store is taken to have ignored the change, and nothing
+   * is written.
    */
   setState: (state: S) => void;
 
@@ -137,7 +141,8 @@ export interface PersistableDoc {
 
   /**
    * Report every change to the document, local or from a peer, as an update `apply`
-   * accepts. Changes made by `apply` itself are not reported.
+   * accepts. Changes made by `apply` itself are not reported, but a change made in response
+   * while it runs, such as a sync engine's write, is.
    * @returns Unsubscribe function
    */
   subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;

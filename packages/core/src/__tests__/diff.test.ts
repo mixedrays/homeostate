@@ -426,6 +426,25 @@ describe("getChanges", () => {
   describe("with a text policy", () => {
     const text = todoTitles;
 
+    it.each([false, true])(
+      "skips the text policy inside an unchanged record with json: %s",
+      (json) => {
+        const unchanged = { title: "Keep this title" };
+        const text: TextPolicy = (path) => {
+          expect(path).toEqual(["title"]);
+          return true;
+        };
+
+        expect(
+          getChanges(
+            { unchanged, title: "a" },
+            { unchanged, title: "ab" },
+            { json, text },
+          ),
+        ).toEqual([[PENDING, "title", [[INSERT, 1, "b"]]]]);
+      },
+    );
+
     it("replaces a changed string outside the policy whole", () => {
       expect(
         getChanges(

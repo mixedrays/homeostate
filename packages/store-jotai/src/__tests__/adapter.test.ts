@@ -71,6 +71,26 @@ describe("JotaiAdapter", () => {
     expect(store.get(labelAtom)).toBe("q");
   });
 
+  it("writes what a root atom that normalises its write makes of a remote change", () => {
+    const countAtom = atom(0);
+    const labelAtom = atom("a");
+    const rootAtom = atom(
+      (get) => ({ count: get(countAtom), label: get(labelAtom) }),
+      (_get, set, next: Counter) => {
+        set(countAtom, Math.min(next.count, 10));
+        set(labelAtom, next.label);
+      },
+    );
+    const store = createStore();
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, createJotaiAdapter(rootAtom, store)).connect();
+
+    backend.receive({ count: 50, label: "a" });
+
+    expect(store.get(rootAtom)).toEqual({ count: 10, label: "a" });
+    expect(backend.read()).toEqual({ count: 10, label: "a" });
+  });
+
   it("stops both directions after disconnect", () => {
     const counterAtom = atom<Counter>({ count: 0, label: "a" });
     const store = createStore();

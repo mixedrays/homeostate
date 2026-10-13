@@ -7,7 +7,7 @@ import type {
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
 import { patchState } from "./patching.js";
-import { hasOwn, PROTO_KEY } from "./diff.js";
+import { hasOwn, jsonEqual, PROTO_KEY } from "./diff.js";
 
 type Plain = Record<string, unknown>;
 
@@ -22,7 +22,9 @@ type Plain = Record<string, unknown>;
  * backend holds wins over the store's value, and a synced key the backend lacks stays in
  * the store and is seeded into the backend unless `seed` is `'never'`. Afterwards the
  * backend owns the synced document: every write replaces it with the store's filtered
- * state, and a key removed from the backend is removed from the store.
+ * state, and a key removed from the backend is removed from the store. The store's own changes
+ * while a remote change is applied, such as a key a reducer normalises or a subscriber derives,
+ * are written once the apply ends.
  *
  * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
  * A local change made before the flush applies them first, and they replace the store's synced
@@ -75,18 +77,8 @@ export function createSyncEngine<S extends object>(
       : undefined;
   };
 
-  /**
-   * Builds the next store state from `remote`. With `keepLocalOnly`, a synced key the
-   * backend does not hold is left in place instead of being deleted; that is the
-   * connect-time reconciliation. Otherwise `remote` is the whole synced state.
-   */
-  const mergeStates = (
-    current: S,
-    remote: Plain,
-    keepLocalOnly: boolean,
-  ): S => {
-    const synced = filterState(current);
-    const target = keepLocalOnly ? { ...synced, ...remote } : remote;
+  /** Builds the next store state from `current`, whose synced part `synced` becomes `target`. */
+  const mergeStates = (current: S, synced: Plain, target: Plain): S => {
     const patched = patchState(synced, target);
     if (patched === synced) return current;
 
@@ -97,15 +89,45 @@ export function createSyncEngine<S extends object>(
     return merged as S;
   };
 
+  /** Writes `next`, the store's synced state, passing what the backend holds as `previous`. */
+  const writeSynced = (next: Plain): void => {
+    const previous = lastSynced;
+    const reads = remoteReads;
+    // Unknown should the write throw.
+    lastSynced = undefined;
+    backend.write(next, previous);
+    // A remote change applied during the write has already recorded what it read.
+    if (remoteReads === reads) lastSynced = next;
+  };
+
+  /**
+   * Makes the store's synced state `remote`, then writes what the store changed in response.
+   * With `keepLocalOnly`, a synced key the backend does not hold is left in place instead of
+   * being deleted; that is the connect-time reconciliation. Otherwise `remote` is the whole
+   * synced state. `lastSynced` must already be what the backend holds.
+   */
   const applyRemote = (remote: Plain, keepLocalOnly: boolean): void => {
+    let current: S;
+    let target: Plain;
     applyingRemote = true;
     try {
-      const current = adapter.getState();
-      const merged = mergeStates(current, remote, keepLocalOnly);
-      if (merged !== current) adapter.setState(merged);
+      current = adapter.getState();
+      const synced = filterState(current);
+      target = keepLocalOnly ? { ...synced, ...remote } : remote;
+      const merged = mergeStates(current, synced, target);
+      if (merged === current) return;
+      adapter.setState(merged);
     } finally {
       applyingRemote = false;
     }
+    const after = adapter.getState();
+    // A store that ignored the change entirely, such as a Redux store without the replace case,
+    // would otherwise write its old state back over every peer's.
+    if (after === current) return;
+    // The store's notifications were ignored meanwhile, so a key it normalised or derived from
+    // `merged` reaches the backend only here. An echo of `merged` alone equals `target`.
+    const applied = filterState(after);
+    if (!jsonEqual(applied, target)) writeSynced(applied);
   };
 
   const syncToStore = (): void => {
@@ -117,11 +139,12 @@ export function createSyncEngine<S extends object>(
     applyRemote(filterState(lastSynced ?? {}), false);
   };
 
-  /** Runs the apply deferred by `schedule`, if one is pending. */
-  const runPendingApply = (): void => {
-    if (!applyPending) return;
+  /** Runs the apply deferred by `schedule`, if one is pending, and returns whether it ran. */
+  const runPendingApply = (): boolean => {
+    if (!applyPending) return false;
     applyPending = false;
     syncToStore();
+    return true;
   };
 
   const onRemoteChange = (): void => {
@@ -150,16 +173,11 @@ export function createSyncEngine<S extends object>(
   const syncToBackend = (): void => {
     if (applyingRemote) return;
     // Otherwise the write would revert the pending remote changes. They win: applying them
-    // replaces the store's synced state, local change included.
-    runPendingApply();
-    const next = filterState(adapter.getState());
-    const previous = lastSynced;
-    const reads = remoteReads;
-    // Unknown should the write throw.
-    lastSynced = undefined;
-    backend.write(next, previous);
-    // A remote change applied during the write has already recorded what it read.
-    if (remoteReads === reads) lastSynced = next;
+    // replaces the store's synced state, local change included, and leaves the backend holding
+    // what the store then holds, so there is nothing left to write. A store that ignored the
+    // apply keeps its stale state out of the backend this way too.
+    if (runPendingApply()) return;
+    writeSynced(filterState(adapter.getState()));
   };
 
   const unsubscribeAll = (): void => {
@@ -186,10 +204,9 @@ export function createSyncEngine<S extends object>(
         held = seeded;
       }
 
-      applyRemote(remote, true);
       lastSynced = held;
-
       try {
+        applyRemote(remote, true);
         backendUnsubscribe = backend.subscribe(onRemoteChange);
         storeUnsubscribe = adapter.subscribe(syncToBackend);
       } catch (error) {

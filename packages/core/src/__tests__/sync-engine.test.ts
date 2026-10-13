@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSyncEngine } from "../index.js";
-import { createMemoryBackend } from "../testing.js";
+import { createMemoryBackend, type MemoryBackend } from "../testing.js";
 import {
   addTodo,
   createTestStore,
@@ -12,6 +12,7 @@ import {
   threeTodos,
   todo,
   toggleTodo,
+  type TestStore,
 } from "./helpers.js";
 
 /**
@@ -275,6 +276,202 @@ describe("createSyncEngine", () => {
     });
   });
 
+  describe("store changes made while a remote change is applied", () => {
+    interface Counted {
+      todos: string[];
+      count: number;
+    }
+
+    /** A store whose `setState` derives `count`, as a normalising reducer would. */
+    const normalisingStore = (initial: Counted = { todos: [], count: 0 }) =>
+      createTestStore(initial, (next) => ({
+        ...next,
+        count: next.todos.length,
+      }));
+
+    /** A store with a subscriber that keeps `count` in step with `todos`. */
+    const subscriberStore = (initial: Counted = { todos: [], count: 0 }) => {
+      const store = createTestStore(initial);
+      store.adapter.subscribe(() => {
+        const state = store.getState();
+        if (state.count !== state.todos.length)
+          store.setState({ ...state, count: state.todos.length });
+      });
+      return store;
+    };
+
+    it.each([
+      ["setState normalises", normalisingStore],
+      ["a subscriber derives", subscriberStore],
+    ])("writes a key the store changes when %s it", (_, createStore) => {
+      const backend = createMemoryBackend();
+      const store = createStore();
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive({ todos: ["a", "b"], count: 0 });
+
+      expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+      expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+    });
+
+    it("writes once, passing what it read as the previous state", () => {
+      const { backend, previous } = checkedBackend();
+      const store = subscriberStore();
+      createSyncEngine(backend, store.adapter).connect();
+      const write = vi.spyOn(backend, "write");
+
+      backend.receive({ todos: ["a", "b"], count: 0 });
+
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(previous.at(-1)).toEqual({ todos: ["a", "b"], count: 0 });
+    });
+
+    it("writes nothing back when the remote change needs no derived write", () => {
+      const backend = createMemoryBackend();
+      const store = subscriberStore();
+      createSyncEngine(backend, store.adapter).connect();
+      const write = vi.spyOn(backend, "write");
+
+      backend.receive({ todos: ["a", "b"], count: 2 });
+
+      expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it("writes nothing when the store ignores the remote change", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore({ todos: [] as string[], count: 0 });
+      const adapter = { ...store.adapter, setState: () => {} };
+      createSyncEngine(backend, adapter).connect();
+      const write = vi.spyOn(backend, "write");
+
+      backend.receive({ todos: ["a", "b"], count: 2 });
+
+      expect(store.getState()).toEqual({ todos: [], count: 0 });
+      expect(write).not.toHaveBeenCalled();
+      expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+    });
+
+    it("writes what the store derives when connecting to a non-empty backend", () => {
+      const backend = createMemoryBackend({ todos: ["a", "b"], count: 0 });
+      const store = subscriberStore();
+
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+      expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+    });
+
+    it("writes what the store derives after seeding the keys the backend lacks", () => {
+      const { backend, previous } = checkedBackend({ todos: ["a", "b"] });
+      const store = createTestStore(
+        { todos: [] as string[], count: 0, searchTerm: "local" },
+        (next) => ({ ...next, count: next.todos.length }),
+      );
+
+      createSyncEngine(backend, store.adapter).connect();
+
+      const expected = { todos: ["a", "b"], count: 2, searchTerm: "local" };
+      expect(store.getState()).toEqual(expected);
+      expect(backend.read()).toEqual(expected);
+      expect(previous.at(-1)).toEqual({
+        todos: ["a", "b"],
+        count: 0,
+        searchTerm: "local",
+      });
+    });
+
+    it("writes nothing on connect when the store derives nothing new", () => {
+      const backend = createMemoryBackend({ todos: ["a", "b"], count: 2 });
+      const store = createTestStore({
+        todos: [] as string[],
+        count: 0,
+        searchTerm: "local",
+      });
+      store.adapter.subscribe(() => {
+        const state = store.getState();
+        if (state.count !== state.todos.length)
+          store.setState({ ...state, count: state.todos.length });
+      });
+      const write = vi.spyOn(backend, "write");
+
+      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+
+      expect(store.getState()).toEqual({
+        todos: ["a", "b"],
+        count: 2,
+        searchTerm: "local",
+      });
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    describe("with schedule", () => {
+      const connectScheduled = (
+        backend: MemoryBackend,
+        store: TestStore<Counted> = subscriberStore(),
+      ) => {
+        const flushes: (() => void)[] = [];
+        const engine = createSyncEngine(backend, store.adapter, {
+          schedule: (flush) => {
+            flushes.push(flush);
+          },
+        });
+        engine.connect();
+        const run = () => flushes.splice(0).forEach((flush) => flush());
+        return { store, engine, run };
+      };
+
+      it("writes what the store derives when the flush runs", () => {
+        const backend = createMemoryBackend();
+        const { store, run } = connectScheduled(backend);
+
+        backend.receive({ todos: ["a"], count: 0 });
+        backend.receive({ todos: ["a", "b"], count: 0 });
+        run();
+
+        expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+      });
+
+      it("writes what the store derives when disconnect runs the pending apply", () => {
+        const backend = createMemoryBackend();
+        const { store, engine } = connectScheduled(backend);
+
+        backend.receive({ todos: ["a", "b"], count: 0 });
+        engine.disconnect();
+
+        expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+      });
+
+      it("writes once when a local change runs the pending apply", () => {
+        const { backend, previous } = checkedBackend();
+        const { store } = connectScheduled(backend, normalisingStore());
+        const write = vi.spyOn(backend, "write");
+
+        backend.receive({ todos: ["a", "b"], count: 0 });
+        store.update((s) => ({ ...s, todos: [...s.todos, "local"] }));
+
+        expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(previous.at(-1)).toEqual({ todos: ["a", "b"], count: 0 });
+      });
+
+      it("writes nothing when a local change runs a pending apply that needs no derived write", () => {
+        const backend = createMemoryBackend();
+        const { store } = connectScheduled(backend, normalisingStore());
+        const write = vi.spyOn(backend, "write");
+
+        backend.receive({ todos: ["a", "b"], count: 2 });
+        store.update((s) => ({ ...s, todos: [...s.todos, "local"] }));
+
+        expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(write).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   describe("previous state given to write", () => {
     it("passes the synced state it last wrote, so unchanged todos match by identity", () => {
       const { backend, previous } = checkedBackend();
@@ -370,15 +567,13 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos(), trimTitles);
       createSyncEngine(backend, store.adapter).connect();
       const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
+
       backend.receive(remote);
+
+      // The trimmed titles are written back.
       expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
-
-      store.update((s) => toggleTodo(s, "1"));
-
       expect(previous.at(-1)).toEqual(remote);
-      expect(backend.read()).toEqual(
-        toggleTodo(addTodo(threeTodos(), todo("4")), "1"),
-      );
+      expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
     });
 
     it("passes what it read when a remote change arrives during its own write", () => {

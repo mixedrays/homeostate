@@ -98,6 +98,29 @@ describe("createAutomergeBackend", () => {
     expect(backend.read()).toEqual({ count: 1 });
   });
 
+  it("reports a peer's update merged while its own write notifies, and only that", () => {
+    const handle = createHandle(1);
+    const backend = createAutomergeBackend(handle, NAME);
+    backend.write({ count: 1 });
+    const peer = A.change(A.clone(handle.doc(), actor(2)), (doc) => {
+      (doc[NAME] as Root).label = "peer";
+    });
+    let notified = 0;
+    backend.subscribe(() => {
+      notified++;
+    });
+    // A relay that merges a peer's update while it hears about the write.
+    const stop = handle.subscribe(({ local }) => {
+      if (local) handle.update((doc) => A.merge(doc, peer));
+    });
+
+    backend.write({ count: 2 });
+    stop();
+
+    expect(backend.read()).toEqual({ count: 2, label: "peer" });
+    expect(notified).toBe(1);
+  });
+
   it("shares unchanged subtrees between reads and copies the changed path", () => {
     const backend = createAutomergeBackend(createHandle(), NAME);
     backend.write(threeTodos());

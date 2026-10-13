@@ -34,7 +34,11 @@ interface StoreAdapter<S extends object> {
 ```
 
 `setState` is called only for changes that come from the backend. The engine ignores store
-notifications raised while it runs, so an adapter needs no echo suppression of its own.
+notifications raised while it runs, so an adapter needs no echo suppression of its own. What the
+store changes meanwhile, such as a key a reducer normalises or a subscriber, reaction or hook
+derives, is written to the backend once `setState` returns, in one write. A remote change the
+store keeps as it is writes nothing back, and neither does one it ignores: when `getState`
+returns the same object as before `setState`, the backend keeps the remote state.
 
 Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and `null`.
 Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are

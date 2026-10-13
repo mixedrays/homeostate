@@ -161,5 +161,62 @@ export const describePersistableDoc = <D>(
 
       expect(backend(copy).read()).toEqual(store.getState());
     });
+
+    it.each([
+      ["before", true],
+      ["after", false],
+    ])(
+      "reports what a store derives while an update is applied, subscribed %s the engine",
+      (_, persistableFirst) => {
+        const docs = [createDoc(), createDoc()];
+        const persistables = docs.map(persistable);
+        // Updates travel as a provider delivers them: later, one at a time.
+        const inbox: Uint8Array[][] = [[], []];
+        const relay = (from: number) =>
+          persistables[from].subscribe((update) => {
+            inbox[1 - from].push(update);
+          });
+        const deliver = () => {
+          while (inbox[0].length > 0 || inbox[1].length > 0)
+            for (const to of [0, 1]) {
+              const update = inbox[to].shift();
+              if (update !== undefined) persistables[to].apply(update);
+            }
+        };
+        const initial = { todos: [] as string[], count: 0 };
+        const stores = [createTestStore(initial), createTestStore(initial)];
+        const deriving = stores[1];
+        deriving.adapter.subscribe(() => {
+          const state = deriving.getState();
+          if (state.count !== state.todos.length)
+            deriving.setState({ ...state, count: state.todos.length });
+        });
+        const engines = docs.map((doc, i) =>
+          createSyncEngine(backend(doc), stores[i].adapter),
+        );
+        relay(0);
+        engines[0].connect();
+        deliver();
+        if (persistableFirst) relay(1);
+        engines[1].connect();
+        if (!persistableFirst) relay(1);
+        deliver();
+
+        stores[0].setState({ todos: ["a", "b"], count: 0 });
+        deliver();
+
+        expect(stores[1].getState()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(stores[0].getState()).toEqual({ todos: ["a", "b"], count: 2 });
+
+        // A later edit of the deriving peer depends on the derived one.
+        deriving.setState({ todos: ["a", "b", "c"], count: 3 });
+        deliver();
+
+        expect(stores[0].getState()).toEqual({
+          todos: ["a", "b", "c"],
+          count: 3,
+        });
+      },
+    );
   });
 };
