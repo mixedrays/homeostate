@@ -1,5 +1,5 @@
 ---
-description: localStorage persistence adapter for @homeostate/core
+description: Store a Yjs, Loro or Automerge document in localStorage, so its state survives reloads, offline starts and every peer leaving the room.
 label: Introduction
 ---
 

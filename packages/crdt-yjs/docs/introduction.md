@@ -1,5 +1,5 @@
 ---
-description: Yjs CRDT backend for @homeostate/core
+description: Keep a Zustand, Redux, MobX or other store in sync with a Yjs document, mapping state onto Y.Map and Y.Array with fine-grained updates.
 label: Introduction
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: Valtio adapter for @homeostate/core
+description: Keep a Valtio proxy in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

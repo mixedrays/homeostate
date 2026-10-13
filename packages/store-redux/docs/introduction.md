@@ -1,5 +1,5 @@
 ---
-description: Redux adapter for @homeostate/core
+description: Keep a Redux or Redux Toolkit store in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

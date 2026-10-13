@@ -1,5 +1,5 @@
 ---
-description: The sync engine that keeps a store adapter in sync with a CRDT backend, plus document persistence.
+description: The sync engine that keeps a Zustand, Redux, MobX or other store in sync with a Yjs, Loro or Automerge document, plus document persistence.
 label: Introduction
 ---
 

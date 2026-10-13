@@ -4,8 +4,11 @@ import { site } from "@/site.config.ts";
 import { SiteHeader } from "./site-header.tsx";
 
 export function NotFound() {
+  // React hoists these into <head>; no route that renders this page has a `meta` export.
   return (
     <>
+      <title>{`Page not found · ${site.name}`}</title>
+      <meta name="robots" content="noindex" />
       <SiteHeader />
       <main
         id="content"

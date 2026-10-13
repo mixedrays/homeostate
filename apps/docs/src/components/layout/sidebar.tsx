@@ -74,7 +74,8 @@ function PackageItem({
         <span>{pkg.label}</span>
         <ChevronRightIcon className="size-3.5 transition-transform group-data-panel-open/trigger:rotate-90" />
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      {/* Mounted while closed, so every page's HTML links to every other page for crawlers. */}
+      <CollapsibleContent keepMounted>
         <NavList
           links={pkg.links}
           pathname={pathname}

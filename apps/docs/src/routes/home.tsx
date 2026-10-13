@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { getManifest, summarizePackage } from "@/content/manifest.server.ts";
 import { renderFragment } from "@/content/markdown.server.ts";
 import type { PackageSummary } from "@/content/types.ts";
+import { pageMeta } from "@/lib/meta.ts";
 import { siteUrl } from "@/lib/site-url.ts";
 import { site } from "@/site.config.ts";
 
@@ -23,18 +24,24 @@ export async function loader() {
   };
 }
 
-export const meta: Route.MetaFunction = () => {
-  const title = `${site.name}: sync any store with any CRDT`;
-  return [
-    { title },
-    { name: "description", content: site.summary },
-    { tagName: "link", rel: "canonical", href: `${siteUrl}/` },
-    { property: "og:type", content: "website" },
-    { property: "og:title", content: title },
-    { property: "og:description", content: site.summary },
-    { property: "og:url", content: `${siteUrl}/` },
-  ];
-};
+export const meta: Route.MetaFunction = () => [
+  ...pageMeta({
+    type: "website",
+    title: `${site.name}: sync any store with any CRDT`,
+    description: site.description,
+    path: "/",
+  }),
+  // Gives search results the site's name instead of its domain.
+  {
+    "script:ld+json": {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: site.name,
+      url: `${siteUrl}/`,
+      description: site.description,
+    },
+  },
+];
 
 function PackageColumn({
   title,

@@ -1,5 +1,5 @@
 ---
-description: MobX adapter for @homeostate/core
+description: Keep chosen properties of a MobX observable store in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

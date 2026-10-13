@@ -1,5 +1,5 @@
 ---
-description: NgRx Signals adapter for @homeostate/core, for signalState and signalStore
+description: Keep a slice of an Angular NgRx signalState or signalStore in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

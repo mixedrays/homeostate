@@ -1,5 +1,5 @@
 ---
-description: Zustand adapter and middleware for @homeostate/core
+description: Keep a Zustand store in sync with a Yjs, Loro or Automerge document, with the homeostate middleware or an adapter for an existing store.
 label: Introduction
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: Loro CRDT backend for @homeostate/core
+description: Keep a Zustand, Redux, MobX or other store in sync with a Loro document, mapping state onto LoroMap and LoroList with fine-grained updates.
 label: Introduction
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: Automerge CRDT backend for @homeostate/core
+description: Keep a Zustand, Redux, MobX or other store in sync with an Automerge document, writing fine-grained operations as one change per write.
 label: Introduction
 ---
 
