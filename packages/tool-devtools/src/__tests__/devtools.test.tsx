@@ -222,13 +222,22 @@ describe("HomeostateDevtools", () => {
 
   it("disconnects and reconnects the engine", async () => {
     await render();
+    const markState = () =>
+      byLabel("Sync engine connected")
+        .closest("label")
+        ?.querySelector(".hm-mark")
+        ?.getAttribute("data-state");
+    expect(markState()).toBe("connected");
+
     const toggle = byLabel("Sync engine connected");
     await click(toggle);
     expect(engine.isConnected()).toBe(false);
     expect(shadow().textContent).toContain("Disconnected");
+    expect(markState()).toBe("disconnected");
 
     await click(byLabel("Sync engine connected"));
     expect(engine.isConnected()).toBe(true);
+    expect(markState()).toBe("connected");
   });
 
   it("shows the key status against the backend", async () => {

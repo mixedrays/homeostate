@@ -314,12 +314,9 @@ function EngineSwitch({ inspector }: { inspector: Inspector }) {
 
   return (
     <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span
-        aria-hidden
-        className={cn(
-          "size-1.5 rounded-full",
-          connected ? "bg-emerald-500" : "bg-amber-500",
-        )}
+      <HomeostateMark
+        state={connected ? "connected" : "disconnected"}
+        className="size-3.5 shrink-0 [--hm-ink:currentColor]"
       />
       {connected ? "Connected" : "Disconnected"}
       <Switch
