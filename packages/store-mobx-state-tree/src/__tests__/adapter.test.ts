@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { reaction } from "mobx";
 import { getSnapshot, types } from "mobx-state-tree";
 import { createSyncEngine } from "@homeostate/core";
 import {
@@ -120,6 +121,34 @@ describe("MobxStateTreeAdapter", () => {
 
     expect(store.todos[0].done).toBe(true);
     expect(store.todos[1]).toBe(second);
+  });
+
+  it("writes a field an afterAttach hook sets on a remotely inserted item", () => {
+    const Item = types
+      .model("Item", { id: types.identifier, createdAt: 0 })
+      .actions((self) => ({
+        afterAttach() {
+          if (self.createdAt === 0) self.createdAt = 12345;
+        },
+      }));
+    const store = types
+      .model("ItemStore", { items: types.array(Item) })
+      .create({ items: [] });
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, createMobxStateTreeAdapter(store)).connect();
+    // An observer makes MST create the inserted node, so its hook runs, during the apply.
+    const stop = reaction(
+      () => store.items.map((item) => item.createdAt),
+      () => {},
+    );
+
+    backend.receive({ items: [{ id: "1", createdAt: 0 }] });
+
+    expect(getSnapshot(store)).toEqual({
+      items: [{ id: "1", createdAt: 12345 }],
+    });
+    expect(backend.read()).toEqual({ items: [{ id: "1", createdAt: 12345 }] });
+    stop();
   });
 
   it("stops both directions after disconnect", () => {

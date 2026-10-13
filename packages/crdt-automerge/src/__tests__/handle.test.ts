@@ -96,6 +96,27 @@ describe("createAutomergeHandle", () => {
     expect(handle.doc()).toEqual({ count: 2 });
   });
 
+  it("keeps a change a listener makes during an update and reports it to every listener", () => {
+    const handle = createAutomergeHandle<Root>(A.from<Root>({ count: 1 }));
+    const other = A.change(A.load<Root>(A.save(handle.doc())), (doc) => {
+      doc.label = "x";
+    });
+    handle.subscribe(({ local }) => {
+      if (!local)
+        handle.change((doc) => {
+          doc.count = 2;
+        });
+    });
+    const events: boolean[] = [];
+    handle.subscribe(({ local }) => events.push(local));
+
+    handle.update((doc) => A.merge(doc, other));
+
+    expect(handle.doc()).toEqual({ count: 2, label: "x" });
+    // The listener's change reaches the next listener before the update does.
+    expect(events).toEqual([true, false]);
+  });
+
   it("stops notifying after unsubscribe", () => {
     const handle = createAutomergeHandle<Root>();
     const listener = vi.fn();

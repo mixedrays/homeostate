@@ -64,8 +64,10 @@ export const createAutomergeBackend = <T extends Container>(
     },
 
     subscribe: (onRemoteChange): Unsubscribe =>
-      handle.subscribe(() => {
-        if (!writing) onRemoteChange();
+      handle.subscribe(({ local }) => {
+        // A peer's update merged while the write notifies, as a synchronous relay does, is
+        // remote even though it arrives during the write.
+        if (!writing || !local) onRemoteChange();
       }),
   };
 };

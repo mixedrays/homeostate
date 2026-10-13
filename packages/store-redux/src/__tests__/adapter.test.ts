@@ -184,6 +184,60 @@ describe("ReduxAdapter", () => {
     expect(store.getState()).toEqual({ count: 5, label: "b" });
   });
 
+  it("writes what a replace case that normalises its payload makes of a remote change", () => {
+    interface Counted {
+      todos: string[];
+      count: number;
+    }
+    const counted = createSlice({
+      name: "counted",
+      initialState: { todos: [], count: 0 } as Counted,
+      reducers: {
+        replaced: (_state, action: PayloadAction<Counted>) => ({
+          ...action.payload,
+          count: action.payload.todos.length,
+        }),
+      },
+    });
+    const store = configureStore({ reducer: counted.reducer });
+    const backend = createMemoryBackend();
+    createSyncEngine(
+      backend,
+      createReduxAdapter(store, counted.actions.replaced),
+    ).connect();
+
+    backend.receive({ todos: ["a", "b"], count: 0 });
+
+    expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
+    expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+  });
+
+  it("leaves a remote change in the backend when no reducer handles the replace action", () => {
+    const counter = createSlice({
+      name: "counter",
+      initialState: { count: 0 },
+      reducers: {
+        increment: (state) => {
+          state.count++;
+        },
+      },
+    });
+    const store = configureStore({ reducer: counter.reducer });
+    const { backend, writes } = countingWrites(createMemoryBackend());
+    const replace = (payload: { count: number }) => ({
+      type: "counter/replaceState",
+      payload,
+    });
+    createSyncEngine(backend, createReduxAdapter(store, replace)).connect();
+    writes.length = 0;
+
+    backend.receive({ count: 5 });
+
+    expect(store.getState()).toEqual({ count: 0 });
+    expect(backend.read()).toEqual({ count: 5 });
+    expect(writes).toHaveLength(0);
+  });
+
   it("stops both directions after disconnect", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend();
