@@ -1,15 +1,21 @@
 <script lang="ts">
-  import homeostateLogo from "@homeostate/playground/shared/homeostate.svg";
+  import "@homeostate/playground/shared/homeostate-mark.css";
+  import { mountHomeostateMark } from "@homeostate/playground/shared";
   import svelteLogo from "@homeostate/playground/shared/icons/svelte.svg";
   import { PLAYGROUNDS_URL, SYNC_SERVER_URL } from "./config";
   import { appList } from "./demos";
   import { followLink, href } from "./router.svelte";
+
+  // The homeostate mark; hovering the link around it plays the Connect motion.
+  const homeostateMark = (node: HTMLElement) => ({
+    destroy: mountHomeostateMark(node),
+  });
 </script>
 
 <main class="page">
   <div class="brand-bar">
     <a class="brand" href={PLAYGROUNDS_URL} aria-label="Homeostate playgrounds">
-      <img class="brand-logo" src={homeostateLogo} alt="" />
+      <span class="brand-logo" aria-hidden="true" use:homeostateMark></span>
       <span class="brand-name">homeostate</span>
     </a>
     <a class="back-link" href={PLAYGROUNDS_URL}>← All playgrounds</a>

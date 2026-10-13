@@ -1,8 +1,18 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, useTemplateRef } from "vue";
 import { PLAYGROUNDS_URL, SYNC_SERVER_URL } from "./config";
-import homeostateLogo from "@homeostate/playground/shared/homeostate.svg";
+import "@homeostate/playground/shared/homeostate-mark.css";
+import { mountHomeostateMark } from "@homeostate/playground/shared";
 import vueLogo from "@homeostate/playground/shared/icons/vue.svg";
 import { appList } from "./demos";
+
+// The homeostate mark; hovering the link around it plays the Connect motion.
+const logo = useTemplateRef<HTMLElement>("logo");
+let unmountLogo: (() => void) | undefined;
+onMounted(() => {
+  if (logo.value) unmountLogo = mountHomeostateMark(logo.value);
+});
+onBeforeUnmount(() => unmountLogo?.());
 </script>
 
 <template>
@@ -13,7 +23,7 @@ import { appList } from "./demos";
         :href="PLAYGROUNDS_URL"
         aria-label="Homeostate playgrounds"
       >
-        <img class="brand-logo" :src="homeostateLogo" alt="" />
+        <span ref="logo" class="brand-logo" aria-hidden="true"></span>
         <span class="brand-name">homeostate</span>
       </a>
       <a class="back-link" :href="PLAYGROUNDS_URL">← All playgrounds</a>

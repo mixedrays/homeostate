@@ -1,5 +1,7 @@
-import homeostateLogo from "@homeostate/playground/shared/homeostate.svg";
+import "@homeostate/playground/shared/homeostate-mark.css";
+import { mountHomeostateMark } from "@homeostate/playground/shared";
 import reactLogo from "@homeostate/playground/shared/icons/react.svg";
+import { useLayoutEffect, useRef } from "react";
 import { ArrowLeft, MonitorSmartphone, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,18 @@ import { InlineCode } from "../components/InlineCode";
 import { appList, PLAYGROUNDS_URL } from "../demos";
 import { SYNC_SERVER_URL } from "../sync";
 
+/** The homeostate mark; hovering the link around it plays the Connect motion. */
+function HomeostateLogo({ className }: { className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const host = ref.current;
+    return host ? mountHomeostateMark(host) : undefined;
+  }, []);
+
+  return <span ref={ref} aria-hidden className={className} />;
+}
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -25,7 +39,7 @@ export default function Home() {
             aria-label="Homeostate playgrounds"
             className="flex items-center gap-2 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <img src={homeostateLogo} alt="" className="size-7" />
+            <HomeostateLogo className="size-7" />
             <span className="text-xl font-[650] tracking-[-0.04em]">
               homeostate
             </span>

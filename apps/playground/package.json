@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./shared": "./shared/index.ts",
-    "./shared/*.svg": "./shared/*.svg"
+    "./shared/*.svg": "./shared/*.svg",
+    "./shared/*.css": "./shared/*.css"
   },
   "scripts": {
     "dev": "vite",

@@ -1,5 +1,13 @@
-import homeostateLogo from "@homeostate/playground/shared/homeostate.svg";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import "@homeostate/playground/shared/homeostate-mark.css";
+import { mountHomeostateMark } from "@homeostate/playground/shared";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ArrowLeft, Braces, CloudOff, Terminal } from "lucide-react";
 import { HomeostateDevtools } from "@homeostate/tool-devtools";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -156,11 +164,7 @@ export default function App() {
               orientation="vertical"
               className="mx-1.5 h-5 self-center max-sm:hidden"
             />
-            <img
-              src={homeostateLogo}
-              alt=""
-              className="mr-1 size-6 max-sm:hidden"
-            />
+            <HomeostateLogo className="mr-1 size-6 shrink-0 max-sm:hidden" />
             <h1 className="truncate font-heading text-base font-semibold tracking-tight">
               Whiteboard
             </h1>
@@ -268,4 +272,16 @@ function ServerDownNotice() {
       </AlertDescription>
     </Alert>
   );
+}
+
+/** The homeostate mark; hovering it plays the Connect motion. */
+function HomeostateLogo({ className }: { className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const host = ref.current;
+    return host ? mountHomeostateMark(host) : undefined;
+  }, []);
+
+  return <span ref={ref} aria-hidden className={className} />;
 }
