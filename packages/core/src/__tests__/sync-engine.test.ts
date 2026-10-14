@@ -1,4 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 import { createSyncEngine } from "../index.js";
 import { createMemoryBackend, type MemoryBackend } from "../testing.js";
 import {
@@ -468,6 +476,246 @@ describe("createSyncEngine", () => {
 
         expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
         expect(write).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("that keep changing what they receive", () => {
+      let warn: MockInstance<typeof console.warn>;
+      /** Whether the stores' rules run, so that they start once every peer has connected. */
+      let rulesOn = false;
+      beforeEach(() => {
+        warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        rulesOn = false;
+      });
+      afterEach(() => {
+        warn.mockRestore();
+      });
+
+      /** Runs `count` rounds of `setTimeout(0)`, so relayed writes arrive. */
+      const ticks = async (count: number) => {
+        for (let i = 0; i < count; i++)
+          await new Promise((resolve) => setTimeout(resolve, 0));
+      };
+
+      /**
+       * Memory backends whose writes reach every other one asynchronously, as a provider relays
+       * them, counting every write.
+       */
+      const relayedBackends = (count: number) => {
+        const backends = Array.from({ length: count }, () =>
+          createMemoryBackend(),
+        );
+        const writes = { count: 0 };
+        for (const from of backends) {
+          const write = from.write;
+          from.write = (next, previous) => {
+            writes.count++;
+            write(next, previous);
+            const sent = snapshot(next);
+            for (const to of backends)
+              if (to !== from) setTimeout(() => to.receive(sent), 0);
+          };
+        }
+        return { backends, writes };
+      };
+
+      /** A `setState` transform that runs `change` once the rules are on. */
+      const rule =
+        <S>(change: (next: S) => S) =>
+        (next: S): S =>
+          rulesOn ? change(next) : next;
+
+      /** Connects one store per backend, lets the seed writes settle, then turns the rules on. */
+      const connectPeers = async <S extends object>(
+        backends: MemoryBackend[],
+        stores: TestStore<S>[],
+        writes: { count: number },
+      ) => {
+        backends.forEach((backend, i) =>
+          createSyncEngine(backend, stores[i]!.adapter).connect(),
+        );
+        await ticks(10);
+        writes.count = 0;
+        rulesOn = true;
+      };
+
+      interface Stamped {
+        count: number;
+        updatedAt?: number;
+      }
+
+      let clock = 0;
+      /** A store that stamps `updatedAt` on every `setState`, as a replace reducer might. */
+      const stampingStore = () =>
+        createTestStore<Stamped>(
+          { count: 0 },
+          rule((next) => ({ ...next, updatedAt: ++clock })),
+        );
+
+      it("settles when every peer stamps what it receives", async () => {
+        const { backends, writes } = relayedBackends(2);
+        const [a, b] = [stampingStore(), stampingStore()];
+        await connectPeers(backends, [a, b], writes);
+
+        a.update((s) => ({ ...s, count: 1 }));
+        await ticks(40);
+
+        expect(writes.count).toBeLessThan(5);
+        expect(a.getState().count).toBe(1);
+        expect(b.getState().count).toBe(1);
+      });
+
+      it("settles when two peers enforce contradicting rules", async () => {
+        const { backends, writes } = relayedBackends(2);
+        const initial = { count: 7, todos: [] as string[] };
+        const atLeastTen = createTestStore(
+          initial,
+          rule((next) => ({ ...next, count: Math.max(next.count, 10) })),
+        );
+        const atMostFive = createTestStore(
+          initial,
+          rule((next) => ({ ...next, count: Math.min(next.count, 5) })),
+        );
+        await connectPeers(backends, [atLeastTen, atMostFive], writes);
+
+        atLeastTen.update((s) => ({ ...s, todos: ["a"] }));
+        await ticks(40);
+
+        expect(writes.count).toBeLessThan(5);
+        expect(atLeastTen.getState().todos).toEqual(["a"]);
+        expect(atMostFive.getState().todos).toEqual(["a"]);
+      });
+
+      /** One stamping peer whose write back another peer re-stamps twice. */
+      const restampWriteBack = () => {
+        rulesOn = true;
+        const backend = createMemoryBackend();
+        const store = stampingStore();
+        createSyncEngine(backend, store.adapter).connect();
+        const write = vi.spyOn(backend, "write");
+
+        backend.receive({ count: 1, updatedAt: 0 });
+        expect(write).toHaveBeenCalledTimes(1);
+        const stamped = (backend.read() as Stamped).updatedAt!;
+
+        backend.receive({ count: 1, updatedAt: -1 });
+        backend.receive({ count: 1, updatedAt: -2 });
+        return { backend, store, write, stamped };
+      };
+
+      it("stops writing back and reports the keys once when a peer re-writes them", () => {
+        const { backend, store, write, stamped } = restampWriteBack();
+
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0]![0]).toContain('"updatedAt"');
+        expect(warn.mock.calls[0]![0]).not.toContain('"count"');
+        // The store keeps its own stamp, and the backend the peer's.
+        expect(store.getState().updatedAt).toBeGreaterThan(stamped);
+        expect(backend.read()).toEqual({ count: 1, updatedAt: -2 });
+      });
+
+      it("stops a loop without a warning in production", () => {
+        vi.stubEnv("NODE_ENV", "production");
+        try {
+          const { write } = restampWriteBack();
+
+          expect(write).toHaveBeenCalledTimes(1);
+          expect(warn).not.toHaveBeenCalled();
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      });
+
+      it.each([
+        ["setState normalises", normalisingStore],
+        ["a subscriber derives", subscriberStore],
+        [
+          "setState also sorts what the other peer edits",
+          () =>
+            createTestStore<Counted>({ todos: [], count: 0 }, (next) => ({
+              todos: [...next.todos].sort().reverse(),
+              count: next.todos.length,
+            })),
+        ],
+      ])(
+        "writes back after every remote change that needs it when %s",
+        async (_, createStore) => {
+          const { backends, writes } = relayedBackends(2);
+          const deriving = createStore();
+          const editing = createTestStore<Counted>({ todos: [], count: 0 });
+          await connectPeers(backends, [deriving, editing], writes);
+
+          for (const [i, item] of ["a", "b", "c", "d", "e"].entries()) {
+            editing.update((s) => ({ ...s, todos: [...s.todos, item] }));
+            await ticks(10);
+
+            // The edit, then the deriving peer's write back.
+            expect(writes.count).toBe(2 * (i + 1));
+            expect(editing.getState().count).toBe(i + 1);
+          }
+          expect(warn).not.toHaveBeenCalled();
+        },
+      );
+
+      it("settles when three peers stamp what they receive", async () => {
+        const { backends, writes } = relayedBackends(3);
+        const stores = [stampingStore(), stampingStore(), stampingStore()];
+        await connectPeers(backends, stores, writes);
+
+        stores[0]!.update((s) => ({ ...s, count: 1 }));
+        await ticks(40);
+
+        expect(writes.count).toBeLessThan(7);
+        for (const store of stores) expect(store.getState().count).toBe(1);
+      });
+
+      it("settles when three peers each fight another over a different key", async () => {
+        interface Pair {
+          x: number;
+          y: number;
+          z: number;
+        }
+        const { backends, writes } = relayedBackends(3);
+        const initial: Pair = { x: 1, y: 1, z: 0 };
+        const stores = [
+          createTestStore(
+            initial,
+            rule((next) => ({ ...next, x: 1, y: 1 })),
+          ),
+          createTestStore(
+            initial,
+            rule((next) => ({ ...next, x: 2 })),
+          ),
+          createTestStore(
+            initial,
+            rule((next) => ({ ...next, y: 2 })),
+          ),
+        ];
+        await connectPeers(backends, stores, writes);
+
+        stores[0]!.update((s) => ({ ...s, z: 1 }));
+        await ticks(40);
+
+        expect(writes.count).toBeLessThan(7);
+        for (const store of stores) expect(store.getState().z).toBe(1);
+      });
+
+      it("keeps syncing later edits after a stopped loop", async () => {
+        const { backends, writes } = relayedBackends(2);
+        const [a, b] = [stampingStore(), stampingStore()];
+        await connectPeers(backends, [a, b], writes);
+
+        for (const count of [1, 2, 3]) {
+          writes.count = 0;
+          a.update((s) => ({ ...s, count }));
+          await ticks(20);
+
+          expect(writes.count).toBeLessThan(5);
+          expect(b.getState().count).toBe(count);
+          expect(backends[0]!.read()).toMatchObject({ count });
+          expect(backends[1]!.read()).toMatchObject({ count });
+        }
       });
     });
   });

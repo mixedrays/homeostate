@@ -32,6 +32,14 @@ export interface StoreAdapter<S extends object> {
    * derived meanwhile, so the backend ends up equal to it. If `getState()` then returns the
    * same object as before the call, the store is taken to have ignored the change, and nothing
    * is written.
+   *
+   * What the store changes meanwhile must not change again when the same state is applied a
+   * second time, and every peer must agree on it. A store that breaks this, such as one that
+   * stamps the time on every call, or two peers that enforce contradicting rules, would make
+   * the peers re-write each other's changes forever. Instead, when another peer changes the keys
+   * the engine's last write back changed and the store changes them again, the engine stops
+   * writing them back, warns once in development naming them, and the store keeps values for
+   * them that differ from the backend's.
    */
   setState: (state: S) => void;
 
