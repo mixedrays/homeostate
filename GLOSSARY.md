@@ -35,6 +35,10 @@ _Avoid_: Syncer, binding
 One of the interfaces in `packages/core/src/types.ts` that packages implement: `StoreAdapter`, `CrdtBackend`, `PersistableDoc` or `PersistenceAdapter`.
 _Avoid_: Protocol, spec
 
+**Conformance suite**:
+The shared scenarios every implementation of one contract must pass, so that all store adapters, CRDT backends, persistable documents or persistence adapters behave alike.
+_Avoid_: Contract suite
+
 **Store adapter**:
 An implementation of the `StoreAdapter` contract that lets the sync engine read, replace and watch one store; each `store-*` package provides one.
 "Adapter" alone means a store adapter; say "persistence adapter" for storage.
@@ -124,6 +128,11 @@ _Avoid_: Incoming change, peer change
 **Echo**:
 A store notification raised while the sync engine applies a remote change. The engine ignores echoes, so a store adapter needs no echo suppression of its own.
 _Avoid_: Feedback loop
+
+**Sync event**:
+A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, naming which of the four it was.
+A local change that first runs a pending apply is reported as a remote change, because the remote changes replace what it did to synced keys.
+_Avoid_: Engine event, sync notification
 
 **Pending apply**:
 Remote changes the sync engine defers, with its `schedule` option, to the next flush, which applies them all with one read of the CRDT backend. A local change made before the flush runs the apply first, which overrides what that change did to synced keys.
