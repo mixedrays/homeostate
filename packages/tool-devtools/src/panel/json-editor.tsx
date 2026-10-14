@@ -21,11 +21,12 @@ interface JsonEditorProps {
   value: Json;
   /** Throws to report a store that rejected the value, e.g. a MobX-State-Tree type check. */
   onApply: (value: Json) => void;
-  /** Shows Cancel instead of Reset. */
+  /** Shows Cancel instead of Reset, and Escape cancels too. */
   onCancel?: () => void;
   requireObject?: boolean;
   label: string;
   className?: string;
+  autoFocus?: boolean;
 }
 
 /**
@@ -39,6 +40,7 @@ export function JsonEditor({
   requireObject = false,
   label,
   className,
+  autoFocus,
 }: JsonEditorProps) {
   const latest = useMemo(() => JSON.stringify(value, null, 2), [value]);
   const [base, setBase] = useState(latest);
@@ -89,6 +91,7 @@ export function JsonEditor({
       )}
       <JsonCodeArea
         value={text}
+        autoFocus={autoFocus}
         aria-label={label}
         aria-invalid={!parsed.ok || undefined}
         onChange={(event) => {
@@ -99,6 +102,10 @@ export function JsonEditor({
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
             event.preventDefault();
             apply();
+          } else if (event.key === "Escape" && onCancel) {
+            // Keep Escape from closing the panel.
+            event.stopPropagation();
+            onCancel();
           }
         }}
         className="min-h-32 flex-1"

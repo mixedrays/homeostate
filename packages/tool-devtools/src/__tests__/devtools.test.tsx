@@ -264,6 +264,79 @@ describe("HomeostateDevtools", () => {
     expect(code()?.textContent).toBe(`${textarea.value}\n`);
   });
 
+  describe("tree keyboard navigation", () => {
+    const rows = () => [
+      ...byLabel("Store state").querySelectorAll<HTMLElement>(
+        '[role="treeitem"]',
+      ),
+    ];
+    const focused = () => shadow().activeElement?.getAttribute("aria-label");
+    const press = async (code: string, key = code) => {
+      await act(async () => {
+        shadow().activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", { code, key, bubbles: true }),
+        );
+      });
+      await act(tick);
+    };
+
+    it("is one tab stop, moved with the arrows, Home, End and typing", async () => {
+      await render();
+      expect(rows().filter((row) => row.tabIndex === 0)).toEqual([rows()[0]]);
+      await act(async () => rows()[0].focus());
+      expect(focused()).toBe("todos: Array(1), synced");
+
+      await press("ArrowDown");
+      expect(focused()).toBe("0: {…} 2 keys");
+      await press("ArrowLeft");
+      expect(rows()).toHaveLength(3);
+      expect(shadow().activeElement?.getAttribute("aria-expanded")).toBe(
+        "false",
+      );
+      await press("ArrowRight");
+      await press("ArrowRight");
+      expect(focused()).toBe('title: "milk"');
+      await press("ArrowLeft");
+      expect(focused()).toBe("0: {…} 2 keys");
+
+      await press("End");
+      expect(focused()).toBe('filter: "all", synced');
+      await press("Home");
+      expect(focused()).toBe("todos: Array(1), synced");
+      await press("KeyF", "f");
+      expect(focused()).toBe('filter: "all", synced');
+      expect(rows().filter((row) => row.tabIndex === 0)).toEqual([
+        shadow().activeElement,
+      ]);
+    });
+
+    it("edits with Enter and returns focus to the row", async () => {
+      await render();
+      await act(async () => rows()[4].focus());
+      await press("Enter");
+      const input = byLabel<HTMLInputElement>("Value of filter");
+      await type(input, "done");
+      await act(async () => {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
+      });
+      await act(tick);
+
+      expect(store.get().filter).toBe("done");
+      expect(focused()).toBe('filter: "done", synced');
+    });
+
+    it("deletes with Delete and keeps focus in the tree", async () => {
+      await render();
+      await act(async () => rows()[4].focus());
+      await press("Delete");
+
+      expect(store.get()).not.toHaveProperty("filter");
+      expect(focused()).toBe("done: false");
+    });
+  });
+
   it("toggles a boolean with one click", async () => {
     await render();
     await click(byLabel("Toggle todos[0].done"));

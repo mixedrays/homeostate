@@ -129,6 +129,12 @@ remembered in `localStorage`.
   tree by a path, such as `todos[0]`, or by a value: it shows what matches, with everything
   under it and the containers on the way to it open. The button beside the filter expands every
   container, then collapses them all.
+  The tree is one tab stop, navigated from the keyboard: **↑**/**↓** move between rows,
+  **Home**/**End** to the first and last, **→** opens a container or enters it, **←** closes it
+  or goes to its parent, and typing a key's name jumps to it. **Enter** edits the value,
+  toggles a boolean or edits a container as JSON, **Escape** cancels, and **Delete** or
+  **Backspace** deletes the key or item. The backend document on the Sync tab navigates the same
+  way, read-only.
 - **Sync** lists every key as `synced`, `diverged` (the backend holds another value, as it
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
   filter) or `backend only`, and shows the backend document read-only. Under a diverged key,
