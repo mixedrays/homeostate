@@ -167,9 +167,12 @@ remembered in `localStorage`.
 - **Network** shows whether the engine is connected, with a switch to disconnect and
   reconnect it, and sets the [network conditions](#network-conditions) of the source's link:
   offline, latency, jitter and a flaky connection.
-- The status bar at the bottom shows the source, or a switcher between several sources, and
-  its sync at a glance: whether the engine is connected, the network link's state and how many
-  keys diverged. Click one to open the tab that explains it.
+- The status bar at the bottom gives the source, or a switcher between several sources,
+  the available space. Hover the name to read it in full. A compact status button shows
+  the connection state or the number of issues. Open it for the engine connection,
+  network link, diverged keys and backend read errors; click an indicator to open the tab
+  that explains it. Long source names wrap in the switcher's list, and the switcher and
+  status details stay within the viewport in narrow panels.
 - While the panel is closed, a dot on the floating button flags a disconnected engine, a link
   that is down or has conditions on, or diverged keys, and its tooltip names them.
 
