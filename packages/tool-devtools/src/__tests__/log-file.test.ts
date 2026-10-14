@@ -85,4 +85,21 @@ describe("log files", () => {
     expect(entry.state).toEqual({ count: 1, user: {} });
     expect(Object.keys(entry.state.user as object)).toEqual([]);
   });
+
+  it.each([1e20, -1e20, 8_640_000_000_000_001])(
+    "reject an unrenderable timestamp %s",
+    (at) => {
+      expect(() =>
+        parseLog(fileWith({ entries: [{ ...entries[0], at }] })),
+      ).toThrow("Entry 1 has no valid time.");
+    },
+  );
+
+  it("reject numeric overflow in a timestamp", () => {
+    const text = fileWith({ entries: [{ ...entries[0], at: 123456 }] }).replace(
+      '"at":123456',
+      '"at":1e400',
+    );
+    expect(() => parseLog(text)).toThrow("Entry 1 has no valid time.");
+  });
 });

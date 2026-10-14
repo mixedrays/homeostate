@@ -59,6 +59,45 @@ describe("createInspector", () => {
     expect(snapshot.keyStatus).toEqual({ todos: "synced", filter: "synced" });
   });
 
+  it("keeps the last backend document and stops comparing keys when reads fail, then recovers", async () => {
+    const store = createTestStore({ count: 0, draft: "local" });
+    const backend = createMemoryBackend();
+    backend.receive({ count: 0 });
+    let fail = false;
+    inspector = createInspector({
+      name: "counter",
+      adapter: store.adapter,
+      filter: (key) => key !== "draft",
+      backend: {
+        ...backend,
+        read: () => {
+          if (fail) throw new Error("backend unavailable");
+          return backend.read();
+        },
+      },
+    });
+    inspector.start();
+    await tick();
+    const previous = inspector.getSnapshot().backend;
+
+    fail = true;
+    backend.receive({ count: 1 });
+    await tick();
+    expect(inspector.getSnapshot().backend).toBe(previous);
+    expect(inspector.getSnapshot().backendError).toBe("backend unavailable");
+    expect(inspector.getSnapshot().keyStatus).toEqual({ draft: "local" });
+
+    fail = false;
+    backend.receive({ count: 2 });
+    await tick();
+    expect(inspector.getSnapshot().backendError).toBeNull();
+    expect(inspector.getSnapshot().backend).toEqual({ count: 2 });
+    expect(inspector.getSnapshot().keyStatus).toEqual({
+      count: "diverged",
+      draft: "local",
+    });
+  });
+
   it("logs a local change with its diff", async () => {
     const { store, inspector } = setup();
     store.set({ ...store.get(), filter: "done" });
@@ -284,6 +323,7 @@ describe("storage", () => {
       busy: null,
       cleared: false,
       error: null,
+      operationError: null,
     });
 
     doc.add("a");
@@ -331,6 +371,7 @@ describe("storage", () => {
       busy: null,
       cleared: true,
       error: null,
+      operationError: null,
     });
   });
 
@@ -344,4 +385,35 @@ describe("storage", () => {
 
     expect(inspector.getSnapshot().storage?.error).toBe("storage unavailable");
   });
+
+  it.each(["compact", "clear"] as const)(
+    "keeps a failed %s visible after refreshing stats and clears it on retry",
+    async (operation) => {
+      let fail = true;
+      const { inspector } = await setupStorage((persistence) => ({
+        ...persistence,
+        [operation]: async () => {
+          if (fail) throw new Error(`${operation} failed`);
+          await persistence[operation]();
+        },
+      }));
+      const change =
+        operation === "compact"
+          ? inspector.compactStorage
+          : inspector.clearStorage;
+      await change();
+      await inspector.refreshStorage();
+
+      expect(inspector.getSnapshot().storage).toMatchObject({
+        busy: null,
+        operationError: `${operation} failed`,
+        error: null,
+        stats: { updates: 1 },
+        cleared: false,
+      });
+      fail = false;
+      await change();
+      expect(inspector.getSnapshot().storage?.operationError).toBeNull();
+    },
+  );
 });

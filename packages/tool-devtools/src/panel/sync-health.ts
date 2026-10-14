@@ -10,6 +10,8 @@ export interface SyncHealth {
   link: "online" | "conditions" | "down" | "offline" | null;
   /** Keys the backend holds another value for. */
   diverged: number;
+  /** Whether backend inspection failed. */
+  backendError: boolean;
 }
 
 export const healthOf = (
@@ -34,6 +36,7 @@ export const healthOf = (
   diverged: Object.values(snapshot.keyStatus).filter(
     (status) => status === "diverged",
   ).length,
+  backendError: snapshot.backendError !== null,
 });
 
 export const linkLabel: Record<NonNullable<SyncHealth["link"]>, string> = {
@@ -44,7 +47,13 @@ export const linkLabel: Record<NonNullable<SyncHealth["link"]>, string> = {
 };
 
 /** What needs a look, such as `["disconnected", "Offline"]`; empty when all is well. */
-export const issuesOf = ({ engine, link, diverged }: SyncHealth): string[] => [
+export const issuesOf = ({
+  engine,
+  link,
+  diverged,
+  backendError,
+}: SyncHealth): string[] => [
+  ...(backendError ? ["backend read failed"] : []),
   ...(engine === "disconnected" ? ["disconnected"] : []),
   ...(link && link !== "online" ? [linkLabel[link]] : []),
   ...(diverged > 0 ? [`${diverged} diverged`] : []),

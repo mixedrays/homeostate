@@ -43,7 +43,7 @@ export function StorageTab({
     );
   }
 
-  const { stats, busy, cleared, error } = storage;
+  const { stats, busy, cleared, error, operationError } = storage;
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
@@ -81,11 +81,14 @@ export function StorageTab({
         </p>
       )}
 
-      {error && (
+      {(error || operationError) && (
         <Alert variant="destructive" className="m-3 mb-0 w-auto">
           <CircleAlert />
           <AlertTitle>Storage failed</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {operationError && <p>{operationError}</p>}
+            {error && <p>{error}</p>}
+          </AlertDescription>
         </Alert>
       )}
 

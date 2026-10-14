@@ -1,10 +1,16 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { Braces, ChevronRight, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import type { KeyStatus } from "../inspector";
-import { formatPath, type Json, type JsonObject, type JsonPath } from "../json";
+import {
+  deepEqual,
+  formatPath,
+  type Json,
+  type JsonObject,
+  type JsonPath,
+} from "../json";
 import { JsonEditor } from "./json-editor";
 import { previewOf } from "./format";
 import { KeyStatusBadge, JsonValue, NonJsonBadge } from "./value";
@@ -361,10 +367,15 @@ function ValueInput({
   onCommit: (value: Json) => void;
   onCancel: () => void;
 }) {
-  const isString = typeof value === "string";
+  const [base, setBase] = useState(value);
+  const isString = typeof base === "string";
   const [text, setText] = useState(() =>
-    isString ? value : JSON.stringify(value),
+    typeof value === "string" ? value : JSON.stringify(value),
   );
+  const initialText = isString ? base : JSON.stringify(base);
+  const dirty = text !== initialText;
+  const stale = !deepEqual(value, base);
+  const warningId = useId();
   const parsed = useMemo((): ParsedValue => {
     if (isString) return { ok: true, value: text };
     try {
@@ -376,30 +387,55 @@ function ValueInput({
 
   const commit = (): void => {
     if (!parsed.ok) return;
-    if (parsed.value === value) onCancel();
-    else onCommit(parsed.value);
+    if (!dirty || parsed.value === value) onCancel();
+    else if (!stale) onCommit(parsed.value);
   };
 
   return (
-    <Input
-      autoFocus
-      value={text}
-      aria-label={label}
-      aria-invalid={!parsed.ok || undefined}
-      spellCheck={false}
-      onChange={(event) => setText(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commit();
-        } else if (event.key === "Escape") {
-          // Keep Escape from closing the panel.
-          event.stopPropagation();
-          onCancel();
-        }
-      }}
-      onBlur={() => (parsed.ok ? commit() : onCancel())}
-      className="h-6 min-w-0 flex-1 rounded-sm px-1 py-0 font-mono text-xs md:text-xs"
-    />
+    <div className="min-w-0 flex-1">
+      <Input
+        autoFocus
+        value={text}
+        aria-label={label}
+        aria-invalid={!parsed.ok || undefined}
+        aria-describedby={dirty && stale ? warningId : undefined}
+        spellCheck={false}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          } else if (event.key === "Escape") {
+            // Keep Escape from closing the panel.
+            event.stopPropagation();
+            onCancel();
+          }
+        }}
+        onBlur={() => (parsed.ok ? commit() : onCancel())}
+        className="h-6 min-w-0 flex-1 rounded-sm px-1 py-0 font-mono text-xs md:text-xs"
+      />
+      {dirty && stale && (
+        <div className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+          <p id={warningId} role="status">
+            The value changed since you started editing.
+          </p>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => {
+              setBase(value);
+              setText(
+                typeof value === "string" ? value : JSON.stringify(value),
+              );
+            }}
+          >
+            Load latest
+          </Button>
+          <Button size="xs" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

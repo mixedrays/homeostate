@@ -118,7 +118,10 @@ remembered in `localStorage`.
 
 - **State** shows the store as a tree or as JSON. Click a value to edit it, click a boolean to
   toggle it, edit an object or array as JSON, or delete a key or item. The JSON view, with
-  its syntax highlighted, edits the whole state. Each top-level key is marked with how it
+  its syntax highlighted, edits the whole state. An untouched inline editor never writes
+  on blur. If its value changes while you have a draft, the draft stays visible and cannot
+  be saved until you choose **Load latest** or cancel and reopen the editor.
+  Each top-level key is marked with how it
   relates to the backend. Values in synced keys that are not plain JSON, such as a `Date`, a
   `Map`, a class instance or `NaN`,
   are listed in a warning and marked in the tree: the engine does not sync them as they are,
@@ -130,6 +133,8 @@ remembered in `localStorage`.
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
   filter) or `backend only`, and shows the backend document read-only. Under a diverged key,
   each path that differs shows its value in the store and in the backend.
+  If reading the backend fails, the panel reports the error and suspends key comparisons;
+  the last successfully read document remains available, marked as such.
 - **Log** records each change to the store with its diff, marked `local`, `remote` (a peer's
   change applied through the backend) or `devtools`. Any entry can be restored. Recording
   can be paused and the log cleared. Filter it by a path that a change touches, and by
@@ -141,6 +146,8 @@ remembered in `localStorage`.
   updates do. **Clear** removes the stored document and stops storing it until the page
   reloads; the live document and its peers keep their state, and other tabs that store the
   same key may write it again.
+  Failed Compact or Clear operations remain visible after stats refreshes, until another
+  operation is attempted.
 - **Network** shows whether the engine is connected, with a switch to disconnect and
   reconnect it, and sets the [network conditions](#network-conditions) of the source's link:
   offline, latency, jitter and a flaky connection.

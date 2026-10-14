@@ -88,13 +88,23 @@ function SyncStatus({
   onOpenTab: (tab: string) => void;
 }) {
   const snapshot = useInspectorSnapshot(inspector);
-  const { engine, link, diverged } = healthOf(
+  const { engine, link, diverged, backendError } = healthOf(
     snapshot,
     useNetworkSnapshot(source.network),
   );
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-0.5">
+      {backendError && (
+        <StatusItem
+          warn
+          title="Backend inspection failed: show the error on the Sync tab"
+          onClick={() => onOpenTab("sync")}
+        >
+          <TriangleAlert />
+          Backend error
+        </StatusItem>
+      )}
       {diverged > 0 && (
         <StatusItem
           warn

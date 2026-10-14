@@ -1,4 +1,5 @@
-import { Database } from "lucide-react";
+import { CircleAlert, Database } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import {
   Empty,
   EmptyDescription,
@@ -25,6 +26,33 @@ const ORDER: KeyStatus[] = [
 const DIFF_LIMIT = 10;
 
 export function SyncTab({ snapshot }: { snapshot: InspectorSnapshot }) {
+  if (snapshot.backendError !== null) {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto">
+        <Alert variant="destructive" className="m-3 w-auto">
+          <CircleAlert />
+          <AlertTitle>Backend read failed</AlertTitle>
+          <AlertDescription>
+            <p>{snapshot.backendError}</p>
+            <p>
+              Key comparisons are unavailable until the backend can be read.
+            </p>
+          </AlertDescription>
+        </Alert>
+        {snapshot.backend !== null && (
+          <section>
+            <h3 className="px-3 text-xs font-medium">
+              Last successful backend document
+            </h3>
+            <JsonTree
+              label="Last successful backend document"
+              value={snapshot.backend}
+            />
+          </section>
+        )}
+      </div>
+    );
+  }
   if (snapshot.backend === null) {
     return (
       <Empty className="flex-1">

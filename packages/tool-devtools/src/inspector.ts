@@ -84,8 +84,10 @@ export interface StorageSnapshot {
   busy: "compacting" | "clearing" | null;
   /** Set once Clear has stopped storing the document, until the page reloads. */
   cleared: boolean;
-  /** Why the last storage call failed. */
+  /** Why the last stats read failed. */
   error: string | null;
+  /** Why Compact or Clear failed; kept until another operation is attempted. */
+  operationError: string | null;
 }
 
 export interface InspectorSnapshot {
@@ -93,8 +95,10 @@ export interface InspectorSnapshot {
   store: JsonObject;
   /** Why the store could not be read as JSON, e.g. a cycle. */
   storeError: string | null;
-  /** `backend.read()`, or `null` without a backend. */
+  /** Last successful `backend.read()`, or `null` without a successful read. */
   backend: JsonObject | null;
+  /** Why the backend could not be read; comparisons are unavailable while set. */
+  backendError: string | null;
   /** `engine.isConnected()`, or `null` without an engine. */
   connected: boolean | null;
   keyStatus: Readonly<Record<string, KeyStatus>>;
@@ -157,7 +161,13 @@ const messageOf = (error: unknown): string =>
 
 const initialStorage = (source: DevtoolsSource): StorageSnapshot | null =>
   source.persistence
-    ? { stats: null, busy: null, cleared: false, error: null }
+    ? {
+        stats: null,
+        busy: null,
+        cleared: false,
+        error: null,
+        operationError: null,
+      }
     : null;
 
 const keyStatusOf = (
@@ -218,13 +228,14 @@ export function createInspector(
       storeError = messageOf(error);
     }
 
-    let backend: JsonObject | null = null;
+    let backend: JsonObject | null = previous?.backend ?? null;
+    let backendError: string | null = null;
     if (source.backend) {
       try {
         const value = source.backend.read();
         backend = isRecord(value) ? toJsonObject(value) : {};
-      } catch {
-        backend = {};
+      } catch (error) {
+        backendError = messageOf(error);
       }
     }
 
@@ -240,8 +251,13 @@ export function createInspector(
       storeError,
       warnings,
       backend,
+      backendError,
       connected: source.engine ? source.engine.isConnected() : null,
-      keyStatus: keyStatusOf(store, localKeys, backend),
+      keyStatus: keyStatusOf(
+        store,
+        localKeys,
+        backendError !== null ? null : backend,
+      ),
     };
   };
 
@@ -292,6 +308,7 @@ export function createInspector(
       log !== snapshot.log ||
       next.store !== snapshot.store ||
       next.backend !== snapshot.backend ||
+      next.backendError !== snapshot.backendError ||
       next.connected !== snapshot.connected ||
       next.storeError !== snapshot.storeError ||
       next.warnings !== snapshot.warnings ||
@@ -386,12 +403,12 @@ export function createInspector(
   ): Promise<void> => {
     const persistence = source.persistence;
     if (!persistence || snapshot.storage?.busy) return;
-    setStorage(persistence, { busy, error: null });
+    setStorage(persistence, { busy, operationError: null });
     try {
       await change(persistence);
       setStorage(persistence, { busy: null });
     } catch (error) {
-      setStorage(persistence, { busy: null, error: messageOf(error) });
+      setStorage(persistence, { busy: null, operationError: messageOf(error) });
     }
     await refreshStorage();
   };

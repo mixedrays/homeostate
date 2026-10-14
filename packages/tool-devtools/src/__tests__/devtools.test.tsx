@@ -173,6 +173,53 @@ describe("HomeostateDevtools", () => {
     expect(pageKeys).toEqual(["Tab"]);
   });
 
+  it("does not overwrite a remote change when an untouched inline editor blurs", async () => {
+    await render();
+    await click(byLabel("Edit filter"));
+    const input = byLabel<HTMLInputElement>("Value of filter");
+    await act(async () =>
+      backend.receive({ ...store.get(), filter: "remote" }),
+    );
+    await act(tick);
+    await act(async () => input.blur());
+
+    expect(store.get().filter).toBe("remote");
+    expect((backend.read() as State).filter).toBe("remote");
+  });
+
+  it("keeps an inline draft when the value changes and can load the latest value", async () => {
+    await render();
+    await click(byLabel("Edit filter"));
+    const input = byLabel<HTMLInputElement>("Value of filter");
+    await type(input, "draft");
+    await act(async () =>
+      backend.receive({ ...store.get(), filter: "remote" }),
+    );
+    await act(tick);
+    await act(async () => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+      input.blur();
+    });
+
+    expect(store.get().filter).toBe("remote");
+    expect(input.value).toBe("draft");
+    expect(shadow().textContent).toContain(
+      "The value changed since you started editing.",
+    );
+    await click(buttonWithText("Load latest"));
+    expect(input.value).toBe("remote");
+    await type(input, "next");
+    await act(async () => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    await act(tick);
+    expect(store.get().filter).toBe("next");
+  });
+
   it("filters the state tree and expands or collapses all of it", async () => {
     await render();
     const tree = () => byLabel("Store state").textContent;
@@ -407,6 +454,44 @@ describe("HomeostateDevtools", () => {
     expect(shadow().textContent).toContain("2 synced");
   });
 
+  it("shows a backend read failure instead of an empty document and recovers", async () => {
+    let fail = true;
+    await renderSources([
+      {
+        name: "Todos",
+        adapter: store.adapter,
+        backend: {
+          ...backend,
+          read: () => {
+            if (fail) throw new Error("backend unavailable");
+            return backend.read();
+          },
+        },
+      },
+    ]);
+    expect(
+      byLabel("Close Homeostate devtools").getAttribute("title"),
+    ).toContain("backend read failed");
+    await click(buttonWithText("Backend error"));
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+      "backend unavailable",
+    );
+    expect(shadow().textContent).not.toContain("No backend");
+    expect(
+      shadow().querySelector('[aria-label="Backend document"]'),
+    ).toBeNull();
+
+    fail = false;
+    await act(async () => backend.receive(store.get()));
+    await act(tick);
+    expect(shadow().querySelector('[role="alert"]')).toBeNull();
+    expect(shadow().textContent).toContain("2 synced");
+    expect(byLabel("Backend document").textContent).toContain("milk");
+    expect(
+      byLabel("Close Homeostate devtools").getAttribute("title"),
+    ).toBeNull();
+  });
+
   it("follows a controlled open prop and reports changes", async () => {
     const onOpenChange = vi.fn();
     const renderOpen = (open: boolean) =>
@@ -529,6 +614,37 @@ describe("HomeostateDevtools", () => {
     );
   });
 
+  it("rejects an invalid log timestamp and keeps the recorded log", async () => {
+    await render();
+    await click(buttonWithText("Log"));
+    const text = serializeLog("Todos", [
+      {
+        id: 4,
+        at: 1e20,
+        origin: "local",
+        state: { filter: "invalid" },
+        diff: [],
+      },
+    ]);
+    const input = byLabel<HTMLInputElement>("Log file to import");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File([text], "log.json", { type: "application/json" })],
+    });
+    await act(async () =>
+      input.dispatchEvent(new Event("change", { bubbles: true })),
+    );
+    await act(tick);
+
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
+      "Import failed: Entry 1 has no valid time.",
+    );
+    expect(byLabel("Changes, newest first").textContent).toContain(
+      "Initial state",
+    );
+    expect(store.get().filter).toBe("all");
+  });
+
   it("shows what is stored and compacts it", async () => {
     const doc = createTestDoc();
     const storage = createMemoryPersistenceAdapter();
@@ -555,6 +671,46 @@ describe("HomeostateDevtools", () => {
     await render();
     await click(buttonWithText("Storage"));
     expect(shadow().textContent).toContain("No persistence");
+  });
+
+  it("keeps a failed storage operation visible after stats refresh and removes it on retry", async () => {
+    const persistence = createPersistence(
+      createTestDoc(),
+      createMemoryPersistenceAdapter(),
+      { key: "todos" },
+    );
+    await persistence.whenLoaded;
+    let fail = true;
+    await renderSources([
+      {
+        name: "Todos",
+        adapter: store.adapter,
+        persistence: {
+          ...persistence,
+          compact: async () => {
+            if (fail) throw new Error("compact failed");
+            await persistence.compact();
+          },
+        },
+      },
+    ]);
+    try {
+      await click(buttonWithText("Storage"));
+      await click(buttonWithText("Compact"));
+      expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+        "compact failed",
+      );
+      await act(async () => store.set({ ...store.get(), filter: "active" }));
+      await act(tick);
+      expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+        "compact failed",
+      );
+      fail = false;
+      await click(buttonWithText("Compact"));
+      expect(shadow().querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      await persistence.destroy();
+    }
   });
 
   it("changes network conditions from the Network tab", async () => {
