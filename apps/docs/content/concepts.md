@@ -45,8 +45,9 @@ state is applied a second time, and every peer must agree on it. A store that br
 as one that stamps the time on every `setState`, or two app versions that normalise a key in
 contradicting ways, would make the peers re-write each other's changes forever. Instead, when
 another peer changes the keys the engine's last write back changed and the store changes them
-again, the engine stops writing them back and, in development, warns once naming them. The store
-then keeps values for those keys that differ from the backend's.
+again, the engine stops writing them back and reports them once: to `onError` as a
+`WriteLoopError`, or without `onError` with a warning in development. The store then keeps values
+for those keys that differ from the backend's.
 
 Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and `null`.
 Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are

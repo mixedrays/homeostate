@@ -3,11 +3,12 @@ import type {
   StoreAdapter,
   SyncEngine,
   SyncEngineConfig,
+  SyncErrorSource,
   Unsubscribe,
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
 import { patchState } from "./patching.js";
-import { hasOwn, jsonEqual, PROTO_KEY } from "./diff.js";
+import { hasOwn, isRecord, jsonEqual, PROTO_KEY } from "./diff.js";
 import { isAbsent } from "./json.js";
 
 type Plain = Record<string, unknown>;
@@ -23,6 +24,48 @@ const changedKeys = (a: Plain, b: Plain): string[] => {
     (key) => !jsonEqual(jsonEntry(a, key), jsonEntry(b, key)),
   );
 };
+
+/** What `value` is, as an error about a broken contract names it. */
+const kindOf = (value: unknown): string =>
+  value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+
+/** Returns `value` if it is a non-array object, and throws a `TypeError` naming `contract` otherwise. */
+const expectRecord = (
+  value: unknown,
+  contract: string,
+  expected: string,
+): Plain => {
+  if (isRecord(value)) return value;
+  throw new TypeError(
+    `${contract} must return ${expected}, got ${kindOf(value)}`,
+  );
+};
+
+/** Why the engine stopped writing back `keys`, and what the store must do instead. */
+const loopMessage = (keys: string[]): string =>
+  `stopped writing back ${keys.map((key) => JSON.stringify(key)).join(", ")}: another peer ` +
+  "changed what this store changed while a remote change was applied, and this store changed " +
+  "it again, so the peers would keep re-writing each other's changes. The store keeps its " +
+  "values for these keys, which differ from the backend's. What a store changes while a " +
+  "remote change is applied must not change again when the same state is applied twice, and " +
+  "every peer must agree on it.";
+
+/**
+ * Reported to `SyncEngineConfig.onError`, with the source `'store'`, when the engine stops
+ * writing back keys the store keeps changing while remote changes are applied, so that the
+ * peers do not re-write each other's changes forever; see `StoreAdapter.setState`. Reported
+ * once per set of keys. The engine stays connected.
+ */
+export class WriteLoopError extends Error {
+  /** The synced keys no longer written back; the store and the backend hold different values. */
+  readonly keys: string[];
+
+  constructor(keys: string[]) {
+    super(loopMessage(keys));
+    this.name = "WriteLoopError";
+    this.keys = keys;
+  }
+}
 
 // Declared here so that core needs no Node types; bundlers replace `process.env.NODE_ENV`.
 declare const process: { env: { NODE_ENV?: string } };
@@ -58,6 +101,10 @@ const isProduction = (): boolean => {
  * A local change made before the flush applies them first, and they replace the store's synced
  * state, so the local change keeps only what it did to keys the engine does not sync.
  *
+ * `connect()` throws what it runs into, including a `TypeError` for a `read()` or `getState()`
+ * that does not return an object. Once connected, what the adapter or the backend throws goes to
+ * `onError` when it is given, and otherwise to whoever triggered the work, as before.
+ *
  * @example
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
@@ -71,7 +118,12 @@ export function createSyncEngine<S extends object>(
   adapter: StoreAdapter<S>,
   config: SyncEngineConfig = {},
 ): SyncEngine {
-  const { filter = defaultSyncFilter, seed = "if-empty", schedule } = config;
+  const {
+    filter = defaultSyncFilter,
+    seed = "if-empty",
+    schedule,
+    onError,
+  } = config;
 
   let connected = false;
   let storeUnsubscribe: Unsubscribe | null = null;
@@ -95,6 +147,35 @@ export function createSyncEngine<S extends object>(
   let lastWriteBack: { written: Plain; keys: string[] } | null = null;
   /** The key lists of the loops already reported, so each is reported once. */
   const reportedLoops = new Set<string>();
+  /** The side whose call threw the error now on its way out of the engine; see `call`. */
+  let thrownBy: SyncErrorSource | undefined;
+
+  /** Runs `run`, a call into the store adapter or the backend, recording `source` if it throws. */
+  const call = <T>(source: SyncErrorSource, run: () => T): T => {
+    try {
+      return run();
+    } catch (error) {
+      thrownBy = source;
+      throw error;
+    }
+  };
+
+  /**
+   * Runs `work`, which a notification, the scheduled flush or `disconnect()` started, and hands
+   * what the store adapter or the backend threw to `onError`, so it does not reach the notifier
+   * or the scheduler. Anything else, and everything without `onError`, propagates as it is.
+   */
+  const guarded = (work: () => void): void => {
+    thrownBy = undefined;
+    try {
+      work();
+    } catch (error) {
+      const source = thrownBy;
+      thrownBy = undefined;
+      if (onError === undefined || source === undefined) throw error;
+      onError(error, source);
+    }
+  };
 
   const filterState = (state: object): Plain => {
     const filtered: Plain = {};
@@ -104,13 +185,23 @@ export function createSyncEngine<S extends object>(
     return filtered;
   };
 
-  /** The backend's whole state, local keys included; `undefined` when it holds no object. */
-  const readBackend = (): Plain | undefined => {
-    const value = backend.read();
-    return value !== null && typeof value === "object"
-      ? (value as Plain)
-      : undefined;
-  };
+  /** The backend's whole state, local keys included. */
+  const readBackend = (): Plain =>
+    call("backend", () =>
+      expectRecord(backend.read(), "CrdtBackend.read()", "a plain object"),
+    );
+
+  /** The store's whole state. */
+  const readStore = (): S =>
+    call(
+      "store",
+      () =>
+        expectRecord(
+          adapter.getState(),
+          "StoreAdapter.getState()",
+          "an object",
+        ) as S,
+    );
 
   /** Builds the next store state from `current`, whose synced part `synced` becomes `target`. */
   const mergeStates = (current: S, synced: Plain, target: Plain): S => {
@@ -130,7 +221,7 @@ export function createSyncEngine<S extends object>(
     const reads = remoteReads;
     // Unknown should the write throw.
     lastSynced = undefined;
-    backend.write(next, previous);
+    call("backend", () => backend.write(next, previous));
     // A remote change applied during the write has already recorded what it read.
     if (remoteReads === reads) lastSynced = next;
   };
@@ -146,16 +237,16 @@ export function createSyncEngine<S extends object>(
     let target: Plain;
     applyingRemote = true;
     try {
-      current = adapter.getState();
+      current = readStore();
       const synced = filterState(current);
       target = keepLocalOnly ? { ...synced, ...remote } : remote;
       const merged = mergeStates(current, synced, target);
       if (merged === current) return;
-      adapter.setState(merged);
+      call("store", () => adapter.setState(merged));
     } finally {
       applyingRemote = false;
     }
-    const after = adapter.getState();
+    const after = readStore();
     // A store that ignored the change entirely, such as a Redux store without the replace case,
     // would otherwise write its old state back over every peer's.
     if (after === current) return;
@@ -191,19 +282,20 @@ export function createSyncEngine<S extends object>(
     );
   };
 
+  /**
+   * Reports a stopped loop once per set of keys: to `onError` in every build, and otherwise
+   * with a warning in development.
+   */
   const reportLoop = (keys: string[]): void => {
     const id = JSON.stringify([...keys].sort());
-    if (reportedLoops.has(id) || isProduction()) return;
-    reportedLoops.add(id);
-    const names = keys.map((key) => JSON.stringify(key)).join(", ");
-    console.warn(
-      `[homeostate] stopped writing back ${names}: another peer changed what this store ` +
-        "changed while a remote change was applied, and this store changed it again, so the " +
-        "peers would keep re-writing each other's changes. The store keeps its values for " +
-        "these keys, which differ from the backend's. What a store changes while a remote " +
-        "change is applied must not change again when the same state is applied twice, and " +
-        "every peer must agree on it.",
-    );
+    if (reportedLoops.has(id)) return;
+    if (onError !== undefined) {
+      reportedLoops.add(id);
+      onError(new WriteLoopError(keys), "store");
+    } else if (!isProduction()) {
+      reportedLoops.add(id);
+      console.warn(`[homeostate] ${loopMessage(keys)}`);
+    }
   };
 
   const syncToStore = (): void => {
@@ -212,7 +304,7 @@ export function createSyncEngine<S extends object>(
     lastSynced = undefined;
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
     lastSynced = readBackend();
-    applyRemote(filterState(lastSynced ?? {}), false);
+    applyRemote(filterState(lastSynced), false);
   };
 
   /** Runs the apply deferred by `schedule`, if one is pending, and returns whether it ran. */
@@ -234,7 +326,7 @@ export function createSyncEngine<S extends object>(
       // A flush handed out before `disconnect()` does nothing.
       if (scheduledFlush !== flush) return;
       scheduledFlush = null;
-      runPendingApply();
+      guarded(runPendingApply);
     };
     scheduledFlush = flush;
     try {
@@ -254,7 +346,7 @@ export function createSyncEngine<S extends object>(
     // apply keeps its stale state out of the backend this way too.
     if (runPendingApply()) return;
     lastWriteBack = null;
-    writeSynced(filterState(adapter.getState()));
+    writeSynced(filterState(readStore()));
   };
 
   const unsubscribeAll = (): void => {
@@ -269,8 +361,8 @@ export function createSyncEngine<S extends object>(
       if (connected) return;
 
       let held = readBackend();
-      const remote = filterState(held ?? {});
-      const local = filterState(adapter.getState());
+      const remote = filterState(held);
+      const local = filterState(readStore());
       const remoteKeys = new Set(Object.keys(remote));
       const missing = Object.keys(local).filter((key) => !remoteKeys.has(key));
 
@@ -284,8 +376,8 @@ export function createSyncEngine<S extends object>(
       lastSynced = held;
       try {
         applyRemote(remote, true);
-        backendUnsubscribe = backend.subscribe(onRemoteChange);
-        storeUnsubscribe = adapter.subscribe(syncToBackend);
+        backendUnsubscribe = backend.subscribe(() => guarded(onRemoteChange));
+        storeUnsubscribe = adapter.subscribe(() => guarded(syncToBackend));
       } catch (error) {
         // `disconnect()` cannot reach a subscription made before the throw, so drop it here.
         unsubscribeAll();
@@ -301,7 +393,7 @@ export function createSyncEngine<S extends object>(
       // The store keeps what the backend held while connected; the scheduled flush is dropped.
       scheduledFlush = null;
       try {
-        runPendingApply();
+        guarded(runPendingApply);
       } finally {
         unsubscribeAll();
         // A disconnected engine hears no remote change, so it reads the backend again on connect.

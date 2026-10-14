@@ -283,6 +283,49 @@ describe("MobxAdapter", () => {
     expect(held(backend).todos).toEqual([{ id: "9", title: "i", done: true }]);
   });
 
+  describe("a write that throws", () => {
+    const failingWrite = (onError?: () => void) => {
+      const store = new TodoStore();
+      const backend = createMemoryBackend();
+      createSyncEngine(backend, createMobxAdapter(store, syncedKeys), {
+        onError,
+      }).connect();
+      const offline = new Error("offline");
+      vi.spyOn(backend, "write").mockImplementationOnce(() => {
+        throw offline;
+      });
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      return { store, offline, consoleError };
+    };
+
+    it("reaches onError instead of MobX's reaction error boundary", () => {
+      const onError = vi.fn();
+      const { store, offline, consoleError } = failingWrite(onError);
+      try {
+        store.setFilter("done");
+
+        expect(onError).toHaveBeenCalledWith(offline, "backend");
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it("is caught and logged by MobX without onError, so the action returns", () => {
+      const { store, offline, consoleError } = failingWrite();
+      try {
+        expect(() => store.setFilter("done")).not.toThrow();
+
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        expect(consoleError.mock.calls[0]).toContain(offline);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  });
+
   it("ignores keys it was not asked to sync, in both directions", () => {
     const store = new TodoStore();
     const { backend } = connect(store);

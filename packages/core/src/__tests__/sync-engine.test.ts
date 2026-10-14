@@ -7,7 +7,11 @@ import {
   vi,
   type MockInstance,
 } from "vitest";
-import { createSyncEngine } from "../index.js";
+import {
+  createSyncEngine,
+  WriteLoopError,
+  type SyncEngineConfig,
+} from "../index.js";
 import { createMemoryBackend, type MemoryBackend } from "../testing.js";
 import {
   addTodo,
@@ -21,6 +25,7 @@ import {
   todo,
   toggleTodo,
   type TestStore,
+  type TodoState,
 } from "./helpers.js";
 
 /**
@@ -163,19 +168,6 @@ describe("createSyncEngine", () => {
 
       expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
     });
-
-    it.each([null, 5, "text"])(
-      "treats a backend holding %j as empty and seeds it",
-      (held) => {
-        const backend = createMemoryBackend(held);
-        const store = createTestStore(threeTodos());
-
-        createSyncEngine(backend, store.adapter).connect();
-
-        expect(backend.read()).toEqual(threeTodos());
-        expect(store.getState()).toEqual(threeTodos());
-      },
-    );
   });
 
   describe("store to backend", () => {
@@ -241,21 +233,6 @@ describe("createSyncEngine", () => {
       backend.receive({ b: 2, c: 3 });
 
       expect(store.getState()).toEqual({ b: 2, c: 3 });
-    });
-
-    it("removes every synced key when the backend comes to hold no object", () => {
-      const backend = createMemoryBackend();
-      const increment = () => {};
-      const store = createTestStore<Record<string, unknown>>({
-        a: 1,
-        b: 2,
-        increment,
-      });
-      createSyncEngine(backend, store.adapter).connect();
-
-      backend.receive(null);
-
-      expect(store.getState()).toEqual({ increment });
     });
 
     it("leaves the store untouched when the remote state already matches", () => {
@@ -587,11 +564,11 @@ describe("createSyncEngine", () => {
       });
 
       /** One stamping peer whose write back another peer re-stamps twice. */
-      const restampWriteBack = () => {
+      const restampWriteBack = (config?: SyncEngineConfig) => {
         rulesOn = true;
         const backend = createMemoryBackend();
         const store = stampingStore();
-        createSyncEngine(backend, store.adapter).connect();
+        createSyncEngine(backend, store.adapter, config).connect();
         const write = vi.spyOn(backend, "write");
 
         backend.receive({ count: 1, updatedAt: 0 });
@@ -622,6 +599,38 @@ describe("createSyncEngine", () => {
 
           expect(write).toHaveBeenCalledTimes(1);
           expect(warn).not.toHaveBeenCalled();
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      });
+
+      it("reports a stopped loop to onError once, naming its keys, instead of warning", () => {
+        const onError = vi.fn();
+        const { backend } = restampWriteBack({ onError });
+        backend.receive({ count: 1, updatedAt: -3 });
+
+        expect(onError).toHaveBeenCalledTimes(1);
+        const [error, source] = onError.mock.calls[0]!;
+        expect(source).toBe("store");
+        expect(error).toBeInstanceOf(WriteLoopError);
+        expect(error).toMatchObject({
+          name: "WriteLoopError",
+          keys: ["updatedAt"],
+        });
+        expect((error as Error).message).toContain('"updatedAt"');
+        expect(warn).not.toHaveBeenCalled();
+      });
+
+      it("reports a stopped loop to onError in production", () => {
+        vi.stubEnv("NODE_ENV", "production");
+        try {
+          const onError = vi.fn();
+          restampWriteBack({ onError });
+
+          expect(onError).toHaveBeenCalledWith(
+            expect.any(WriteLoopError),
+            "store",
+          );
         } finally {
           vi.unstubAllEnvs();
         }
@@ -1205,6 +1214,287 @@ describe("createSyncEngine", () => {
       expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
       backend.receive(toggleTodo(threeTodos(), "2"));
       expect(store.getState()).toEqual(toggleTodo(threeTodos(), "2"));
+    });
+  });
+
+  describe("onError", () => {
+    it("reports a setState that throws on a remote change, instead of throwing to the backend's notifier", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const invalid = new Error("invalid snapshot");
+      const onError = vi.fn();
+      const engine = createSyncEngine(
+        backend,
+        {
+          ...store.adapter,
+          setState: () => {
+            throw invalid;
+          },
+        },
+        { onError },
+      );
+      engine.connect();
+
+      expect(() =>
+        backend.receive(toggleTodo(threeTodos(), "1")),
+      ).not.toThrow();
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(invalid, "store");
+      expect(engine.isConnected()).toBe(true);
+    });
+
+    it("reports a write that throws on a local change, instead of throwing to the store's notifier", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const onError = vi.fn();
+      createSyncEngine(backend, store.adapter, { onError }).connect();
+      const offline = new Error("offline");
+      vi.spyOn(backend, "write").mockImplementationOnce(() => {
+        throw offline;
+      });
+
+      expect(() => store.update((s) => toggleTodo(s, "1"))).not.toThrow();
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(offline, "backend");
+      store.update((s) => toggleTodo(s, "2"));
+      expect(backend.read()).toEqual(
+        toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+      );
+    });
+
+    it("writes the next local change after reporting a setState that threw", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const onError = vi.fn();
+      createSyncEngine(backend, store.adapter, { onError }).connect();
+      vi.spyOn(store.adapter, "setState").mockImplementationOnce(() => {
+        throw new Error("invalid snapshot");
+      });
+      backend.receive(addTodo(threeTodos(), todo("4")));
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
+    });
+
+    it("reports a write back that throws after a remote change", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(
+        { todos: [] as string[], count: 0 },
+        (s) => ({
+          ...s,
+          count: s.todos.length,
+        }),
+      );
+      const onError = vi.fn();
+      createSyncEngine(backend, store.adapter, { onError }).connect();
+      const offline = new Error("offline");
+      vi.spyOn(backend, "write").mockImplementationOnce(() => {
+        throw offline;
+      });
+
+      expect(() => backend.receive({ todos: ["a"], count: 0 })).not.toThrow();
+
+      expect(onError).toHaveBeenCalledWith(offline, "backend");
+      expect(store.getState()).toEqual({ todos: ["a"], count: 1 });
+    });
+
+    it("reports a read that throws on a remote change", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const onError = vi.fn();
+      createSyncEngine(backend, store.adapter, { onError }).connect();
+      const corrupt = new Error("corrupt document");
+      vi.spyOn(backend, "read").mockImplementationOnce(() => {
+        throw corrupt;
+      });
+
+      expect(() => backend.receive(threeTodos())).not.toThrow();
+
+      expect(onError).toHaveBeenCalledWith(corrupt, "backend");
+    });
+
+    it("still throws from connect, without reporting", () => {
+      const backend = createMemoryBackend(toggleTodo(threeTodos(), "1"));
+      const store = createTestStore(threeTodos());
+      const onError = vi.fn();
+      const engine = createSyncEngine(
+        backend,
+        {
+          ...store.adapter,
+          setState: () => {
+            throw new Error("invalid snapshot");
+          },
+        },
+        { onError },
+      );
+
+      expect(() => engine.connect()).toThrow("invalid snapshot");
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(engine.isConnected()).toBe(false);
+    });
+
+    it("throws to the backend's notifier without onError, and stays connected", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, {
+        ...store.adapter,
+        setState: () => {
+          throw new Error("invalid snapshot");
+        },
+      });
+      engine.connect();
+
+      expect(() => backend.receive(toggleTodo(threeTodos(), "1"))).toThrow(
+        "invalid snapshot",
+      );
+
+      expect(engine.isConnected()).toBe(true);
+    });
+
+    describe("with schedule", () => {
+      const throwingSetState = (onError: () => void) => {
+        const backend = createMemoryBackend();
+        const store = createTestStore(threeTodos());
+        const flushes: (() => void)[] = [];
+        const invalid = new Error("invalid snapshot");
+        const engine = createSyncEngine(
+          backend,
+          {
+            ...store.adapter,
+            setState: () => {
+              throw invalid;
+            },
+          },
+          {
+            onError,
+            schedule: (flush) => {
+              flushes.push(flush);
+            },
+          },
+        );
+        engine.connect();
+        backend.receive(toggleTodo(threeTodos(), "1"));
+        return { engine, flushes, invalid };
+      };
+
+      it("reports an apply that throws in the flush, instead of throwing to the scheduler", () => {
+        const onError = vi.fn();
+        const { flushes, invalid } = throwingSetState(onError);
+
+        expect(() => flushes[0]!()).not.toThrow();
+
+        expect(onError).toHaveBeenCalledWith(invalid, "store");
+      });
+
+      it("reports a pending apply that throws on disconnect, and disconnects", () => {
+        const onError = vi.fn();
+        const { engine, invalid } = throwingSetState(onError);
+
+        expect(() => engine.disconnect()).not.toThrow();
+
+        expect(onError).toHaveBeenCalledWith(invalid, "store");
+        expect(engine.isConnected()).toBe(false);
+      });
+    });
+  });
+
+  describe("broken contracts", () => {
+    it.each([
+      ["a string", "string"],
+      [null, "null"],
+      [undefined, "undefined"],
+      [[1, 2], "array"],
+    ])(
+      "throws from connect, without seeding, when read() returns %j",
+      (held, kind) => {
+        const backend = createMemoryBackend();
+        vi.spyOn(backend, "read").mockReturnValue(held);
+        const write = vi.spyOn(backend, "write");
+        const store = createTestStore(threeTodos());
+        const engine = createSyncEngine(backend, store.adapter);
+
+        expect(() => engine.connect()).toThrow(
+          new TypeError(
+            `CrdtBackend.read() must return a plain object, got ${kind}`,
+          ),
+        );
+
+        expect(write).not.toHaveBeenCalled();
+        expect(engine.isConnected()).toBe(false);
+      },
+    );
+
+    it("throws from connect when getState() returns undefined", () => {
+      const backend = createMemoryBackend();
+      const engine = createSyncEngine(backend, {
+        getState: () => undefined as unknown as object,
+        setState: () => {},
+        subscribe: () => () => {},
+      });
+
+      expect(() => engine.connect()).toThrow(
+        new TypeError(
+          "StoreAdapter.getState() must return an object, got undefined",
+        ),
+      );
+    });
+
+    const noObject = new TypeError(
+      "CrdtBackend.read() must return a plain object, got null",
+    );
+
+    it("reports a backend that comes to hold no object, and leaves the store alone", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const onError = vi.fn();
+      createSyncEngine(backend, store.adapter, { onError }).connect();
+
+      backend.receive(null);
+
+      expect(onError).toHaveBeenCalledWith(noObject, "backend");
+      expect(store.getState()).toEqual(threeTodos());
+    });
+
+    it("throws to the backend's notifier when it comes to hold no object without onError", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(() => backend.receive(null)).toThrow(noObject);
+
+      expect(store.getState()).toEqual(threeTodos());
+    });
+
+    it("reports a store whose getState() comes to return undefined", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      let broken = false;
+      const onError = vi.fn();
+      createSyncEngine(
+        backend,
+        {
+          ...store.adapter,
+          getState: () =>
+            broken ? (undefined as unknown as TodoState) : store.getState(),
+        },
+        { onError },
+      ).connect();
+      broken = true;
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(onError).toHaveBeenCalledWith(
+        new TypeError(
+          "StoreAdapter.getState() must return an object, got undefined",
+        ),
+        "store",
+      );
+      expect(backend.read()).toEqual(threeTodos());
     });
   });
 
