@@ -375,6 +375,178 @@ describe("HomeostateDevtools", () => {
     expect(store.get().filter).toBe("all");
   });
 
+  it("browses a historical snapshot as a tree and JSON while the live state keeps changing", async () => {
+    await render();
+    await act(async () => store.set({ ...store.get(), filter: "active" }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Snapshot"));
+    expect(byLabel("Snapshot #0").textContent).toContain('"all"');
+    expect(byLabel("Snapshot #0").textContent).toContain("milk");
+    expect(
+      byLabel("Snapshot #0").querySelector('[aria-label^="Edit "]'),
+    ).toBeNull();
+
+    await click(buttonWithText("JSON"));
+    const json = byLabel<HTMLTextAreaElement>("Snapshot #0 as JSON");
+    expect(json.readOnly).toBe(true);
+    expect(JSON.parse(json.value)).toEqual({
+      todos: [{ title: "milk", done: false }],
+      filter: "all",
+    });
+
+    await act(async () => store.set({ ...store.get(), filter: "done" }));
+    await act(tick);
+    expect(JSON.parse(json.value).filter).toBe("all");
+    expect(store.get().filter).toBe("done");
+    expect((backend.read() as State).filter).toBe("done");
+  });
+
+  it("compares a snapshot with the live state without restoring it, even while recording is paused", async () => {
+    await render();
+    await act(async () => store.set({ ...store.get(), filter: "active" }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Compare with current"));
+    const comparison = () =>
+      byLabel("Snapshot #0 compared with current state").textContent;
+    expect(comparison()).toContain('"all"');
+    expect(comparison()).toContain('"active"');
+    expect(store.get().filter).toBe("active");
+    expect((backend.read() as State).filter).toBe("active");
+
+    await click(buttonWithText("Pause"));
+    await act(async () => store.set({ ...store.get(), filter: "done" }));
+    await act(tick);
+    expect(comparison()).toContain('"done"');
+    expect(comparison()).not.toContain('"active"');
+    expect(
+      byLabel("Changes, newest first").querySelectorAll(
+        '[data-slot="collapsible-trigger"]',
+      ),
+    ).toHaveLength(2);
+
+    await act(async () => store.set({ ...store.get(), filter: "all" }));
+    await act(tick);
+    expect(shadow().textContent).toContain(
+      "This snapshot matches the current state.",
+    );
+    expect(buttonWithText("Current state").disabled).toBe(true);
+  });
+
+  it("distinguishes an entry's recorded diff from its comparison with current state", async () => {
+    await render();
+    await act(async () => store.set({ ...store.get(), filter: "active" }));
+    await act(tick);
+    await act(async () => store.set({ ...store.get(), filter: "done" }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#1"));
+    const recorded = () => byLabel("Recorded diff for entry #1").textContent;
+    expect(recorded()).toContain('"all"');
+    expect(recorded()).toContain('"active"');
+    expect(recorded()).not.toContain('"done"');
+
+    await click(buttonWithText("Compare with current"));
+    const comparison = byLabel(
+      "Snapshot #1 compared with current state",
+    ).textContent;
+    expect(comparison).toContain('"active"');
+    expect(comparison).toContain('"done"');
+    expect(comparison).not.toContain('"all"');
+    await click(buttonWithText("Diff"));
+    expect(recorded()).toContain('"all"');
+    expect(recorded()).not.toContain('"done"');
+  });
+
+  it("reports an unreadable live state instead of comparing a stale JSON view", async () => {
+    const compared = createTestStore<Record<string, unknown>>({ count: 0 });
+    await renderSources([{ name: "Counter", adapter: compared.adapter }]);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Compare with current"));
+    expect(shadow().textContent).toContain(
+      "This snapshot matches the current state.",
+    );
+    const cyclic: Record<string, unknown> = { count: 1 };
+    cyclic.self = cyclic;
+    await act(async () => compared.set(cyclic));
+    await act(tick);
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+      "Current state cannot be read as JSON",
+    );
+    expect(shadow().textContent).not.toContain(
+      "This snapshot matches the current state.",
+    );
+
+    await act(async () => compared.set({ count: 1 }));
+    await act(tick);
+    expect(shadow().querySelector('[role="alert"]')).toBeNull();
+    expect(
+      byLabel("Snapshot #0 compared with current state").textContent,
+    ).toContain("count");
+  });
+
+  it("inspects full historical and current values with explicit comparison headings", async () => {
+    const before = "Historical message ".repeat(8);
+    const after = "Current message ".repeat(8);
+    const compared = createTestStore({ message: before });
+    await renderSources([{ name: "Messages", adapter: compared.adapter }]);
+    await act(async () => compared.set({ message: after }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Compare with current"));
+    const table = byLabel("Snapshot #0 compared with current state");
+    expect(
+      [...table.querySelectorAll('th[scope="col"]')].map(
+        (cell) => cell.textContent,
+      ),
+    ).toEqual(["Path", "snapshot #0", "current"]);
+    await click(byLabel("Inspect snapshot #0 value at message"));
+    await click(byLabel("Inspect current value at message"));
+    expect(
+      JSON.parse(
+        byLabel("Full snapshot #0 value at message").textContent ?? "",
+      ),
+    ).toBe(before);
+    expect(
+      JSON.parse(byLabel("Full current value at message").textContent ?? ""),
+    ).toBe(after);
+    expect(compared.get().message).toBe(after);
+  });
+
+  it.each([
+    { connected: true, impact: "syncs this change to peers" },
+    { connected: false, impact: "changes only the local store" },
+    { connected: null, impact: "may sync to peers" },
+  ])(
+    "names the source and restoration impact when connected is $connected",
+    async ({ connected, impact }) => {
+      if (connected === false) engine.disconnect();
+      await renderSources([
+        {
+          name: "Review store",
+          adapter: store.adapter,
+          backend,
+          engine: connected === null ? undefined : engine,
+        },
+      ]);
+      await act(async () => store.set({ ...store.get(), filter: "active" }));
+      await act(tick);
+      await click(buttonWithText("Log"));
+      await click(buttonWithText("#0"));
+      const restore = buttonWithText("Restore this state");
+      const descriptionId = restore.getAttribute("aria-describedby");
+      expect(descriptionId).not.toBeNull();
+      const description = shadow().getElementById(descriptionId!);
+      expect(description?.textContent).toContain("Review store");
+      expect(description?.textContent).toContain(impact);
+    },
+  );
+
   it("filters the log by path and by origin", async () => {
     await render();
     await act(async () => {
@@ -844,6 +1016,15 @@ describe("HomeostateDevtools", () => {
     expect(log.textContent).not.toContain("Initial state");
 
     await click(buttonWithText("#4"));
+    await click(buttonWithText("Snapshot"));
+    expect(byLabel("Snapshot #4").textContent).toContain('"imported"');
+    expect(store.get().filter).toBe("all");
+    await click(buttonWithText("Compare with current"));
+    const comparison = byLabel(
+      "Snapshot #4 compared with current state",
+    ).textContent;
+    expect(comparison).toContain('"imported"');
+    expect(comparison).toContain('"all"');
     await click(buttonWithText("Restore this state"));
     expect(store.get()).toEqual({ todos: [], filter: "imported" });
   });

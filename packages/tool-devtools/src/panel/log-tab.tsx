@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useId, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   ChevronRight,
   Download,
@@ -23,13 +23,16 @@ import type {
   LogEntry,
   LogOrigin,
 } from "../inspector";
-import { deepEqual, formatPath, type DiffLine } from "../json";
+import { deepEqual, diffJson, formatPath, type JsonObject } from "../json";
 import { usePersistedState } from "../lib/use-persisted-state";
 import { parseLog, serializeLog } from "../log-file";
 import { CopyButton } from "./copy-button";
 import { FilterInput } from "./filter-input";
 import { normalizeQuery } from "./format";
-import { JsonValue, OriginBadge } from "./value";
+import { JsonCodeArea } from "./json-code";
+import { JsonDiff } from "./json-diff";
+import { JsonTree } from "./json-tree";
+import { OriginBadge } from "./value";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -264,6 +267,7 @@ export function LogTab({
             .map((entry) => (
               <LogRow
                 key={entry.id}
+                name={name}
                 entry={entry}
                 snapshot={snapshot}
                 onRestore={() => restore(entry.id)}
@@ -276,16 +280,23 @@ export function LogTab({
 }
 
 function LogRow({
+  name,
   entry,
   snapshot,
   onRestore,
 }: {
+  name: string;
   entry: LogEntry;
   snapshot: InspectorSnapshot;
   onRestore: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current = open && deepEqual(entry.state, snapshot.store);
+  const [view, setView] = useState("diff");
+  const restoreDescriptionId = useId();
+  const current =
+    open &&
+    snapshot.storeError === null &&
+    deepEqual(entry.state, snapshot.store);
 
   return (
     <li className="border-b">
@@ -321,20 +332,33 @@ function LogRow({
           </time>
         </CollapsibleTrigger>
         <CollapsibleContent className="px-3 pb-2 pl-8">
-          {entry.diff.length > 0 && (
-            <ul className="space-y-0.5 font-mono text-xs">
-              {entry.diff.map((line, index) => (
-                <DiffRow key={index} line={line} />
-              ))}
-            </ul>
+          <ToggleGroup
+            aria-label={`View of log entry #${entry.id}`}
+            variant="outline"
+            size="xs"
+            value={[view]}
+            onValueChange={(next: string[]) => {
+              if (next[0]) setView(next[0]);
+            }}
+            className="my-2 max-w-full flex-wrap"
+          >
+            <ToggleGroupItem value="diff">Diff</ToggleGroupItem>
+            <ToggleGroupItem value="snapshot">Snapshot</ToggleGroupItem>
+            <ToggleGroupItem value="compare">
+              Compare with current
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {open && (
+            <LogEntryView entry={entry} snapshot={snapshot} view={view} />
           )}
-          <div className="mt-2 flex items-center gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Button
               size="xs"
               variant="outline"
               disabled={current}
               onClick={onRestore}
-              title="Write this state to the store; the engine syncs it to peers"
+              title={`Restore snapshot #${entry.id} to ${name}`}
+              aria-describedby={restoreDescriptionId}
             >
               <History />
               {current ? "Current state" : "Restore this state"}
@@ -344,40 +368,112 @@ function LogRow({
               text={JSON.stringify(entry.state, null, 2)}
             />
           </div>
+          <p
+            id={restoreDescriptionId}
+            className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]"
+          >
+            Restoring replaces the JSON state of <strong>{name}</strong>.{" "}
+            {snapshot.connected === true
+              ? "The connected engine syncs this change to peers."
+              : snapshot.connected === false
+                ? "The engine is disconnected; this changes only the local store."
+                : "The store's adapter may sync to peers."}
+          </p>
         </CollapsibleContent>
       </Collapsible>
     </li>
   );
 }
 
-const signs: Record<DiffLine["kind"], { sign: string; className: string }> = {
-  insert: { sign: "+", className: "text-emerald-600 dark:text-emerald-400" },
-  update: { sign: "~", className: "text-amber-600 dark:text-amber-400" },
-  delete: { sign: "−", className: "text-rose-600 dark:text-rose-400" },
-};
-
-function DiffRow({ line }: { line: DiffLine }) {
-  const { sign, className } = signs[line.kind];
+/** Compute a live comparison only while that view is open. */
+function LogEntryView({
+  entry,
+  snapshot,
+  view,
+}: {
+  entry: LogEntry;
+  snapshot: InspectorSnapshot;
+  view: string;
+}) {
+  const comparison = useMemo(
+    () =>
+      view === "compare" && snapshot.storeError === null
+        ? diffJson(entry.state, snapshot.store)
+        : [],
+    [view, entry.state, snapshot.store, snapshot.storeError],
+  );
+  if (view === "snapshot")
+    return <LogSnapshot entryId={entry.id} state={entry.state} />;
+  if (view === "compare") {
+    if (snapshot.storeError !== null)
+      return (
+        <p role="alert" className="text-xs text-destructive">
+          Current state cannot be read as JSON: {snapshot.storeError}
+        </p>
+      );
+    if (comparison.length === 0)
+      return (
+        <p className="text-xs text-muted-foreground">
+          This snapshot matches the current state.
+        </p>
+      );
+    return (
+      <JsonDiff
+        lines={comparison}
+        label={`Snapshot #${entry.id} compared with current state`}
+        beforeLabel={`snapshot #${entry.id}`}
+        afterLabel="current"
+      />
+    );
+  }
+  if (entry.diff.length === 0)
+    return (
+      <p className="text-xs text-muted-foreground">
+        No recorded changes for this entry.
+      </p>
+    );
   return (
-    <li className="flex flex-wrap items-baseline gap-x-1.5">
-      <span aria-label={line.kind} className={cn("w-2 shrink-0", className)}>
-        {sign}
-      </span>
-      <span className="text-sky-700 dark:text-sky-400">
-        {formatPath(line.path)}
-      </span>
-      {line.kind !== "insert" && (
-        <JsonValue
-          value={line.before}
-          className={cn(line.kind === "update" && "line-through opacity-60")}
+    <JsonDiff
+      lines={entry.diff}
+      label={`Recorded diff for entry #${entry.id}`}
+    />
+  );
+}
+
+/** A logged state stays read-only while the live store keeps changing. */
+function LogSnapshot({
+  entryId,
+  state,
+}: {
+  entryId: number;
+  state: JsonObject;
+}) {
+  const [view, setView] = useState("tree");
+  return (
+    <div>
+      <ToggleGroup
+        aria-label={`View of snapshot #${entryId}`}
+        variant="outline"
+        size="xs"
+        value={[view]}
+        onValueChange={(next: string[]) => {
+          if (next[0]) setView(next[0]);
+        }}
+        className="mb-2"
+      >
+        <ToggleGroupItem value="tree">Tree</ToggleGroupItem>
+        <ToggleGroupItem value="json">JSON</ToggleGroupItem>
+      </ToggleGroup>
+      {view === "json" ? (
+        <JsonCodeArea
+          readOnly
+          value={JSON.stringify(state, null, 2)}
+          aria-label={`Snapshot #${entryId} as JSON`}
+          className="h-64"
         />
+      ) : (
+        <JsonTree label={`Snapshot #${entryId}`} value={state} />
       )}
-      {line.kind === "update" && (
-        <span aria-hidden className="text-muted-foreground">
-          →
-        </span>
-      )}
-      {line.kind !== "delete" && <JsonValue value={line.after} />}
-    </li>
+    </div>
   );
 }

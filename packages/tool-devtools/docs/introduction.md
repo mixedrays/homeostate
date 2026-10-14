@@ -146,7 +146,13 @@ remembered in `localStorage`.
   If reading the backend fails, the panel reports the error and suspends key comparisons;
   the last successfully read document remains available, marked as such.
 - **Log** records each change to the store with its diff, marked `local`, `remote` (a peer's
-  change applied through the backend) or `devtools`. Any entry can be restored. Recording
+  change applied through the backend) or `devtools`. Open an entry to choose **Diff** for
+  its recorded before/after values, **Snapshot** for a read-only tree or JSON view of its
+  full state, or **Compare with current** for differences from that snapshot to the live
+  store. The comparison stays live while recording is paused. Both diff views support the
+  full-value inspection, copy actions and expandable results described under Sync.
+  **Restore this state** writes the snapshot back to the store; the adjacent note names
+  the source and explains whether the engine syncs that change to peers. Recording
   can be paused and the log cleared. Filter it by a path that a change touches, and by
   origin; the initial state always shows. **Export** saves the log as a JSON file and **Import**
   replaces the log with one, so a log recorded elsewhere, such as one attached to a bug
