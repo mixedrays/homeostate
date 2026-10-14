@@ -16,10 +16,19 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../components/ui/collapsible";
-import type { Inspector, InspectorSnapshot, LogEntry } from "../inspector";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import type {
+  Inspector,
+  InspectorSnapshot,
+  LogEntry,
+  LogOrigin,
+} from "../inspector";
 import { deepEqual, formatPath, type DiffLine } from "../json";
+import { usePersistedState } from "../lib/use-persisted-state";
 import { parseLog, serializeLog } from "../log-file";
 import { CopyButton } from "./copy-button";
+import { FilterInput } from "./filter-input";
+import { normalizeQuery } from "./format";
 import { JsonValue, OriginBadge } from "./value";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, {
@@ -33,6 +42,9 @@ const formatTime = (at: number): string =>
   `${timeFormat.format(at)}.${String(at % 1000).padStart(3, "0")}`;
 
 const SUMMARY_PATHS = 3;
+
+/** Origins the log can be filtered by; the initial state always shows. */
+const ORIGINS: LogOrigin[] = ["local", "remote", "devtools"];
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -68,6 +80,19 @@ const summarize = (entry: LogEntry): string => {
     : shown;
 };
 
+/** Whether `entry` shows for `origins` and a path `query`, matched against its paths and label. */
+const matches = (
+  entry: LogEntry,
+  origins: readonly string[],
+  query: string,
+): boolean =>
+  (entry.origin === "initial" || origins.includes(entry.origin)) &&
+  (query === "" ||
+    summarize(entry).toLowerCase().includes(query) ||
+    entry.diff.some((line) =>
+      formatPath(line.path).toLowerCase().includes(query),
+    ));
+
 export function LogTab({
   name,
   snapshot,
@@ -81,6 +106,22 @@ export function LogTab({
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const { log, paused } = snapshot;
+  const [query, setQuery] = usePersistedState<string>("logFilter", "");
+  const [storedOrigins, setOrigins] = usePersistedState(
+    "logOrigins",
+    ORIGINS.join(","),
+  );
+  const origins = storedOrigins.split(",");
+  const needle = normalizeQuery(query);
+  const filtered =
+    needle !== "" || ORIGINS.some((origin) => !origins.includes(origin));
+  const shown = filtered
+    ? log.filter((entry) => matches(entry, origins, needle))
+    : log;
+  const clearFilter = (): void => {
+    setQuery("");
+    setOrigins(ORIGINS.join(","));
+  };
 
   const restore = (id: number): void => {
     try {
@@ -158,9 +199,36 @@ export function LogTab({
           onChange={(event) => void importLog(event)}
         />
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+          {filtered && `${shown.length} of `}
           {log.length} {log.length === 1 ? "entry" : "entries"}
           {paused && " · paused"}
         </span>
+      </div>
+      <div className="flex items-center gap-1.5 border-b p-1.5">
+        <FilterInput
+          value={query}
+          onChange={setQuery}
+          label="Filter by path"
+          placeholder="Filter by path"
+        />
+        <ToggleGroup
+          aria-label="Origins"
+          variant="outline"
+          size="xs"
+          multiple
+          value={origins}
+          onValueChange={(next: string[]) =>
+            setOrigins(
+              ORIGINS.filter((origin) => next.includes(origin)).join(","),
+            )
+          }
+        >
+          {ORIGINS.map((origin) => (
+            <ToggleGroupItem key={origin} value={origin}>
+              {origin}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </div>
 
       {error && (
@@ -178,12 +246,19 @@ export function LogTab({
             ? "Recording is paused."
             : "No changes yet. Change the store, here or in the app."}
         </p>
+      ) : shown.length === 0 ? (
+        <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+          No changes match the filter.{" "}
+          <Button variant="link" size="xs" onClick={clearFilter}>
+            Clear the filter
+          </Button>
+        </div>
       ) : (
         <ol
           aria-label="Changes, newest first"
           className="min-h-0 flex-1 overflow-auto"
         >
-          {log
+          {shown
             .slice()
             .reverse()
             .map((entry) => (

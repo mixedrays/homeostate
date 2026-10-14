@@ -2,14 +2,13 @@ import { cn } from "cn";
 import { Badge } from "../components/ui/badge";
 import type { KeyStatus, LogOrigin } from "../inspector";
 import type { Json } from "../json";
-import { keyStatusInfo, previewOf } from "./format";
+import { jsonColors, keyStatusInfo, previewOf } from "./format";
 
 const valueColor = (value: Json | undefined): string => {
-  if (typeof value === "string")
-    return "text-emerald-700 dark:text-emerald-400";
-  if (typeof value === "number") return "text-amber-700 dark:text-amber-400";
-  if (typeof value === "boolean") return "text-violet-700 dark:text-violet-400";
-  if (value === null) return "text-rose-700 dark:text-rose-400";
+  if (typeof value === "string") return jsonColors.string;
+  if (typeof value === "number") return jsonColors.number;
+  if (typeof value === "boolean") return jsonColors.boolean;
+  if (value === null) return jsonColors.null;
   return "text-muted-foreground";
 };
 

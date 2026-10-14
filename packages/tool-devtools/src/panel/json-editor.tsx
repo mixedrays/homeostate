@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
 import { isRecord, type Json } from "../json";
+import { JsonCodeArea } from "./json-code";
 
 type Parsed = { ok: true; value: Json } | { ok: false; error: string };
 
@@ -29,7 +29,7 @@ interface JsonEditorProps {
 }
 
 /**
- * A JSON textarea over a live value. Until you type it follows the value; once you have,
+ * A highlighted JSON textarea over a live value. Until you type it follows the value; once you have,
  * a change underneath is flagged instead of overwriting your edit.
  */
 export function JsonEditor({
@@ -87,11 +87,10 @@ export function JsonEditor({
           </Button>
         </div>
       )}
-      <Textarea
+      <JsonCodeArea
         value={text}
         aria-label={label}
         aria-invalid={!parsed.ok || undefined}
-        spellCheck={false}
         onChange={(event) => {
           setText(event.target.value);
           setApplyError(null);
@@ -102,7 +101,7 @@ export function JsonEditor({
             apply();
           }
         }}
-        className="min-h-32 flex-1 resize-none field-sizing-fixed font-mono text-xs leading-5 md:text-xs"
+        className="min-h-32 flex-1"
       />
       <div className="flex items-center gap-2">
         <p

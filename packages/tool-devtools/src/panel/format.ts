@@ -4,6 +4,16 @@ import type { NetworkSnapshot } from "../network";
 
 const MAX_STRING = 80;
 
+/** The colors of JSON's parts, shared by the tree, the diffs and the JSON editor. */
+export const jsonColors = {
+  key: "text-sky-700 dark:text-sky-400",
+  string: "text-emerald-700 dark:text-emerald-400",
+  number: "text-amber-700 dark:text-amber-400",
+  boolean: "text-violet-700 dark:text-violet-400",
+  null: "text-rose-700 dark:text-rose-400",
+  punctuation: "text-muted-foreground",
+};
+
 export const previewOf = (value: Json | undefined): string => {
   if (value === undefined) return "undefined";
   if (Array.isArray(value)) return `Array(${value.length})`;
@@ -65,3 +75,7 @@ export const keyStatusInfo: Record<
     className: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
   },
 };
+
+/** `query` trimmed and lowercased, or `""` to match everything. */
+export const normalizeQuery = (query: string): string =>
+  query.trim().toLowerCase();

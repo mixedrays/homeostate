@@ -173,6 +173,48 @@ describe("HomeostateDevtools", () => {
     expect(pageKeys).toEqual(["Tab"]);
   });
 
+  it("filters the state tree and expands or collapses all of it", async () => {
+    await render();
+    const tree = () => byLabel("Store state").textContent;
+
+    await type(byLabel<HTMLInputElement>("Filter the state"), "milk");
+    expect(tree()).toContain("milk");
+    expect(tree()).not.toContain("done");
+    expect(tree()).not.toContain("filter");
+
+    await click(byLabel("Clear the filter"));
+    await click(byLabel("Collapse all"));
+    expect(tree()).not.toContain("milk");
+    await click(byLabel("Expand all"));
+    expect(tree()).toContain("milk");
+  });
+
+  it("highlights the JSON view, also while it is being typed", async () => {
+    await render();
+    await click(buttonWithText("JSON"));
+    const textarea = byLabel<HTMLTextAreaElement>("Store state as JSON");
+    const code = () => shadow().querySelector('[data-slot="json-highlight"]');
+    const tokens = (kind: string) =>
+      [...(code()?.querySelectorAll(`[data-token="${kind}"]`) ?? [])].map(
+        (token) => token.textContent,
+      );
+    expect(tokens("key")).toEqual(['"todos"', '"title"', '"done"', '"filter"']);
+    expect(tokens("string")).toEqual(['"milk"', '"all"']);
+    expect(tokens("boolean")).toEqual(["false"]);
+    expect(code()?.textContent).toBe(`${textarea.value}\n`);
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set?.call(textarea, '{ "count": -1.5e3, "note": "unclosed\n}');
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(tokens("number")).toEqual(["-1.5e3"]);
+    expect(tokens("string")).toEqual(['"unclosed']);
+    expect(code()?.textContent).toBe(`${textarea.value}\n`);
+  });
+
   it("toggles a boolean with one click", async () => {
     await render();
     await click(byLabel("Toggle todos[0].done"));
@@ -211,6 +253,30 @@ describe("HomeostateDevtools", () => {
     expect(store.get().filter).toBe("all");
   });
 
+  it("filters the log by path and by origin", async () => {
+    await render();
+    await act(async () => {
+      store.set({ ...store.get(), filter: "active" });
+    });
+    await act(tick);
+    await act(async () => {
+      store.set({ ...store.get(), todos: [] });
+    });
+    await act(tick);
+    await click(buttonWithText("Log"));
+    const log = () => byLabel("Changes, newest first").textContent;
+
+    await type(byLabel<HTMLInputElement>("Filter by path"), "todos");
+    expect(log()).toContain("todos");
+    expect(log()).not.toContain("filter");
+
+    await click(byLabel("Clear the filter"));
+    await click(buttonWithText("local"));
+    expect(log()).toContain("Initial state");
+    expect(log()).not.toContain("todos");
+    expect(shadow().textContent).toContain("1 of 3 entries");
+  });
+
   it("names the log's pause action without aria-pressed", async () => {
     await render();
     await click(buttonWithText("Log"));
@@ -220,8 +286,9 @@ describe("HomeostateDevtools", () => {
     expect(buttonWithText("Resume").getAttribute("aria-pressed")).toBeNull();
   });
 
-  it("disconnects and reconnects the engine", async () => {
+  it("disconnects and reconnects the engine from the Network tab", async () => {
     await render();
+    await click(buttonWithText("Network"));
     const markState = () =>
       byLabel("Sync engine connected")
         .closest("label")
@@ -238,6 +305,99 @@ describe("HomeostateDevtools", () => {
     await click(byLabel("Sync engine connected"));
     expect(engine.isConnected()).toBe(true);
     expect(markState()).toBe("connected");
+  });
+
+  it("closes from the tabs row", async () => {
+    await render();
+    await click(byLabel("Close devtools"));
+    expect(shadow().querySelector('[aria-label="Store state"]')).toBeNull();
+    expect(byLabel("Open Homeostate devtools")).toBeTruthy();
+  });
+
+  it("docks the panel to another side from the settings", async () => {
+    await render();
+    const side = () =>
+      shadow()
+        .querySelector('[data-slot="sheet-content"]')
+        ?.getAttribute("data-side");
+    expect(side()).toBe("right");
+
+    await click(byLabel("Settings"));
+    await click(byLabel("Dock to the bottom"));
+    expect(side()).toBe("bottom");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(side()).toBe("bottom");
+  });
+
+  it("moves the floating button to another corner from the settings", async () => {
+    await render();
+    await click(byLabel("Settings"));
+    await click(byLabel("Button at the top left"));
+    expect(byLabel("Close Homeostate devtools").className).toContain(
+      "top-4 left-4",
+    );
+  });
+
+  it("switches the theme from the settings over the theme prop", async () => {
+    await act(async () => {
+      root.render(
+        <HomeostateDevtools
+          initialIsOpen
+          theme="light"
+          sources={[{ name: "Todos", adapter: store.adapter }]}
+        />,
+      );
+    });
+    await act(tick);
+    const dark = () =>
+      shadow()
+        .querySelector("[data-devtools-root]")
+        ?.classList.contains("dark");
+    expect(dark()).toBe(false);
+
+    await click(byLabel("Settings"));
+    await click(byLabel("Dark theme"));
+    expect(dark()).toBe(true);
+  });
+
+  it("shows the source in the status bar", async () => {
+    await render();
+    expect(shadow().querySelector("footer")?.textContent).toContain("Todos");
+  });
+
+  it("shows a disconnected engine in the status bar and on the button", async () => {
+    await render();
+    const status = () => shadow().querySelector("footer")?.textContent;
+    const button = () => byLabel("Close Homeostate devtools");
+    expect(status()).toContain("Connected");
+    expect(button().getAttribute("title")).toBeNull();
+
+    await click(buttonWithText("Network"));
+    await click(byLabel("Sync engine connected"));
+    await click(buttonWithText("State"));
+    expect(status()).toContain("Disconnected");
+    expect(button().getAttribute("title")).toBe("Todos: disconnected");
+
+    await click(buttonWithText("Disconnected"));
+    expect(byLabel("Sync engine connected")).toBeTruthy();
+  });
+
+  it("compares a diverged key in the store and the backend", async () => {
+    await render();
+    await click(buttonWithText("Network"));
+    await click(byLabel("Sync engine connected"));
+    await act(async () => {
+      store.set({ ...store.get(), filter: "done" });
+    });
+    await act(tick);
+
+    await click(buttonWithText("1 diverged"));
+    const values = byLabel("filter in the store and the backend").textContent;
+    expect(values).toContain('"done"');
+    expect(values).toContain('"all"');
   });
 
   it("shows the key status against the backend", async () => {

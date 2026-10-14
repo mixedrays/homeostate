@@ -23,6 +23,8 @@ interface JsonTreeProps {
   warnings?: ReadonlyMap<string, string>;
   /** Containers shallower than this start expanded. */
   expandDepth?: number;
+  /** Shows only what matches, with the containers on the way to it open. */
+  filter?: string;
 }
 
 interface TreeState {
@@ -30,6 +32,10 @@ interface TreeState {
   keyStatus?: Readonly<Record<string, KeyStatus>>;
   warnings?: ReadonlyMap<string, string>;
   expandDepth: number;
+  /** With a filter: the nodes that match, everything under them shows. */
+  hits: ReadonlySet<string> | null;
+  /** With a filter: the containers on the way to a match, which show open. */
+  forced: ReadonlySet<string> | null;
   toggled: ReadonlySet<string>;
   toggle: (id: string) => void;
   editing: string | null;
@@ -44,6 +50,40 @@ const entriesOf = (value: Json[] | JsonObject): [string | number, Json][] =>
     ? value.map((item, index) => [index, item])
     : Object.entries(value);
 
+/** What `filter` matches in `value`: a path, or a value that is not a container. */
+const filterTree = (
+  value: JsonObject,
+  filter: string,
+): { hits: Set<string>; forced: Set<string> } => {
+  const hits = new Set<string>();
+  const forced = new Set<string>();
+  const walk = (node: Json, path: JsonPath): boolean => {
+    const id = JSON.stringify(path);
+    if (
+      formatPath(path).toLowerCase().includes(filter) ||
+      (!isContainer(node) && String(node).toLowerCase().includes(filter))
+    ) {
+      hits.add(id);
+      return true;
+    }
+    if (!isContainer(node)) return false;
+    let found = false;
+    for (const [key, child] of entriesOf(node))
+      if (walk(child, [...path, key])) found = true;
+    if (found) forced.add(id);
+    return found;
+  };
+  for (const [key, child] of Object.entries(value)) walk(child, [key]);
+  return { hits, forced };
+};
+
+/** Whether the node at `path` shows: with no filter, or under a match, every node does. */
+const shows = (tree: TreeState, path: JsonPath, underHit: boolean): boolean => {
+  if (!tree.hits || underHit) return true;
+  const id = JSON.stringify(path);
+  return tree.hits.has(id) || (tree.forced?.has(id) ?? false);
+};
+
 /**
  * The state as an expandable tree. With `onSet`, clicking a value edits it in place
  * (booleans toggle), a container can be edited as JSON, and keys and items can be deleted.
@@ -55,15 +95,22 @@ export function JsonTree({
   keyStatus,
   warnings,
   expandDepth = 2,
+  filter = "",
 }: JsonTreeProps) {
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
+  const matched = useMemo(
+    () => (filter === "" ? null : filterTree(value, filter.toLowerCase())),
+    [value, filter],
+  );
 
   const tree: TreeState = {
     onSet,
     keyStatus,
     warnings,
     expandDepth,
+    hits: matched?.hits ?? null,
+    forced: matched?.forced ?? null,
     toggled,
     toggle: (id) =>
       setToggled((current) => {
@@ -75,12 +122,14 @@ export function JsonTree({
     setEditing,
   };
 
-  const entries = entriesOf(value);
+  const entries = entriesOf(value).filter(([key]) => shows(tree, [key], false));
 
   return (
     <ul aria-label={label} className="py-1 font-mono text-xs">
       {entries.length === 0 && (
-        <li className="px-3 py-1 text-muted-foreground">Empty object</li>
+        <li className="px-3 py-1 text-muted-foreground">
+          {matched ? "Nothing matches the filter" : "Empty object"}
+        </li>
       )}
       {entries.map(([key, child]) => (
         <TreeNode
@@ -89,6 +138,7 @@ export function JsonTree({
           value={child}
           path={[key]}
           depth={0}
+          underHit={false}
           tree={tree}
         />
       ))}
@@ -101,17 +151,24 @@ interface TreeNodeProps {
   value: Json;
   path: JsonPath;
   depth: number;
+  /** Whether a filter matched this node or one above it, so all of it shows. */
+  underHit: boolean;
   tree: TreeState;
 }
 
-function TreeNode({ name, value, path, depth, tree }: TreeNodeProps) {
+function TreeNode({ name, value, path, depth, underHit, tree }: TreeNodeProps) {
   const id = JSON.stringify(path);
   const jsonId = `${id}:json`;
   const container = isContainer(value);
   const editingJson = tree.editing === jsonId;
+  // On the way to a filter's match, but not a match: open, showing only what leads there.
+  const forced = !underHit && (tree.forced?.has(id) ?? false);
+  const childrenUnderHit = underHit || (tree.hits?.has(id) ?? false);
   const open =
     container &&
-    (editingJson || depth < tree.expandDepth !== tree.toggled.has(id));
+    (editingJson ||
+      forced ||
+      depth < tree.expandDepth !== tree.toggled.has(id));
   const status = depth === 0 ? tree.keyStatus?.[String(name)] : undefined;
   const nonJson = tree.warnings?.get(id);
   const where = formatPath(path);
@@ -159,7 +216,11 @@ function TreeNode({ name, value, path, depth, tree }: TreeNodeProps) {
     display = <JsonValue value={value} className="px-0.5" />;
   }
 
-  const children = container ? entriesOf(value) : [];
+  const children = container
+    ? entriesOf(value).filter(([key]) =>
+        shows(tree, [...path, key], childrenUnderHit),
+      )
+    : [];
   const showAll = tree.toggled.has(`${id}:all`);
   const shown = showAll ? children : children.slice(0, CHILD_LIMIT);
 
@@ -174,6 +235,8 @@ function TreeNode({ name, value, path, depth, tree }: TreeNodeProps) {
             type="button"
             aria-expanded={open}
             aria-label={`${open ? "Collapse" : "Expand"} ${where}`}
+            disabled={forced}
+            title={forced ? "Open while the filter matches inside" : undefined}
             onClick={() => tree.toggle(id)}
             className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
@@ -260,6 +323,7 @@ function TreeNode({ name, value, path, depth, tree }: TreeNodeProps) {
               value={child}
               path={[...path, key]}
               depth={depth + 1}
+              underHit={childrenUnderHit}
               tree={tree}
             />
           ))}

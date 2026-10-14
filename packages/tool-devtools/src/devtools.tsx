@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { cn } from "cn";
 import { Button } from "./components/ui/button";
 import {
@@ -7,9 +7,15 @@ import {
   type Inspector,
 } from "./inspector";
 import { usePersistedState } from "./lib/use-persisted-state";
-import type { ButtonPosition, HomeostateDevtoolsProps } from "./options";
+import type {
+  ButtonPosition,
+  DevtoolsTheme,
+  HomeostateDevtoolsProps,
+  PanelPosition,
+} from "./options";
 import { HomeostateMark } from "./panel/mark";
 import { DevtoolsPanel, type SourceInspector } from "./panel/panel";
+import { healthOf, issuesOf } from "./panel/sync-health";
 import { ShadowHost } from "./shadow-host";
 
 const buttonPositionClass: Record<ButtonPosition, string> = {
@@ -18,6 +24,22 @@ const buttonPositionClass: Record<ButtonPosition, string> = {
   "top-right": "top-4 right-4",
   "top-left": "top-4 left-4",
 };
+
+const BUTTON_POSITIONS: ButtonPosition[] = [
+  "bottom-right",
+  "bottom-left",
+  "top-right",
+  "top-left",
+];
+const PANEL_POSITIONS: PanelPosition[] = ["right", "left", "bottom", "top"];
+const THEMES: DevtoolsTheme[] = ["system", "light", "dark"];
+
+/** The choice stored when it is one of `options`, otherwise `fallback`. */
+const storedOr = <T extends string>(
+  stored: string,
+  options: T[],
+  fallback: T,
+): T => ((options as string[]).includes(stored) ? (stored as T) : fallback);
 
 /**
  * A floating button that opens a panel to inspect and edit the state homeostate keeps in
@@ -61,9 +83,23 @@ export function HomeostateDevtools({
     0,
     inspectors.findIndex(({ source }) => source.name === selectedName),
   );
+  // Picked in the panel's settings; until then the props apply.
+  const [storedPosition, setPosition] = usePersistedState<string>(
+    "panelPosition",
+    "",
+  );
+  const position = storedOr(storedPosition, PANEL_POSITIONS, panelPosition);
+  const [storedCorner, setCorner] = usePersistedState<string>(
+    "buttonPosition",
+    "",
+  );
+  const corner = storedOr(storedCorner, BUTTON_POSITIONS, buttonPosition);
+  const [storedTheme, setTheme] = usePersistedState<string>("theme", "");
+  const activeTheme = storedOr(storedTheme, THEMES, theme);
+  const issues = useIssues(inspectors);
 
   return (
-    <ShadowHost theme={theme}>
+    <ShadowHost theme={activeTheme}>
       <Button
         variant="outline"
         size="icon-lg"
@@ -71,24 +107,66 @@ export function HomeostateDevtools({
           open ? "Close Homeostate devtools" : "Open Homeostate devtools"
         }
         aria-expanded={open}
+        title={issues || undefined}
         onClick={() => setOpen(!open)}
         className={cn(
           "fixed z-40 size-11 rounded-full bg-background shadow-lg hover:scale-105 dark:bg-background",
-          buttonPositionClass[buttonPosition],
+          buttonPositionClass[corner],
         )}
       >
         <HomeostateMark className="size-6!" />
+        {issues && (
+          <span
+            aria-hidden
+            className="absolute top-0.5 right-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-background"
+          />
+        )}
       </Button>
       <DevtoolsPanel
         open={open}
         onOpenChange={setOpen}
-        position={panelPosition}
+        position={position}
+        onPositionChange={setPosition}
+        buttonPosition={corner}
+        onButtonPositionChange={setCorner}
+        theme={activeTheme}
+        onThemeChange={setTheme}
         sources={inspectors}
         selected={selected}
         onSelect={setSelectedName}
       />
     </ShadowHost>
   );
+}
+
+/**
+ * What needs a look across all sources, such as `Todos: disconnected, Offline`, for the
+ * floating button while the panel is closed; empty when all is well.
+ */
+function useIssues(sources: SourceInspector[]): string {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const stops = sources.flatMap(({ source, inspector }) => [
+        inspector.subscribe(onChange),
+        ...(source.network ? [source.network.subscribe(onChange)] : []),
+      ]);
+      return () => stops.forEach((stop) => stop());
+    },
+    [sources],
+  );
+  const read = (): string =>
+    sources
+      .map(({ source, inspector }) => {
+        const health = healthOf(
+          inspector.getSnapshot(),
+          source.network?.getSnapshot() ?? null,
+        );
+        const issues = issuesOf(health);
+        return issues.length > 0 ? `${source.name}: ${issues.join(", ")}` : "";
+      })
+      .filter(Boolean)
+      .join("; ");
+  return useSyncExternalStore(subscribe, read);
 }
 
 interface CachedInspector {

@@ -60,6 +60,9 @@ connection on the Network tab: see the documentation.
 | `theme`          | `"system"`       | `light`, `dark`, or `system` to follow `prefers-color-scheme`         |
 | `logLimit`       | `200`            | Log entries kept per source                                           |
 
+`buttonPosition`, `panelPosition` and `theme` are where the devtools start: a corner, side or
+theme picked in the panel's settings, behind the gear button, is remembered and applies instead.
+
 > **Warning:** edits go through the store like any local change, so every peer in the room
 > receives them. Restoring a log entry replaces the shared state for everyone.
 

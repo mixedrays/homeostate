@@ -50,8 +50,8 @@ export function App() {
 }
 ```
 
-Pass several sources to inspect several stores; the panel then shows a switcher. With the
-Zustand `homeostate` middleware, create an adapter for the devtools with
+Pass several sources to inspect several stores; the panel's status bar then shows a switcher.
+With the Zustand `homeostate` middleware, create an adapter for the devtools with
 `createZustandAdapter(store)` and pass `store.homeostate` as the engine.
 
 | Prop             | Default          | Description                                                           |
@@ -64,6 +64,9 @@ Zustand `homeostate` middleware, create an adapter for the devtools with
 | `onOpenChange`   |                  | Called with the new state when the panel is opened or closed          |
 | `theme`          | `"system"`       | `light`, `dark`, or `system` to follow `prefers-color-scheme`         |
 | `logLimit`       | `200`            | Log entries kept per source                                           |
+
+`buttonPosition`, `panelPosition` and `theme` are where the devtools start: a corner, side or
+theme picked in the panel's settings, behind the gear button, is remembered and applies instead.
 
 To open the panel from your own UI, such as an "Inspect state" button, control it with
 `open` and `onOpenChange`; the devtools then leave remembering it to you.
@@ -108,20 +111,29 @@ devtools.unmount();
 
 The panel is not modal: the page stays usable while it is open, so you can use the app and
 watch its state change. Drag its inner edge, or focus it and use the arrow keys, to resize
-it. Whether it is open, its size and its tab are remembered in `localStorage`.
+it. In a narrow panel the tabs show only their icons. The gear button next to the close button
+opens its settings: the side it docks to, the floating button's corner and the theme, light,
+dark or the system's. Whether it is open, its size, its tab, its filters and its settings are
+remembered in `localStorage`.
 
 - **State** shows the store as a tree or as JSON. Click a value to edit it, click a boolean to
-  toggle it, edit an object or array as JSON, or delete a key or item. The JSON view edits
-  the whole state. Each top-level key is marked with how it relates to the backend. Values in
-  synced keys that are not plain JSON, such as a `Date`, a `Map`, a class instance or `NaN`,
+  toggle it, edit an object or array as JSON, or delete a key or item. The JSON view, with
+  its syntax highlighted, edits the whole state. Each top-level key is marked with how it
+  relates to the backend. Values in synced keys that are not plain JSON, such as a `Date`, a
+  `Map`, a class instance or `NaN`,
   are listed in a warning and marked in the tree: the engine does not sync them as they are,
-  and the tree shows them as JSON would, a `Date` as a string and a `Map` as `{}`.
+  and the tree shows them as JSON would, a `Date` as a string and a `Map` as `{}`. Filter the
+  tree by a path, such as `todos[0]`, or by a value: it shows what matches, with everything
+  under it and the containers on the way to it open. **Expand all** and **Collapse all** open
+  or close every container.
 - **Sync** lists every key as `synced`, `diverged` (the backend holds another value, as it
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
-  filter) or `backend only`, and shows the backend document read-only.
+  filter) or `backend only`, and shows the backend document read-only. Under a diverged key,
+  each path that differs shows its value in the store and in the backend.
 - **Log** records each change to the store with its diff, marked `local`, `remote` (a peer's
   change applied through the backend) or `devtools`. Any entry can be restored. Recording
-  can be paused and the log cleared. **Export** saves the log as a JSON file and **Import**
+  can be paused and the log cleared. Filter it by a path that a change touches, and by
+  origin; the initial state always shows. **Export** saves the log as a JSON file and **Import**
   replaces the log with one, so a log recorded elsewhere, such as one attached to a bug
   report, can be stepped through and its states restored here.
 - **Storage** shows how many updates the stored document holds and their size, read again as
@@ -129,10 +141,14 @@ it. Whether it is open, its size and its tab are remembered in `localStorage`.
   updates do. **Clear** removes the stored document and stops storing it until the page
   reloads; the live document and its peers keep their state, and other tabs that store the
   same key may write it again.
-- **Network** sets the [network conditions](#network-conditions) of the source's link:
+- **Network** shows whether the engine is connected, with a switch to disconnect and
+  reconnect it, and sets the [network conditions](#network-conditions) of the source's link:
   offline, latency, jitter and a flaky connection.
-- The header shows whether the engine is connected, with a switch to disconnect and
-  reconnect it.
+- The status bar at the bottom shows the source, or a switcher between several sources, and
+  its sync at a glance: whether the engine is connected, the network link's state and how many
+  keys diverged. Click one to open the tab that explains it.
+- While the panel is closed, a dot on the floating button flags a disconnected engine, a link
+  that is down or has conditions on, or diverged keys, and its tooltip names them.
 
 ## Network conditions
 
@@ -165,14 +181,14 @@ Automerge through their `create*Persistable`. The panel sets four conditions:
 
 - **Offline** stops every update, both ways. Coming back online exchanges the whole
   documents, as a provider does on reconnecting, so both sides merge what the other missed.
-  Unlike the engine switch in the header, the store keeps syncing with this tab's document.
+  Unlike the engine switch above them, the store keeps syncing with this tab's document.
 - **Latency** delays every update, both ways.
 - **Jitter** adds up to that much more per update, at random. Updates still arrive in order,
   as over a WebSocket.
 - **Flaky** drops the link for 1 to 3 seconds every 3 to 10 seconds, at random.
 
-The tab also counts the updates on their way in each direction, and the panel says so while
-the link is down. Pass starting conditions as a third argument, such as `{ latency: 200 }`, or
+The tab also counts the updates on their way in each direction, and the tab and the status bar
+say so while the link is down. Pass starting conditions as a third argument, such as `{ latency: 200 }`, or
 change them from code with `network.setConditions`.
 
 Presence, such as cursors, goes through the provider directly and is not delayed. The second
