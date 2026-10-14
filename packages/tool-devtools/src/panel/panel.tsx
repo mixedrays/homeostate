@@ -153,12 +153,7 @@ export function DevtoolsPanel({
           </>
         )}
 
-        <StatusBar
-          sources={sources}
-          current={current}
-          onSelect={onSelect}
-          onOpenTab={setTab}
-        />
+        <StatusBar sources={sources} current={current} onSelect={onSelect} />
       </SheetContent>
     </Sheet>
   );

@@ -103,6 +103,15 @@ const buttonWithText = (text: string): HTMLButtonElement => {
   return button;
 };
 
+/** One of the status bar's toggles, by its text. */
+const statusToggle = (text: string): HTMLButtonElement => {
+  const toggle = [...shadow().querySelectorAll("footer button")].find(
+    (button) => button.textContent?.trim() === text,
+  );
+  if (!toggle) throw new Error(`no status toggle ${text}`);
+  return toggle as HTMLButtonElement;
+};
+
 const click = async (element: Element) => {
   await act(async () => {
     (element as HTMLElement).click();
@@ -662,9 +671,8 @@ describe("HomeostateDevtools", () => {
     expect(shadow().querySelector("footer")?.textContent).toContain("Todos");
   });
 
-  it("summarizes simultaneous sync issues and opens their details without changing state", async () => {
+  it("shows the link and the engine as two toggles in the status bar", async () => {
     engine.disconnect();
-    store.set({ ...store.get(), filter: "done" });
     const network = createNetworkLink(createTestDoc(), createTestDoc(), {
       offline: true,
     });
@@ -672,33 +680,29 @@ describe("HomeostateDevtools", () => {
       await renderSources([
         { name: "Todos", adapter: store.adapter, backend, engine, network },
       ]);
-      const summary = byLabel("Sync status");
-      expect(summary.textContent).toContain("3 issues");
-      expect(summary.getAttribute("aria-expanded")).toBe("false");
-      await click(summary);
-      expect(summary.getAttribute("aria-expanded")).toBe("true");
-      const details = byLabel("Sync status details");
-      expect(details.textContent).toContain("Todos");
-      expect(details.textContent).toContain("1 diverged");
-      expect(details.textContent).toContain("Offline");
-      expect(details.textContent).toContain("Disconnected");
-      expect(store.get().filter).toBe("done");
-      expect(engine.isConnected()).toBe(false);
-      expect(network.getSnapshot().conditions.offline).toBe(true);
+      const toggles = [...shadow().querySelectorAll("footer button")]
+        .map((button) => button.textContent?.trim())
+        .filter((text) => text === "Online" || text === "Connected");
+      expect(toggles).toEqual(["Online", "Connected"]);
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("false");
+      expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
+        "false",
+      );
 
-      await click(buttonWithText("1 diverged"));
-      expect(
-        byLabel("filter in the store and the backend").textContent,
-      ).toContain('"done"');
-      expect(
-        shadow().querySelector('[aria-label="Sync status details"]'),
-      ).toBeNull();
+      await click(statusToggle("Online"));
+      expect(network.getSnapshot().conditions.offline).toBe(false);
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("true");
+      await click(statusToggle("Connected"));
+      expect(engine.isConnected()).toBe(true);
+      expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
+        "true",
+      );
     } finally {
       await act(async () => network.destroy());
     }
   });
 
-  it("switches between long source names and closes the previous source's status details", async () => {
+  it("switches between long source names and shows each source's own toggles", async () => {
     const name = "A source with a long descriptive name ".repeat(5);
     const otherName = "Another source with a long descriptive name ".repeat(5);
     const other = createTestStore({ count: 3 });
@@ -707,7 +711,7 @@ describe("HomeostateDevtools", () => {
       { name: otherName, adapter: other.adapter },
     ]);
     expect(byLabel("Source").getAttribute("title")).toBe(name);
-    await click(byLabel("Sync status"));
+    expect(statusToggle("Connected")).toBeTruthy();
     await click(byLabel("Source"));
     const option = [...shadow().querySelectorAll('[role="option"]')].find(
       (candidate) => candidate.textContent?.trim() === otherName.trim(),
@@ -718,39 +722,29 @@ describe("HomeostateDevtools", () => {
     expect(byLabel("Source").getAttribute("title")).toBe(otherName);
     expect(byLabel("Store state").textContent).toContain("count");
     expect(byLabel("Store state").textContent).toContain("3");
-    expect(
-      shadow().querySelector('[aria-label="Sync status details"]'),
-    ).toBeNull();
-    expect(shadow().querySelector('[aria-label="Sync status"]')).toBeNull();
+    expect(shadow().querySelector("footer")?.textContent).not.toContain(
+      "Connected",
+    );
   });
 
-  it("updates open status details as network conditions change and links to Network", async () => {
+  it("follows the link's conditions on the Online toggle and takes it offline", async () => {
     const network = createNetworkLink(createTestDoc(), createTestDoc(), {
       offline: true,
     });
     try {
       await renderSources([{ name: "Todos", adapter: store.adapter, network }]);
-      await click(byLabel("Sync status"));
-      expect(byLabel("Sync status details").textContent).toContain("Offline");
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("false");
       await act(async () =>
         network.setConditions({ offline: false, latency: 500 }),
       );
-      expect(byLabel("Sync status details").textContent).toContain(
-        "Conditions on",
-      );
-      expect(byLabel("Sync status").textContent).toContain("1 issue");
-      await act(async () => network.setConditions({ latency: 0 }));
-      expect(byLabel("Sync status details").textContent).toContain("Online");
-      expect(byLabel("Sync status").textContent).toContain("Online");
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("true");
 
-      const online = [
-        ...byLabel("Sync status details").querySelectorAll("button"),
-      ].find((button) => button.textContent?.trim() === "Online");
-      await click(online!);
-      expect(byLabel("Offline")).toBeTruthy();
-      expect(
-        shadow().querySelector('[aria-label="Sync status details"]'),
-      ).toBeNull();
+      await click(statusToggle("Online"));
+      expect(network.getSnapshot().conditions).toMatchObject({
+        offline: true,
+        latency: 500,
+      });
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("false");
     } finally {
       await act(async () => network.destroy());
     }
@@ -766,15 +760,14 @@ describe("HomeostateDevtools", () => {
     await click(buttonWithText("Network"));
     await click(byLabel("Sync engine connected"));
     await click(buttonWithText("State"));
-    expect(status()).toContain("1 issue");
-    expect(byLabel("Sync status").getAttribute("title")).toContain(
-      "Disconnected",
+    expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
+      "false",
     );
     expect(button().getAttribute("title")).toBe("Todos: disconnected");
 
-    await click(byLabel("Sync status"));
-    await click(buttonWithText("Disconnected"));
-    expect(byLabel("Sync engine connected")).toBeTruthy();
+    await click(statusToggle("Connected"));
+    expect(engine.isConnected()).toBe(true);
+    expect(button().getAttribute("title")).toBeNull();
   });
 
   it("compares a diverged key in the store and the backend", async () => {
@@ -786,8 +779,7 @@ describe("HomeostateDevtools", () => {
     });
     await act(tick);
 
-    await click(byLabel("Sync status"));
-    await click(buttonWithText("1 diverged"));
+    await click(buttonWithText("Sync"));
     const values = byLabel("filter in the store and the backend").textContent;
     expect(values).toContain('"done"');
     expect(values).toContain('"all"');
@@ -995,8 +987,7 @@ describe("HomeostateDevtools", () => {
     expect(
       byLabel("Close Homeostate devtools").getAttribute("title"),
     ).toContain("backend read failed");
-    await click(byLabel("Sync status"));
-    await click(buttonWithText("Backend error"));
+    await click(buttonWithText("Sync"));
     expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
       "backend unavailable",
     );
