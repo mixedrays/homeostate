@@ -61,3 +61,23 @@ When a peer removes a synced key, the adapter deletes it from an `observable({..
 A class field made observable by `makeObservable` or `makeAutoObservable` cannot be deleted,
 so it is set to `undefined` instead; type such fields as optional. A synced key holding
 `undefined` counts as absent, as in JSON, so assigning the field again syncs it again.
+
+## Errors
+
+The engine writes a local change from inside the adapter's MobX `reaction`. MobX catches what a
+reaction throws, so without the engine's `onError` option a backend `write` that fails never
+reaches the code that changed the store: the action returns normally, MobX logs the error with
+`console.error`, and the backend keeps its old value until the next successful write. Pass
+`onError` to handle it yourself; MobX then logs nothing:
+
+```ts
+const engine = createSyncEngine(
+  createYjsBackend(new Y.Doc(), "shared"),
+  createMobxAdapter(store, ["todos", "filter"]),
+  { onError: (error, source) => reportSyncError(error, source) },
+);
+```
+
+A remote change is applied outside any reaction, so without `onError` an error from it
+propagates to the provider as with any other store. See
+[Reporting errors](../../core/docs/sync-engine.md#reporting-errors).

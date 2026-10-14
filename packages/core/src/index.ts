@@ -1,4 +1,4 @@
-export { createSyncEngine } from "./sync-engine.js";
+export { createSyncEngine, WriteLoopError } from "./sync-engine.js";
 export { createPersistence } from "./persistence.js";
 export { getChanges } from "./diff.js";
 export { toJsonValue } from "./json.js";
@@ -20,5 +20,6 @@ export type {
   StoreAdapter,
   SyncEngine,
   SyncEngineConfig,
+  SyncErrorSource,
   Unsubscribe,
 } from "./types.js";
