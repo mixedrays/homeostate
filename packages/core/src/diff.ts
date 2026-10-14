@@ -37,7 +37,7 @@ const isArray = (value: unknown): value is Array<unknown> =>
 
 const isString = (value: unknown): value is string => typeof value === "string";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 /**

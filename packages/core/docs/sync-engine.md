@@ -28,10 +28,11 @@ watching both sides. Creation alone does not read, write or subscribe to either 
 | `adapter` | Yes      | The application store, exposed through `StoreAdapter<S>`. |
 | `config`  | No       | Sync options. Defaults to `{}`.                           |
 
-Returns a `SyncEngine`. The engine is synchronous: adapter, backend and filter errors
-propagate to the caller of the operation that triggered them, which is whoever calls `flush`
-for an apply deferred by `schedule`. There is no engine-level `onError` option or retry
-mechanism.
+Returns a `SyncEngine`. The engine is synchronous and does not retry. `connect()` throws what
+it runs into. Once connected, adapter and backend errors go to `onError` when it is given;
+otherwise they, like filter errors, propagate to the caller of the operation that triggered them,
+which is whoever calls `flush` for an apply deferred by `schedule`. See
+[Reporting errors](#reporting-errors).
 
 ### Example
 
@@ -71,9 +72,11 @@ interface SyncEngineConfig {
   filter?: (key: string, value: unknown) => boolean;
   seed?: SeedStrategy;
   schedule?: (flush: () => void) => void;
+  onError?: (error: unknown, source: SyncErrorSource) => void;
 }
 
 type SeedStrategy = "if-empty" | "never";
+type SyncErrorSource = "store" | "backend";
 ```
 
 | Option     | Default             | Behavior                                                                                                             |
@@ -81,6 +84,7 @@ type SeedStrategy = "if-empty" | "never";
 | `filter`   | `defaultSyncFilter` | Selects top-level keys independently in the store and backend, in both directions. Excluded keys stay local.         |
 | `seed`     | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
 | `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.    |
+| `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.     |
 
 A custom filter replaces the default. Call `defaultSyncFilter` within it if you also want
 to exclude functions. Filtering is top-level; it does not remove nested functions or turn
@@ -113,6 +117,39 @@ and only its changes to keys the filter excludes stay. With `queueMicrotask` tha
 code that changes the store in the same task as a remote update; a longer delay, such as
 `requestAnimationFrame`, lets user input fall in the window too. `disconnect()` also runs a
 pending apply, and a flush called after it does nothing.
+
+### Reporting errors
+
+Once the engine is connected, it calls the adapter and the backend from their notifications,
+from the `flush` and from `disconnect()`. Without `onError`, what they throw propagates there:
+a store validation error in `setState` reaches the provider's message handler, and a failed
+`write` reaches the code that changed the store. The engine stays connected either way, and the
+store and backend differ until the next change succeeds.
+
+With `onError`, the engine catches those errors and reports them with their source, so neither
+side's notifier sees them:
+
+```ts
+createSyncEngine(backend, adapter, {
+  onError: (error, source) => {
+    // source: "store" for getState and setState, "backend" for read and write
+    report(error);
+  },
+});
+```
+
+The next change is synced as usual. `connect()` still throws, since a failed connect leaves the
+engine disconnected, and errors from `filter`, `schedule` and `onError` itself propagate.
+
+A `read()` or `getState()` that returns something other than an object breaks its contract. The
+engine throws a `TypeError` naming the method and what it returned, such as
+`CrdtBackend.read() must return a plain object, got string`: from `connect()`, before seeding,
+or through `onError` once connected.
+
+`onError` also receives a `WriteLoopError`, with the source `"store"`, when the engine stops
+writing back keys the store keeps changing while remote changes are applied; see
+[Store adapters](/docs/concepts#store-adapters). Its `keys` names them, and each set of keys is
+reported once, in every build. Without `onError`, the engine warns once in development instead.
 
 ## SyncEngine
 
@@ -163,7 +200,7 @@ interface StoreAdapter<S extends object> {
 
 | Member                | Contract                                                                                                               |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `getState()`          | Returns the current store state.                                                                                       |
+| `getState()`          | Returns the current store state, as an object.                                                                         |
 | `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection. |
 | `subscribe(callback)` | Calls the callback when the store changes; returns a function that removes that subscription.                          |
 
@@ -203,7 +240,7 @@ for the seed write during `connect()` and after a write that threw, and a backen
 backend must read its document while a change may still be unreported: the Yjs backend does
 inside another transaction, and the Loro backend while other code has uncommitted edits.
 
-The engine treats a `null` or non-object `read()` result as an empty state. Objects in the
+`read()` must return an object; the engine throws a `TypeError` for anything else. Objects in the
 snapshot must inherit from `Object.prototype`: a library that builds them by assignment turns
 a peer's `__proto__` entry into the prototype, which the Yjs and Loro backends undo before
 returning. Keep document replication in your CRDT provider. To write small edits instead of

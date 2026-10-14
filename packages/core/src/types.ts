@@ -18,9 +18,10 @@ export type Unsubscribe = () => void;
  */
 export interface StoreAdapter<S extends object> {
   /**
-   * Get the current state from the store. Its synced part must change immutably, with a new
-   * object for every container that changes: the engine diffs each write against the state it
-   * last wrote, so a container changed in place looks unchanged and is not written.
+   * Get the current state from the store, as an object; the engine throws a `TypeError` for
+   * anything else. Its synced part must change immutably, with a new object for every container
+   * that changes: the engine diffs each write against the state it last wrote, so a container
+   * changed in place looks unchanged and is not written.
    */
   getState: () => S;
 
@@ -38,8 +39,8 @@ export interface StoreAdapter<S extends object> {
    * stamps the time on every call, or two peers that enforce contradicting rules, would make
    * the peers re-write each other's changes forever. Instead, when another peer changes the keys
    * the engine's last write back changed and the store changes them again, the engine stops
-   * writing them back, warns once in development naming them, and the store keeps values for
-   * them that differ from the backend's.
+   * writing them back and the store keeps values for them that differ from the backend's. It
+   * reports them once as a `WriteLoopError` to `onError`, or without it warns once in development.
    */
   setState: (state: S) => void;
 
@@ -55,7 +56,10 @@ export interface StoreAdapter<S extends object> {
  * The engine only ever exchanges plain JSON with it.
  */
 export interface CrdtBackend {
-  /** Plain JSON snapshot of the synced subtree. Must not alias backend internals. */
+  /**
+   * Plain JSON snapshot of the synced subtree, as an object; the engine throws a `TypeError` for
+   * anything else. Must not alias backend internals.
+   */
   read: () => unknown;
 
   /**
@@ -110,7 +114,22 @@ export interface SyncEngineConfig {
    * only what it did to keys the engine does not sync. `disconnect()` runs a pending apply too.
    */
   schedule?: (flush: () => void) => void;
+  /**
+   * Called with what the store adapter or the backend threw once the engine is connected, while
+   * it applies a remote change or writes a local one, instead of letting the error reach the
+   * other side's notifier. Without it, the error propagates to whoever triggered the work.
+   * `connect()` always throws. See `SyncErrorSource`.
+   */
+  onError?: (error: unknown, source: SyncErrorSource) => void;
 }
+
+/**
+ * The side of the sync engine that an error reported to `onError` came from:
+ * - `'store'`: the store adapter's `getState` or `setState`, or a store that keeps changing
+ *   what it is given (see `WriteLoopError`)
+ * - `'backend'`: the backend's `read` or `write`
+ */
+export type SyncErrorSource = "store" | "backend";
 
 /**
  * The sync engine interface - manages bidirectional sync between a store and a backend

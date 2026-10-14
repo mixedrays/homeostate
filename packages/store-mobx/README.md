@@ -51,6 +51,9 @@ identity and `observer` components that read them do not re-render.
 When a peer removes a synced key, a class field cannot be deleted, so it is set to
 `undefined`; type such fields as optional.
 
+MobX catches errors thrown inside reactions, where the engine writes local changes, so a failed
+backend write is only logged by MobX unless you pass the engine's `onError` option.
+
 ## License
 
 MIT — see [LICENSE](https://github.com/mixedrays/homeostate/blob/main/LICENSE).
