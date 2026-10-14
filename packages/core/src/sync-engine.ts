@@ -8,8 +8,34 @@ import type {
 import { defaultSyncFilter } from "./types.js";
 import { patchState } from "./patching.js";
 import { hasOwn, jsonEqual, PROTO_KEY } from "./diff.js";
+import { isAbsent } from "./json.js";
 
 type Plain = Record<string, unknown>;
+
+/** The value of `key` in `state` as JSON would store it; `undefined` when it would be left out. */
+const jsonEntry = (state: Plain, key: string): unknown =>
+  hasOwn(state, key) && !isAbsent(state[key]) ? state[key] : undefined;
+
+/** The top-level keys whose values differ between `a` and `b`, as JSON would store them. */
+const changedKeys = (a: Plain, b: Plain): string[] => {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].filter(
+    (key) => !jsonEqual(jsonEntry(a, key), jsonEntry(b, key)),
+  );
+};
+
+// Declared here so that core needs no Node types; bundlers replace `process.env.NODE_ENV`.
+declare const process: { env: { NODE_ENV?: string } };
+
+/** Whether the app runs a production build, where development warnings stay silent. */
+const isProduction = (): boolean => {
+  try {
+    return process.env.NODE_ENV === "production";
+  } catch {
+    // No bundler replaced it, and `process` does not exist outside Node.
+    return false;
+  }
+};
 
 /**
  * Creates a sync engine that keeps a store (via its adapter) and a CRDT backend
@@ -24,7 +50,9 @@ type Plain = Record<string, unknown>;
  * backend owns the synced document: every write replaces it with the store's filtered
  * state, and a key removed from the backend is removed from the store. The store's own changes
  * while a remote change is applied, such as a key a reducer normalises or a subscriber derives,
- * are written once the apply ends.
+ * are written once the apply ends. Once another peer changes the keys that write changed and the
+ * store changes them again, they are no longer written, so the peers do not re-write each other's
+ * changes forever; see `StoreAdapter.setState`.
  *
  * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
  * A local change made before the flush applies them first, and they replace the store's synced
@@ -60,6 +88,13 @@ export function createSyncEngine<S extends object>(
   let applyPending = false;
   /** The flush handed to `schedule` and not run yet; a flush that is no longer it does nothing. */
   let scheduledFlush: (() => void) | null = null;
+  /**
+   * The engine's last write back, unless a local change was written since: the synced state it
+   * wrote and the keys in which that differs from the remote state the store was given.
+   */
+  let lastWriteBack: { written: Plain; keys: string[] } | null = null;
+  /** The key lists of the loops already reported, so each is reported once. */
+  const reportedLoops = new Set<string>();
 
   const filterState = (state: object): Plain => {
     const filtered: Plain = {};
@@ -127,7 +162,48 @@ export function createSyncEngine<S extends object>(
     // The store's notifications were ignored meanwhile, so a key it normalised or derived from
     // `merged` reaches the backend only here. An echo of `merged` alone equals `target`.
     const applied = filterState(after);
-    if (!jsonEqual(applied, target)) writeSynced(applied);
+    const keys = changedKeys(target, applied);
+    if (keys.length === 0) return;
+    if (rewritesLastWriteBack(target, keys)) {
+      // Writing would only make the peer change these keys again, and so on forever. The store
+      // keeps its values for them, which differ from the backend's.
+      reportLoop(keys);
+      return;
+    }
+    writeSynced(applied);
+    lastWriteBack = { written: applied, keys };
+  };
+
+  /**
+   * Whether every key the store changed in `remote` is one the last write back changed, and
+   * `remote` holds another value for it than the one written: another peer changed what this
+   * store changed, and this store changed it again. Peers in that state only re-write each
+   * other's changes to those keys; a key the store changes anew, such as one it derives from
+   * an edit, is written back.
+   */
+  const rewritesLastWriteBack = (remote: Plain, keys: string[]): boolean => {
+    if (lastWriteBack === null) return false;
+    const { written, keys: wroteBack } = lastWriteBack;
+    return keys.every(
+      (key) =>
+        wroteBack.includes(key) &&
+        !jsonEqual(jsonEntry(written, key), jsonEntry(remote, key)),
+    );
+  };
+
+  const reportLoop = (keys: string[]): void => {
+    const id = JSON.stringify([...keys].sort());
+    if (reportedLoops.has(id) || isProduction()) return;
+    reportedLoops.add(id);
+    const names = keys.map((key) => JSON.stringify(key)).join(", ");
+    console.warn(
+      `[homeostate] stopped writing back ${names}: another peer changed what this store ` +
+        "changed while a remote change was applied, and this store changed it again, so the " +
+        "peers would keep re-writing each other's changes. The store keeps its values for " +
+        "these keys, which differ from the backend's. What a store changes while a remote " +
+        "change is applied must not change again when the same state is applied twice, and " +
+        "every peer must agree on it.",
+    );
   };
 
   const syncToStore = (): void => {
@@ -177,6 +253,7 @@ export function createSyncEngine<S extends object>(
     // what the store then holds, so there is nothing left to write. A store that ignored the
     // apply keeps its stale state out of the backend this way too.
     if (runPendingApply()) return;
+    lastWriteBack = null;
     writeSynced(filterState(adapter.getState()));
   };
 
@@ -229,6 +306,7 @@ export function createSyncEngine<S extends object>(
         unsubscribeAll();
         // A disconnected engine hears no remote change, so it reads the backend again on connect.
         lastSynced = undefined;
+        lastWriteBack = null;
         connected = false;
       }
     },
