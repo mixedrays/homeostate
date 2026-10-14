@@ -6,10 +6,12 @@ export function CopyButton({
   text,
   label = "Copy",
   className,
+  iconOnly = false,
 }: {
   text: string;
   label?: string;
   className?: string;
+  iconOnly?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -29,9 +31,24 @@ export function CopyButton({
   const Icon = copied ? Check : Copy;
 
   return (
-    <Button size="xs" variant="ghost" onClick={copy} className={className}>
+    <Button
+      size={iconOnly ? "icon-xs" : "xs"}
+      variant="ghost"
+      onClick={copy}
+      className={className}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? (copied ? "Copied" : label) : undefined}
+    >
       <Icon />
-      {copied ? "Copied" : label}
+      {iconOnly ? (
+        <span role="status" className="sr-only">
+          {copied ? "Copied" : ""}
+        </span>
+      ) : copied ? (
+        "Copied"
+      ) : (
+        label
+      )}
     </Button>
   );
 }

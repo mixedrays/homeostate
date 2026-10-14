@@ -88,8 +88,8 @@ const shadow = (): ShadowRoot => {
 };
 
 const byLabel = <T extends Element = HTMLElement>(label: string): T => {
-  const element = shadow().querySelector<T & Element>(
-    `[aria-label="${label}"]`,
+  const element = [...shadow().querySelectorAll<T>("[aria-label]")].find(
+    (candidate) => candidate.getAttribute("aria-label") === label,
   );
   if (!element) throw new Error(`no element labelled ${label}`);
   return element;
@@ -447,6 +447,183 @@ describe("HomeostateDevtools", () => {
     const values = byLabel("filter in the store and the backend").textContent;
     expect(values).toContain('"done"');
     expect(values).toContain('"all"');
+  });
+
+  it("expands and collapses differences beyond the first ten", async () => {
+    const values = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => [`key${index}`, index]),
+    );
+    const compared = createTestStore({ values });
+    const document = createMemoryBackend({
+      values: Object.fromEntries(Object.keys(values).map((key) => [key, -1])),
+    });
+    await renderSources([
+      { name: "Values", adapter: compared.adapter, backend: document },
+    ]);
+    await click(buttonWithText("Sync"));
+    const table = byLabel("values in the store and the backend");
+    const paths = () =>
+      [...table.querySelectorAll('tbody th[scope="row"]')].map(
+        (cell) => cell.textContent,
+      );
+    expect(paths()).toHaveLength(10);
+    expect(paths()).not.toContain("values.key11");
+
+    const expand = buttonWithText("Show all 12 differences");
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    await click(expand);
+    expect(paths()).toHaveLength(12);
+    expect(paths()).toContain("values.key11");
+    expect(
+      buttonWithText("Show first 10 differences").getAttribute("aria-expanded"),
+    ).toBe("true");
+
+    await click(buttonWithText("Show first 10 differences"));
+    expect(paths()).toHaveLength(10);
+  });
+
+  it("inspects and copies full values and paths from both sides of a difference", async () => {
+    const prefix = "A long shared prefix ".repeat(8);
+    const current = `${prefix}\nstore ending`;
+    const previous = `${prefix}\nbackend ending`;
+    const compared = createTestStore({ payload: { message: current } });
+    const document = createMemoryBackend({ payload: { message: previous } });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      await renderSources([
+        { name: "Values", adapter: compared.adapter, backend: document },
+      ]);
+      await click(buttonWithText("Sync"));
+      const table = byLabel("payload in the store and the backend");
+      expect(table.textContent).not.toContain("store ending");
+      expect(table.textContent).not.toContain("backend ending");
+
+      const inspect = byLabel("Inspect store value at payload.message");
+      expect(inspect.getAttribute("aria-expanded")).toBe("false");
+      await click(inspect);
+      expect(inspect.getAttribute("aria-expanded")).toBe("true");
+      expect(byLabel("Full store value at payload.message").textContent).toBe(
+        JSON.stringify(current, null, 2),
+      );
+      await click(byLabel("Inspect backend value at payload.message"));
+      expect(byLabel("Full backend value at payload.message").textContent).toBe(
+        JSON.stringify(previous, null, 2),
+      );
+
+      await click(byLabel("Copy path payload.message"));
+      expect(writeText).toHaveBeenLastCalledWith("payload.message");
+      await click(byLabel("Copy store value at payload.message"));
+      expect(writeText).toHaveBeenLastCalledWith(
+        JSON.stringify(current, null, 2),
+      );
+      await click(byLabel("Copy backend value at payload.message"));
+      expect(writeText).toHaveBeenLastCalledWith(
+        JSON.stringify(previous, null, 2),
+      );
+
+      await click(inspect);
+      expect(
+        shadow().querySelector(
+          '[aria-label="Full store value at payload.message"]',
+        ),
+      ).toBeNull();
+      expect(compared.get().payload.message).toBe(current);
+      expect(document.read()).toEqual({ payload: { message: previous } });
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it.each([
+    { value: { nested: { title: "Full nested value" }, empty: [] } },
+    { value: [null, false, 3, { title: "Full array item" }] },
+  ])("inspects a full container value: $value", async ({ value }) => {
+    const compared = createTestStore({ payload: { value } });
+    const document = createMemoryBackend({ payload: { value: null } });
+    await renderSources([
+      { name: "Values", adapter: compared.adapter, backend: document },
+    ]);
+    await click(buttonWithText("Sync"));
+    const inspect = byLabel("Inspect store value at payload.value");
+    await click(inspect);
+    const full = byLabel("Full store value at payload.value");
+    expect(inspect.getAttribute("aria-controls")).toBe(full.id);
+    expect(JSON.parse(full.textContent ?? "")).toEqual(value);
+  });
+
+  it("copies null and unusual paths while leaving missing values without a copy action", async () => {
+    const compared = createTestStore({
+      payload: { added: null, "odd.key": false },
+    });
+    const document = createMemoryBackend({
+      payload: { removed: null, "odd.key": true },
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      await renderSources([
+        { name: "Values", adapter: compared.adapter, backend: document },
+      ]);
+      await click(buttonWithText("Sync"));
+      expect(
+        byLabel("payload in the store and the backend").textContent,
+      ).toContain("not set");
+      expect(
+        shadow().querySelector(
+          '[aria-label="Copy backend value at payload.added"]',
+        ),
+      ).toBeNull();
+      expect(
+        shadow().querySelector(
+          '[aria-label="Copy store value at payload.removed"]',
+        ),
+      ).toBeNull();
+      await click(byLabel("Copy store value at payload.added"));
+      expect(writeText).toHaveBeenLastCalledWith("null");
+      await click(byLabel("Copy backend value at payload.removed"));
+      expect(writeText).toHaveBeenLastCalledWith("null");
+      await click(byLabel('Copy path payload["odd.key"]'));
+      expect(writeText).toHaveBeenLastCalledWith('payload["odd.key"]');
+      await click(byLabel('Copy store value at payload["odd.key"]'));
+      expect(writeText).toHaveBeenLastCalledWith("false");
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("keeps an inspected path open when another difference appears before it", async () => {
+    const message = "Full store message ".repeat(8);
+    const compared = createTestStore({ payload: { earlier: 0, message } });
+    const document = createMemoryBackend({
+      payload: { earlier: 0, message: "old" },
+    });
+    await renderSources([
+      { name: "Values", adapter: compared.adapter, backend: document },
+    ]);
+    await click(buttonWithText("Sync"));
+    await click(byLabel("Inspect store value at payload.message"));
+
+    await act(async () => compared.set({ payload: { earlier: 1, message } }));
+    await act(tick);
+    expect(byLabel("Full store value at payload.message").textContent).toBe(
+      JSON.stringify(message, null, 2),
+    );
+    expect(
+      byLabel("Inspect store value at payload.message").getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe("true");
   });
 
   it("shows the key status against the backend", async () => {

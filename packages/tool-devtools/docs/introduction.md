@@ -132,7 +132,11 @@ remembered in `localStorage`.
 - **Sync** lists every key as `synced`, `diverged` (the backend holds another value, as it
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
   filter) or `backend only`, and shows the backend document read-only. Under a diverged key,
-  each path that differs shows its value in the store and in the backend.
+  each path that differs shows its value in the store and in the backend. The first ten
+  differences show initially; **Show all** reveals the rest, and **Show first 10** collapses
+  them again. Click a long string, object or array to inspect its full JSON value. Each
+  path and each present value has a copy button; values are copied as JSON, including
+  quotes around strings. Missing values are shown as `not set` and cannot be copied.
   If reading the backend fails, the panel reports the error and suspends key comparisons;
   the last successfully read document remains available, marked as such.
 - **Log** records each change to the store with its diff, marked `local`, `remote` (a peer's
