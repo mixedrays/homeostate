@@ -76,7 +76,15 @@ export function SettingsMenu({
   return (
     <Popover>
       <PopoverTrigger
-        render={<Button variant="ghost" size="icon-xs" aria-label="Settings" />}
+        render={
+          // The tabs bar is muted already, so hover and open need a deeper tint.
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Settings"
+            className="hover:bg-foreground/10 aria-expanded:bg-foreground/10"
+          />
+        }
       >
         <Settings />
       </PopoverTrigger>

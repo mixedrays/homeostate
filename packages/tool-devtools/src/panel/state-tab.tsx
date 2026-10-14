@@ -40,10 +40,14 @@ export function StateTab({
   const view = stored === "json" ? "json" : "tree";
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = usePersistedState<string>("stateFilter", "");
-  // A new `version` remounts the tree, so Expand all and Collapse all reset what was toggled.
+  // A new `version` remounts the tree, so expanding or collapsing all resets what was toggled.
   const [expansion, setExpansion] = useState({ depth: 2, version: 0 });
-  const expandTo = (depth: number): void =>
-    setExpansion(({ version }) => ({ depth, version: version + 1 }));
+  const expandedAll = expansion.depth === Infinity;
+  const toggleAll = (): void =>
+    setExpansion(({ version }) => ({
+      depth: expandedAll ? 0 : Infinity,
+      version: version + 1,
+    }));
   const warningKinds = useMemo(
     () =>
       new Map(
@@ -93,31 +97,23 @@ export function StateTab({
         <CopyButton text={JSON.stringify(snapshot.store, null, 2)} />
       </div>
       {view === "tree" && (
-        <div className="flex items-center gap-1 border-b p-1.5">
+        <div className="flex items-center gap-1 border-b py-1.5 pr-1.5 pl-1">
+          {/* On the left, in line with the tree's own chevrons. Its label names the next action. */}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={expandedAll ? "Collapse all" : "Expand all"}
+            title={expandedAll ? "Collapse all" : "Expand all"}
+            onClick={toggleAll}
+          >
+            {expandedAll ? <ChevronsDownUp /> : <ChevronsUpDown />}
+          </Button>
           <FilterInput
             value={query}
             onChange={setQuery}
             label="Filter the state"
             placeholder="Filter keys and values"
           />
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Expand all"
-            title="Expand all"
-            onClick={() => expandTo(Infinity)}
-          >
-            <ChevronsUpDown />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Collapse all"
-            title="Collapse all"
-            onClick={() => expandTo(0)}
-          >
-            <ChevronsDownUp />
-          </Button>
         </div>
       )}
 

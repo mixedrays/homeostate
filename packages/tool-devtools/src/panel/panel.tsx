@@ -136,7 +136,9 @@ export function DevtoolsPanel({
           />
         ) : (
           <>
-            <div className="flex justify-end border-b py-0.5">{actions}</div>
+            <div className="flex justify-end border-b bg-muted py-0.5 dark:bg-background">
+              {actions}
+            </div>
             <Empty className="flex-1">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -186,7 +188,8 @@ function SourceView({
       onValueChange={(value: string) => onTabChange(value)}
       className="min-h-0 flex-1 gap-0"
     >
-      <div className="@container/tabs flex items-center border-b">
+      {/* A shade darker than the panel, so the tabs read as their own bar. */}
+      <div className="@container/tabs flex items-center border-b bg-muted dark:bg-background">
         <div className="min-w-0 flex-1 overflow-x-auto">
           <TabsList variant="line" className="h-7">
             <Tab value="state" icon={ListTree} label="State">
@@ -266,7 +269,12 @@ function CloseButton() {
   return (
     <SheetClose
       render={
-        <Button variant="ghost" size="icon-xs" aria-label="Close devtools" />
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Close devtools"
+          className="hover:bg-foreground/10"
+        />
       }
     >
       <X />

@@ -127,8 +127,8 @@ remembered in `localStorage`.
   are listed in a warning and marked in the tree: the engine does not sync them as they are,
   and the tree shows them as JSON would, a `Date` as a string and a `Map` as `{}`. Filter the
   tree by a path, such as `todos[0]`, or by a value: it shows what matches, with everything
-  under it and the containers on the way to it open. **Expand all** and **Collapse all** open
-  or close every container.
+  under it and the containers on the way to it open. The button beside the filter expands every
+  container, then collapses them all.
 - **Sync** lists every key as `synced`, `diverged` (the backend holds another value, as it
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
   filter) or `backend only`, and shows the backend document read-only. Under a diverged key,

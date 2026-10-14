@@ -230,8 +230,10 @@ describe("HomeostateDevtools", () => {
     expect(tree()).not.toContain("filter");
 
     await click(byLabel("Clear the filter"));
+    await click(byLabel("Expand all"));
     await click(byLabel("Collapse all"));
     expect(tree()).not.toContain("milk");
+    expect(byLabel("Expand all")).toBeTruthy();
     await click(byLabel("Expand all"));
     expect(tree()).toContain("milk");
   });
