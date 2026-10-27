@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import { describePersistableDoc } from "@homeostate/core/conformance";
 import { createLoroBackend, createLoroPersistable } from "../index.js";
 
+/** A Yjs update setting `shared.title`, as a Yjs app would have stored it. */
+const yjsUpdate = new Uint8Array([
+  1, 1, 158, 203, 200, 236, 15, 0, 40, 1, 6, 115, 104, 97, 114, 101, 100, 5,
+  116, 105, 116, 108, 101, 1, 119, 3, 121, 106, 115, 0,
+]);
+
 describePersistableDoc("createLoroPersistable", {
   createDoc: () => new LoroDoc(),
   persistable: createLoroPersistable,
@@ -11,6 +17,7 @@ describePersistableDoc("createLoroPersistable", {
     b.import(a.export({ mode: "update", from: b.version() }));
     a.import(b.export({ mode: "update", from: a.version() }));
   },
+  foreignUpdate: yjsUpdate,
 });
 
 describe("createLoroPersistable with a commit made during apply", () => {

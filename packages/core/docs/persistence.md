@@ -30,7 +30,9 @@ before connecting a sync engine that could seed initial state.
 
 The initial load merges stored updates into the document and compacts them into one
 snapshot, which also stores whatever the document already held. Later updates, local and from
-peers, are appended one at a time, including those made during the load.
+peers, are appended one at a time, including those made during the load. If a stored update
+cannot be applied, the log is kept instead; see
+[Stored updates that cannot be applied](#stored-updates-that-cannot-be-applied).
 
 ### Example
 
@@ -79,7 +81,8 @@ interface PersistenceConfig {
 | `onError`      | Logs through `console.error` | Receives storage failures and errors applying stored updates. Supply a handler that reports the error without throwing.          |
 
 Compaction loads the current log, merges it into the document, and replaces the loaded
-portion with one snapshot; updates another writer appended after that load remain.
+portion with one snapshot; updates another writer appended after that load remain. When an
+update in the loaded log cannot be applied, compaction leaves the log as it is.
 
 ## Persistence
 
@@ -102,7 +105,8 @@ interface PersistenceStats {
 ### whenLoaded
 
 Resolves once the stored updates have been applied. If loading fails, it resolves after
-`onError`, so the app starts without its saved state; it never rejects. It may resolve before
+`onError`, so the app starts without its saved state; it never rejects. If some stored updates
+cannot be applied, it resolves after `onError` with the others applied. It may resolve before
 the initial snapshot is written, and it does not wait for network peers. Await `flush()` to
 wait for storage work too.
 
@@ -114,7 +118,9 @@ triggers. Updates arriving later need another call.
 ### compact
 
 Queues a compaction now, as every `compactAfter` appends do, and resolves once it is written.
-Failures go to `onError`. After `destroy()` or `clear()` it does nothing.
+Failures go to `onError`. When a stored update cannot be applied, its error goes to `onError`
+and the log is not compacted, though the promise still resolves. After `destroy()` or
+`clear()` it does nothing.
 
 ### stats
 
@@ -133,9 +139,10 @@ destroy the document, disconnect its provider or sync engine, or close the stora
 ### clear
 
 Stops storing updates and removes the stored document after pending work, also after
-`destroy()`. The live document and other peers keep their state, and other persistence
-instances using the same key can write it again. To resume storing after `clear()` or
-`destroy()`, create a new persistence.
+`destroy()`. It is how to delete a log holding updates that cannot be applied. The live
+document and other peers keep their state, and other persistence instances using the same key
+can write it again. To resume storing after `clear()` or `destroy()`, create a new
+persistence.
 
 ### Error handling
 
@@ -143,6 +150,24 @@ Storage errors and stored updates that cannot be applied go to `onError`, and th
 moves on to the next operation. So the lifecycle promises resolving does not mean every
 write succeeded: track failures in `onError` if the app needs to show whether persistence
 works. Keep `onError` from throwing, or queued work rejects.
+
+### Stored updates that cannot be applied
+
+A stored update the document cannot apply, such as damaged bytes or an update another CRDT
+library stored under a reused key, goes to `onError` with the error `apply` threw. The other
+updates are still applied, so the document holds what could be restored, and the stored log
+is kept as it is:
+
+- The initial load does not compact the log. It appends a snapshot of the document instead,
+  so what the document held before it was persisted is still stored.
+- Automatic and explicit compactions load the log again, report the same error again, and
+  leave the log in place.
+- Updates made after the load are appended as usual, and entries other writers stored remain.
+
+The unreadable bytes stay available through the adapter's `load(key)` until something deletes
+them. To recover, read the log, export or repair what the app can, then call `clear()`, or
+`adapter.clear(key)`, and persist the document again. Once the log can be applied in full,
+compaction resumes.
 
 ## PersistableDoc
 
@@ -157,7 +182,7 @@ interface PersistableDoc {
 | Member                | Contract                                                                                                                                                                                |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `encode()`            | Encodes the entire document as an update accepted by `apply`.                                                                                                                           |
-| `apply(update)`       | Merges binary updates or snapshots. Repeated and out-of-order updates must be safe.                                                                                                     |
+| `apply(update)`       | Merges binary updates or snapshots. Repeated and out-of-order updates must be safe. Throws for bytes it cannot apply, so that `createPersistence` keeps them in storage.                |
 | `subscribe(callback)` | Reports local changes and changes received from peers as binary updates. Changes made through this interface's own `apply` must not be reported again. Returns an unsubscribe function. |
 
 Not reporting `apply`'s own changes keeps restored updates from being stored again. Use

@@ -62,6 +62,13 @@ const restore = async (adapter: PersistenceAdapter, key = "doc") => {
   return { doc, persistence };
 };
 
+/** The oldest `count` updates stored under `key`. */
+const storedPrefix = async (
+  adapter: PersistenceAdapter,
+  count: number,
+  key = "doc",
+) => (await adapter.load(key)).updates.slice(0, count);
+
 describe("createPersistence", () => {
   it("restores local edits into a new document", async () => {
     const adapter = createMemoryPersistenceAdapter();
@@ -311,17 +318,99 @@ describe("createPersistence", () => {
     expect(onError).toHaveBeenCalledWith(error);
   });
 
-  it("skips a stored update it cannot apply", async () => {
+  it("applies the stored updates it can and keeps the one it cannot apply", async () => {
     const adapter = createMemoryPersistenceAdapter();
     const onError = vi.fn();
-    await adapter.append("doc", encoder.encode("not json"));
-    await adapter.append("doc", createToyDoc(["valid"]).encode());
+    const stored = [
+      encoder.encode("not json"),
+      createToyDoc(["valid"]).encode(),
+    ];
+    for (const update of stored) await adapter.append("doc", update);
     const doc = createToyDoc();
 
-    await createPersistence(doc, adapter, { key: "doc", onError }).whenLoaded;
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      onError,
+    });
+    await persistence.whenLoaded;
+    await persistence.flush();
 
     expect(doc.ops()).toEqual(["valid"]);
     expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0]).toBeInstanceOf(SyntaxError);
+    expect(await storedPrefix(adapter, stored.length)).toEqual(stored);
+  });
+
+  it("stores what the document held before it was persisted when it keeps the log", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const corrupt = encoder.encode("not json");
+    await adapter.append("doc", corrupt);
+    const doc = createToyDoc(["seed"]);
+
+    await createPersistence(doc, adapter, {
+      key: "doc",
+      onError: vi.fn(),
+    }).flush();
+
+    const restored = createToyDoc();
+    await createPersistence(restored, adapter, {
+      key: "doc",
+      onError: vi.fn(),
+    }).flush();
+    expect(restored.ops()).toEqual(["seed"]);
+    expect(await storedPrefix(adapter, 1)).toEqual([corrupt]);
+  });
+
+  it("keeps a log it cannot apply, with other writers' entries, through every compaction", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    const corrupt = encoder.encode("not json");
+    // Another writer's snapshot, the update it cannot read, and another writer's append.
+    await adapter.append("doc", createToyDoc(["other"]).encode());
+    await adapter.compact("doc", createToyDoc(["snapshot"]).encode(), 1);
+    await adapter.append("doc", corrupt);
+    await adapter.append("doc", createToyDoc(["later"]).encode());
+    const stored = (await adapter.load("doc")).updates;
+    const onError = vi.fn();
+    const doc = createToyDoc();
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      compactAfter: 2,
+      onError,
+    });
+
+    for (const op of ["a", "b", "c"]) doc.add(op);
+    await persistence.flush();
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(await storedPrefix(adapter, stored.length)).toEqual(stored);
+
+    await persistence.compact();
+
+    expect(onError).toHaveBeenCalledTimes(3);
+    expect(await storedPrefix(adapter, stored.length)).toEqual(stored);
+    const restored = createToyDoc();
+    await createPersistence(restored, adapter, {
+      key: "doc",
+      onError: vi.fn(),
+    }).flush();
+    expect(restored.ops()).toEqual(["a", "b", "c", "later", "snapshot"]);
+  });
+
+  it("removes a log it cannot apply on clear, and compacts again after", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    await adapter.append("doc", encoder.encode("not json"));
+    const doc = createToyDoc(["kept"]);
+    await createPersistence(doc, adapter, {
+      key: "doc",
+      onError: vi.fn(),
+    }).clear();
+    expect(adapter.size("doc")).toBe(0);
+
+    const { doc: next, persistence } = await restore(adapter);
+    next.add("a");
+    await persistence.compact();
+
+    expect(adapter.size("doc")).toBe(1);
+    expect((await restore(adapter)).doc.ops()).toEqual(["a"]);
   });
 
   it("reports a failed append and keeps storing later updates", async () => {
