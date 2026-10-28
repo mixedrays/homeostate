@@ -61,7 +61,9 @@ edits alike.
 either and stores such array items as `null`, as `JSON.stringify` does.
 
 Snapshots from `read()` copy only what changed since the last read and are shared between
-reads, so treat them as immutable.
+reads, so treat them as immutable. A missing synced key reads as `{}`. If a peer stores
+anything but a map there, such as a string or `null`, `read()` throws a `TypeError` naming
+what the key holds, which the sync engine reports; a `write` replaces it with a map.
 
 ## With automerge-repo
 

@@ -9,7 +9,7 @@ import type {
 import { defaultSyncFilter } from "./types.js";
 import { patchState } from "./patching.js";
 import { hasOwn, isRecord, jsonEqual, PROTO_KEY } from "./diff.js";
-import { isAbsent } from "./json.js";
+import { isAbsent, kindOf } from "./json.js";
 
 type Plain = Record<string, unknown>;
 
@@ -24,10 +24,6 @@ const changedKeys = (a: Plain, b: Plain): string[] => {
     (key) => !jsonEqual(jsonEntry(a, key), jsonEntry(b, key)),
   );
 };
-
-/** What `value` is, as an error about a broken contract names it. */
-const kindOf = (value: unknown): string =>
-  value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 
 /** Returns `value` if it is a non-array object, and throws a `TypeError` naming `contract` otherwise. */
 const expectRecord = (

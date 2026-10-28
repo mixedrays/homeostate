@@ -2,6 +2,10 @@
 export const isAbsent = (value: unknown): boolean =>
   value === undefined || typeof value === "function";
 
+/** What `value` is, as an error about a broken contract names it. */
+export const kindOf = (value: unknown): string =>
+  value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+
 /** A primitive as `JSON.stringify` stores it: `NaN` and infinite numbers become `null`. */
 export const toJsonPrimitive = (value: unknown): unknown =>
   typeof value === "number" && !Number.isFinite(value) ? null : value;

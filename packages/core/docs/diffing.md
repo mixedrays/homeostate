@@ -12,7 +12,9 @@ turn a JSON snapshot into small edits that keep unchanged containers in place.
 ## getChanges
 
 ```ts
-type Diffable = Record<string, unknown> | Array<unknown> | string;
+type JsonObject = Record<string, unknown>;
+type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
+type Diffable = JsonObject | unknown[] | string;
 type TextPolicy = (path: readonly (string | number)[]) => boolean;
 
 interface DiffOptions {
@@ -31,20 +33,17 @@ declare function getChanges(
   options?: DiffOptions,
 ): ListChange[];
 declare function getChanges(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
+  a: JsonObjectInput,
+  b: JsonObjectInput,
   options?: DiffOptions,
 ): RecordChange[];
-declare function getChanges(
-  a: Diffable,
-  b: Diffable,
-  options?: DiffOptions,
-): EditScript;
 ```
 
 Returns an ordered edit script that transforms `a` into `b`, without mutating either input. Two
-values of one kind return the script of that kind; values typed only as `Diffable` return an
-`EditScript`.
+values of one kind return the script of that kind. Records are taken as `JsonObjectInput`, so
+two states typed with an `interface` diff as records. `Diffable` names the kinds it accepts, but
+both values must be of one of them: passing values of different kinds, or values typed only as
+`Diffable`, fails to compile, so narrow them first.
 
 | Parameter      | Description                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -53,8 +52,14 @@ values of one kind return the script of that kind; values typed only as `Diffabl
 | `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
 | `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`.       |
 
-Equal values produce `[]`, and so do different root kinds, since an edit script cannot
-replace its root. Nested values that change kind produce an `UPDATE`.
+Equal values produce `[]`. An edit script cannot replace its root, so values of different root
+kinds throw a `TypeError` naming both kinds, such as
+`getChanges needs two strings, two arrays or two records, got array and string`; so does
+anything else, such as a number. Nested values that change kind produce an `UPDATE`.
+
+Steps are applied in order: each array index or string offset addresses the value as revised by
+the steps before it, and string offsets and counts are UTF-16 code units. See
+[Array positions](#array-positions) and [String offsets](#string-offsets).
 
 Records and arrays shared by identity are skipped without visiting their contents, including
 their text-policy paths. Update containers immutably to retain this shortcut: copy each
@@ -77,8 +82,8 @@ console.log(getChanges([1, 2, 3], [1, 3]));
 console.log(getChanges({ value: [1] }, { value: "one" }));
 // [{ type: "update", key: "value", value: "one" }]
 
-console.log(getChanges([1], "one"));
-// []: root replacement is not represented
+// @ts-expect-error An array and a string have no edit script: a root cannot be replaced.
+getChanges([1], "one"); // throws a TypeError
 ```
 
 ## Change and ChangeType

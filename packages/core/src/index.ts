@@ -16,6 +16,8 @@ export type {
 export { defaultSyncFilter } from "./types.js";
 export type {
   CrdtBackend,
+  JsonObject,
+  JsonObjectInput,
   Persistence,
   PersistableDoc,
   PersistenceAdapter,

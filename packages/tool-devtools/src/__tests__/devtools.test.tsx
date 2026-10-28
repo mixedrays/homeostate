@@ -159,7 +159,7 @@ describe("HomeostateDevtools", () => {
     await act(tick);
 
     expect(store.get().filter).toBe("done");
-    expect((backend.read() as State).filter).toBe("done");
+    expect((backend.read() as unknown as State).filter).toBe("done");
   });
 
   it("keeps keys typed into a field from reaching page shortcuts", async () => {
@@ -193,7 +193,7 @@ describe("HomeostateDevtools", () => {
     await act(async () => input.blur());
 
     expect(store.get().filter).toBe("remote");
-    expect((backend.read() as State).filter).toBe("remote");
+    expect((backend.read() as unknown as State).filter).toBe("remote");
   });
 
   it("keeps an inline draft when the value changes and can load the latest value", async () => {
@@ -409,7 +409,7 @@ describe("HomeostateDevtools", () => {
     await act(tick);
     expect(JSON.parse(json.value).filter).toBe("all");
     expect(store.get().filter).toBe("done");
-    expect((backend.read() as State).filter).toBe("done");
+    expect((backend.read() as unknown as State).filter).toBe("done");
   });
 
   it("compares a snapshot with the live state without restoring it, even while recording is paused", async () => {
@@ -424,7 +424,7 @@ describe("HomeostateDevtools", () => {
     expect(comparison()).toContain('"all"');
     expect(comparison()).toContain('"active"');
     expect(store.get().filter).toBe("active");
-    expect((backend.read() as State).filter).toBe("active");
+    expect((backend.read() as unknown as State).filter).toBe("active");
 
     await click(buttonWithText("Pause"));
     await act(async () => store.set({ ...store.get(), filter: "done" }));

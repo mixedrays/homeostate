@@ -5,7 +5,7 @@ import {
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
-import { toPlainValue } from "./mapping.js";
+import { toPlainMap } from "./mapping.js";
 import { createYjsOps } from "./patching.js";
 
 /** Options for `createYjsBackend` */
@@ -150,16 +150,16 @@ export function createYjsBackend(
     map,
     origin,
 
-    read: () => toPlainValue(map),
+    read: () => toPlainMap(map),
 
     // Every change in the document, since telling which ones changed the map takes more.
     revision: () => (transactions.open > 0 ? undefined : transactions.done),
 
     write: (next, previous) => {
-      const current = (previous ?? map.toJSON()) as object;
+      const current = previous ?? map.toJSON();
       doc.transact(
         () =>
-          applyChanges(map, current, next as object, ops, {
+          applyChanges(map, current, next, ops, {
             text,
             json: true,
           }),

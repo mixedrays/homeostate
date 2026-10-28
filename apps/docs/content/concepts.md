@@ -64,16 +64,20 @@ the engine leaves it out of remote state at any depth.
 A `CrdtBackend` holds the synced part of the state in a CRDT or any other replicated store:
 
 ```ts
+type JsonObject = Record<string, unknown>;
+type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
+
 interface CrdtBackend {
-  read: () => unknown;
-  write: (next: unknown, previous?: unknown) => void;
+  read: () => JsonObject;
+  write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
   revision?: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
 
-- `read` returns a plain JSON snapshot that does not alias the backend's internals.
-- `write` makes the backend equal to `next` in one atomic transaction. The engine also passes
+- `read` returns a plain JSON snapshot, an object that does not alias the backend's internals.
+- `write` makes the backend equal to `next` in one atomic transaction. `next` is any object
+  but an array or another iterable, including state typed with an `interface`. The engine also passes
   `previous`, what the backend holds as far as it knows. The supplied backends diff the two
   with core's `applyChanges`, so a write becomes small edits instead of replacing the
   document.

@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { StoreAdapter, TextPolicy } from "../index.js";
+import type { JsonObject, StoreAdapter, TextPolicy } from "../index.js";
 
 export interface Todo {
   id: string;
@@ -119,7 +119,7 @@ export const unicodeEdits: [string, string][] = [
  * what `JSON.stringify` makes of `next` and every backend reads back. Shared regressions for core
  * and every CRDT backend.
  */
-export const nonJsonWrites: [string, object, object, object][] = [
+export const nonJsonWrites: [string, JsonObject, JsonObject, JsonObject][] = [
   [
     "an undefined item in a fresh array",
     {},

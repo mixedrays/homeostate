@@ -4,6 +4,7 @@ import {
   getChanges,
   type ListChange,
   type Diffable,
+  type JsonObject,
   type TextPolicy,
   toJsonValue,
 } from "../index.js";
@@ -45,10 +46,19 @@ const randomPairs = Array.from(
 );
 
 describe("getChanges", () => {
-  it("returns no changes when the root values are of different kinds", () => {
-    expect(getChanges("abc", ["a", "b", "c"])).toEqual([]);
-    expect(getChanges([1], { 0: 1 })).toEqual([]);
-    expect(getChanges({ a: 1 }, "a")).toEqual([]);
+  it("throws a TypeError naming both kinds when the root values are of different kinds", () => {
+    const diffAny = getChanges as (a: unknown, b: unknown) => unknown;
+    const message = (kinds: string) =>
+      new TypeError(
+        `getChanges needs two strings, two arrays or two records, got ${kinds}`,
+      );
+
+    expect(() => diffAny("abc", ["a", "b", "c"])).toThrow(
+      message("string and array"),
+    );
+    expect(() => diffAny([1], { 0: 1 })).toThrow(message("array and object"));
+    expect(() => diffAny({ a: 1 }, "a")).toThrow(message("object and string"));
+    expect(() => diffAny(null, 1)).toThrow(message("null and number"));
   });
 
   it("finds no change in a NaN that stays NaN", () => {
@@ -639,14 +649,10 @@ describe("getChanges", () => {
     it.each(nonJsonWrites)(
       "finds the changes toJsonValue would for %s, and none once they are applied",
       (_, before, next, expected) => {
-        expect(
-          getChanges(before as Diffable, next as Diffable, json),
-        ).toStrictEqual(
-          getChanges(before as Diffable, toJsonValue(next) as Diffable),
+        expect(getChanges(before, next, json)).toStrictEqual(
+          getChanges(before, toJsonValue(next) as JsonObject),
         );
-        expect(
-          getChanges(expected as Diffable, next as Diffable, json),
-        ).toEqual([]);
+        expect(getChanges(expected, next, json)).toEqual([]);
       },
     );
 

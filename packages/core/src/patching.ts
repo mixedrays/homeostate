@@ -1,6 +1,6 @@
 import { applyStringChanges } from "./apply.js";
 import { ChangeType, type ListChange, type RecordChange } from "./change.js";
-import { getChanges, isRecord, PROTO_KEY, type Diffable } from "./diff.js";
+import { getChanges, isRecord, PROTO_KEY } from "./diff.js";
 
 const isContainer = (value: unknown): value is Record<string, unknown> => {
   if (value === null || typeof value !== "object") return false;
@@ -108,8 +108,8 @@ const applyChangesToObject = (
  * Returns a value identical to newState, built from oldState by copying every
  * container along a changed path and sharing every unchanged subtree. Neither
  * input is mutated. If oldState and newState are already identical (indicated
- * by an empty diff), then oldState itself is returned. Own `__proto__` keys in
- * newState are left out at any depth.
+ * by an empty diff), then oldState itself is returned; if they are of different
+ * kinds, newState is. Own `__proto__` keys in newState are left out at any depth.
  *
  * @param oldState The state we want to patch.
  * @param newState The state we want the result to match.
@@ -117,8 +117,8 @@ const applyChangesToObject = (
  * @returns The patched state, identical to newState.
  */
 export const patchState = <T>(oldState: T, newState: T): T => {
-  const a = oldState as Diffable;
-  const b = newState as Diffable;
+  const a: unknown = oldState;
+  const b: unknown = newState;
   if (typeof a === "string" && typeof b === "string") {
     const changes = getChanges(a, b);
     return changes.length === 0
@@ -137,6 +137,6 @@ export const patchState = <T>(oldState: T, newState: T): T => {
       ? oldState
       : (applyChangesToObject(a, changes) as T);
   }
-  // Values of different kinds have no edit script.
-  return oldState;
+  // Values of different kinds have no edit script, so newState replaces oldState whole.
+  return withoutProtoKeys(newState) as T;
 };

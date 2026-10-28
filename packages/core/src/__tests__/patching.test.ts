@@ -121,4 +121,14 @@ describe("patchState", () => {
 
     expect(patchState(oldState, newState)).toEqual(newState);
   });
+
+  it("returns newState, without its __proto__ keys, when the kinds differ", () => {
+    const list = [{ id: "1" }];
+    const newState = JSON.parse('{"list":[],"__proto__":{"isAdmin":true}}');
+
+    expect(patchState<unknown>("todos", list)).toBe(list);
+    const result = patchState<unknown>(["a"], newState);
+    expect(JSON.stringify(result)).toBe('{"list":[]}');
+    expect(prototypeHijacks(result)).toEqual([]);
+  });
 });
