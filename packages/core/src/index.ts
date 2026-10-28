@@ -16,6 +16,7 @@ export type {
   PersistenceConfig,
   PersistenceStats,
   SeedStrategy,
+  SetupOptions,
   StoredUpdates,
   StoreAdapter,
   SyncEngine,

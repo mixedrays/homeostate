@@ -153,6 +153,27 @@ writing back keys the store keeps changing while remote changes are applied; see
 [Store adapters](/docs/concepts#store-adapters). Its `keys` names them, and each set of keys is
 reported once, in every build. Without `onError`, the engine warns once in development instead.
 
+## SetupOptions
+
+```ts
+interface SetupOptions extends SyncEngineConfig {
+  backend: CrdtBackend;
+  connect?: "auto" | "manual";
+}
+```
+
+The options shared by every setup helper: the one call in a store adapter package that creates
+the adapter and the engine for one store, such as the
+[Zustand `homeostate` middleware](../../store-zustand/docs/introduction.md). A helper takes the
+store, or what builds it, then these options, flat, with its own added.
+
+| Option    | Default  | Behavior                                                                                                                     |
+| --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `backend` |          | The CRDT backend the store syncs with.                                                                                       |
+| `connect` | `"auto"` | `"auto"` connects once the store is ready. `"manual"` leaves `connect()` to the app, and until then neither side is touched. |
+
+The other options are the engine's `SyncEngineConfig`.
+
 ## SyncEngine
 
 ```ts

@@ -80,20 +80,21 @@ describe("getting started", () => {
     },
   );
 
-  it("waits for sync, shares button clicks, and keeps the count when a tab joins", async () => {
+  it("connects on sync, shares button clicks, and keeps the count when a tab joins", async () => {
     const first = await openTab();
-    expect(first.button.disabled).toBe(true);
     expect(first.container.textContent).toContain(
       "Connecting to the sync server",
     );
+    await act(async () => first.button.click());
+    expect(first.container.textContent).toContain("Count: 1");
+    expect(first.useCounter.homeostate.isConnected()).toBe(false);
     expect(first.doc.getMap("shared").toJSON()).toEqual({});
 
     await act(async () => {
       first.provider.synced = true;
     });
-    expect(first.button.disabled).toBe(false);
-    await act(async () => first.button.click());
-    expect(first.container.textContent).toContain("Count: 1");
+    expect(first.useCounter.homeostate.isConnected()).toBe(true);
+    expect(first.doc.getMap("shared").toJSON()).toEqual({ count: 1 });
 
     const second = await openTab();
     await act(async () => {
@@ -124,6 +125,8 @@ describe("getting started", () => {
     await act(async () => {
       second.provider.synced = false;
     });
-    expect(second.button.disabled).toBe(true);
+    expect(second.container.textContent).toContain(
+      "Connecting to the sync server",
+    );
   });
 });

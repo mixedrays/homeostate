@@ -295,8 +295,12 @@ _Avoid_: Plugin, extension
 **Tool package**:
 A `tool-*` package for developing with Homeostate rather than shipping it: the devtools and the simulator.
 
+**Setup helper**:
+The one call in a `store-*` package that creates the store adapter and the sync engine for one store, taking the store, or what builds it, and one options object with the CRDT backend. It connects the engine itself unless its `connect` option is `"manual"`, which leaves connect to the app.
+_Avoid_: One-call setup, setup function
+
 **Homeostate middleware**:
-The `homeostate` Zustand middleware from `@homeostate/store-zustand`, which wraps a state creator, connects a sync engine when the store is created and exposes it as `store.homeostate`.
+The `homeostate` Zustand middleware from `@homeostate/store-zustand`, the setup helper for Zustand: `homeostate(creator, { backend })` wraps a state creator, connects a sync engine when the store is created, or when the app calls connect with `connect: "manual"`, and exposes it as `store.homeostate`.
 
 **Automerge handle**:
 The object from `createAutomergeHandle` that holds the current, immutable Automerge document so that the CRDT backend and replication code share it.

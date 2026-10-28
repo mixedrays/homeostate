@@ -1,8 +1,10 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { create } from "zustand";
 import {
   createJSONStorage,
+  devtools,
   persist,
+  subscribeWithSelector,
   type StateStorage,
 } from "zustand/middleware";
 import { createStore } from "zustand/vanilla";
@@ -10,6 +12,7 @@ import {
   createMemoryBackend,
   type MemoryBackend,
 } from "@homeostate/core/testing";
+import type { SyncEngine } from "@homeostate/core";
 import { homeostate } from "../index.js";
 
 interface CounterState {
@@ -19,10 +22,13 @@ interface CounterState {
 
 const createCounter = (backend: MemoryBackend) =>
   createStore<CounterState>()(
-    homeostate(backend, (set) => ({
-      count: 0,
-      increment: () => set((s) => ({ count: s.count + 1 })),
-    })),
+    homeostate(
+      (set) => ({
+        count: 0,
+        increment: () => set((s) => ({ count: s.count + 1 })),
+      }),
+      { backend },
+    ),
   );
 
 type Count = { count: number };
@@ -94,12 +100,86 @@ describe("homeostate middleware", () => {
     expect(store.homeostate.isConnected()).toBe(false);
   });
 
+  it("leaves the backend untouched until connect() with the manual connect mode", () => {
+    const backend = createMemoryBackend({ count: 7 });
+    const calls = ["read", "write", "subscribe"] as const;
+    const spies = calls.map((method) => vi.spyOn(backend, method));
+
+    const store = createStore<CounterState>()(
+      homeostate(
+        (set) => ({
+          count: 0,
+          increment: () => set((s) => ({ count: s.count + 1 })),
+        }),
+        { backend, connect: "manual" },
+      ),
+    );
+    store.getState().increment();
+
+    expect(store.getState().count).toBe(1);
+    expect(store.homeostate.isConnected()).toBe(false);
+    expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
+
+    store.homeostate.connect();
+    expect(store.getState().count).toBe(7);
+    store.getState().increment();
+    expect(backend.read()).toEqual({ count: 8 });
+  });
+
+  it("composes with devtools, subscribeWithSelector and persist, keeping their types", () => {
+    const backend = createMemoryBackend({ count: 7 });
+    const { storage } = createStorage({}, false);
+
+    const useStore = create<CounterState>()(
+      devtools(
+        subscribeWithSelector(
+          homeostate(
+            persist(
+              (set) => ({
+                count: 0,
+                increment: () => set((s) => ({ count: s.count + 1 })),
+              }),
+              { name: "c", storage: createJSONStorage(() => storage) },
+            ),
+            { backend, connect: "manual" },
+          ),
+        ),
+        { enabled: false },
+      ),
+    );
+    const counts: number[] = [];
+    useStore.subscribe(
+      (state) => state.count,
+      (count) => counts.push(count),
+    );
+    useStore.homeostate.connect();
+
+    expectTypeOf(useStore.homeostate).toEqualTypeOf<SyncEngine>();
+    expectTypeOf(useStore.persist.hasHydrated).returns.toEqualTypeOf<boolean>();
+    expect(useStore.persist.hasHydrated()).toBe(true);
+    expect(counts).toEqual([7]);
+    useStore.getState().increment();
+    expect(backend.read()).toEqual({ count: 8 });
+  });
+
+  it("names the new argument order when called with the backend first", () => {
+    const backend = createMemoryBackend();
+    const call = homeostate as unknown as (...args: unknown[]) => unknown;
+
+    expect(() => call(backend, () => ({ count: 0 }))).toThrow(
+      "homeostate(creator, { backend })",
+    );
+  });
+
   it("infers the state type in the documented curried form", () => {
     const useStore = create<CounterState>()(
-      homeostate(createMemoryBackend(), (set) => ({
-        count: 0,
-        increment: () => set((s) => ({ count: s.count + 1 })),
-      })),
+      homeostate(
+        (set) => ({
+          count: 0,
+          increment: () => set((s) => ({ count: s.count + 1 })),
+        }),
+        { backend: createMemoryBackend() },
+      ),
     );
 
     expectTypeOf(useStore.getState().count).toEqualTypeOf<number>();
@@ -113,11 +193,11 @@ describe("homeostate middleware with persist", () => {
 
     const store = createStore<Count>()(
       homeostate(
-        room,
         persist(() => ({ count: 0 }), {
           name: "c",
           storage: createJSONStorage(() => storage),
         }),
+        { backend: room },
       ),
     );
     await tick();
@@ -133,11 +213,11 @@ describe("homeostate middleware with persist", () => {
 
     const store = createStore<Count>()(
       homeostate(
-        room,
         persist(() => ({ count: 0 }), {
           name: "c",
           storage: createJSONStorage(() => storage),
         }),
+        { backend: room },
       ),
     );
 
@@ -154,11 +234,11 @@ describe("homeostate middleware with persist", () => {
 
     const store = createStore<Count>()(
       homeostate(
-        room,
         persist(() => ({ count: 0 }), {
           name: "c",
           storage: createJSONStorage(() => storage),
         }),
+        { backend: room },
       ),
     );
 
@@ -173,11 +253,11 @@ describe("homeostate middleware with persist", () => {
 
     const store = createStore<Count>()(
       homeostate(
-        room,
         persist(() => ({ count: 0 }), {
           name: "c",
           storage: createJSONStorage(() => storage),
         }),
+        { backend: room },
       ),
     );
     expect(store.homeostate.isConnected()).toBe(false);
@@ -196,11 +276,11 @@ describe("homeostate middleware with persist", () => {
 
     const store = createStore<Count>()(
       homeostate(
-        room,
         persist(() => ({ count: 0 }), {
           name: "c",
           storage: createJSONStorage(() => storage),
         }),
+        { backend: room },
       ),
     );
     store.homeostate.disconnect();
@@ -211,6 +291,74 @@ describe("homeostate middleware with persist", () => {
     expect(room.read()).toEqual({ count: 7 });
   });
 
+  it("connects once a retried hydration succeeds after one failed", async () => {
+    const room = createMemoryBackend({ count: 7 });
+    const { storage } = createStorage({ c: persisted(42) }, true);
+    const getItem = storage.getItem;
+    storage.getItem = () => Promise.reject(new Error("storage unavailable"));
+
+    const store = createStore<Count>()(
+      homeostate(
+        persist(() => ({ count: 0 }), {
+          name: "c",
+          storage: createJSONStorage(() => storage),
+        }),
+        { backend: room },
+      ),
+    );
+    await tick();
+    expect(store.homeostate.isConnected()).toBe(false);
+
+    storage.getItem = getItem;
+    await store.persist.rehydrate();
+
+    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.getState().count).toBe(7);
+  });
+
+  it("waits for hydration when connected manually before it finished", async () => {
+    const room = createMemoryBackend({ count: 7 });
+    const { storage, storedCount } = createStorage({ c: persisted(42) }, true);
+
+    const store = createStore<Count>()(
+      homeostate(
+        persist(() => ({ count: 0 }), {
+          name: "c",
+          storage: createJSONStorage(() => storage),
+        }),
+        { backend: room, connect: "manual" },
+      ),
+    );
+    store.homeostate.connect();
+    expect(store.homeostate.isConnected()).toBe(false);
+    await tick();
+
+    expect(store.homeostate.isConnected()).toBe(true);
+    expect(room.read()).toEqual({ count: 7 });
+    expect(store.getState().count).toBe(7);
+    expect(storedCount("c")).toBe(7);
+  });
+
+  it("stays disconnected after hydration with the manual connect mode", async () => {
+    const room = createMemoryBackend();
+    const { storage } = createStorage({ c: persisted(42) }, true);
+
+    const store = createStore<Count>()(
+      homeostate(
+        persist(() => ({ count: 0 }), {
+          name: "c",
+          storage: createJSONStorage(() => storage),
+        }),
+        { backend: room, connect: "manual" },
+      ),
+    );
+    await tick();
+
+    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.getState().count).toBe(42);
+    expect(room.read()).toEqual({});
+  });
+
   it("throws naming the right order when persist wraps the middleware", () => {
     const room = createMemoryBackend();
     const { storage } = createStorage({ c: persisted(42) }, false);
@@ -218,10 +366,10 @@ describe("homeostate middleware with persist", () => {
     expect(() =>
       createStore<Count>()(
         persist(
-          homeostate(room, () => ({ count: 0 })),
+          homeostate(() => ({ count: 0 }), { backend: room }),
           { name: "c", storage: createJSONStorage(() => storage) },
         ),
       ),
-    ).toThrow("homeostate(backend, persist(creator, options))");
+    ).toThrow("homeostate(persist(creator, options), { backend })");
   });
 });

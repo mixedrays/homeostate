@@ -10,12 +10,11 @@ export const doc = new Y.Doc();
 
 export const useCounter = create<CounterState>()(
   homeostate(
-    createYjsBackend(doc, "shared"),
     (set) => ({
       count: 0,
       increment: () => set((state) => ({ count: state.count + 1 })),
     }),
-    { seed: "never" },
+    { backend: createYjsBackend(doc, "shared"), connect: "manual" },
   ),
 );
 
@@ -24,6 +23,8 @@ export const provider = new WebsocketProvider(
   "homeostate-counter",
   doc,
 );
+
+provider.once("sync", () => useCounter.homeostate.connect());
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

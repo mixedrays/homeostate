@@ -1,9 +1,8 @@
 import type { StateCreator, StoreMutatorIdentifier } from "zustand";
 import {
   createSyncEngine,
-  type CrdtBackend,
+  type SetupOptions,
   type SyncEngine,
-  type SyncEngineConfig,
 } from "@homeostate/core";
 import { createZustandAdapter } from "./adapter.js";
 
@@ -16,20 +15,21 @@ declare module "zustand/vanilla" {
   }
 }
 
+/** The `homeostate` middleware's options: the backend, the connect mode and the engine's config */
+export type HomeostateOptions = SetupOptions;
+
 export type HomeostateMiddleware = <
   T extends object,
   Mps extends [StoreMutatorIdentifier, unknown][] = [],
   Mcs extends [StoreMutatorIdentifier, unknown][] = [],
 >(
-  backend: CrdtBackend,
   creator: StateCreator<T, [...Mps, ["homeostate", SyncEngine]], Mcs>,
-  config?: SyncEngineConfig,
+  options: HomeostateOptions,
 ) => StateCreator<T, Mps, [["homeostate", SyncEngine], ...Mcs]>;
 
 type HomeostateMiddlewareImpl = <T extends object>(
-  backend: CrdtBackend,
   creator: StateCreator<T, [], []>,
-  config?: SyncEngineConfig,
+  options: HomeostateOptions,
 ) => StateCreator<T, [], []>;
 
 /** The part of the `persist` middleware's `store.persist` API the middleware uses. */
@@ -41,7 +41,7 @@ interface PersistApi {
 const OUTER_PERSIST_MESSAGE =
   "[homeostate] The persist middleware wraps the homeostate middleware, which writes the " +
   "store before persist hydrates it. Put persist inside instead: " +
-  "homeostate(backend, persist(creator, options)).";
+  "homeostate(persist(creator, options), { backend }).";
 
 /**
  * Throws when a `persist` middleware wrapping this one installs `store.persist`. It does so
@@ -65,33 +65,50 @@ const rejectOuterPersist = (api: object, engine: SyncEngine): void => {
   });
 };
 
-const homeostateImpl: HomeostateMiddlewareImpl =
-  (backend, creator, config) => (set, get, api) => {
+const homeostateImpl: HomeostateMiddlewareImpl = (creator, options) => {
+  if (typeof creator !== "function") {
+    throw new TypeError(
+      "[homeostate] The middleware takes the state creator first and the backend in its " +
+        "options: homeostate(creator, { backend }).",
+    );
+  }
+  const { backend, connect = "auto", ...config } = options;
+  return (set, get, api) => {
     const initialState = creator(set, get, api);
     const engine = createSyncEngine(backend, createZustandAdapter(api), config);
-    /** Cancels the connect deferred until hydration; a no-op once it ran or was cancelled. */
-    let stopWaiting = (): void => {};
-    (api as unknown as { homeostate: SyncEngine }).homeostate = {
-      connect: () => {
-        stopWaiting();
+    /** Cancels a connect waiting for hydration; a no-op once it ran or was cancelled. */
+    let stopWaiting: (() => void) | undefined;
+    const cancelWaiting = (): void => {
+      stopWaiting?.();
+      stopWaiting = undefined;
+    };
+    /** Connects, or waits until `persist` has hydrated the store, so the room wins over it. */
+    const connectWhenHydrated = (): void => {
+      const persistApi = (api as { persist?: PersistApi }).persist;
+      if (persistApi === undefined || persistApi.hasHydrated()) {
+        cancelWaiting();
         engine.connect();
-      },
+      } else if (stopWaiting === undefined) {
+        stopWaiting = persistApi.onFinishHydration(() => {
+          cancelWaiting();
+          engine.connect();
+        });
+      }
+    };
+    (api as unknown as { homeostate: SyncEngine }).homeostate = {
+      connect: connectWhenHydrated,
       disconnect: () => {
-        stopWaiting();
+        cancelWaiting();
         engine.disconnect();
       },
       isConnected: engine.isConnected,
     };
 
     const persistApi = (api as { persist?: PersistApi }).persist;
-    if (persistApi === undefined) {
-      rejectOuterPersist(api, engine);
-    } else if (!persistApi.hasHydrated()) {
-      // Connect once hydration has finished, so the room wins over the hydrated state.
-      stopWaiting = persistApi.onFinishHydration(() => {
-        stopWaiting();
-        engine.connect();
-      });
+    if (persistApi === undefined) rejectOuterPersist(api, engine);
+    if (connect === "manual") return initialState;
+    if (persistApi !== undefined && !persistApi.hasHydrated()) {
+      connectWhenHydrated();
       return initialState;
     }
 
@@ -99,15 +116,23 @@ const homeostateImpl: HomeostateMiddlewareImpl =
     engine.connect();
     return api.getState();
   };
+};
 
 /**
  * Zustand middleware that mirrors the store into a CRDT backend for peer-to-peer synchronization.
- * Any `CrdtBackend` works: `@homeostate/crdt-yjs`, `@homeostate/crdt-loro`, `@homeostate/crdt-automerge`.
+ * It takes the state creator and its options: the `backend`, any `CrdtBackend` such as
+ * `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
+ * `connect` mode, and the sync engine's config (`filter`, `seed`, `schedule`, `onError`).
  * The engine is exposed as `store.homeostate`, so `store.homeostate.disconnect()` stops syncing.
  *
- * Put Zustand's `persist` inside: `homeostate(backend, persist(creator, options))`. The store
- * then connects once `persist` has hydrated it, and the room wins over the persisted state as on
- * any `connect()`. With `persist` outside, creating the store throws.
+ * The store connects when it is created. With `connect: "manual"`, nothing reads or writes the
+ * backend until the app calls `store.homeostate.connect()`, for example once its provider has
+ * synced.
+ *
+ * Put Zustand's `persist` inside: `homeostate(persist(creator, options), { backend })`. The
+ * store then connects once `persist` has hydrated it, and a `connect()` made before that waits
+ * for it, so the room wins over the persisted state as on any `connect()`. With `persist`
+ * outside, creating the store throws.
  *
  * Use the curried `create<T>()(...)` form: Zustand cannot infer the state type through a
  * middleware, so `create(homeostate(...))` types the state as `object`.
@@ -122,10 +147,13 @@ const homeostateImpl: HomeostateMiddlewareImpl =
  * type CounterState = { count: number; increment: () => void };
  *
  * const useStore = create<CounterState>()(
- *   homeostate(createYjsBackend(new Y.Doc(), "shared"), (set) => ({
- *     count: 0,
- *     increment: () => set((s) => ({ count: s.count + 1 })),
- *   })),
+ *   homeostate(
+ *     (set) => ({
+ *       count: 0,
+ *       increment: () => set((s) => ({ count: s.count + 1 })),
+ *     }),
+ *     { backend: createYjsBackend(new Y.Doc(), "shared") },
+ *   ),
  * );
  * ```
  */
