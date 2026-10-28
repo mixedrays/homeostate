@@ -7,7 +7,7 @@ label: Introduction
 
 [MobX](https://mobx.js.org) store adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
-It keeps chosen properties of an observable store in sync with a CRDT backend such as
+It keeps the observable fields of a store in sync with a CRDT backend such as
 [Yjs](../../crdt-yjs/docs/introduction.md), [Loro](../../crdt-loro/docs/introduction.md) or
 [Automerge](../../crdt-automerge/docs/introduction.md).
 
@@ -21,7 +21,9 @@ npm install @homeostate/core @homeostate/store-mobx mobx @homeostate/crdt-yjs yj
 
 ## Usage
 
-Pass the store and the keys to sync. Everything else on the store stays local:
+Pass the store. The adapter syncs its observable data fields; computeds, actions and fields
+MobX does not observe stay local, and so do the fields `omit` names, such as a `draft` each
+user types on their own:
 
 ```ts
 import * as Y from "yjs";
@@ -33,13 +35,19 @@ import { createMobxAdapter } from "@homeostate/store-mobx";
 class TodoStore {
   todos: { id: string; title: string; done: boolean }[] = [];
   filter = "all";
+  draft = "";
 
   constructor() {
     makeAutoObservable(this);
   }
 
-  add(title: string) {
-    this.todos.push({ id: crypto.randomUUID(), title, done: false });
+  add() {
+    this.todos.push({
+      id: crypto.randomUUID(),
+      title: this.draft,
+      done: false,
+    });
+    this.draft = "";
   }
 }
 
@@ -47,10 +55,21 @@ const store = new TodoStore();
 
 const engine = createSyncEngine(
   createYjsBackend(new Y.Doc(), "shared"),
-  createMobxAdapter(store, ["todos", "filter"]),
+  createMobxAdapter(store, { omit: ["draft"] }),
 );
 engine.connect();
 ```
+
+`keys` syncs only the fields it lists instead, as in
+`createMobxAdapter(store, { keys: ["todos"] })`; it does not combine with `omit`. Both take
+field names that TypeScript checks against the store, so a typo or a method name is a compile
+error, and a list shared as an `as const` constant works. The synced state is typed as the
+synced fields without the store's methods, `Pick<TodoStore, "todos" | "filter">` here. A
+computed getter looks like a field to TypeScript, so the type includes it unless `omit` names
+it; do not list one in `keys`.
+
+The adapter finds the fields when it is created, so make the store observable first: a store
+that is not observable throws. A field added to the store later is not synced.
 
 A remote change is reconciled into the observable tree instead of being assigned over it:
 only the fields, array elements and keys that differ are written, inside one action. Items
@@ -73,7 +92,7 @@ reaches the code that changed the store: the action returns normally, MobX logs 
 ```ts
 const engine = createSyncEngine(
   createYjsBackend(new Y.Doc(), "shared"),
-  createMobxAdapter(store, ["todos", "filter"]),
+  createMobxAdapter(store, { omit: ["draft"] }),
   { onError: (error, source) => reportSyncError(error, source) },
 );
 ```

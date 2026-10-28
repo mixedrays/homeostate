@@ -88,11 +88,7 @@ export const mobx: Fixture = {
     });
 
     return {
-      adapter: createMobxAdapter<TodoState>(store, [
-        "todos",
-        "searchTerm",
-        "filterStatus",
-      ]),
+      adapter: createMobxAdapter<TodoState>(store),
       tree: <App />,
       counters,
     };
