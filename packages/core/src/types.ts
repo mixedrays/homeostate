@@ -69,11 +69,25 @@ export interface CrdtBackend {
    * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
    * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing,
    * and `NaN` or infinite numbers where it holds `null`.
-   * The sync engine passes the synced state it last wrote or read, so a backend can diff against
-   * it with `json: true` instead of reading its document, and unchanged subtrees of `next` match
-   * it by identity. A backend may ignore it.
+   * The sync engine passes the synced state it last wrote or read, once `revision` or a read
+   * shows that the backend still holds it, so a backend can diff against it with `json: true`
+   * instead of reading its document, and unchanged subtrees of `next` match it by identity.
+   * A backend may ignore it.
    */
   write: (next: unknown, previous?: unknown) => void;
+
+  /**
+   * The synced subtree's revision: a value equal (`===`) to an earlier one only if the subtree
+   * has not changed since, whether or not `subscribe` has reported the change yet. It may change
+   * without the subtree changing, and is `undefined` while the backend cannot tell, as inside a
+   * transaction. Must be cheap: the engine calls it around every write.
+   *
+   * Before writing a local change, the sync engine reads the backend unless the revision is the
+   * one it recorded with what it last wrote or read, so that a remote change another listener
+   * heard first is applied before the local change instead of being written over. Without
+   * `revision`, the engine reads the backend before every local change.
+   */
+  revision?: () => unknown;
 
   /**
    * Notify about changes that did not come through this backend's own `write`.
@@ -162,7 +176,8 @@ export interface PersistableDoc {
 
   /**
    * Merge an update or an `encode()` result into the document. Applying the same update
-   * twice, or updates out of order, must be safe.
+   * twice, or updates out of order, must be safe. Throw for bytes it cannot apply, such as
+   * another CRDT library's update, so `createPersistence` keeps them in storage.
    */
   apply: (update: Uint8Array) => void;
 
@@ -233,14 +248,16 @@ export interface PersistenceStats {
 export interface Persistence {
   /**
    * Resolves once the stored updates are applied to the document. It also resolves when
-   * loading fails, after `onError`, so the app still starts without its stored state.
+   * loading fails, or a stored update cannot be applied, after `onError`, so the app still
+   * starts with what could be restored.
    */
   whenLoaded: Promise<void>;
   /** Resolves when every update reported so far has been written. */
   flush: () => Promise<void>;
   /**
    * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
-   * once it is written; does nothing once storing has stopped.
+   * once it is written; does nothing once storing has stopped. Keeps the log, after
+   * `onError`, when one of its updates cannot be applied.
    */
   compact: () => Promise<void>;
   /**
@@ -250,6 +267,9 @@ export interface Persistence {
   stats: () => Promise<PersistenceStats>;
   /** Stop storing updates; stored data is kept. Resolves once pending writes finish. */
   destroy: () => Promise<void>;
-  /** Stop storing updates and remove the stored document. */
+  /**
+   * Stop storing updates and remove the stored document, also a log holding updates that
+   * cannot be applied.
+   */
   clear: () => Promise<void>;
 }

@@ -162,6 +162,17 @@ await persistence.clear(); // stop storing and delete the stored document, e.g. 
 `whenLoaded` never rejects. If storage is unavailable or fails, the error goes to `onError`
 (`console.error` by default) and the app starts without its stored state.
 
+## Unreadable stored updates
+
+A stored update can fail to apply: its bytes were damaged, or the key was used before for a
+document of another CRDT library. The error goes to `onError`, the rest of the log is applied,
+and the stored log is kept as it is: compaction leaves it alone, so nothing that failed to
+restore is deleted. To recover, read the log with the adapter's `load(key)`, keep what the app
+can use, then call `persistence.clear()` to delete it on purpose. Use a distinct key for each
+CRDT library. The
+[API reference](../../../packages/core/docs/persistence.md#stored-updates-that-cannot-be-applied)
+describes what happens on load and on each compaction.
+
 ## Several tabs
 
 Tabs of one origin may persist the same key at once. Each update is appended to a log, and

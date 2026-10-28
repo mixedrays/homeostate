@@ -67,6 +67,7 @@ A `CrdtBackend` holds the synced part of the state in a CRDT or any other replic
 interface CrdtBackend {
   read: () => unknown;
   write: (next: unknown, previous?: unknown) => void;
+  revision?: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
@@ -76,6 +77,10 @@ interface CrdtBackend {
   `previous`, what the backend holds as far as it knows. The supplied backends diff the two
   with core's `applyChanges`, so a write becomes small edits instead of replacing the
   document.
+- `revision` tells the engine whether the document may have changed since it last synced,
+  even before `subscribe` reports the change. If it has, the engine applies that change to the
+  store before writing a local one, which loses what it did to synced keys. Without
+  `revision`, the engine reads the backend before every local change.
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 

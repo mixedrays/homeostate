@@ -1,3 +1,4 @@
+import * as A from "@automerge/automerge";
 import {
   applyChanges,
   toJsonValue,
@@ -36,12 +37,26 @@ export const createAutomergeBackend = <T>(
   const { text = noText } = options;
   const handle = "on" in source ? fromRepoHandle(source) : source;
   const snapshot = createSnapshot();
+  /** The heads of each document `revision` was asked about. */
+  const heads = new WeakMap<object, string>();
   let writing = false;
 
   const current = (): unknown => snapshot((handle.doc() as Container)[name]);
 
   return {
     read: () => current() ?? {},
+
+    // Every change gives the handle a new document, and so does a merge that brings nothing
+    // new, which the heads tell apart. They are read once per document.
+    revision: () => {
+      const doc = handle.doc();
+      let known = heads.get(doc);
+      if (known === undefined) {
+        known = A.getHeads(doc).join();
+        heads.set(doc, known);
+      }
+      return known;
+    },
 
     write: (next, previous) => {
       if (!isRecord(next)) return;

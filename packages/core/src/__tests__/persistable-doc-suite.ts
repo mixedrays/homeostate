@@ -22,6 +22,8 @@ export interface PersistableDocHarness<D> {
   backend: (doc: D) => CrdtBackend;
   /** Bring both documents up to date with each other, as a provider would */
   exchange: (a: D, b: D) => void;
+  /** An update another CRDT library stored, as when an app reuses its key for this one */
+  foreignUpdate: Uint8Array;
 }
 
 /**
@@ -32,7 +34,7 @@ export const describePersistableDoc = <D>(
   name: string,
   harness: PersistableDocHarness<D>,
 ): void => {
-  const { createDoc, persistable, backend, exchange } = harness;
+  const { createDoc, persistable, backend, exchange, foreignUpdate } = harness;
 
   const connect = (doc: D, initial: TodoState = threeTodos()) => {
     const store = createTestStore(initial);
@@ -45,10 +47,12 @@ export const describePersistableDoc = <D>(
   const open = async (
     adapter = createMemoryPersistenceAdapter(),
     initial?: TodoState,
+    onError?: (error: unknown) => void,
   ) => {
     const doc = createDoc();
     const persistence = createPersistence(persistable(doc), adapter, {
       key: "room",
+      onError,
     });
     await persistence.whenLoaded;
     return { doc, persistence, store: connect(doc, initial), adapter };
@@ -131,6 +135,58 @@ export const describePersistableDoc = <D>(
       expect(reloaded.store.getState().todos.map((t) => t.id)).toContain(
         "remote",
       );
+    });
+
+    it.each([
+      ["corrupt bytes", () => new Uint8Array([255, 254, 253])],
+      ["an update of another CRDT library", () => foreignUpdate],
+    ])(
+      "restores the rest of a log holding %s, and keeps the whole log",
+      async (_, unreadable) => {
+        const first = await open();
+        first.store.setState(addTodo(first.store.getState(), todo("4")));
+        await first.persistence.flush();
+        await first.adapter.append("room", unreadable());
+        first.store.setState(toggleTodo(first.store.getState(), "2"));
+        await first.persistence.destroy();
+        const stored = (await first.adapter.load("room")).updates;
+        const expected = toggleTodo(addTodo(threeTodos(), todo("4")), "2");
+
+        const onError = vi.fn();
+        const reloaded = await open(first.adapter, undefined, onError);
+        await reloaded.persistence.flush();
+        await reloaded.persistence.compact();
+
+        expect(reloaded.store.getState()).toEqual(expected);
+        expect(onError).toHaveBeenCalledTimes(2);
+        const kept = (await first.adapter.load("room")).updates;
+        expect(kept.slice(0, stored.length)).toEqual(stored);
+        expect(
+          (await open(first.adapter, undefined, vi.fn())).store.getState(),
+        ).toEqual(expected);
+      },
+    );
+
+    it("compacts a log of repeated and out-of-order updates", async () => {
+      const doc = createDoc();
+      const updates: Uint8Array[] = [];
+      persistable(doc).subscribe((update) => updates.push(update));
+      const store = connect(doc);
+      store.setState(addTodo(store.getState(), todo("4")));
+      store.setState(toggleTodo(store.getState(), "4"));
+      const adapter = createMemoryPersistenceAdapter();
+      for (const update of [...updates].reverse()) {
+        await adapter.append("room", update);
+        await adapter.append("room", update);
+      }
+
+      const onError = vi.fn();
+      const reloaded = await open(adapter, undefined, onError);
+      await reloaded.persistence.flush();
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(adapter.size("room")).toBe(1);
+      expect(reloaded.store.getState()).toEqual(store.getState());
     });
 
     it("does not report the updates it applies", () => {

@@ -37,19 +37,16 @@ export const createLoroBackend = (
     read: () => withPlainPrototypes(map.toJSON()),
 
     write: (next, previous) => {
-      // Edits other code has not committed are reported only once committed, so `previous`
-      // may lack them.
-      const current = (
-        previous !== undefined && doc.getPendingTxnLength() === 0
-          ? previous
-          : map.toJSON()
-      ) as object;
+      const current = (previous ?? map.toJSON()) as object;
       applyChanges(map, current, next as object, ops, {
         text,
         json: true,
       });
       doc.commit({ origin });
     },
+
+    // The document counts every op, committed or not. A checkout changes the state without one.
+    revision: () => (doc.isDetached() ? undefined : doc.opCount()),
 
     subscribe: (onRemoteChange): Unsubscribe =>
       map.subscribe((event) => {

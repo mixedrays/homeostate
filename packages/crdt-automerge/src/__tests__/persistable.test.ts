@@ -1,13 +1,24 @@
 import * as A from "@automerge/automerge";
-import { describe, expect, it } from "vitest";
-import { createSyncEngine, type StoreAdapter } from "@homeostate/core";
+import { describe, expect, it, vi } from "vitest";
+import {
+  createPersistence,
+  createSyncEngine,
+  type StoreAdapter,
+} from "@homeostate/core";
 import { describePersistableDoc } from "@homeostate/core/conformance";
+import { createMemoryPersistenceAdapter } from "@homeostate/core/testing";
 import {
   createAutomergeBackend,
   createAutomergeHandle,
   createAutomergePersistable,
   type AutomergeHandle,
 } from "../index.js";
+
+/** A Yjs update setting `shared.title`, as a Yjs app would have stored it. */
+const yjsUpdate = new Uint8Array([
+  1, 1, 158, 203, 200, 236, 15, 0, 40, 1, 6, 115, 104, 97, 114, 101, 100, 5,
+  116, 105, 116, 108, 101, 1, 119, 3, 121, 106, 115, 0,
+]);
 
 describePersistableDoc("createAutomergePersistable", {
   createDoc: () => createAutomergeHandle<Record<string, unknown>>(),
@@ -17,9 +28,30 @@ describePersistableDoc("createAutomergePersistable", {
     b.update((doc) => A.merge(doc, a.doc()));
     a.update((doc) => A.merge(doc, b.doc()));
   },
+  foreignUpdate: yjsUpdate,
 });
 
 type Root = Record<string, unknown>;
+
+describe("createPersistence with a log Automerge cannot read", () => {
+  it.each([
+    ["corrupt bytes", new Uint8Array([255, 254, 253])],
+    ["a Yjs update stored under the same key", yjsUpdate],
+  ])("keeps %s and reports the error", async (_, unreadable) => {
+    const storage = createMemoryPersistenceAdapter();
+    await storage.append("room", unreadable);
+    const onError = vi.fn();
+    const persistence = createPersistence(
+      createAutomergePersistable(createAutomergeHandle()),
+      storage,
+      { key: "room", onError },
+    );
+    await persistence.flush();
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect((await storage.load("room")).updates).toContainEqual(unreadable);
+  });
+});
 
 /** A handle listener that changes the document whenever an update from a peer arrives. */
 const deriveOnRemote = (handle: AutomergeHandle<Root>) =>

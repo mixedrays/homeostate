@@ -59,6 +59,39 @@ const removedError = (): Error =>
     "The synced Y.Map was removed from its document, as when a peer replaces it with a new map",
   );
 
+/** A document's transactions, as far as its events tell, for the `revision` of its backends. */
+interface Transactions {
+  /** Started, whose observers have not been called yet. */
+  open: number;
+  /** Whose observers have been called, and that changed a shared type. */
+  done: number;
+}
+
+/** One count per document, however many backends work on it. */
+const counts = new WeakMap<Y.Doc, Transactions>();
+
+/**
+ * Counts `doc`'s transactions. Their changes reach observers only once they end, and a
+ * transaction an observer starts ends before the observers still running return, so until a
+ * transaction's observers are called, what it changed is unknown.
+ */
+const countTransactions = (doc: Y.Doc): Transactions => {
+  const known = counts.get(doc);
+  if (known) return known;
+  const transactions: Transactions = { open: 0, done: 0 };
+  doc.on("beforeTransaction", () => {
+    transactions.open++;
+  });
+  doc.on("beforeObserverCalls", (transaction) => {
+    // Not below zero, for a transaction already open when the count began.
+    transactions.open = Math.max(0, transactions.open - 1);
+    // An update the document already held changes nothing.
+    if (transaction.changed.size > 0) transactions.done++;
+  });
+  counts.set(doc, transactions);
+  return transactions;
+};
+
 /**
  * Creates a CrdtBackend over the Y.Map called `name` inside `doc`, or over `map`, which may be
  * nested in another shared type or live in a subdocument, but must already be part of a
@@ -110,6 +143,7 @@ export function createYjsBackend(
     onRemoved = reportRemoved,
   } = options;
   const ops = createYjsOps(text);
+  const transactions = countTransactions(doc);
   let reported = false;
 
   return {
@@ -118,14 +152,11 @@ export function createYjsBackend(
 
     read: () => toPlainValue(map),
 
+    // Every change in the document, since telling which ones changed the map takes more.
+    revision: () => (transactions.open > 0 ? undefined : transactions.done),
+
     write: (next, previous) => {
-      // Inside another transaction, its changes so far are reported only once it ends, so
-      // `previous` may lack them.
-      const current = (
-        previous !== undefined && doc._transaction === null
-          ? previous
-          : map.toJSON()
-      ) as object;
+      const current = (previous ?? map.toJSON()) as object;
       doc.transact(
         () =>
           applyChanges(map, current, next as object, ops, {
