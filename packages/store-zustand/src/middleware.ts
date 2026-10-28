@@ -102,6 +102,8 @@ const homeostateImpl: HomeostateMiddlewareImpl = (creator, options) => {
         engine.disconnect();
       },
       isConnected: engine.isConnected,
+      getSyncedState: engine.getSyncedState,
+      subscribe: engine.subscribe,
     };
 
     const persistApi = (api as { persist?: PersistApi }).persist;

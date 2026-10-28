@@ -45,9 +45,9 @@ export function App() {
 Pass several sources to inspect several stores. With the Zustand `homeostate` middleware, use
 `createZustandAdapter(store)` as the adapter and `store.homeostate` as the engine. Pass what
 `createPersistence` returned as `persistence` to see and compact the stored document on the
-Storage tab. Pass the engine's `filter` too, if it has one, and a `network` link from
-`createNetworkLink` in `@homeostate/tool-devtools/network` to slow down or cut the
-connection on the Network tab: see the documentation.
+Storage tab. The engine tells the devtools which keys it keeps local and which changes are
+remote. Pass a `network` link from `createNetworkLink` in `@homeostate/tool-devtools/network`
+to slow down or cut the connection on the Network tab: see the documentation.
 
 | Prop             | Default          | Description                                                           |
 | ---------------- | ---------------- | --------------------------------------------------------------------- |

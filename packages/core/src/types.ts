@@ -163,6 +163,22 @@ export interface SetupOptions extends SyncEngineConfig {
 export type SyncErrorSource = "store" | "backend";
 
 /**
+ * What the sync engine has just handled, as `SyncEngine.subscribe` reports it:
+ * - `'local'`: a store notification while connected, once its write to the backend returned,
+ *   even when it changed only local keys. An echo raised while a remote change is applied sends
+ *   none.
+ * - `'remote'`: an apply of the backend's state, once `setState` and the write of what the store
+ *   changed meanwhile returned; once per flush with `schedule`, even when the store is unchanged.
+ *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`.
+ * - `'connect'`: a `connect()` that connected, once reconciliation and both subscriptions are
+ *   done. It covers seeding and the values adopted from the backend, which send nothing else.
+ * - `'disconnect'`: a `disconnect()` that disconnected, once both subscriptions are removed. A
+ *   pending apply it runs sends its `'remote'` first, and `'disconnect'` follows even when that
+ *   apply throws, since the engine is disconnected all the same.
+ */
+export type SyncEvent = "local" | "remote" | "connect" | "disconnect";
+
+/**
  * The sync engine interface - manages bidirectional sync between a store and a backend
  */
 export interface SyncEngine {
@@ -172,6 +188,19 @@ export interface SyncEngine {
   disconnect: () => void;
   /** Check if engine is connected */
   isConnected: () => boolean;
+  /**
+   * The store's synced keys with the values the store holds, connected or not: a new object
+   * holding the keys `filter` keeps, without `__proto__`. Its values are the store's own, by
+   * identity, and are not turned into JSON.
+   */
+  getSyncedState: () => Record<string, unknown>;
+  /**
+   * Calls `listener` after every sync event until unsubscribed, across reconnects. Events are
+   * sent synchronously once the work is done, and not at all when it throws or when `connect()`
+   * or `disconnect()` changes nothing. Each listener runs on its own: what it throws goes to
+   * `console.error`, and the other listeners still run.
+   */
+  subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
 
 /**

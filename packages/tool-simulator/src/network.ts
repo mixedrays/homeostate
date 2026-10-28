@@ -1,6 +1,5 @@
 import {
   createSyncEngine,
-  defaultSyncFilter,
   type CrdtBackend,
   type PersistableDoc,
   type StoreAdapter,
@@ -8,13 +7,7 @@ import {
   type SyncEngineConfig,
   type Unsubscribe,
 } from "@homeostate/core";
-import {
-  asJson,
-  firstDifference,
-  formatPath,
-  formatValue,
-  syncedJson,
-} from "./compare.js";
+import { asJson, firstDifference, formatPath, formatValue } from "./compare.js";
 import { createRandom, randomSeed } from "./random.js";
 
 /**
@@ -356,7 +349,6 @@ export function createNetwork(options: NetworkOptions = {}): Network {
         setup.adapter,
         setup.config,
       );
-      const filter = setup.config?.filter ?? defaultSyncFilter;
       const peer: Peer<S> = {
         index,
         name: setup.name ?? `peer-${index}`,
@@ -364,7 +356,7 @@ export function createNetwork(options: NetworkOptions = {}): Network {
         backend: setup.backend,
         doc: setup.doc,
         engine,
-        syncedState: () => syncedJson(setup.adapter.getState(), filter),
+        syncedState: () => asJson(engine.getSyncedState()),
       };
       peers.push(peer);
       unsubscribers.push(
