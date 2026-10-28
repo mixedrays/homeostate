@@ -138,6 +138,23 @@ export interface SyncEngineConfig {
 }
 
 /**
+ * The options every setup helper takes. A setup helper is the one call in a `store-*` package,
+ * such as the Zustand `homeostate` middleware, that creates the store adapter and the sync
+ * engine for one store; its options extend these with its own.
+ */
+export interface SetupOptions extends SyncEngineConfig {
+  /** The CRDT backend the store syncs with */
+  backend: CrdtBackend;
+  /**
+   * Who connects the engine:
+   * - `'auto'`: the helper, once the store is ready, such as when it is created (default)
+   * - `'manual'`: the app, by calling `connect()` on the engine the helper exposes; until then
+   *   the engine reads and writes neither the store nor the backend
+   */
+  connect?: "auto" | "manual";
+}
+
+/**
  * The side of the sync engine that an error reported to `onError` came from:
  * - `'store'`: the store adapter's `getState` or `setState`, or a store that keeps changing
  *   what it is given (see `WriteLoopError`)

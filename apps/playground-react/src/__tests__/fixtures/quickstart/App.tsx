@@ -19,9 +19,7 @@ export default function App() {
         {synced ? "Connected" : "Connecting to the sync server…"}
       </p>
       <p>Count: {count}</p>
-      <button disabled={!synced} onClick={increment}>
-        Increment
-      </button>
+      <button onClick={increment}>Increment</button>
     </main>
   );
 }

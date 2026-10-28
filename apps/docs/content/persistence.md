@@ -68,10 +68,19 @@ stored, local edits and those from peers alike.
 > `connect()` would seed the store's defaults as new operations, and they could win over the
 > restored values. The provider may connect at any time.
 
-If you use the Zustand middleware, which connects as soon as the store is created, create the
-store after `whenLoaded`, or seed the document identically in every peer before persisting
-it, as the [playground](https://github.com/mixedrays/homeostate/tree/main/apps/playground)
-does.
+With the Zustand middleware, pass `connect: "manual"` and connect the store the same way:
+
+```ts
+const useTodos = create<TodoState>()(
+  homeostate(creator, {
+    backend: createYjsBackend(doc, "shared"),
+    connect: "manual",
+  }),
+);
+
+await persistence.whenLoaded;
+useTodos.homeostate.connect();
+```
 
 ## Choosing storage
 
