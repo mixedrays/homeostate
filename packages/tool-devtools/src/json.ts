@@ -1,4 +1,9 @@
-import { ChangeType, getChanges, type Change } from "@homeostate/core";
+import {
+  ChangeType,
+  getChanges,
+  type ListChange,
+  type RecordChange,
+} from "@homeostate/core";
 
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -173,49 +178,110 @@ export interface DiffLine {
  * the edit script. A string edit is shown as one update of the whole string.
  */
 export const diffJson = (before: JsonObject, after: JsonObject): DiffLine[] =>
-  flatten(before, after, getChanges(before, after), []);
+  flattenRecord(before, after, getChanges(before, after), []);
 
-const flatten = (
+type Pending = Extract<RecordChange | ListChange, { type: "pending" }>;
+
+/** The lines of the pending step `change`, from the values at its key before and after. */
+const flattenPending = (
   before: unknown,
   after: unknown,
-  changes: Change[],
+  change: Pending,
   path: JsonPath,
 ): DiffLine[] => {
-  if (typeof before === "string")
-    return [{ kind: "update", path, before, after: after as Json | undefined }];
+  if (change.kind === "text")
+    return [
+      { kind: "update", path, before: before as Json, after: after as Json },
+    ];
+  if (change.kind === "list")
+    return flattenList(before as unknown[], after, change.changes, path);
+  return flattenRecord(before as Plain, after, change.changes, path);
+};
 
+const flattenRecord = (
+  before: Plain,
+  after: unknown,
+  changes: RecordChange[],
+  path: JsonPath,
+): DiffLine[] => {
   const lines: DiffLine[] = [];
-  const work = Array.isArray(before) ? before.slice() : null;
-  const at = (key: string | number): Json | undefined =>
-    (work ? work[key as number] : (before as Plain)[key]) as Json | undefined;
-
-  for (const [type, key, value] of changes) {
-    const keyPath = [...path, key];
-    switch (type) {
+  for (const change of changes) {
+    const keyPath = [...path, change.key];
+    const previous = before[change.key] as Json | undefined;
+    switch (change.type) {
       case ChangeType.INSERT:
-        lines.push({ kind: "insert", path: keyPath, after: value as Json });
-        work?.splice(key as number, 0, value);
+        lines.push({
+          kind: "insert",
+          path: keyPath,
+          after: change.value as Json,
+        });
         break;
       case ChangeType.DELETE:
-        lines.push({ kind: "delete", path: keyPath, before: at(key) });
-        work?.splice(key as number, 1);
+        lines.push({ kind: "delete", path: keyPath, before: previous });
         break;
       case ChangeType.UPDATE:
         lines.push({
           kind: "update",
           path: keyPath,
-          before: at(key),
-          after: value as Json,
+          before: previous,
+          after: change.value as Json,
         });
-        if (work) work[key as number] = value;
+        break;
+      case ChangeType.PENDING:
+        lines.push(
+          ...flattenPending(
+            previous,
+            (after as Plain)[change.key],
+            change,
+            keyPath,
+          ),
+        );
+        break;
+    }
+  }
+  return lines;
+};
+
+const flattenList = (
+  before: unknown[],
+  after: unknown,
+  changes: ListChange[],
+  path: JsonPath,
+): DiffLine[] => {
+  const lines: DiffLine[] = [];
+  const work = before.slice();
+  for (const change of changes) {
+    const keyPath = [...path, change.key];
+    switch (change.type) {
+      case ChangeType.INSERT:
+        lines.push({
+          kind: "insert",
+          path: keyPath,
+          after: change.value as Json,
+        });
+        work.splice(change.key, 0, change.value);
+        break;
+      case ChangeType.DELETE:
+        // One line per item, each at the index the line before it left.
+        for (const item of work.splice(change.key, change.count ?? 1))
+          lines.push({ kind: "delete", path: keyPath, before: item as Json });
+        break;
+      case ChangeType.UPDATE:
+        lines.push({
+          kind: "update",
+          path: keyPath,
+          before: work[change.key] as Json,
+          after: change.value as Json,
+        });
+        work[change.key] = change.value;
         break;
       case ChangeType.PENDING:
         // Steps before this index are final, so it is also the index in `after`.
         lines.push(
-          ...flatten(
-            at(key),
-            (after as Plain)[key as string],
-            value as Change[],
+          ...flattenPending(
+            work[change.key],
+            (after as unknown[])[change.key],
+            change,
             keyPath,
           ),
         );

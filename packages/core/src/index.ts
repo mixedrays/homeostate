@@ -6,7 +6,13 @@ export { applyChanges, applyStringChanges } from "./apply.js";
 export type { ApplyOps, ContainerKind } from "./apply.js";
 export type { Diffable, DiffOptions, TextPolicy } from "./diff.js";
 export { ChangeType } from "./change.js";
-export type { Change } from "./change.js";
+export type {
+  Change,
+  EditScript,
+  ListChange,
+  RecordChange,
+  TextChange,
+} from "./change.js";
 export { defaultSyncFilter } from "./types.js";
 export type {
   CrdtBackend,

@@ -168,15 +168,15 @@ Every backend writing to one document should use the same text policy.
 ## Diffing
 
 **Change**:
-One `[type, key, value]` step of an edit script, whose type is `INSERT`, `UPDATE`, `DELETE` or `PENDING`.
-In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the tuple is meant.
+One step of an edit script, an object whose `type` is `INSERT`, `UPDATE`, `DELETE` or `PENDING`: a `RecordChange` keyed by property name, or a `ListChange` or `TextChange` keyed by position. An array or string delete carries the `count` of adjacent items or UTF-16 units it removes.
+In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the step is meant.
 
 **Edit script**:
-The ordered `Change[]` that `getChanges(a, b)` returns to turn `a` into `b`; each numeric key addresses the array or string as revised by the steps before it.
+The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, all of one container kind (`EditScript`); each numeric key addresses the array or string as revised by the steps before it.
 _Avoid_: Patch, delta, changeset
 
 **Pending change**:
-A `PENDING` change, whose value is the nested edit script for the container or text at its key, so it is edited in place rather than replaced.
+A `PENDING` change, whose `changes` are the nested edit script for the container or text at its key and whose `kind` names that container, so it is edited in place rather than replaced.
 _Avoid_: Recursive change, nested diff
 
 **Fine-grained write**:

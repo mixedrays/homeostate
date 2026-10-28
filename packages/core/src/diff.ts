@@ -1,4 +1,10 @@
-import { ChangeType, type Change } from "./change.js";
+import {
+  ChangeType,
+  type EditScript,
+  type ListChange,
+  type RecordChange,
+  type TextChange,
+} from "./change.js";
 import { isAbsent, toJsonPrimitive, toJsonValue } from "./json.js";
 
 export type Diffable = Record<string, unknown> | Array<unknown> | string;
@@ -53,11 +59,11 @@ export const hasOwn = (object: object, key: string): boolean =>
  */
 export const PROTO_KEY = "__proto__";
 
-const isDiffable = (value: unknown): value is Diffable =>
-  isArray(value) || isString(value) || isRecord(value);
-
-const isSameKind = (a: Diffable, b: Diffable): boolean =>
-  isString(a) ? isString(b) : isArray(a) ? isArray(b) : isRecord(b);
+/** A nested edit script and the kind of container it edits. */
+type Nested =
+  | { kind: "record"; changes: RecordChange[] }
+  | { kind: "list"; changes: ListChange[] }
+  | { kind: "text"; changes: TextChange[] };
 
 /**
  * The changes turning `a` into `b` under `key` of the container at `path`, or `null` when `b`
@@ -69,12 +75,17 @@ const nestedChanges = (
   path: Path,
   key: string | number,
   options: DiffOptions,
-): Change[] | null => {
-  if (!isDiffable(a) || !isDiffable(b) || !isSameKind(a, b)) return null;
+): Nested | null => {
   const at = [...path, key];
-  if (isString(a) && options.text !== undefined && !options.text(at))
-    return null;
-  return diff(a, b, at, options);
+  if (isString(a) && isString(b))
+    return options.text === undefined || options.text(at)
+      ? { kind: "text", changes: getStringChanges(a, b) }
+      : null;
+  if (isArray(a) && isArray(b))
+    return { kind: "list", changes: getArrayChanges(a, b, at, options) };
+  if (isRecord(a) && isRecord(b))
+    return { kind: "record", changes: getRecordChanges(a, b, at, options) };
+  return null;
 };
 
 /** `===`, except that `NaN` equals itself, so a store that keeps holding it has not changed. */
@@ -152,22 +163,43 @@ const written = (value: unknown, options: DiffOptions): unknown =>
  * Returns the ordered edit script that turns `a` into `b`. Two strings passed directly are
  * always diffed character by character; `options.text` decides for the strings nested in them.
  */
-export const getChanges = (
+export function getChanges(
+  a: string,
+  b: string,
+  options?: DiffOptions,
+): TextChange[];
+export function getChanges(
+  a: unknown[],
+  b: unknown[],
+  options?: DiffOptions,
+): ListChange[];
+export function getChanges(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+  options?: DiffOptions,
+): RecordChange[];
+export function getChanges(
+  a: Diffable,
+  b: Diffable,
+  options?: DiffOptions,
+): EditScript;
+export function getChanges(
   a: Diffable,
   b: Diffable,
   options: DiffOptions = {},
-): Change[] => diff(a, b, [], options);
+): EditScript {
+  return diff(a, b, options);
+}
 
+/** The script for two values of any kind; values of different kinds have none. */
 const diff = (
   a: Diffable,
   b: Diffable,
-  path: Path,
-  options: DiffOptions,
-): Change[] => {
-  if (a === b) return [];
+  options: DiffOptions = {},
+): EditScript => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
-  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, path, options);
-  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, path, options);
+  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, [], options);
+  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, [], options);
   return [];
 };
 
@@ -202,13 +234,7 @@ const sharesCharacter = (a: string[], b: string[]): boolean => {
   return false;
 };
 
-const deleteCharacter = (index: number, character: string): Change => [
-  ChangeType.DELETE,
-  index,
-  character.length === 1 ? undefined : character.length,
-];
-
-const getStringChanges = (a: string, b: string): Change[] => {
+const getStringChanges = (a: string, b: string): TextChange[] => {
   if (a === b) return [];
   // Trim the common ends by UTF-16 unit, but never between the halves of a surrogate pair.
   let [start, end] = commonEnds(
@@ -223,14 +249,16 @@ const getStringChanges = (a: string, b: string): Change[] => {
   const from = Array.from(a.slice(start, a.length - end));
   const to = Array.from(b.slice(start, b.length - end));
   if (!sharesCharacter(from, to)) {
-    const deletes = from.map((character) => deleteCharacter(start, character));
+    const changes: TextChange[] = [];
+    const count = a.length - end - start;
+    if (count > 0) changes.push({ type: ChangeType.DELETE, key: start, count });
     const inserted = to.join("");
-    return inserted.length === 0
-      ? deletes
-      : [...deletes, [ChangeType.INSERT, start, inserted]];
+    if (inserted.length > 0)
+      changes.push({ type: ChangeType.INSERT, key: start, value: inserted });
+    return changes;
   }
 
-  const changes: Change[] = [];
+  const changes: TextChange[] = [];
   let index = start;
 
   for (const { step, a: source, b: position } of editScript(
@@ -238,17 +266,30 @@ const getStringChanges = (a: string, b: string): Change[] => {
     to,
     (x, y) => x === y,
   )) {
+    const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
     if (step === "eq") index += from[source].length;
-    else if (step === "del") changes.push(deleteCharacter(index, from[source]));
-    else {
-      const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
+    else if (step === "del") {
+      // A run of deletions at one offset is one step, counting whole characters.
+      if (last?.type === ChangeType.DELETE && last.key === index)
+        last.count = (last.count ?? 1) + from[source].length;
+      else
+        changes.push({
+          type: ChangeType.DELETE,
+          key: index,
+          count: from[source].length,
+        });
+    } else {
       if (
-        last !== undefined &&
-        last[0] === ChangeType.INSERT &&
-        (last[1] as number) + (last[2] as string).length === index
-      ) {
-        last[2] = (last[2] as string) + to[position];
-      } else changes.push([ChangeType.INSERT, index, to[position]]);
+        last?.type === ChangeType.INSERT &&
+        last.key + last.value.length === index
+      )
+        last.value += to[position];
+      else
+        changes.push({
+          type: ChangeType.INSERT,
+          key: index,
+          value: to[position],
+        });
       index += to[position].length;
     }
   }
@@ -261,14 +302,15 @@ const getArrayChanges = (
   b: Array<unknown>,
   path: Path,
   options: DiffOptions,
-): Change[] => {
+): ListChange[] => {
+  if (a === b) return [];
   const equal = options.json ? jsonItemEqual : deepEqual;
   const [start, end] = commonEnds(a.length, b.length, (i, j) =>
     equal(a[i], b[j]),
   );
   const from = a.slice(start, a.length - end);
   const to = b.slice(start, b.length - end);
-  const changes: Change[] = [];
+  const changes: ListChange[] = [];
   let index = start;
   let deleted: number[] = [];
   let inserted: number[] = [];
@@ -286,16 +328,29 @@ const getArrayChanges = (
         options,
       );
       if (nested === null)
-        changes.push([ChangeType.UPDATE, index, written(next, options)]);
-      else if (nested.length > 0)
-        changes.push([ChangeType.PENDING, index, nested]);
+        changes.push({
+          type: ChangeType.UPDATE,
+          key: index,
+          value: written(next, options),
+        });
+      else if (nested.changes.length > 0)
+        changes.push({ type: ChangeType.PENDING, key: index, ...nested });
       index++;
     }
-    for (let i = pairs; i < deleted.length; i++)
-      changes.push([ChangeType.DELETE, index, undefined]);
+    // The unpaired deletions are adjacent, so they are one step.
+    if (deleted.length > pairs)
+      changes.push({
+        type: ChangeType.DELETE,
+        key: index,
+        count: deleted.length - pairs,
+      });
     for (let i = pairs; i < inserted.length; i++) {
       const next = itemOf(to[inserted[i]]);
-      changes.push([ChangeType.INSERT, index, written(next, options)]);
+      changes.push({
+        type: ChangeType.INSERT,
+        key: index,
+        value: written(next, options),
+      });
       index++;
     }
     deleted = [];
@@ -320,8 +375,9 @@ const getRecordChanges = (
   b: Record<string, unknown>,
   path: Path,
   options: DiffOptions,
-): Change[] => {
-  const changes: Change[] = [];
+): RecordChange[] => {
+  if (a === b) return [];
+  const changes: RecordChange[] = [];
   // With `options.json`, an entry holding `undefined` or a function is absent.
   const absent = (value: unknown): boolean =>
     options.json === true && isAbsent(value);
@@ -335,19 +391,27 @@ const getRecordChanges = (
       !absent(a[property]) &&
       (!hasOwn(b, property) || absent(b[property]))
     )
-      changes.push([ChangeType.DELETE, property, undefined]);
+      changes.push({ type: ChangeType.DELETE, key: property });
 
   for (const [property, value] of Object.entries(b)) {
     if (property === PROTO_KEY || absent(value)) continue;
     if (!hasOwn(a, property) || absent(a[property]))
-      changes.push([ChangeType.INSERT, property, written(value, options)]);
+      changes.push({
+        type: ChangeType.INSERT,
+        key: property,
+        value: written(value, options),
+      });
     else {
       const nested = nestedChanges(a[property], value, path, property, options);
       if (nested === null) {
         if (!same(a[property], value))
-          changes.push([ChangeType.UPDATE, property, written(value, options)]);
-      } else if (nested.length > 0)
-        changes.push([ChangeType.PENDING, property, nested]);
+          changes.push({
+            type: ChangeType.UPDATE,
+            key: property,
+            value: written(value, options),
+          });
+      } else if (nested.changes.length > 0)
+        changes.push({ type: ChangeType.PENDING, key: property, ...nested });
     }
   }
 

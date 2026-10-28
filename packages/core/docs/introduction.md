@@ -73,6 +73,8 @@ which read and write your library's maps, lists and texts:
 - Accept a `text` policy and pass it on. In `set` and `splice`, store the strings it marks in
   your library's text type and every other string as a plain value; text is then edited
   through `editText`.
+- Delete in `splice` and `editText` with one library call for the whole `deleteCount`, such as
+  `Y.Text.delete(index, length)`: clearing a list or deleting a paragraph arrives as one run.
 
-The [diff and apply reference](./diffing.md) covers the edit script format and has a complete
-`ApplyOps` example.
+The [diff and apply reference](./diffing.md) covers the edit script format, the
+`RecordChange`, `ListChange` and `TextChange` steps, and has a complete `ApplyOps` example.
