@@ -109,18 +109,53 @@ describe("createYjsBackend", () => {
     expect(backend.read()).toEqual({ count: 2, label: "b" });
   });
 
-  it("diffs against its document when written inside another transaction", () => {
+  it("has no revision inside a transaction, and a new one once its observers are called", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
-    backend.write({ count: 1, label: "a" });
-
-    doc.transact(() => {
-      // Reported only once the outer transaction ends, so `previous` cannot hold it yet.
-      doc.getMap(NAME).set("count", 2);
-      backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+    backend.write({ count: 1 });
+    const before = backend.revision?.();
+    let observed: unknown;
+    doc.getMap(NAME).observe(() => {
+      observed = backend.revision?.();
     });
 
-    expect(backend.read()).toEqual({ count: 1, label: "b" });
+    doc.transact(() => {
+      doc.getMap(NAME).set("count", 2);
+      expect(backend.revision?.()).toBeUndefined();
+    });
+
+    expect(observed).toBeDefined();
+    expect(observed).not.toBe(before);
+    expect(backend.revision?.()).toBe(observed);
+  });
+
+  it("has no revision while a transaction an observer started waits for its observers", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    const map = doc.getMap(NAME);
+    const observed: unknown[] = [];
+    // Called first, so its transaction has changed the map when the next observer is called.
+    map.observe(() => {
+      if (!map.has("derived")) map.set("derived", 1);
+    });
+    map.observe(() => observed.push(backend.revision?.()));
+
+    map.set("count", 1);
+
+    expect(observed).toHaveLength(2);
+    expect(observed[0]).toBeUndefined();
+    expect(observed[1]).toBeDefined();
+  });
+
+  it("keeps its revision for an update the document already holds", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1 });
+    const before = backend.revision?.();
+
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(doc));
+
+    expect(backend.revision?.()).toBe(before);
   });
 });
 

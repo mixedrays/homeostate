@@ -61,16 +61,31 @@ describe("createLoroBackend", () => {
     expect(backend.read()).toEqual({ count: 2, label: "b" });
   });
 
-  it("diffs against its document while edits by other code are uncommitted", () => {
+  it("moves its revision with an edit other code has not committed", () => {
     const doc = new LoroDoc();
     const backend = createLoroBackend(doc, NAME);
-    backend.write({ count: 1, label: "a" });
-    // Reported only once committed, so `previous` cannot hold it yet.
+    backend.write({ count: 1 });
+    const before = backend.revision?.();
+
+    // Reported only once committed.
     doc.getMap(NAME).set("count", 2);
 
-    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+    expect(backend.revision?.()).not.toBe(before);
+  });
 
-    expect(backend.read()).toEqual({ count: 1, label: "b" });
+  it("has no revision while checked out, and its latest one again after", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME);
+    backend.write({ count: 1 });
+    const earlier = doc.frontiers();
+    backend.write({ count: 2 });
+    const latest = backend.revision?.();
+
+    doc.checkout(earlier);
+    expect(backend.revision?.()).toBeUndefined();
+    doc.checkoutToLatest();
+
+    expect(backend.revision?.()).toBe(latest);
   });
 });
 

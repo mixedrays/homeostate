@@ -69,11 +69,25 @@ export interface CrdtBackend {
    * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
    * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing,
    * and `NaN` or infinite numbers where it holds `null`.
-   * The sync engine passes the synced state it last wrote or read, so a backend can diff against
-   * it with `json: true` instead of reading its document, and unchanged subtrees of `next` match
-   * it by identity. A backend may ignore it.
+   * The sync engine passes the synced state it last wrote or read, once `revision` or a read
+   * shows that the backend still holds it, so a backend can diff against it with `json: true`
+   * instead of reading its document, and unchanged subtrees of `next` match it by identity.
+   * A backend may ignore it.
    */
   write: (next: unknown, previous?: unknown) => void;
+
+  /**
+   * The synced subtree's revision: a value equal (`===`) to an earlier one only if the subtree
+   * has not changed since, whether or not `subscribe` has reported the change yet. It may change
+   * without the subtree changing, and is `undefined` while the backend cannot tell, as inside a
+   * transaction. Must be cheap: the engine calls it around every write.
+   *
+   * Before writing a local change, the sync engine reads the backend unless the revision is the
+   * one it recorded with what it last wrote or read, so that a remote change another listener
+   * heard first is applied before the local change instead of being written over. Without
+   * `revision`, the engine reads the backend before every local change.
+   */
+  revision?: () => unknown;
 
   /**
    * Notify about changes that did not come through this backend's own `write`.

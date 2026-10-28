@@ -99,7 +99,10 @@ const isProduction = (): boolean => {
  *
  * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
  * A local change made before the flush applies them first, and they replace the store's synced
- * state, so the local change keeps only what it did to keys the engine does not sync.
+ * state, so the local change keeps only what it did to keys the engine does not sync. The same
+ * goes for a remote change the backend holds before the engine hears of it, as when a listener
+ * subscribed to the document first changes the store as it hears of it; see
+ * `CrdtBackend.revision`.
  *
  * `connect()` throws what it runs into, including a `TypeError` for a `read()` or `getState()`
  * that does not return an object. Once connected, what the adapter or the backend throws goes to
@@ -134,6 +137,8 @@ export function createSyncEngine<S extends object>(
    * whole state it last read. Passed to `backend.write` as `previous`; `undefined` when unknown.
    */
   let lastSynced: Plain | undefined;
+  /** The backend's revision when `lastSynced` was recorded. */
+  let lastRevision: unknown;
   /** Counts backend reads after remote changes, so a write can tell that one ran during it. */
   let remoteReads = 0;
   /** Whether a remote change waits for the scheduled flush. */
@@ -191,6 +196,14 @@ export function createSyncEngine<S extends object>(
       expectRecord(backend.read(), "CrdtBackend.read()", "a plain object"),
     );
 
+  /** The backend's revision; `undefined` without one, or while the backend cannot tell. */
+  const readRevision = (): unknown =>
+    call("backend", () => backend.revision?.());
+
+  /** Whether the backend's revision shows that it still holds `lastSynced`. */
+  const isUnchanged = (revision: unknown): boolean =>
+    revision !== undefined && revision === lastRevision;
+
   /** The store's whole state. */
   const readStore = (): S =>
     call(
@@ -215,15 +228,20 @@ export function createSyncEngine<S extends object>(
     return merged as S;
   };
 
-  /** Writes `next`, the store's synced state, passing what the backend holds as `previous`. */
-  const writeSynced = (next: Plain): void => {
-    const previous = lastSynced;
+  /**
+   * Writes `next`, the store's synced state, passing what the backend holds as `previous`, or
+   * nothing when `stale`, so that the backend diffs against its document.
+   */
+  const writeSynced = (next: Plain, stale = false): void => {
+    const previous = stale ? undefined : lastSynced;
     const reads = remoteReads;
     // Unknown should the write throw.
     lastSynced = undefined;
     call("backend", () => backend.write(next, previous));
     // A remote change applied during the write has already recorded what it read.
-    if (remoteReads === reads) lastSynced = next;
+    if (remoteReads !== reads) return;
+    lastRevision = readRevision();
+    lastSynced = next;
   };
 
   /**
@@ -261,7 +279,12 @@ export function createSyncEngine<S extends object>(
       reportLoop(keys);
       return;
     }
-    writeSynced(applied);
+    // Code the store notified may have changed the backend before the engine hears of it, as
+    // with an uncommitted Loro edit, or a Yjs transaction whose observers run after the engine's.
+    // A backend without a revision was read just before.
+    const stale =
+      backend.revision !== undefined && !isUnchanged(readRevision());
+    writeSynced(applied, stale);
     lastWriteBack = { written: applied, keys };
   };
 
@@ -302,6 +325,7 @@ export function createSyncEngine<S extends object>(
     remoteReads++;
     // Unknown should the read throw.
     lastSynced = undefined;
+    lastRevision = readRevision();
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
     lastSynced = readBackend();
     applyRemote(filterState(lastSynced), false);
@@ -338,13 +362,47 @@ export function createSyncEngine<S extends object>(
     }
   };
 
+  /**
+   * Applies the remote changes the store has not been given before a local change is written,
+   * and returns whether it did: those waiting for the scheduled flush, and those the backend holds
+   * before the engine's own listener hears of them, as when another listener of the backend
+   * changes the store first. Reads the backend unless its revision shows it unchanged, and applies
+   * only what differs from what the engine last synced, so a notification for a change already
+   * applied does not discard the local change.
+   */
+  const applyUnseenRemote = (): boolean => {
+    const pending = applyPending;
+    applyPending = false;
+    const synced = lastSynced;
+    // Without a base, nothing tells a remote change apart, so only a pending apply runs.
+    if (synced === undefined) {
+      if (pending) syncToStore();
+      return pending;
+    }
+    const revision = readRevision();
+    if (isUnchanged(revision)) return false;
+    // Unknown should the read throw.
+    lastSynced = undefined;
+    const held = readBackend();
+    lastRevision = revision;
+    if (jsonEqual(held, synced)) {
+      // Kept rather than `held`, since the store's unchanged subtrees share its objects.
+      lastSynced = synced;
+      return false;
+    }
+    remoteReads++;
+    lastSynced = held;
+    applyRemote(filterState(held), false);
+    return true;
+  };
+
   const syncToBackend = (): void => {
     if (applyingRemote) return;
-    // Otherwise the write would revert the pending remote changes. They win: applying them
-    // replaces the store's synced state, local change included, and leaves the backend holding
-    // what the store then holds, so there is nothing left to write. A store that ignored the
-    // apply keeps its stale state out of the backend this way too.
-    if (runPendingApply()) return;
+    // Otherwise the write would revert those remote changes. They win: applying them replaces
+    // the store's synced state, local change included, and leaves the backend holding what the
+    // store then holds, so there is nothing left to write. A store that ignored the apply keeps
+    // its stale state out of the backend this way too.
+    if (applyUnseenRemote()) return;
     lastWriteBack = null;
     writeSynced(filterState(readStore()));
   };
@@ -373,6 +431,7 @@ export function createSyncEngine<S extends object>(
         held = seeded;
       }
 
+      lastRevision = readRevision();
       lastSynced = held;
       try {
         applyRemote(remote, true);

@@ -40,7 +40,8 @@ onMessage((update) => doc.import(update));
 ```
 
 The engine picks up every commit that did not come through its own write, imports and local
-edits alike.
+edits alike. An edit not committed yet is picked up when the store next changes: the engine
+applies it first, and it wins over what that change did to synced keys.
 
 `undefined` and functions are not JSON, so the backend leaves out object entries holding
 either and stores such array items as `null`, as `JSON.stringify` does.

@@ -16,6 +16,7 @@ declare const createMemoryBackend: (initial?: unknown) => MemoryBackend;
 
 interface MemoryBackend extends CrdtBackend {
   receive: (next: unknown) => void;
+  revision: () => number;
 }
 ```
 
@@ -27,6 +28,7 @@ initial state defaults to `{}`. Values are copied through JSON, so use plain JSO
 | `read()`              | `unknown`     | A fresh copy of the held state.                                                                                                 |
 | `write(next)`         | `void`        | Replaces the held state with a copy, without notifying subscribers, and ignores `previous`. Models the engine's own write.      |
 | `receive(next)`       | `void`        | Replaces the held state with a copy, then synchronously notifies every subscriber. Models a full snapshot arriving from a peer. |
+| `revision()`          | `number`      | Counts the writes and receives so far.                                                                                          |
 | `subscribe(callback)` | `Unsubscribe` | Registers a callback; the returned function removes it.                                                                         |
 
 Separate memory backends do not exchange state. See the

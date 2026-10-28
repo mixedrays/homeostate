@@ -45,6 +45,8 @@ export const passthrough: BackendCandidate<PassthroughReplica> = {
           state = next;
           peers.forEach((peer) => peer.deliver(next));
         },
+        // Every change replaces the state.
+        revision: () => state,
         subscribe: (onRemoteChange) => {
           listeners.add(onRemoteChange);
           return () => {
@@ -91,6 +93,7 @@ export const memory: BackendCandidate<MemoryReplica> = {
       peers,
       backend: {
         read: inner.read,
+        revision: inner.revision,
         subscribe: inner.subscribe,
         write: (next) => {
           inner.write(next);
