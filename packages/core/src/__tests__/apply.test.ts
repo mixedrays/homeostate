@@ -82,8 +82,24 @@ describe("applyStringChanges", () => {
       expect(applyStringChanges(before, getChanges(before, after))).toBe(after);
   });
 
-  it("ignores a step it has no meaning for", () => {
-    expect(applyStringChanges("ab", [[ChangeType.UPDATE, 0, "z"]])).toBe("ab");
+  it("deletes a run of UTF-16 units in one step, one unit when the count is absent", () => {
+    expect(
+      applyStringChanges("a😀bc", [
+        { type: ChangeType.DELETE, key: 1, count: 3 },
+      ]),
+    ).toBe("ac");
+    expect(
+      applyStringChanges("abc", [{ type: ChangeType.DELETE, key: 1 }]),
+    ).toBe("ac");
+  });
+
+  it("takes only text steps", () => {
+    expect(
+      applyStringChanges("ab", [
+        // @ts-expect-error A text script has no update.
+        { type: ChangeType.UPDATE, key: 0, value: "z" },
+      ]),
+    ).toBe("ab");
   });
 });
 
@@ -107,6 +123,27 @@ describe("applyChanges", () => {
 
     expect(target).toEqual(after);
     expect(log).toEqual(["splice list 0 1 0", "splice list 2 0 1"]);
+  });
+
+  it("clears a list and a text in one operation each", () => {
+    const { ops, log } = createOps();
+    const target = { list: [1, 2, 3, 4], title: new Text("a😀b") };
+
+    applyChanges(target, snapshot(target), { list: [], title: "" }, ops);
+
+    expect(target.list).toEqual([]);
+    expect(target.title.value).toBe("");
+    expect(log).toEqual(["splice list 0 4 0", "editText title 0 4 "]);
+  });
+
+  it("deletes a run in the middle of a list in one splice", () => {
+    const { target, log } = reconcile(
+      { list: [1, 2, 3, 4, 5] },
+      { list: [1, 5] },
+    );
+
+    expect(target).toEqual({ list: [1, 5] });
+    expect(log).toEqual(["splice list 1 3 0"]);
   });
 
   it("recurses into a container instead of replacing it", () => {
@@ -195,11 +232,9 @@ describe("applyChanges", () => {
 
     expect(target.todos[0].title).toBe(title);
     expect(title.value).toBe("Plan a 😀 trip");
-    // The diff deletes "the" one character at a time, then inserts the new run.
+    // The diff deletes "the" in one step, then inserts the new run.
     expect(log).toEqual([
-      "editText todos.0.title 5 1 ",
-      "editText todos.0.title 5 1 ",
-      "editText todos.0.title 5 1 ",
+      "editText todos.0.title 5 3 ",
       "editText todos.0.title 5 0 a 😀",
     ]);
   });

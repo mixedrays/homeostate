@@ -1,6 +1,6 @@
 import { applyStringChanges } from "./apply.js";
-import { ChangeType, type Change } from "./change.js";
-import { getChanges, PROTO_KEY, type Diffable } from "./diff.js";
+import { ChangeType, type ListChange, type RecordChange } from "./change.js";
+import { getChanges, isRecord, PROTO_KEY, type Diffable } from "./diff.js";
 
 const isContainer = (value: unknown): value is Record<string, unknown> => {
   if (value === null || typeof value !== "object") return false;
@@ -33,36 +33,44 @@ const withoutProtoKeys = (value: unknown): unknown => {
 const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
-const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
-  if (typeof state === "string") return applyStringChanges(state, changes);
-  if (Array.isArray(state)) return applyChangesToArray(state, changes);
-  return applyChangesToObject(state, changes);
+/** The value the pending step `change` leaves at its key, given the value there now. */
+const applyPending = (
+  current: unknown,
+  change: Extract<RecordChange | ListChange, { type: "pending" }>,
+): unknown => {
+  // The diff found a container of `change.kind` at its key.
+  if (change.kind === "text")
+    return applyStringChanges(current as string, change.changes);
+  if (change.kind === "list")
+    return applyChangesToArray(current as unknown[], change.changes);
+  return applyChangesToObject(
+    current as Record<string, unknown>,
+    change.changes,
+  );
 };
 
 const applyChangesToArray = (
   array: unknown[],
-  changes: Change[],
+  changes: ListChange[],
 ): unknown[] => {
   const revised = [...array];
 
-  for (const [type, index, value] of changes) {
-    const i = index as number;
-
-    switch (type) {
+  for (const change of changes) {
+    switch (change.type) {
       case ChangeType.INSERT:
-        revised.splice(i, 0, withoutProtoKeys(value));
+        revised.splice(change.key, 0, withoutProtoKeys(change.value));
         break;
 
       case ChangeType.UPDATE:
-        revised[i] = withoutProtoKeys(value);
+        revised[change.key] = withoutProtoKeys(change.value);
         break;
 
       case ChangeType.PENDING:
-        revised[i] = applyChanges(revised[i] as Diffable, value as Change[]);
+        revised[change.key] = applyPending(revised[change.key], change);
         break;
 
       case ChangeType.DELETE:
-        revised.splice(i, 1);
+        revised.splice(change.key, change.count ?? 1);
         break;
     }
   }
@@ -72,25 +80,23 @@ const applyChangesToArray = (
 
 const applyChangesToObject = (
   object: Record<string, unknown>,
-  changes: Change[],
+  changes: RecordChange[],
 ): Record<string, unknown> => {
   const revised = { ...object };
 
-  for (const [type, property, value] of changes) {
-    const key = property as string;
-
-    switch (type) {
+  for (const change of changes) {
+    switch (change.type) {
       case ChangeType.INSERT:
       case ChangeType.UPDATE:
-        revised[key] = withoutProtoKeys(value);
+        revised[change.key] = withoutProtoKeys(change.value);
         break;
 
       case ChangeType.PENDING:
-        revised[key] = applyChanges(object[key] as Diffable, value as Change[]);
+        revised[change.key] = applyPending(object[change.key], change);
         break;
 
       case ChangeType.DELETE:
-        delete revised[key];
+        delete revised[change.key];
         break;
     }
   }
@@ -111,8 +117,26 @@ const applyChangesToObject = (
  * @returns The patched state, identical to newState.
  */
 export const patchState = <T>(oldState: T, newState: T): T => {
-  const changes = getChanges(oldState as Diffable, newState as Diffable);
-
-  if (changes.length === 0) return oldState;
-  return applyChanges(oldState as Diffable, changes) as T;
+  const a = oldState as Diffable;
+  const b = newState as Diffable;
+  if (typeof a === "string" && typeof b === "string") {
+    const changes = getChanges(a, b);
+    return changes.length === 0
+      ? oldState
+      : (applyStringChanges(a, changes) as T);
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const changes = getChanges(a, b);
+    return changes.length === 0
+      ? oldState
+      : (applyChangesToArray(a, changes) as T);
+  }
+  if (isRecord(a) && isRecord(b)) {
+    const changes = getChanges(a, b);
+    return changes.length === 0
+      ? oldState
+      : (applyChangesToObject(a, changes) as T);
+  }
+  // Values of different kinds have no edit script.
+  return oldState;
 };

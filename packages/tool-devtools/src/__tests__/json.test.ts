@@ -145,6 +145,14 @@ describe("diffJson", () => {
     ]);
   });
 
+  it("lists each item of a deleted run at the index the earlier lines left it", () => {
+    expect(diffJson({ l: [1, 2, 3, 4] }, { l: [1] })).toEqual([
+      { kind: "delete", path: ["l", 1], before: 2 },
+      { kind: "delete", path: ["l", 1], before: 3 },
+      { kind: "delete", path: ["l", 1], before: 4 },
+    ]);
+  });
+
   it("shows a string edit as one update of the whole string", () => {
     expect(diffJson({ text: "hello" }, { text: "help" })).toEqual([
       { kind: "update", path: ["text"], before: "hello", after: "help" },

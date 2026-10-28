@@ -3,9 +3,9 @@ import { Bench } from "tinybench";
 import {
   ChangeType,
   getChanges,
-  type Change,
   type Diffable,
   type DiffOptions,
+  type EditScript,
 } from "@homeostate/core";
 import { formatDuration, table } from "./report.js";
 import { makeTodos } from "./scenarios.js";
@@ -14,7 +14,7 @@ interface Fixture {
   name: string;
   before: Diffable;
   after: Diffable;
-  expected: Change[];
+  expected: EditScript;
 }
 
 const { UPDATE, PENDING } = ChangeType;
@@ -31,32 +31,52 @@ const fixtures = (size: number): Fixture[] => {
       name: "unchanged record",
       before: { entities, count: 0 },
       after: { entities, count: 1 },
-      expected: [[UPDATE, "count", 1]],
+      expected: [{ type: UPDATE, key: "count", value: 1 }],
     },
     {
       name: "normalized toggle",
       before: { entities },
       after: { entities: { ...entities, [changed.id]: changed } },
       expected: [
-        [
-          PENDING,
-          "entities",
-          [[PENDING, changed.id, [[UPDATE, "completed", true]]]],
-        ],
+        {
+          type: PENDING,
+          key: "entities",
+          kind: "record",
+          changes: [
+            {
+              type: PENDING,
+              key: changed.id,
+              kind: "record",
+              changes: [{ type: UPDATE, key: "completed", value: true }],
+            },
+          ],
+        },
       ],
     },
     {
       name: "unchanged array",
       before: { todos, count: 0 },
       after: { todos, count: 1 },
-      expected: [[UPDATE, "count", 1]],
+      expected: [{ type: UPDATE, key: "count", value: 1 }],
     },
     {
       name: "array toggle",
       before: { todos },
       after: { todos: todos.map((todo, i) => (i === index ? changed : todo)) },
       expected: [
-        [PENDING, "todos", [[PENDING, index, [[UPDATE, "completed", true]]]]],
+        {
+          type: PENDING,
+          key: "todos",
+          kind: "list",
+          changes: [
+            {
+              type: PENDING,
+              key: index,
+              kind: "record",
+              changes: [{ type: UPDATE, key: "completed", value: true }],
+            },
+          ],
+        },
       ],
     },
     {

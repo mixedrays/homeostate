@@ -1,11 +1,16 @@
-import { ChangeType, type Change } from "./change.js";
-import { getChanges, type Diffable, type DiffOptions } from "./diff.js";
+import {
+  ChangeType,
+  type ContainerKind,
+  type ListChange,
+  type RecordChange,
+  type TextChange,
+} from "./change.js";
+import { getChanges, isRecord, type DiffOptions } from "./diff.js";
 import { toJsonValue } from "./json.js";
 
-type Path = readonly (string | number)[];
+export type { ContainerKind } from "./change.js";
 
-/** How `applyChanges` edits a container: by key, by position, or by character. */
-export type ContainerKind = "record" | "list" | "text";
+type Path = readonly (string | number)[];
 
 /**
  * How one store or document writes into its containers. `applyChanges` decides *what* to write;
@@ -58,106 +63,118 @@ export interface ApplyOps {
 /**
  * Revises `value` by the character-level edit script `changes`, which is what `getChanges`
  * returns for two strings. Each index addresses the string as revised by the steps before it.
- * Offsets and deletion lengths are UTF-16 units; an omitted length means one unit.
+ * Offsets and deletion counts are UTF-16 units; an absent count means one unit.
  */
-export const applyStringChanges = (value: string, changes: Change[]): string =>
-  changes.reduce((revised, [type, index, inserted]) => {
-    const at = index as number;
-    if (type === ChangeType.INSERT)
-      return revised.slice(0, at) + (inserted as string) + revised.slice(at);
-    if (type === ChangeType.DELETE)
-      return (
-        revised.slice(0, at) +
-        revised.slice(at + (typeof inserted === "number" ? inserted : 1))
-      );
+export const applyStringChanges = (
+  value: string,
+  changes: TextChange[],
+): string =>
+  changes.reduce((revised, change) => {
+    const at = change.key;
+    if (change.type === ChangeType.INSERT)
+      return revised.slice(0, at) + change.value + revised.slice(at);
+    if (change.type === ChangeType.DELETE)
+      return revised.slice(0, at) + revised.slice(at + (change.count ?? 1));
     return revised;
   }, value);
 
-/** The kind of container a diff edits `value` as. */
-const expectedKind = (value: unknown): ContainerKind | undefined =>
-  typeof value === "string"
-    ? "text"
-    : Array.isArray(value)
-      ? "list"
-      : value !== null && typeof value === "object"
-        ? "record"
-        : undefined;
+/** A pending step of a record's or a list's script. */
+type Pending = Extract<RecordChange | ListChange, { type: "pending" }>;
 
 /**
- * Applies `changes` to `container`, whose next value is `next`. A pending step edits the child
- * in place when it is the kind of container the diff expects; any other child, such as a string
- * held as a plain value or a plain value other code stored, is replaced whole by its next value.
+ * Applies the pending step `change` to the child at its key of `container`, whose next value is
+ * `next`. The child is edited in place when it is the kind of container the step's script edits;
+ * any other child, such as a string held as a plain value or a plain value other code stored, is
+ * replaced whole by its next value.
  */
-const walk = (
+const walkPending = (
   container: object,
-  kind: ContainerKind,
-  changes: Change[],
+  change: Pending,
   next: unknown,
   path: Path,
   ops: ApplyOps,
   options: DiffOptions,
 ): void => {
-  if (kind === "text") {
-    for (const [type, index, value] of changes) {
-      if (type === ChangeType.INSERT)
-        ops.editText?.(container, index as number, 0, value as string, path);
-      else if (type === ChangeType.DELETE)
-        ops.editText?.(
-          container,
-          index as number,
-          typeof value === "number" ? value : 1,
-          "",
-          path,
-        );
+  const { key } = change;
+  // Steps before a pending one are final, so `key` is also its index in `next`.
+  const nextChild = (next as Record<string | number, unknown>)[key];
+  const child = ops.get(container, key);
+  const at = [...path, key];
+  if (ops.kind(child) === change.kind) {
+    if (change.kind === "record")
+      return walkRecord(
+        child as object,
+        change.changes,
+        nextChild,
+        at,
+        ops,
+        options,
+      );
+    if (change.kind === "list")
+      return walkList(
+        child as object,
+        change.changes,
+        nextChild,
+        at,
+        ops,
+        options,
+      );
+    if (ops.editText !== undefined) {
+      for (const step of change.changes)
+        if (step.type === ChangeType.INSERT)
+          ops.editText(child, step.key, 0, step.value, at);
+        else ops.editText(child, step.key, step.count ?? 1, "", at);
+      return;
     }
-    return;
   }
+  ops.set(
+    container,
+    key,
+    options.json ? toJsonValue(nextChild) : nextChild,
+    path,
+  );
+};
 
-  const list = kind === "list";
+/** Applies a record's script `changes` to `record`, whose next value is `next`. */
+const walkRecord = (
+  record: object,
+  changes: RecordChange[],
+  next: unknown,
+  path: Path,
+  ops: ApplyOps,
+  options: DiffOptions,
+): void => {
+  for (const change of changes) {
+    if (change.type === ChangeType.PENDING)
+      walkPending(record, change, next, path, ops, options);
+    else if (change.type === ChangeType.DELETE)
+      ops.remove(record, change.key, path);
+    else ops.set(record, change.key, change.value, path);
+  }
+};
 
-  for (const [type, key, value] of changes) {
-    switch (type) {
-      case ChangeType.PENDING: {
-        // Steps before a pending one are final, so `key` is also its index in `next`.
-        const nextChild = (next as Record<string | number, unknown>)[key];
-        const child = ops.get(container, key);
-        const childKind = ops.kind(child);
-        if (
-          childKind !== undefined &&
-          childKind === expectedKind(nextChild) &&
-          (childKind !== "text" || ops.editText !== undefined)
-        )
-          walk(
-            child as object,
-            childKind,
-            value as Change[],
-            nextChild,
-            [...path, key],
-            ops,
-            options,
-          );
-        else
-          ops.set(
-            container,
-            key,
-            options.json ? toJsonValue(nextChild) : nextChild,
-            path,
-          );
+/** Applies a list's script `changes` to `list`, whose next value is `next`. */
+const walkList = (
+  list: object,
+  changes: ListChange[],
+  next: unknown,
+  path: Path,
+  ops: ApplyOps,
+  options: DiffOptions,
+): void => {
+  for (const change of changes) {
+    switch (change.type) {
+      case ChangeType.PENDING:
+        walkPending(list, change, next, path, ops, options);
         break;
-      }
-
       case ChangeType.DELETE:
-        if (list) ops.splice(container, key as number, 1, [], path);
-        else ops.remove(container, key as string, path);
+        ops.splice(list, change.key, change.count ?? 1, [], path);
         break;
-
       case ChangeType.INSERT:
-        if (list) ops.splice(container, key as number, 0, [value], path);
-        else ops.set(container, key, value, path);
+        ops.splice(list, change.key, 0, [change.value], path);
         break;
-
       case ChangeType.UPDATE:
-        ops.set(container, key, value, path);
+        ops.set(list, change.key, change.value, path);
         break;
     }
   }
@@ -182,14 +199,22 @@ export const applyChanges = (
   options: DiffOptions = {},
 ): void => {
   const kind = ops.kind(target);
-  if (kind !== "record" && kind !== "list") return;
-  walk(
-    target,
-    kind,
-    getChanges(current as Diffable, next as Diffable, options),
-    next,
-    [],
-    ops,
-    options,
-  );
+  if (kind === "record" && isRecord(current) && isRecord(next))
+    walkRecord(
+      target,
+      getChanges(current, next, options),
+      next,
+      [],
+      ops,
+      options,
+    );
+  else if (kind === "list" && Array.isArray(current) && Array.isArray(next))
+    walkList(
+      target,
+      getChanges(current, next, options),
+      next,
+      [],
+      ops,
+      options,
+    );
 };
