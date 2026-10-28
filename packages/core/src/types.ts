@@ -162,7 +162,8 @@ export interface PersistableDoc {
 
   /**
    * Merge an update or an `encode()` result into the document. Applying the same update
-   * twice, or updates out of order, must be safe.
+   * twice, or updates out of order, must be safe. Throw for bytes it cannot apply, such as
+   * another CRDT library's update, so `createPersistence` keeps them in storage.
    */
   apply: (update: Uint8Array) => void;
 
@@ -233,14 +234,16 @@ export interface PersistenceStats {
 export interface Persistence {
   /**
    * Resolves once the stored updates are applied to the document. It also resolves when
-   * loading fails, after `onError`, so the app still starts without its stored state.
+   * loading fails, or a stored update cannot be applied, after `onError`, so the app still
+   * starts with what could be restored.
    */
   whenLoaded: Promise<void>;
   /** Resolves when every update reported so far has been written. */
   flush: () => Promise<void>;
   /**
    * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
-   * once it is written; does nothing once storing has stopped.
+   * once it is written; does nothing once storing has stopped. Keeps the log, after
+   * `onError`, when one of its updates cannot be applied.
    */
   compact: () => Promise<void>;
   /**
@@ -250,6 +253,9 @@ export interface Persistence {
   stats: () => Promise<PersistenceStats>;
   /** Stop storing updates; stored data is kept. Resolves once pending writes finish. */
   destroy: () => Promise<void>;
-  /** Stop storing updates and remove the stored document. */
+  /**
+   * Stop storing updates and remove the stored document, also a log holding updates that
+   * cannot be applied.
+   */
   clear: () => Promise<void>;
 }

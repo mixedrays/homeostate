@@ -84,5 +84,8 @@ earlier release, reads as usual and is stored as the configured kind when it nex
 ## Persistence
 
 Pass `createAutomergePersistable(handle)` to `createPersistence`. It stores `A.save` of the
-document plus the changes of each update since. See the
+document plus the changes of each update since. Restoring a stored update that is not
+Automerge data, such as damaged bytes or another library's update under a reused key, throws,
+even though `A.loadIncremental` skips such bytes once the document holds changes, so
+`createPersistence` reports it and keeps the stored log. See the
 [persistence guide](/docs/persistence).

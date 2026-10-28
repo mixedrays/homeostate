@@ -21,6 +21,8 @@ const reportError = (error: unknown): void => {
  * Updates are appended one by one, and every `compactAfter` appends the stored log is
  * merged into a single snapshot. Several documents may share one key, in one tab or
  * across tabs: compaction only removes updates it has applied to its own document first.
+ * When a stored update cannot be applied, the log is not compacted, so its bytes stay
+ * available for recovery until `clear()`.
  *
  * @example
  * ```typescript
@@ -52,23 +54,39 @@ export function createPersistence(
     return queue;
   };
 
-  const applyStored = (updates: Uint8Array[]): void => {
+  /** Apply every stored update it can; false when one of them could not be applied. */
+  const applyStored = (updates: Uint8Array[]): boolean => {
+    let complete = true;
     for (const update of updates) {
       try {
         doc.apply(update);
       } catch (error) {
+        complete = false;
         onError(error);
       }
     }
+    return complete;
   };
 
-  /** Merge the stored log into the document, then replace the log with its snapshot. */
-  const compact = async (onApplied?: () => void): Promise<void> => {
+  let markLoaded!: () => void;
+  const whenLoaded = new Promise<void>((resolve) => {
+    markLoaded = resolve;
+  });
+
+  /**
+   * Merge the stored log into the document, then replace the log with its snapshot. A log
+   * holding an update the document could not apply is kept as it is, since the snapshot
+   * would not contain that update.
+   */
+  const compact = async (initial = false): Promise<void> => {
     const { updates, version } = await adapter.load(key);
-    applyStored(updates);
-    onApplied?.();
+    const complete = applyStored(updates);
+    if (initial) markLoaded();
     appended = 0;
-    await adapter.compact(key, doc.encode(), version);
+    // The first snapshot also stores whatever the document held before it was persisted, so
+    // a first load that keeps the log appends it instead.
+    if (complete) await adapter.compact(key, doc.encode(), version);
+    else if (initial) await adapter.append(key, doc.encode());
   };
 
   // Subscribe before loading, so no update made in the meantime is missed.
@@ -80,12 +98,7 @@ export function createPersistence(
     });
   });
 
-  let markLoaded!: () => void;
-  const whenLoaded = new Promise<void>((resolve) => {
-    markLoaded = resolve;
-  });
-  // The first compaction also stores whatever the document held before it was persisted.
-  void enqueue(() => compact(markLoaded)).finally(markLoaded);
+  void enqueue(() => compact(true)).finally(markLoaded);
 
   const stop = (): void => {
     if (stopped) return;
