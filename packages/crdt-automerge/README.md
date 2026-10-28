@@ -46,6 +46,13 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 `handle.update(fn)` replaces the document with the result of any Automerge call. See the
 [documentation](https://homeostate.pages.dev/docs/crdt-automerge/introduction) for details.
 
+To let an [automerge-repo](https://automerge.org/docs/repositories/) `Repo` store and sync the
+document instead, pass one of its `DocHandle`s:
+
+```ts
+createAutomergeBackend(await repo.find(url), "shared");
+```
+
 Strings are `ImmutableString` values, so concurrent writes keep one of them. Pass `text` to
 store chosen strings as Automerge text, whose concurrent edits merge character by character:
 
@@ -55,8 +62,9 @@ createAutomergeBackend(handle, "shared", {
 });
 ```
 
-To persist the document, pass `createAutomergePersistable(handle)` to `createPersistence`;
-see the [persistence guide](https://homeostate.pages.dev/docs/persistence).
+To persist the document, pass `createAutomergePersistable(handle)` to `createPersistence`, or
+use a `Repo`'s storage adapter; see the
+[persistence guide](https://homeostate.pages.dev/docs/persistence).
 
 ## License
 

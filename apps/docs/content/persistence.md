@@ -81,6 +81,74 @@ does.
   limited to about 5 MB per origin. It suits small documents and environments without
   IndexedDB. Pass `sessionStorage` to keep a document only for the tab's session.
 
+## The CRDT library's own storage
+
+The backends sync a document however it is stored, so you can keep it with the CRDT library's
+own tooling instead of `createPersistence`. As with `whenLoaded`, connect the engine once that
+tooling has loaded the document.
+
+| CRDT      | Own storage                                                                                   | How to use it                                             |
+| --------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Yjs       | [`y-indexeddb`](https://github.com/yjs/y-indexeddb)                                           | Attach it to the same `Y.Doc`                             |
+| Automerge | [automerge-repo](https://automerge.org/docs/reference/repositories/storage/) storage adapters | Pass the `Repo`'s `DocHandle` to `createAutomergeBackend` |
+| Loro      | None                                                                                          | Use `createPersistence` with `createLoroPersistable`      |
+
+### Yjs: y-indexeddb
+
+```ts {9,12}
+import * as Y from "yjs";
+import { IndexeddbPersistence } from "y-indexeddb";
+import { WebsocketProvider } from "y-websocket";
+import { createSyncEngine } from "@homeostate/core";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+
+const doc = new Y.Doc();
+
+const stored = new IndexeddbPersistence("todos", doc);
+new WebsocketProvider("wss://sync.example.com", "todos", doc);
+
+await stored.whenSynced;
+createSyncEngine(createYjsBackend(doc, "shared"), storeAdapter).connect();
+```
+
+It stores the document much as `createPersistence` does: one row per update, merged into one
+snapshot on load and once 500 updates pile up. Unlike `createPersistence`:
+
+- `whenSynced` never settles if IndexedDB fails to open, so an app that waits for it never
+  connects. Race it against a timeout to start without the stored state instead.
+- It has no error callback, no `flush`, `compact` or `stats`, and no localStorage storage.
+- `clearData()` resolves before the database is deleted.
+- The [devtools](../../../packages/tool-devtools/docs/introduction.md) Storage tab works with
+  `createPersistence` only.
+
+### Automerge: automerge-repo
+
+A `Repo` stores its documents through a storage adapter, such as `IndexedDBStorageAdapter` from
+`@automerge/automerge-repo-storage-indexeddb`, and syncs them through network adapters, so it
+replaces both `createPersistence` and the provider. Pass its `DocHandle` to the backend once
+`repo.find` has loaded it:
+
+```ts
+const repo = new Repo({
+  storage: new IndexedDBStorageAdapter(),
+  network: [new BrowserWebSocketClientAdapter("wss://sync.example.com")],
+});
+const docHandle = await repo.find(url);
+createSyncEngine(
+  createAutomergeBackend(docHandle, "shared"),
+  storeAdapter,
+).connect();
+```
+
+See [With automerge-repo](../../../packages/crdt-automerge/docs/introduction.md#with-automerge-repo)
+for the imports and details.
+
+### Loro
+
+Loro has no storage package. Its [persistence guide](https://loro.dev/docs/tutorial/persistence)
+suggests storing a snapshot plus the updates since, which is what `createPersistence` does with
+`createLoroPersistable`.
+
 ## Lifecycle
 
 ```ts
