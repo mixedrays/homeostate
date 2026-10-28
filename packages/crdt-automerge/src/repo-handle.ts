@@ -2,9 +2,9 @@ import type * as A from "@automerge/automerge";
 import type { Unsubscribe } from "@homeostate/core";
 import type { AutomergeHandle } from "./handle.js";
 
-/** What an automerge-repo `DocHandle` reports on `"change"`. */
+/** What an automerge-repo `DocHandle` reports on `"heads-changed"`. */
 export interface AutomergeRepoChange<T> {
-  patchInfo: A.PatchInfo<T>;
+  doc: A.Doc<T>;
 }
 
 /**
@@ -15,18 +15,20 @@ export interface AutomergeRepoHandle<T> {
   doc(): A.Doc<T>;
   change(fn: A.ChangeFn<T>, options?: A.ChangeOptions<T>): void;
   on(
-    event: "change",
+    event: "heads-changed",
     listener: (change: AutomergeRepoChange<T>) => void,
   ): unknown;
   off(
-    event: "change",
+    event: "heads-changed",
     listener: (change: AutomergeRepoChange<T>) => void,
   ): unknown;
 }
 
 /**
- * Reads a `DocHandle` as an `AutomergeHandle`. Its `"change"` event does not say where a change
- * came from, so a change is local when `change` produced the document the event reports.
+ * Reads a `DocHandle` as an `AutomergeHandle`. It listens to `"heads-changed"`: `"change"` skips a
+ * merge that moves the heads without changing a value, and the heads are the backend's
+ * `revision`. The event does not say where a change came from, so a change is local when `change`
+ * produced the document the event reports.
  */
 export const fromRepoHandle = <T>(
   docHandle: AutomergeRepoHandle<T>,
@@ -42,10 +44,10 @@ export const fromRepoHandle = <T>(
       }),
 
     subscribe: (listener): Unsubscribe => {
-      const onChange = ({ patchInfo: { after } }: AutomergeRepoChange<T>) =>
-        listener({ doc: after, local: changed.has(after) });
-      docHandle.on("change", onChange);
-      return () => docHandle.off("change", onChange);
+      const onChange = ({ doc }: AutomergeRepoChange<T>) =>
+        listener({ doc, local: changed.has(doc) });
+      docHandle.on("heads-changed", onChange);
+      return () => docHandle.off("heads-changed", onChange);
     },
   };
 };
