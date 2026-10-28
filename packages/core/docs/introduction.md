@@ -65,6 +65,10 @@ which read and write your library's maps, lists and texts:
 
 - Pass `previous` as `current` when the engine gives it, and read your document only when it
   does not. Unchanged subtrees then match by identity instead of item by item.
+- Implement `revision()` from something your library updates with every change, reported or
+  not, such as a version vector or an op count, and return `undefined` while it cannot tell.
+  Without it, the engine reads your document before every local change to check that
+  `previous` is still current.
 - `json: true` keeps `undefined` and functions out of the CRDT library.
 - Accept a `text` policy and pass it on. In `set` and `splice`, store the strings it marks in
   your library's text type and every other string as a plain value; text is then edited

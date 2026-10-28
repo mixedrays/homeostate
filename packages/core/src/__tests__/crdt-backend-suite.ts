@@ -394,8 +394,14 @@ export const describeCrdtBackend = <D>(
 
       const step = (r: Random): string => {
         const kind = r.pick(steps);
-        if (kind === "local") store.update((s) => r.pick(edits)(s, r));
-        else if (kind === "remote") remoteEdit(r);
+        if (kind === "local") {
+          const edited = r.pick(edits)(store.getState(), r);
+          store.setState(edited);
+          // The engine heard every other change as it happened, so the store keeps its own.
+          expect(snapshot(store.getState())).toEqual(
+            snapshot(resetCount(edited)),
+          );
+        } else if (kind === "remote") remoteEdit(r);
         else if (kind === "foreign")
           storeForeign?.(
             doc,
@@ -453,6 +459,41 @@ export const describeCrdtBackend = <D>(
       value.obj.a.push(2);
 
       expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
+    });
+
+    // `revision` is optional in the contract, but every backend in this repository has one.
+    scenario(
+      "changes its revision with every change, and keeps it across reads",
+    ).run(() => {
+      const doc = createDoc();
+      const watched = backend(doc);
+      const revision = () => watched.revision?.();
+      const seen = [revision()];
+      const expectChanged = (change: string): void => {
+        const next = revision();
+        expect(next, change).toBeDefined();
+        expect(seen, change).not.toContain(next);
+        seen.push(next);
+      };
+
+      watched.read();
+      expect(revision()).toBe(seen[0]);
+      watched.write({ count: 1 });
+      expectChanged("its own write");
+      backend(doc).write({ count: 2 });
+      expectChanged("another backend's write");
+      if (storeForeign) {
+        storeForeign(doc, "count", 3);
+        expectChanged("other code's edit");
+      }
+      if (exchange) {
+        const other = createDoc();
+        backend(other).write({ label: "b" });
+        exchange(doc, other);
+        expectChanged("a peer's change");
+      }
+      watched.read();
+      expect(revision()).toBe(seen.at(-1));
     });
 
     if (onLocalUpdate) {
@@ -633,6 +674,59 @@ export const describeCrdtBackend = <D>(
         exchange(a.doc, b.doc);
 
         const expected = toggleTodo(setSearchTerm(threeTodos(), "abc"), "2");
+        expect(a.store.getState()).toEqual(expected);
+        expect(b.store.getState()).toEqual(expected);
+      });
+
+      scenario(
+        "lets a remote delete win over a store change made before the engine hears of it",
+      ).run(() => {
+        const docA = createDoc(1);
+        const docB = createDoc(2);
+        const store = createTestStore(threeTodos());
+        // App code that reacts to a peer's change, subscribed before the engine connects, so it
+        // runs before the engine's own listener.
+        let armed = false;
+        backend(docA).subscribe(() => {
+          if (!armed) return;
+          armed = false;
+          store.update((s) => toggleTodo(s, "3"));
+        });
+        const onError = vi.fn();
+        createSyncEngine(backend(docA), store.adapter, { onError }).connect();
+        exchange(docA, docB);
+        const b = peer(docB, threeTodos());
+
+        b.store.update((s) => deleteTodo(s, "3"));
+        armed = true;
+        exchange(docA, docB);
+
+        const expected = deleteTodo(threeTodos(), "3");
+        expect(onError).not.toHaveBeenCalled();
+        expect(store.getState()).toEqual(expected);
+        expect(backend(docA).read()).toEqual(expected);
+        expect(b.store.getState()).toEqual(expected);
+      });
+
+      scenario(
+        "reads its document once per remote change, and not before local changes",
+      ).run(() => {
+        const { a, b } = twoSyncedPeers();
+        const read = vi.spyOn(a.backend, "read");
+
+        a.store.update((s) => toggleTodo(s, "1"));
+        expect(read).not.toHaveBeenCalled();
+        b.store.update((s) => toggleTodo(s, "2"));
+        exchange(a.doc, b.doc);
+        expect(read).toHaveBeenCalledTimes(1);
+        a.store.update((s) => toggleTodo(s, "3"));
+
+        expect(read).toHaveBeenCalledTimes(1);
+        exchange(a.doc, b.doc);
+        const expected = toggleTodo(
+          toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+          "3",
+        );
         expect(a.store.getState()).toEqual(expected);
         expect(b.store.getState()).toEqual(expected);
       });

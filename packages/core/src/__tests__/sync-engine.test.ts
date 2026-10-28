@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import {
   createSyncEngine,
+  type CrdtBackend,
   WriteLoopError,
   type SyncEngineConfig,
 } from "../index.js";
@@ -17,6 +18,7 @@ import {
   addTodo,
   createTestStore,
   deepFreeze,
+  deleteTodo,
   prototypeHijacks,
   prototypeMemberKeys,
   setSearchTerm,
@@ -729,6 +731,111 @@ describe("createSyncEngine", () => {
     });
   });
 
+  describe("remote changes another listener hears first", () => {
+    /**
+     * Subscribes `react` to `backend` before the engine connects, as app code that reacts to a
+     * peer's change does, so it runs before the engine's own listener. It runs once.
+     */
+    const listenFirst = (backend: CrdtBackend, react: () => void): void => {
+      let reacted = false;
+      backend.subscribe(() => {
+        if (reacted) return;
+        reacted = true;
+        react();
+      });
+    };
+
+    it("applies the remote change before the store's change, which it overrides", () => {
+      const { backend } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      listenFirst(backend, () => store.update((s) => toggleTodo(s, "3")));
+      const onError = vi.fn();
+      createSyncEngine(backend, store.adapter, { onError }).connect();
+      const remote = deleteTodo(threeTodos(), "3");
+
+      backend.receive(remote);
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(store.getState()).toEqual(remote);
+      expect(backend.read()).toEqual(remote);
+    });
+
+    it("keeps what the store's change did to a key it does not sync", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      listenFirst(backend, () =>
+        store.update((s) => setSearchTerm(toggleTodo(s, "3"), "x")),
+      );
+      createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "searchTerm",
+      }).connect();
+      const remote = {
+        todos: deleteTodo(threeTodos(), "3").todos,
+        filterStatus: "all",
+      };
+
+      backend.receive(remote);
+
+      expect(store.getState()).toEqual({ ...remote, searchTerm: "x" });
+      expect(backend.read()).toEqual(remote);
+    });
+
+    it("writes the store's change when the backend holds nothing new", () => {
+      const { backend } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      listenFirst(backend, () => store.update((s) => toggleTodo(s, "1")));
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive(threeTodos());
+
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+      expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
+    });
+
+    it("reads the backend before a local change only when its revision moved", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      const read = vi.spyOn(backend, "read");
+
+      store.update((s) => toggleTodo(s, "1"));
+      store.update((s) => toggleTodo(s, "2"));
+      expect(read).not.toHaveBeenCalled();
+
+      backend.receive(addTodo(threeTodos(), todo("4")));
+      store.update((s) => toggleTodo(s, "4"));
+
+      // Once, for the remote change.
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(backend.read()).toEqual(
+        toggleTodo(addTodo(threeTodos(), todo("4")), "4"),
+      );
+    });
+
+    it("reads a backend without a revision before every local change", () => {
+      const memory = createMemoryBackend(threeTodos());
+      const backend: CrdtBackend = {
+        read: () => memory.read(),
+        write: (next, previous) => memory.write(next, previous),
+        subscribe: (onRemoteChange) => memory.subscribe(onRemoteChange),
+      };
+      const store = createTestStore(threeTodos());
+      listenFirst(backend, () => store.update((s) => toggleTodo(s, "3")));
+      createSyncEngine(backend, store.adapter).connect();
+      const read = vi.spyOn(memory, "read");
+
+      store.update((s) => toggleTodo(s, "1"));
+      store.update((s) => toggleTodo(s, "2"));
+      expect(read).toHaveBeenCalledTimes(2);
+
+      const remote = deleteTodo(memory.read() as TodoState, "3");
+      memory.receive(remote);
+
+      expect(store.getState()).toEqual(remote);
+      expect(memory.read()).toEqual(remote);
+    });
+  });
+
   describe("previous state given to write", () => {
     it("passes the synced state it last wrote, so unchanged todos match by identity", () => {
       const { backend, previous } = checkedBackend();
@@ -830,6 +937,31 @@ describe("createSyncEngine", () => {
       // The trimmed titles are written back.
       expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
       expect(previous.at(-1)).toEqual(remote);
+      expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
+    });
+
+    it("passes nothing to the write-back when the backend changed during setState", () => {
+      const { backend, previous } = checkedBackend();
+      const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
+        ...s,
+        todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
+      });
+      const store = createTestStore(threeTodos(), trimTitles);
+      createSyncEngine(backend, store.adapter).connect();
+      // Other code that changes the backend as the store changes, unheard by the engine so far,
+      // as with an uncommitted Loro edit or a Yjs transaction whose observers have not run yet.
+      let armed = true;
+      store.adapter.subscribe(() => {
+        if (!armed) return;
+        armed = false;
+        backend.write({ ...(backend.read() as object), filterStatus: "done" });
+      });
+      const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
+
+      backend.receive(remote);
+
+      expect(previous.at(-1)).toBeUndefined();
+      expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
       expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
     });
 
@@ -1117,6 +1249,33 @@ describe("createSyncEngine", () => {
 
       expect(read).not.toHaveBeenCalled();
       expect(setState).not.toHaveBeenCalled();
+    });
+
+    it("keeps a local change once the remote change it would apply was applied already", () => {
+      const { backend } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      const scheduler = manualScheduler();
+      // A listener subscribed before the engine, whose change makes the engine apply the remote
+      // change before its own listener schedules it.
+      let armed = true;
+      backend.subscribe(() => {
+        if (!armed) return;
+        armed = false;
+        store.update((s) => toggleTodo(s, "3"));
+      });
+      createSyncEngine(backend, store.adapter, {
+        schedule: scheduler.schedule,
+      }).connect();
+      const remote = deleteTodo(threeTodos(), "3");
+      backend.receive(remote);
+      expect(store.getState()).toEqual(remote);
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(store.getState()).toEqual(toggleTodo(remote, "1"));
+      expect(backend.read()).toEqual(toggleTodo(remote, "1"));
+      scheduler.run();
+      expect(store.getState()).toEqual(toggleTodo(remote, "1"));
     });
 
     it("applies a pending remote change on disconnect", () => {

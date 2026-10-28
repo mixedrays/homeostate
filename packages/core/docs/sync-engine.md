@@ -115,8 +115,10 @@ Local changes are still written synchronously. One made while an apply is pendin
 apply first, and the remote changes win: what the local change did to synced keys is lost,
 and only its changes to keys the filter excludes stay. With `queueMicrotask` that only affects
 code that changes the store in the same task as a remote update; a longer delay, such as
-`requestAnimationFrame`, lets user input fall in the window too. `disconnect()` also runs a
-pending apply, and a flush called after it does nothing.
+`requestAnimationFrame`, lets user input fall in the window too. A remote change another
+listener hears of before the engine is applied the same way, with or without `schedule`; see
+[SyncEngine](#syncengine). `disconnect()` also runs a pending apply, and a flush called after
+it does nothing.
 
 ### Reporting errors
 
@@ -169,7 +171,11 @@ interface SyncEngine {
 
 After connection, each local notification writes the full filtered store state to the
 backend, along with what the backend holds, so the backend can diff against it instead of
-reading its document; see [CrdtBackend](#crdtbackend). Each backend notification, or each
+reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
+the store has not been given yet, the engine applies it first, and it wins as a pending apply
+does: what the local change did to synced keys is lost. That happens when a listener subscribed
+to the document before `connect()` changes the store as it hears of a remote change, before the
+engine does. Each backend notification, or each
 flush with `schedule`, applies the backend's full filtered state to the store, including
 deletions. Unchanged subtrees keep their identity. Store notifications raised synchronously
 while the engine applies remote state are ignored to avoid echoing that state back.
@@ -218,6 +224,7 @@ Adapters whose `getState()` returns a fresh copy, such as the MobX adapter, meet
 interface CrdtBackend {
   read: () => unknown;
   write: (next: unknown, previous?: unknown) => void;
+  revision?: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
@@ -226,6 +233,7 @@ interface CrdtBackend {
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read()`                 | Returns a plain JSON snapshot that does not alias mutable backend internals. For the sync engine, expose the synced top-level state as an object.                |
 | `write(next, previous?)` | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                          |
+| `revision()`             | Optional. A value equal (`===`) to an earlier one only if the synced subtree has not changed since, reported or not; `undefined` while it cannot tell.           |
 | `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
 
 `previous`, when given, is what the synced subtree holds now: the synced state the engine last
@@ -233,12 +241,17 @@ wrote, or the whole state it last read after a remote change. A backend can diff
 against it with `applyChanges` and `json: true` instead of reading its document; unchanged
 subtrees of `next` are then the same objects and compare by identity. Like `next`, it may
 hold `undefined` and functions, which `json: true` treats as absent. The engine passes nothing
-for the seed write during `connect()` and after a write that threw, and a backend may ignore
-`previous`.
+for the seed write during `connect()`, after a write that threw, and for a write back after
+`setState` during which the revision moved. A backend may ignore `previous`.
 
-`previous` is exact only when `subscribe` reports every other change synchronously, so a
-backend must read its document while a change may still be unreported: the Yjs backend does
-inside another transaction, and the Loro backend while other code has uncommitted edits.
+A document can change before `subscribe` reports it: another listener may hear of a remote
+change first, and some libraries report changes only once a transaction ends or is committed.
+So before writing a local change, the engine checks that the backend still holds what it last
+synced. It reads the backend unless `revision()` returns the revision it recorded then, and
+applies what it finds first if that differs; see [SyncEngine](#syncengine). Without
+`revision`, it reads the backend before every local change. A revision may change without the
+subtree changing, which costs only that read: the Yjs backend counts the document's
+transactions, the Loro backend its ops, and the Automerge backend uses the document's heads.
 
 `read()` must return an object; the engine throws a `TypeError` for anything else. Objects in the
 snapshot must inherit from `Object.prototype`: a library that builds them by assignment turns

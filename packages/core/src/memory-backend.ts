@@ -3,6 +3,8 @@ import type { CrdtBackend, Unsubscribe } from "./types.js";
 export interface MemoryBackend extends CrdtBackend {
   /** Replace the held state as if a remote peer had written it, then notify subscribers */
   receive: (next: unknown) => void;
+  /** Counts the writes and receives so far */
+  revision: () => number;
 }
 
 const clone = <T>(value: T): T =>
@@ -14,6 +16,7 @@ const clone = <T>(value: T): T =>
  */
 export const createMemoryBackend = (initial: unknown = {}): MemoryBackend => {
   let state = clone(initial);
+  let changes = 0;
   const listeners = new Set<() => void>();
 
   return {
@@ -21,7 +24,10 @@ export const createMemoryBackend = (initial: unknown = {}): MemoryBackend => {
 
     write: (next) => {
       state = clone(next);
+      changes++;
     },
+
+    revision: () => changes,
 
     subscribe: (onRemoteChange): Unsubscribe => {
       listeners.add(onRemoteChange);
@@ -32,6 +38,7 @@ export const createMemoryBackend = (initial: unknown = {}): MemoryBackend => {
 
     receive: (next) => {
       state = clone(next);
+      changes++;
       listeners.forEach((listener) => listener());
     },
   };

@@ -118,6 +118,7 @@ The `seed` option in `SyncEngineConfig`: `"if-empty"`, the default, seeds during
 
 **Local change**:
 A change made to the store on this peer, which the sync engine writes to the CRDT backend as the whole synced state.
+When a pending apply waits, it runs first, so a local change never writes over a remote change the store has not been given.
 _Avoid_: Outgoing change, store change
 
 **Remote change**:
@@ -135,8 +136,12 @@ A local change that first runs a pending apply is reported as a remote change, b
 _Avoid_: Engine event, sync notification
 
 **Pending apply**:
-Remote changes the sync engine defers, with its `schedule` option, to the next flush, which applies them all with one read of the CRDT backend. A local change made before the flush runs the apply first, which overrides what that change did to synced keys.
+Remote changes the CRDT backend holds and the sync engine has not applied to the store yet: those its `schedule` option defers to the next flush, which applies them all with one read of the backend, and those another listener of the document hears of before the engine. A local change made meanwhile runs the apply first, which overrides what that change did to synced keys.
 _Avoid_: Queued update, batch
+
+**Revision**:
+What a CRDT backend reports to tell whether its synced subtree may have changed: equal to an earlier revision only if nothing changed since, even when the change is not reported yet. The sync engine compares it with the revision it recorded when it last synced.
+_Avoid_: Version, document version
 
 **Offline editing**:
 Editing while the provider is disconnected and the sync engine stays connected, so the document records the edits and merges them when the provider reconnects.
