@@ -6,6 +6,7 @@ import {
   type Unsubscribe,
 } from "@homeostate/core";
 import type { AutomergeHandle } from "./handle.js";
+import { fromRepoHandle, type AutomergeRepoHandle } from "./repo-handle.js";
 import {
   createAutomergeOps,
   isRecord,
@@ -27,12 +28,13 @@ export interface AutomergeBackendOptions {
 
 const noText: TextPolicy = () => false;
 
-export const createAutomergeBackend = <T extends Container>(
-  handle: AutomergeHandle<T>,
+export const createAutomergeBackend = <T>(
+  source: AutomergeHandle<T> | AutomergeRepoHandle<T>,
   name: string,
   options: AutomergeBackendOptions = {},
 ): CrdtBackend => {
   const { text = noText } = options;
+  const handle = "on" in source ? fromRepoHandle(source) : source;
   const snapshot = createSnapshot();
   let writing = false;
 

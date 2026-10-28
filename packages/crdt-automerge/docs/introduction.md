@@ -63,6 +63,40 @@ either and stores such array items as `null`, as `JSON.stringify` does.
 Snapshots from `read()` copy only what changed since the last read and are shared between
 reads, so treat them as immutable.
 
+## With automerge-repo
+
+[automerge-repo](https://automerge.org/docs/repositories/) keeps documents in a `Repo`, which
+stores them through a storage adapter and syncs them through network adapters. Pass one of its
+`DocHandle`s instead of a handle, and the `Repo` stores and syncs what the engine writes:
+
+```ts
+import { Repo } from "@automerge/automerge-repo";
+import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
+import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
+import { createSyncEngine } from "@homeostate/core";
+import { createAutomergeBackend } from "@homeostate/crdt-automerge";
+
+const repo = new Repo({
+  storage: new IndexedDBStorageAdapter(),
+  network: [new BrowserWebSocketClientAdapter("wss://sync.example.com")],
+});
+// `url` is the document's AutomergeUrl, such as `repo.create().url` where it was created.
+const docHandle = await repo.find(url);
+const engine = createSyncEngine(
+  createAutomergeBackend(docHandle, "shared"),
+  storeAdapter,
+);
+engine.connect();
+```
+
+`repo.find` resolves once the document is ready, loaded from storage or a peer, so `connect()`
+sees the stored state instead of seeding the store's defaults over it. As with a handle, the
+engine picks up every change that did not come through its own write: changes loaded from
+storage, received from peers, or made through `docHandle.change`.
+
+The `Repo` and the backend must share one copy of `@automerge/automerge`, so check that your
+package manager installs only one.
+
 ## Strings and text
 
 Strings are `ImmutableString` values by default, so two peers changing an id, a status or a
@@ -84,5 +118,6 @@ earlier release, reads as usual and is stored as the configured kind when it nex
 ## Persistence
 
 Pass `createAutomergePersistable(handle)` to `createPersistence`. It stores `A.save` of the
-document plus the changes of each update since. See the
-[persistence guide](/docs/persistence).
+document plus the changes of each update since. With
+[automerge-repo](#with-automerge-repo), the `Repo`'s storage adapter stores the document
+instead. See the [persistence guide](/docs/persistence).
