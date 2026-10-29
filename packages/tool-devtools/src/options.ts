@@ -15,9 +15,15 @@ export type DevtoolsTheme = "system" | "light" | "dark";
 export interface HomeostateDevtoolsProps {
   /** The stores to inspect. With more than one, the panel shows a switcher. */
   sources: DevtoolsSource[];
-  /** Viewport corner of the floating button. Defaults to `"bottom-right"`. */
+  /**
+   * Viewport corner of the floating button, until one is picked in the panel's settings.
+   * Defaults to `"bottom-right"`.
+   */
   buttonPosition?: ButtonPosition;
-  /** Viewport edge the panel docks to. Defaults to `"right"`. */
+  /**
+   * Viewport edge the panel docks to, until a side is picked in the panel's settings.
+   * Defaults to `"right"`.
+   */
   panelPosition?: PanelPosition;
   /** Whether the panel starts open, until it is opened or closed once. Defaults to `false`. */
   initialIsOpen?: boolean;
@@ -28,7 +34,10 @@ export interface HomeostateDevtoolsProps {
   open?: boolean;
   /** Called when the floating button, the close button or Escape opens or closes the panel. */
   onOpenChange?: (open: boolean) => void;
-  /** Defaults to `"system"`, which follows `prefers-color-scheme`. */
+  /**
+   * The panel's theme, until one is picked in its settings. Defaults to `"system"`, which
+   * follows `prefers-color-scheme`.
+   */
   theme?: DevtoolsTheme;
   /** Log entries kept per source. Defaults to 200. */
   logLimit?: number;

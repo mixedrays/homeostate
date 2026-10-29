@@ -1,5 +1,6 @@
 import {
   connectSharedDoc as connect,
+  onPageHost,
   TODO_ROOM,
 } from "@homeostate/playground/shared";
 
@@ -11,8 +12,9 @@ export {
   TODO_ROOM,
 } from "@homeostate/playground/shared";
 
-export const SYNC_SERVER_URL =
-  import.meta.env.VITE_SYNC_SERVER_URL ?? "ws://localhost:9999";
+export const SYNC_SERVER_URL = onPageHost(
+  import.meta.env.VITE_SYNC_SERVER_URL ?? "ws://localhost:9999",
+);
 
 export function connectSharedDoc(room = TODO_ROOM) {
   return connect(SYNC_SERVER_URL, room);

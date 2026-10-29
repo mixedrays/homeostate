@@ -1,5 +1,10 @@
 # @homeostate/core
 
+[![npm](https://img.shields.io/npm/v/@homeostate/core?color=2563eb)](https://www.npmjs.com/package/@homeostate/core)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fcore?color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fcore)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/core?color=2563eb)](https://www.npmjs.com/package/@homeostate/core)
+[![license](https://img.shields.io/npm/l/@homeostate/core?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/core/LICENSE)
+
 Sync engine that keeps a store in sync with a CRDT document. Pair it with a store adapter
 (`@homeostate/store-*`) and a CRDT backend such as
 [`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs).
@@ -17,12 +22,14 @@ import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+  omit: ["draft"],
   seed: "if-empty",
 });
 engine.connect();
 ```
 
-On `connect()`, keys the backend already holds win over the store's values, so a peer joining
+`omit` keeps the keys it names on this device; functions stay local by default. On
+`connect()`, keys the backend already holds win over the store's values, so a peer joining
 a populated room adopts it. Keys only the store has are written to the backend (`seed:
 "if-empty"`, the default) or left for the next local change (`seed: "never"`). A reconnect
 adopts the backend again, so edits made while disconnected to keys it holds are dropped.

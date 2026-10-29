@@ -22,6 +22,8 @@ export interface PersistableDocHarness<D> {
   backend: (doc: D) => CrdtBackend;
   /** Bring both documents up to date with each other, as a provider would */
   exchange: (a: D, b: D) => void;
+  /** An update another CRDT library stored, as when an app reuses its key for this one */
+  foreignUpdate: Uint8Array;
 }
 
 /**
@@ -32,7 +34,7 @@ export const describePersistableDoc = <D>(
   name: string,
   harness: PersistableDocHarness<D>,
 ): void => {
-  const { createDoc, persistable, backend, exchange } = harness;
+  const { createDoc, persistable, backend, exchange, foreignUpdate } = harness;
 
   const connect = (doc: D, initial: TodoState = threeTodos()) => {
     const store = createTestStore(initial);
@@ -45,13 +47,15 @@ export const describePersistableDoc = <D>(
   const open = async (
     adapter = createMemoryPersistenceAdapter(),
     initial?: TodoState,
+    onError?: (error: unknown) => void,
   ) => {
     const doc = createDoc();
     const persistence = createPersistence(persistable(doc), adapter, {
       key: "room",
+      onError,
     });
-    await persistence.whenLoaded;
-    return { doc, persistence, store: connect(doc, initial), adapter };
+    const loaded = await persistence.whenLoaded;
+    return { doc, persistence, loaded, store: connect(doc, initial), adapter };
   };
 
   describe(`${name} persistence`, () => {
@@ -67,7 +71,24 @@ export const describePersistableDoc = <D>(
         filterStatus: "all",
       });
 
+      expect(first.loaded).toEqual({ status: "empty" });
+      expect(reloaded.loaded).toEqual({ status: "loaded" });
       expect(reloaded.store.getState()).toEqual(first.store.getState());
+    });
+
+    it("loads with the error storage failed with, and keeps the document's state", async () => {
+      const error = new Error("storage unavailable");
+      const onError = vi.fn();
+      const adapter = {
+        ...createMemoryPersistenceAdapter(),
+        load: () => Promise.reject(error),
+      };
+
+      const failed = await open(adapter, undefined, onError);
+
+      expect(failed.loaded).toEqual({ status: "failed", error });
+      expect(onError).toHaveBeenCalledWith(error);
+      expect(failed.store.getState()).toEqual(threeTodos());
     });
 
     it("merges a restored document with a peer without duplicating it", async () => {
@@ -133,6 +154,62 @@ export const describePersistableDoc = <D>(
       );
     });
 
+    it.each([
+      ["corrupt bytes", () => new Uint8Array([255, 254, 253])],
+      ["an update of another CRDT library", () => foreignUpdate],
+    ])(
+      "restores the rest of a log holding %s, and keeps the whole log",
+      async (_, unreadable) => {
+        const first = await open();
+        first.store.setState(addTodo(first.store.getState(), todo("4")));
+        await first.persistence.flush();
+        await first.adapter.append("room", unreadable());
+        first.store.setState(toggleTodo(first.store.getState(), "2"));
+        await first.persistence.destroy();
+        const stored = (await first.adapter.load("room")).updates;
+        const expected = toggleTodo(addTodo(threeTodos(), todo("4")), "2");
+
+        const onError = vi.fn();
+        const reloaded = await open(first.adapter, undefined, onError);
+        await reloaded.persistence.flush();
+        await reloaded.persistence.compact();
+
+        expect(reloaded.loaded).toEqual({
+          status: "partial",
+          errors: [onError.mock.calls[0][0]],
+        });
+        expect(reloaded.store.getState()).toEqual(expected);
+        expect(onError).toHaveBeenCalledTimes(2);
+        const kept = (await first.adapter.load("room")).updates;
+        expect(kept.slice(0, stored.length)).toEqual(stored);
+        expect(
+          (await open(first.adapter, undefined, vi.fn())).store.getState(),
+        ).toEqual(expected);
+      },
+    );
+
+    it("compacts a log of repeated and out-of-order updates", async () => {
+      const doc = createDoc();
+      const updates: Uint8Array[] = [];
+      persistable(doc).subscribe((update) => updates.push(update));
+      const store = connect(doc);
+      store.setState(addTodo(store.getState(), todo("4")));
+      store.setState(toggleTodo(store.getState(), "4"));
+      const adapter = createMemoryPersistenceAdapter();
+      for (const update of [...updates].reverse()) {
+        await adapter.append("room", update);
+        await adapter.append("room", update);
+      }
+
+      const onError = vi.fn();
+      const reloaded = await open(adapter, undefined, onError);
+      await reloaded.persistence.flush();
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(adapter.size("room")).toBe(1);
+      expect(reloaded.store.getState()).toEqual(store.getState());
+    });
+
     it("does not report the updates it applies", () => {
       const source = createDoc();
       connect(source);
@@ -161,5 +238,62 @@ export const describePersistableDoc = <D>(
 
       expect(backend(copy).read()).toEqual(store.getState());
     });
+
+    it.each([
+      ["before", true],
+      ["after", false],
+    ])(
+      "reports what a store derives while an update is applied, subscribed %s the engine",
+      (_, persistableFirst) => {
+        const docs = [createDoc(), createDoc()];
+        const persistables = docs.map(persistable);
+        // Updates travel as a provider delivers them: later, one at a time.
+        const inbox: Uint8Array[][] = [[], []];
+        const relay = (from: number) =>
+          persistables[from].subscribe((update) => {
+            inbox[1 - from].push(update);
+          });
+        const deliver = () => {
+          while (inbox[0].length > 0 || inbox[1].length > 0)
+            for (const to of [0, 1]) {
+              const update = inbox[to].shift();
+              if (update !== undefined) persistables[to].apply(update);
+            }
+        };
+        const initial = { todos: [] as string[], count: 0 };
+        const stores = [createTestStore(initial), createTestStore(initial)];
+        const deriving = stores[1];
+        deriving.adapter.subscribe(() => {
+          const state = deriving.getState();
+          if (state.count !== state.todos.length)
+            deriving.setState({ ...state, count: state.todos.length });
+        });
+        const engines = docs.map((doc, i) =>
+          createSyncEngine(backend(doc), stores[i].adapter),
+        );
+        relay(0);
+        engines[0].connect();
+        deliver();
+        if (persistableFirst) relay(1);
+        engines[1].connect();
+        if (!persistableFirst) relay(1);
+        deliver();
+
+        stores[0].setState({ todos: ["a", "b"], count: 0 });
+        deliver();
+
+        expect(stores[1].getState()).toEqual({ todos: ["a", "b"], count: 2 });
+        expect(stores[0].getState()).toEqual({ todos: ["a", "b"], count: 2 });
+
+        // A later edit of the deriving peer depends on the derived one.
+        deriving.setState({ todos: ["a", "b", "c"], count: 3 });
+        deliver();
+
+        expect(stores[0].getState()).toEqual({
+          todos: ["a", "b", "c"],
+          count: 3,
+        });
+      },
+    );
   });
 };

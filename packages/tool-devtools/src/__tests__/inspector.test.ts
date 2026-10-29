@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPersistence,
   createSyncEngine,
   type Persistence,
+  type PersistenceAdapter,
 } from "@homeostate/core";
+import { prototypeMemberKeys } from "@homeostate/core/conformance";
 import {
   createMemoryBackend,
   createMemoryPersistenceAdapter,
@@ -42,7 +44,6 @@ const setup = (options: { filter?: (key: string) => boolean } = {}) => {
     adapter: store.adapter,
     backend,
     engine,
-    filter: options.filter,
   });
   inspector.start();
   return { store, backend, engine, inspector };
@@ -57,6 +58,48 @@ describe("createInspector", () => {
     expect(snapshot.connected).toBe(true);
     expect(snapshot.log).toMatchObject([{ id: 0, origin: "initial" }]);
     expect(snapshot.keyStatus).toEqual({ todos: "synced", filter: "synced" });
+  });
+
+  it("keeps the last backend document and stops comparing keys when reads fail, then recovers", async () => {
+    const store = createTestStore({ count: 0, draft: "local" });
+    const backend = createMemoryBackend();
+    backend.receive({ count: 0 });
+    let fail = false;
+    inspector = createInspector({
+      name: "counter",
+      adapter: store.adapter,
+      // Disconnected, so the store keeps its values; it still says which keys are local.
+      engine: createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "draft",
+      }),
+      backend: {
+        ...backend,
+        read: () => {
+          if (fail) throw new Error("backend unavailable");
+          return backend.read();
+        },
+      },
+    });
+    inspector.start();
+    await tick();
+    const previous = inspector.getSnapshot().backend;
+
+    fail = true;
+    backend.receive({ count: 1 });
+    await tick();
+    expect(inspector.getSnapshot().backend).toBe(previous);
+    expect(inspector.getSnapshot().backendError).toBe("backend unavailable");
+    expect(inspector.getSnapshot().keyStatus).toEqual({ draft: "local" });
+
+    fail = false;
+    backend.receive({ count: 2 });
+    await tick();
+    expect(inspector.getSnapshot().backendError).toBeNull();
+    expect(inspector.getSnapshot().backend).toEqual({ count: 2 });
+    expect(inspector.getSnapshot().keyStatus).toEqual({
+      count: "diverged",
+      draft: "local",
+    });
   });
 
   it("logs a local change with its diff", async () => {
@@ -91,7 +134,7 @@ describe("createInspector", () => {
     await tick();
 
     expect(store.get().todos[0].done).toBe(true);
-    expect((backend.read() as State).todos[0].done).toBe(true);
+    expect((backend.read() as unknown as State).todos[0].done).toBe(true);
     expect(inspector.getSnapshot().log.at(-1)).toMatchObject({
       origin: "devtools",
       label: "Edited todos[0].done",
@@ -132,9 +175,64 @@ describe("createInspector", () => {
     await tick();
 
     expect(store.get().filter).toBe("all");
-    expect((backend.read() as State).filter).toBe("all");
+    expect((backend.read() as unknown as State).filter).toBe("all");
     expect(inspector.getSnapshot().log.at(-1)?.label).toBe("Restored #0");
   });
+
+  it("keeps the identity of every other todo when a restore inserts one at the top", async () => {
+    const { store, inspector } = setup();
+    const first = { title: "first", done: false };
+    store.set({ ...store.get(), todos: [first, ...store.get().todos] });
+    await tick();
+    const entry = inspector.getSnapshot().log.at(-1)!;
+    const kept = store.get().todos.slice(1);
+    store.set({ ...store.get(), todos: kept });
+    await tick();
+
+    inspector.restore(entry.id);
+    await tick();
+
+    expect(store.get().todos).toEqual([first, ...kept]);
+    expect(store.get().todos[1]).toBe(kept[0]);
+  });
+
+  it.each(prototypeMemberKeys)(
+    "removes a %s key missing from a replacement",
+    (key) => {
+      const store = createTestStore<Record<string, unknown>>({
+        [key]: "x",
+        count: 1,
+      });
+      inspector = createInspector({ name: "keys", adapter: store.adapter });
+
+      inspector.replaceState({ count: 2 }, "Replaced");
+
+      expect(store.get()).toEqual({ count: 2 });
+    },
+  );
+
+  it.each(prototypeMemberKeys)(
+    "compares a %s key with the backend's own key only",
+    (key) => {
+      const status = (store: object, backend: object) => {
+        const source = createInspector({
+          name: "keys",
+          adapter: createTestStore(store).adapter,
+          backend: createMemoryBackend(backend),
+        });
+        return source.getSnapshot().keyStatus;
+      };
+
+      expect(status({ [key]: "x" }, {})).toEqual({ [key]: "pending" });
+      expect(status({ [key]: "x" }, { [key]: "x" })).toEqual({
+        [key]: "synced",
+      });
+      expect(status({ [key]: "x" }, { [key]: "y" })).toEqual({
+        [key]: "diverged",
+      });
+      expect(status({}, { [key]: "x" })).toEqual({ [key]: "backend-only" });
+    },
+  );
 
   it("marks filtered keys local and unsynced edits while disconnected", async () => {
     const { store, inspector } = setup({ filter: (key) => key !== "draft" });
@@ -215,7 +313,9 @@ describe("createInspector", () => {
     inspector = createInspector({
       name: "dates",
       adapter: store.adapter,
-      filter: (key) => key !== "cache",
+      engine: createSyncEngine(createMemoryBackend(), store.adapter, {
+        filter: (key) => key !== "cache",
+      }),
     });
     inspector.start();
     expect(inspector.getSnapshot().warnings).toEqual([
@@ -260,14 +360,158 @@ describe("createInspector", () => {
   });
 });
 
+describe("sync events", () => {
+  /** A scheduler that holds each flush until the test runs it. */
+  const manualScheduler = () => {
+    const queued: (() => void)[] = [];
+    return {
+      schedule: (flush: () => void) => {
+        queued.push(flush);
+      },
+      run: () => queued.splice(0).forEach((flush) => flush()),
+    };
+  };
+
+  const remoteChange = { ...initial(), filter: "active" };
+
+  it("logs a remote change applied by a flush run later as remote", async () => {
+    const store = createTestStore<State>(initial());
+    const backend = createMemoryBackend();
+    const scheduler = manualScheduler();
+    const engine = createSyncEngine(backend, store.adapter, {
+      schedule: scheduler.schedule,
+    });
+    engine.connect();
+    inspector = createInspector({
+      name: "todos",
+      adapter: store.adapter,
+      backend,
+      engine,
+    });
+    inspector.start();
+    await tick();
+
+    backend.receive(remoteChange);
+    await tick();
+    expect(inspector.getSnapshot().backend?.filter).toBe("active");
+    expect(inspector.getSnapshot().log).toHaveLength(1);
+
+    scheduler.run();
+    await tick();
+    expect(inspector.getSnapshot().log.at(-1)).toMatchObject({
+      origin: "remote",
+      state: { filter: "active" },
+    });
+  });
+
+  it.each([
+    ["the engine", true],
+    ["the inspector", false],
+  ])(
+    "logs a remote change applied in a microtask as remote when %s subscribed to the backend first",
+    async (_, engineFirst) => {
+      const store = createTestStore<State>(initial());
+      const backend = createMemoryBackend();
+      const engine = createSyncEngine(backend, store.adapter, {
+        schedule: (flush) => queueMicrotask(flush),
+      });
+      if (engineFirst) engine.connect();
+      inspector = createInspector({
+        name: "todos",
+        adapter: store.adapter,
+        backend,
+        engine,
+      });
+      inspector.start();
+      if (!engineFirst) engine.connect();
+      await tick();
+
+      backend.receive(remoteChange);
+      await tick();
+
+      const { log, store: state } = inspector.getSnapshot();
+      expect(state.filter).toBe("active");
+      expect(log.at(-1)?.origin).toBe("remote");
+    },
+  );
+
+  it("updates the connection status when the app connects or disconnects the engine", async () => {
+    const { engine, inspector } = setup();
+
+    engine.disconnect();
+    await tick();
+    expect(inspector.getSnapshot().connected).toBe(false);
+
+    engine.connect();
+    await tick();
+    expect(inspector.getSnapshot().connected).toBe(true);
+  });
+
+  it("logs a connect made by the app as adopting the backend", async () => {
+    const { store, engine, inspector } = setup();
+    engine.disconnect();
+    store.set({ ...store.get(), filter: "done" });
+    await tick();
+
+    engine.connect();
+    await tick();
+
+    expect(store.get().filter).toBe("all");
+    expect(inspector.getSnapshot().log.at(-1)).toMatchObject({
+      origin: "remote",
+      label: "Connected: adopted the backend",
+    });
+  });
+
+  it("stops hearing the engine after stop()", async () => {
+    const { engine, inspector } = setup();
+    inspector.stop();
+    engine.disconnect();
+    await tick();
+    expect(inspector.getSnapshot().connected).toBe(true);
+  });
+
+  it("marks keys and flags values as before for a source without an engine", async () => {
+    const store = createTestStore<Record<string, unknown>>({
+      count: 0,
+      draft: "x",
+      when: new Date(0),
+      add: () => {},
+    });
+    const backend = createMemoryBackend();
+    backend.receive({ count: 0, gone: true });
+    inspector = createInspector({
+      name: "plain",
+      adapter: store.adapter,
+      backend,
+    });
+    inspector.start();
+    await tick();
+
+    const snapshot = inspector.getSnapshot();
+    expect(snapshot.connected).toBeNull();
+    expect(snapshot.keyStatus).toEqual({
+      count: "synced",
+      draft: "pending",
+      when: "pending",
+      gone: "backend-only",
+    });
+    expect(snapshot.warnings).toEqual([{ path: ["when"], kind: "Date" }]);
+  });
+});
+
 describe("storage", () => {
   const setupStorage = async (
     wrap: (persistence: Persistence) => Persistence = (p) => p,
+    adapt: (storage: PersistenceAdapter) => PersistenceAdapter = (s) => s,
   ) => {
     const store = createTestStore({ count: 0 });
     const doc = createTestDoc();
     const storage = createMemoryPersistenceAdapter();
-    const persistence = createPersistence(doc, storage, { key: "doc" });
+    const persistence = createPersistence(doc, adapt(storage), {
+      key: "doc",
+      onError: () => {},
+    });
     await persistence.whenLoaded;
     inspector = createInspector({
       name: "count",
@@ -284,6 +528,7 @@ describe("storage", () => {
       busy: null,
       cleared: false,
       error: null,
+      operationError: null,
     });
 
     doc.add("a");
@@ -331,6 +576,7 @@ describe("storage", () => {
       busy: null,
       cleared: true,
       error: null,
+      operationError: null,
     });
   });
 
@@ -344,4 +590,40 @@ describe("storage", () => {
 
     expect(inspector.getSnapshot().storage?.error).toBe("storage unavailable");
   });
+
+  it.each(["compact", "clear"] as const)(
+    "keeps a failed %s visible after refreshing stats and clears it on retry",
+    async (operation) => {
+      let fail = (): void => {};
+      const { inspector, persistence, storage } = await setupStorage(
+        (persistence) => persistence,
+        (memory) => {
+          const call = vi.fn(memory[operation]);
+          fail = () => {
+            call.mockRejectedValueOnce(new Error(`${operation} failed`));
+          };
+          return { ...memory, [operation]: call };
+        },
+      );
+      await persistence.flush();
+      fail();
+      const change =
+        operation === "compact"
+          ? inspector.compactStorage
+          : inspector.clearStorage;
+      await change();
+      await inspector.refreshStorage();
+
+      expect(inspector.getSnapshot().storage).toMatchObject({
+        busy: null,
+        operationError: `${operation} failed`,
+        error: null,
+        stats: { updates: 1 },
+        cleared: false,
+      });
+      await change();
+      expect(inspector.getSnapshot().storage?.operationError).toBeNull();
+      expect(storage.size("doc")).toBe(operation === "clear" ? 0 : 1);
+    },
+  );
 });

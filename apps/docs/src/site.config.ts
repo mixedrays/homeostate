@@ -5,6 +5,10 @@ export const site = {
   summary:
     "State-manager and CRDT-backend agnostic sync engine: keep a Zustand, Redux, MobX, Jotai, " +
     "Valtio, TanStack Store, NgRx Signals or MobX-State-Tree store in sync with a Yjs, Loro or Automerge document.",
+  /** The landing page's meta description; like a page's, at most 160 characters. */
+  description:
+    "Keep a Zustand, Redux, MobX, Jotai, Valtio, TanStack Store, NgRx Signals or MobX-State-Tree " +
+    "store in sync with a Yjs, Loro or Automerge document.",
   repo: "https://github.com/mixedrays/homeostate",
   branch: "main",
   npm: "https://www.npmjs.com/package",
@@ -15,12 +19,16 @@ export const site = {
   aboutPage: "/docs/about",
 } as const;
 
-export const groups: { id: GroupId; title: string }[] = [
+/**
+ * `role` names one of the group's packages; a package introduction's title leads with its label
+ * and role ("Yjs CRDT backend"), since its H1 is the package name.
+ */
+export const groups: { id: GroupId; title: string; role?: string }[] = [
   { id: "guides", title: "Guides" },
-  { id: "core", title: "Core" },
-  { id: "crdt", title: "CRDT backends" },
-  { id: "store", title: "Store adapters" },
-  { id: "persist", title: "Persistence" },
+  { id: "core", title: "Core", role: "sync engine" },
+  { id: "crdt", title: "CRDT backends", role: "CRDT backend" },
+  { id: "store", title: "Store adapters", role: "store adapter" },
+  { id: "persist", title: "Persistence", role: "persistence adapter" },
   { id: "tools", title: "Tools" },
 ];
 

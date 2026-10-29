@@ -58,7 +58,8 @@ const entryProblem = (entry: unknown, ids: Set<number>): string | null => {
   if (!Number.isSafeInteger(id) || (id as number) < 0) return "has no valid id";
   if (ids.has(id as number)) return `repeats id ${String(id)}`;
   ids.add(id as number);
-  if (typeof at !== "number") return "has no valid time";
+  if (typeof at !== "number" || !Number.isFinite(new Date(at).getTime()))
+    return "has no valid time";
   if (!ORIGINS.includes(origin as LogOrigin)) return "has no valid origin";
   if (label !== undefined && typeof label !== "string")
     return "has a label that is not a string";

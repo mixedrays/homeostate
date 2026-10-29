@@ -1,5 +1,5 @@
 ---
-description: TanStack Store adapter for @homeostate/core
+description: Keep a TanStack Store in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

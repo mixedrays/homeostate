@@ -1,5 +1,5 @@
 ---
-description: localStorage persistence adapter for @homeostate/core
+description: Store a Yjs, Loro or Automerge document in localStorage, so its state survives reloads, offline starts and every peer leaving the room.
 label: Introduction
 ---
 
@@ -36,7 +36,9 @@ createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
 ```
 
 Connect the engine after `whenLoaded`, so it adopts the restored state instead of seeding the
-store's defaults over it. See the [persistence guide](/docs/persistence) for the whole flow.
+store's defaults over it. Its result tells whether a stored document was found and restored in
+full; see [checking what was restored](/docs/persistence#checking-what-was-restored). See the
+[persistence guide](/docs/persistence) for the whole flow.
 
 ## Options
 
@@ -51,5 +53,6 @@ createLocalStorageAdapter({
 
 Each document is one JSON entry holding its updates in base64, rewritten on every update.
 Browsers allow about 5 MB per origin; a write past that fails and is reported through
-`createPersistence`'s `onError`. For larger documents use
+`createPersistence`'s `onError`, and `flush()` rejects until a compaction stores the whole
+document again. For larger documents use
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md).

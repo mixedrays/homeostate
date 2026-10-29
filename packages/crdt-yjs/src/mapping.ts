@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import type { TextPolicy } from "@homeostate/core";
+import type { JsonObject, TextPolicy } from "@homeostate/core";
 
 export type SharedType = Y.Map<unknown> | Y.Array<unknown> | Y.Text;
 
@@ -46,47 +46,23 @@ const objectToYMap = (
 /**
  * Returns the JSON value of `value`, a shared type or a value held in one, as `toJSON` would in
  * one pass, leaving out map entries named `__proto__`: `toJSON` builds objects by assignment,
- * so such an entry would become the prototype of the object holding it. Values a peer stored
- * whole go through `withPlainPrototypes`.
+ * so such an entry would become the prototype of the object holding it. A value a peer stored
+ * whole is returned as Yjs decoded it, which may have built such a prototype too; the sync
+ * engine copies those objects into plain ones before they reach the store.
  */
 export const toPlainValue = (value: unknown): unknown => {
-  if (value instanceof Y.Map) {
-    const object: Record<string, unknown> = {};
-    value.forEach((item, key) => {
-      // Assigning this key would replace the object's prototype; the engine leaves it out anyway.
-      if (key !== "__proto__") object[key] = toPlainValue(item);
-    });
-    return object;
-  }
+  if (value instanceof Y.Map) return toPlainMap(value);
   if (value instanceof Y.Array) return value.map(toPlainValue);
   if (value instanceof Y.AbstractType) return value.toJSON();
-  return withPlainPrototypes(value);
+  return value;
 };
 
-/**
- * `toJSON` builds objects by assignment, so a map entry a peer named `__proto__` becomes the
- * prototype of the object holding it, and its entries read as inherited properties. Returns
- * `value` with every such object replaced by a plain copy of its own properties, copying only
- * the containers on a path to one.
- */
-const withPlainPrototypes = (value: unknown): unknown => {
-  if (value === null || typeof value !== "object" || ArrayBuffer.isView(value))
-    return value;
-
-  const source = value as Record<string, unknown>;
-  let copy =
-    Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype
-      ? undefined
-      : copyOf(value);
-  for (const key of Object.keys(source)) {
-    // Assigning this key would replace the copy's prototype; the engine leaves it out anyway.
-    if (key === "__proto__") continue;
-    const item = withPlainPrototypes(source[key]);
-    if (item !== source[key]) (copy ??= copyOf(value))[key] = item;
-  }
-
-  return copy ?? value;
+/** `toPlainValue` of a Y.Map, which is a plain object. */
+export const toPlainMap = (map: Y.Map<unknown>): JsonObject => {
+  const object: JsonObject = {};
+  map.forEach((item, key) => {
+    // Assigning this key would replace the object's prototype; the engine leaves it out anyway.
+    if (key !== "__proto__") object[key] = toPlainValue(item);
+  });
+  return object;
 };
-
-const copyOf = (value: object): Record<string, unknown> =>
-  (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;

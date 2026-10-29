@@ -57,11 +57,16 @@ function removeResourceData(clientDir: string): number {
   return count;
 }
 
+// The .md twins, llms.txt files and search index repeat the pages' text: keep them out of search
+// results, so those link to the HTML pages. noindex on robots.txt only keeps it out of results.
 const HEADERS = `/*.md
   Content-Type: text/markdown; charset=utf-8
   X-Robots-Tag: noindex
 /*.txt
   Content-Type: text/plain; charset=utf-8
+  X-Robots-Tag: noindex
+/search-index.json
+  X-Robots-Tag: noindex
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 `;
@@ -93,6 +98,7 @@ function assertOutput(clientDir: string, manifest: Manifest) {
     "sitemap.xml",
     "robots.txt",
     "search-index.json",
+    "og.png",
   ].forEach(expect);
 
   const stray: string[] = [];

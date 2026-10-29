@@ -10,36 +10,72 @@ import {
 } from "../components/ui/empty";
 import { Switch } from "../components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import type { Inspector, InspectorSnapshot } from "../inspector";
 import { useNetworkSnapshot } from "../lib/use-network-snapshot";
 import type { NetworkLink } from "../network";
 import { formatDelay } from "./format";
+import { HomeostateMark } from "./mark";
 
 const LATENCIES = [0, 100, 500, 2000];
 const JITTERS = [0, 50, 200, 1000];
 
-export function NetworkTab({ network }: { network: NetworkLink | undefined }) {
-  const snapshot = useNetworkSnapshot(network);
+export function NetworkTab({
+  snapshot,
+  inspector,
+  network,
+}: {
+  snapshot: InspectorSnapshot;
+  inspector: Inspector;
+  network: NetworkLink | undefined;
+}) {
+  const link = useNetworkSnapshot(network);
+  const top = (
+    <>
+      {snapshot.connected === false && (
+        <Notice>
+          Disconnected: changes stay in this store and peers do not see them.
+          Reconnecting adopts the backend&apos;s values, so edits made meanwhile
+          to keys it holds are dropped.
+        </Notice>
+      )}
+      {link && !link.connected && (
+        <Notice>
+          {link.conditions.offline
+            ? "Network offline"
+            : "Network down for a moment"}
+          : changes made here wait, and peers&apos; changes do not arrive.
+          Coming back online merges both.
+        </Notice>
+      )}
+      {snapshot.connected !== null && (
+        <EngineSection connected={snapshot.connected} inspector={inspector} />
+      )}
+    </>
+  );
 
-  if (!network || !snapshot) {
+  if (!network || !link) {
     return (
-      <Empty className="flex-1">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Wifi />
-          </EmptyMedia>
-          <EmptyTitle>No network link</EmptyTitle>
-          <EmptyDescription>
-            Put a <code>createNetworkLink</code> between the app&apos;s document
-            and the one its provider syncs, and add it to the source as{" "}
-            <code>network</code>, to slow down or cut this tab&apos;s
-            connection.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        {top}
+        <Empty className="flex-1">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Wifi />
+            </EmptyMedia>
+            <EmptyTitle>No network link</EmptyTitle>
+            <EmptyDescription>
+              Put a <code>createNetworkLink</code> between the app&apos;s
+              document and the one its provider syncs, and add it to the source
+              as <code>network</code>, to slow down or cut this tab&apos;s
+              connection.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     );
   }
 
-  const { conditions, connected, incoming, outgoing } = snapshot;
+  const { conditions, connected, incoming, outgoing } = link;
   const status = conditions.offline
     ? "Offline"
     : connected
@@ -48,6 +84,7 @@ export function NetworkTab({ network }: { network: NetworkLink | undefined }) {
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
+      {top}
       <section
         aria-labelledby="devtools-conditions"
         className="space-y-3 border-b px-3 py-2"
@@ -133,11 +170,59 @@ export function NetworkTab({ network }: { network: NetworkLink | undefined }) {
         <p className="mt-3 text-xs text-muted-foreground">
           The link carries updates between this tab&apos;s document and the one
           its provider syncs; the counts are updates on their way. Presence,
-          such as cursors, does not go through it. The engine switch in the
-          header is different: it stops syncing the store with the document.
+          such as cursors, does not go through it. The engine switch above is
+          different: it stops syncing the store with the document.
         </p>
       </section>
     </div>
+  );
+}
+
+function Notice({ children }: { children: ReactNode }) {
+  return (
+    <p className="border-b bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+      {children}
+    </p>
+  );
+}
+
+function EngineSection({
+  connected,
+  inspector,
+}: {
+  connected: boolean;
+  inspector: Inspector;
+}) {
+  return (
+    <section
+      aria-labelledby="devtools-engine"
+      className="space-y-1.5 border-b px-3 py-2"
+    >
+      <div className="flex items-center gap-2">
+        <h3 id="devtools-engine" className="text-xs font-medium">
+          Sync engine
+        </h3>
+        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+          <HomeostateMark
+            state={connected ? "connected" : "disconnected"}
+            className="size-3.5 shrink-0 [--hm-ink:currentColor]"
+          />
+          {connected ? "Connected" : "Disconnected"}
+          <Switch
+            size="sm"
+            checked={connected}
+            onCheckedChange={(checked: boolean) =>
+              checked ? inspector.connect() : inspector.disconnect()
+            }
+            aria-label="Sync engine connected"
+          />
+        </label>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Syncs the store with the backend. While it is off, each side keeps its
+        own changes.
+      </p>
+    </section>
   );
 }
 

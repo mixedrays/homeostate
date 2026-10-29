@@ -1,5 +1,5 @@
 ---
-description: MobX-State-Tree adapter for @homeostate/core
+description: Keep a MobX-State-Tree node in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

@@ -1,19 +1,20 @@
 import {
   defaultSyncFilter,
+  jsonEqual,
+  keepIdentity,
   type CrdtBackend,
   type Persistence,
   type PersistenceStats,
   type StoreAdapter,
   type SyncEngine,
+  type SyncEvent,
   type Unsubscribe,
 } from "@homeostate/core";
 import {
-  deepEqual,
   diffJson,
   findNonJson,
   isRecord,
   setIn,
-  share,
   toJsonObject,
   type DiffLine,
   type JsonObject,
@@ -35,10 +36,11 @@ export interface DevtoolsSource<S extends object = any> {
   adapter: StoreAdapter<S>;
   /** Shown read-only on the Sync tab next to the store. */
   backend?: CrdtBackend;
-  /** Adds the connection status and a connect / disconnect switch. */
+  /**
+   * Adds the connection status and a connect / disconnect switch. Its synced state decides which
+   * keys are local, and its sync events which changes are remote.
+   */
   engine?: SyncEngine;
-  /** The engine's `filter`, if it has one, so keys it keeps out of sync are marked local. */
-  filter?: (key: string, value: unknown) => boolean;
   /** What `createPersistence` returned for the document, for the Storage tab. */
   persistence?: Persistence;
   /** What `createNetworkLink` returned for the document, for the Network tab. */
@@ -84,8 +86,10 @@ export interface StorageSnapshot {
   busy: "compacting" | "clearing" | null;
   /** Set once Clear has stopped storing the document, until the page reloads. */
   cleared: boolean;
-  /** Why the last storage call failed. */
+  /** Why the last stats read failed. */
   error: string | null;
+  /** Why Compact or Clear failed; kept until another operation is attempted. */
+  operationError: string | null;
 }
 
 export interface InspectorSnapshot {
@@ -93,8 +97,10 @@ export interface InspectorSnapshot {
   store: JsonObject;
   /** Why the store could not be read as JSON, e.g. a cycle. */
   storeError: string | null;
-  /** `backend.read()`, or `null` without a backend. */
+  /** Last successful `backend.read()`, or `null` without a successful read. */
   backend: JsonObject | null;
+  /** Why the backend could not be read; comparisons are unavailable while set. */
+  backendError: string | null;
   /** `engine.isConnected()`, or `null` without an engine. */
   connected: boolean | null;
   keyStatus: Readonly<Record<string, KeyStatus>>;
@@ -113,7 +119,7 @@ export interface Inspector {
   /** Start watching the store, the backend and the engine. */
   start: () => void;
   stop: () => void;
-  /** Swap in a source with the same adapter, backend and engine but a new name or filter. */
+  /** Swap in a source with the same adapter, backend and engine but a new name or persistence. */
   update: (source: DevtoolsSource) => void;
   /** Replace the store's JSON keys with `state`; keys that are not JSON, such as actions, stay. */
   replaceState: (state: JsonObject, label: string) => void;
@@ -138,13 +144,14 @@ export interface Inspector {
 export interface InspectorOptions {
   /** Log entries kept; older ones are dropped. Defaults to 200. */
   logLimit?: number;
-  /** How often to check `engine.isConnected()`, which has no events. Defaults to 1000 ms. */
-  pollInterval?: number;
 }
 
 type Plain = Record<string, unknown>;
 
-/** A remote change reaches the store through the engine within the same task, so it outranks local. */
+/**
+ * The origin of a batch's store change: a sync event in the batch outranks the local default,
+ * and a devtools edit outranks both.
+ */
 const originRank: Record<LogOrigin, number> = {
   initial: 0,
   local: 1,
@@ -157,8 +164,27 @@ const messageOf = (error: unknown): string =>
 
 const initialStorage = (source: DevtoolsSource): StorageSnapshot | null =>
   source.persistence
-    ? { stats: null, busy: null, cleared: false, error: null }
+    ? {
+        stats: null,
+        busy: null,
+        cleared: false,
+        error: null,
+        operationError: null,
+      }
     : null;
+
+const CONNECTED_LABEL = "Connected: adopted the backend";
+
+const hasOwn = (object: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(object, key);
+
+/** The keys of `state` the engine would sync with its default filter, for a source without one. */
+const defaultSynced = (state: Plain): Plain => {
+  const synced: Plain = {};
+  for (const key of Object.keys(state))
+    if (defaultSyncFilter(key, state[key])) synced[key] = state[key];
+  return synced;
+};
 
 const keyStatusOf = (
   store: JsonObject,
@@ -169,30 +195,29 @@ const keyStatusOf = (
   for (const key of Object.keys(store)) {
     if (localKeys.includes(key)) status[key] = "local";
     else if (backend === null) continue;
-    else if (!(key in backend)) status[key] = "pending";
+    else if (!hasOwn(backend, key)) status[key] = "pending";
     else
-      status[key] = deepEqual(store[key], backend[key]) ? "synced" : "diverged";
+      status[key] = jsonEqual(store[key], backend[key]) ? "synced" : "diverged";
   }
   if (backend !== null)
     for (const key of Object.keys(backend))
-      if (!(key in store)) status[key] = "backend-only";
+      if (!hasOwn(store, key)) status[key] = "backend-only";
   return status;
 };
 
 /**
- * Watches one source and keeps a log of its store's changes. The store and backend
- * notifications of one task are read together in a microtask, so a remote change that the
- * engine applies to the store is logged once, as remote.
+ * Watches one source and keeps a log of its store's changes. The store's notifications and the
+ * engine's sync events are read together in a microtask: a store change is logged as local unless
+ * a sync event in the same batch says the engine applied a remote change or connected.
  */
 export function createInspector(
   initialSource: DevtoolsSource,
-  { logLimit = 200, pollInterval = 1000 }: InspectorOptions = {},
+  { logLimit = 200 }: InspectorOptions = {},
 ): Inspector {
   let source = initialSource;
   let nextId = 1;
   let running = false;
   let unsubscribers: Unsubscribe[] = [];
-  let timer: ReturnType<typeof setInterval> | undefined;
   let scheduled = false;
   let pendingOrigin: LogOrigin | null = null;
   let pendingLabel: string | undefined;
@@ -207,32 +232,35 @@ export function createInspector(
     let warnings = previous?.warnings ?? [];
     try {
       const raw = source.adapter.getState() as Plain;
-      const filter = source.filter ?? defaultSyncFilter;
+      const synced = source.engine
+        ? source.engine.getSyncedState()
+        : defaultSynced(raw);
       // Before the JSON view, which throws on some of them.
-      warnings = Object.keys(raw)
-        .filter((key) => filter(key, raw[key]))
-        .flatMap((key) => findNonJson(raw[key], [key]));
+      warnings = Object.keys(synced).flatMap((key) =>
+        findNonJson(synced[key], [key]),
+      );
       store = toJsonObject(raw);
-      localKeys = Object.keys(store).filter((key) => !filter(key, raw[key]));
+      localKeys = Object.keys(store).filter((key) => !hasOwn(synced, key));
     } catch (error) {
       storeError = messageOf(error);
     }
 
-    let backend: JsonObject | null = null;
+    let backend: JsonObject | null = previous?.backend ?? null;
+    let backendError: string | null = null;
     if (source.backend) {
       try {
         const value = source.backend.read();
         backend = isRecord(value) ? toJsonObject(value) : {};
-      } catch {
-        backend = {};
+      } catch (error) {
+        backendError = messageOf(error);
       }
     }
 
     // Keep the previous objects when nothing changed, so memoized views stay quiet.
-    if (previous && deepEqual(previous.store, store)) store = previous.store;
-    if (previous?.backend && deepEqual(previous.backend, backend))
+    if (previous && jsonEqual(previous.store, store)) store = previous.store;
+    if (previous?.backend && jsonEqual(previous.backend, backend))
       backend = previous.backend;
-    if (previous && deepEqual(previous.warnings, warnings))
+    if (previous && jsonEqual(previous.warnings, warnings))
       warnings = previous.warnings;
 
     return {
@@ -240,8 +268,13 @@ export function createInspector(
       storeError,
       warnings,
       backend,
+      backendError,
       connected: source.engine ? source.engine.isConnected() : null,
-      keyStatus: keyStatusOf(store, localKeys, backend),
+      keyStatus: keyStatusOf(
+        store,
+        localKeys,
+        backendError !== null ? null : backend,
+      ),
     };
   };
 
@@ -292,10 +325,11 @@ export function createInspector(
       log !== snapshot.log ||
       next.store !== snapshot.store ||
       next.backend !== snapshot.backend ||
+      next.backendError !== snapshot.backendError ||
       next.connected !== snapshot.connected ||
       next.storeError !== snapshot.storeError ||
       next.warnings !== snapshot.warnings ||
-      !deepEqual(next.keyStatus, snapshot.keyStatus);
+      !jsonEqual(next.keyStatus, snapshot.keyStatus);
     if (changed) emit({ ...snapshot, ...next, log });
   };
 
@@ -323,24 +357,28 @@ export function createInspector(
     const current = source.adapter.getState() as Plain;
     const next: Plain = { ...current };
     for (const key of Object.keys(toJsonObject(current)))
-      if (!(key in state)) delete next[key];
+      if (!hasOwn(state, key)) delete next[key];
     for (const [key, value] of Object.entries(state))
-      next[key] = share(current[key], value);
+      next[key] = keepIdentity(current[key], value);
     commit(next, label);
+  };
+
+  /** What a sync event says about the batch it falls in; `local` only refreshes the view. */
+  const onSyncEvent = (event: SyncEvent): void => {
+    if (event === "remote") schedule("remote");
+    // Connecting adopts the backend's values, which is a remote change to the store.
+    else if (event === "connect") schedule("remote", CONNECTED_LABEL);
+    else schedule("local");
   };
 
   const start = (): void => {
     if (running) return;
     running = true;
     unsubscribers = [source.adapter.subscribe(() => schedule("local"))];
+    // Only refreshes the backend's view: the engine's sync events tell a remote change apart.
     if (source.backend)
-      unsubscribers.push(source.backend.subscribe(() => schedule("remote")));
-    if (source.engine) {
-      const engine = source.engine;
-      timer = setInterval(() => {
-        if (engine.isConnected() !== snapshot.connected) schedule("local");
-      }, pollInterval);
-    }
+      unsubscribers.push(source.backend.subscribe(() => schedule("local")));
+    if (source.engine) unsubscribers.push(source.engine.subscribe(onSyncEvent));
     // Pick up whatever changed while stopped.
     schedule("local");
   };
@@ -386,12 +424,12 @@ export function createInspector(
   ): Promise<void> => {
     const persistence = source.persistence;
     if (!persistence || snapshot.storage?.busy) return;
-    setStorage(persistence, { busy, error: null });
+    setStorage(persistence, { busy, operationError: null });
     try {
       await change(persistence);
       setStorage(persistence, { busy: null });
     } catch (error) {
-      setStorage(persistence, { busy: null, error: messageOf(error) });
+      setStorage(persistence, { busy: null, operationError: messageOf(error) });
     }
     await refreshStorage();
   };
@@ -401,8 +439,6 @@ export function createInspector(
     running = false;
     unsubscribers.forEach((unsubscribe) => unsubscribe());
     unsubscribers = [];
-    clearInterval(timer);
-    timer = undefined;
   };
 
   return {
@@ -437,16 +473,10 @@ export function createInspector(
       if (entry) replaceState(entry.state, `Restored #${entryId}`);
     },
 
-    connect: () => {
-      source.engine?.connect();
-      // Connecting adopts the backend's values, which is a remote change to the store.
-      schedule("remote", "Connected: adopted the backend");
-    },
+    // The engine's `connect` and `disconnect` events update the view.
+    connect: () => source.engine?.connect(),
 
-    disconnect: () => {
-      source.engine?.disconnect();
-      schedule("local");
-    },
+    disconnect: () => source.engine?.disconnect(),
 
     clearLog: () => emit({ ...snapshot, log: [] }),
 

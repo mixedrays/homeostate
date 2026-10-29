@@ -1,5 +1,5 @@
 ---
-description: Jotai adapter for @homeostate/core
+description: Keep a writable Jotai atom in sync with a Yjs, Loro or Automerge document.
 label: Introduction
 ---
 

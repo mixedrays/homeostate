@@ -24,8 +24,8 @@ pnpm --filter @homeostate/docs preview # serve the build with Cloudflare's local
 
 A public package appears on the site once it has `docs/introduction.md`. Private workspace
 packages are excluded from the catalog. Package folders are flat;
-images go in `docs/assets/`. The sidebar label and order of each package are in
-[src/site.config.ts](src/site.config.ts).
+images go in `docs/assets/`. The sidebar label and order of each package, and the role its
+introduction's page title names ("Yjs CRDT backend"), are in [src/site.config.ts](src/site.config.ts).
 
 ## Page format
 

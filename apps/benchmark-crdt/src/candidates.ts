@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { LoroDoc } from "loro-crdt";
 import * as A from "@automerge/automerge";
+import type { JsonObject } from "@homeostate/core";
 import {
   createMemoryBackend,
   type MemoryBackend,
@@ -20,7 +21,7 @@ export const utf8Bytes = (text: string): number => Buffer.byteLength(text);
 
 interface PassthroughReplica extends Replica {
   peers: Set<PassthroughReplica>;
-  deliver(next: unknown): void;
+  deliver(next: JsonObject): void;
 }
 
 /**
@@ -33,7 +34,7 @@ export const passthrough: BackendCandidate<PassthroughReplica> = {
     "keeps the state by reference; no cloning, no encoding; measures the engine alone",
 
   createReplica() {
-    let state: unknown = {};
+    let state: JsonObject = {};
     const listeners = new Set<() => void>();
     const peers = new Set<PassthroughReplica>();
 
@@ -45,6 +46,8 @@ export const passthrough: BackendCandidate<PassthroughReplica> = {
           state = next;
           peers.forEach((peer) => peer.deliver(next));
         },
+        // Every change replaces the state.
+        revision: () => state,
         subscribe: (onRemoteChange) => {
           listeners.add(onRemoteChange);
           return () => {
@@ -91,6 +94,7 @@ export const memory: BackendCandidate<MemoryReplica> = {
       peers,
       backend: {
         read: inner.read,
+        revision: inner.revision,
         subscribe: inner.subscribe,
         write: (next) => {
           inner.write(next);

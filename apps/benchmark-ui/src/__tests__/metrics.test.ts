@@ -107,6 +107,8 @@ describe("formatting", () => {
     expect(formatValue("bytes", 2048)).toBe("2.0 KB");
     expect(formatValue("bytes", -12, true)).toBe("-12 B");
     expect(formatValue("bytes", null)).toBe("—");
+    expect(formatValue("ratio", 0.123)).toBe("+12%");
+    expect(formatValue("ratio", -0.05)).toBe("-5.0%");
   });
 
   it("keeps axis ticks compact", () => {
@@ -116,6 +118,8 @@ describe("formatting", () => {
     expect(formatTick("bytes", 1024)).toBe("1 KB");
     expect(formatTick("bytes", 10240)).toBe("10 KB");
     expect(formatTick("bytes", 100)).toBe("100 B");
+    expect(formatTick("ratio", 0.1)).toBe("+10%");
+    expect(formatTick("ratio", -0.025)).toBe("-2.5%");
   });
 
   it("formats timings and ratios like the CLI", () => {

@@ -66,12 +66,11 @@ export const doc = new Y.Doc();
 
 export const useCounter = create<CounterState>()(
   homeostate(
-    createYjsBackend(doc, "shared"),
     (set) => ({
       count: 0,
       increment: () => set((state) => ({ count: state.count + 1 })),
     }),
-    { seed: "never" },
+    { backend: createYjsBackend(doc, "shared"), connect: "manual" },
   ),
 );
 
@@ -80,6 +79,8 @@ export const provider = new WebsocketProvider(
   "homeostate-counter",
   doc,
 );
+
+provider.once("sync", () => useCounter.homeostate.connect());
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
@@ -90,12 +91,14 @@ if (import.meta.hot) {
 }
 ```
 
-The `homeostate` middleware connects the store to `doc.getMap("shared")`. The default
+The `homeostate` middleware syncs the store with `doc.getMap("shared")`. The default
 filter excludes the `increment` function, so only `count` is shared.
 
-`seed: "never"` leaves a new document empty until the first local edit. That prevents a
-joining tab from writing its initial zero over a count already in the room. The UI below
-waits for the provider's initial sync before allowing edits.
+`connect: "manual"` creates the store without touching the document, and the
+`provider.once("sync", ...)` line connects it once the provider has received the room's
+state. A joining tab then adopts the count already in the room instead of writing its initial
+zero over it, and the first tab in an empty room writes its count into it. Clicks before then
+change only this tab, and the room's count replaces them when it connects.
 
 Every tab uses the same server URL, room name (`homeostate-counter`) and map name (`shared`).
 The final block cleans up the old store and connection when Vite reloads this module during
@@ -128,9 +131,7 @@ export default function App() {
         {synced ? "Connected" : "Connecting to the sync server…"}
       </p>
       <p>Count: {count}</p>
-      <button disabled={!synced} onClick={increment}>
-        Increment
-      </button>
+      <button onClick={increment}>Increment</button>
     </main>
   );
 }
@@ -155,9 +156,9 @@ Use a different browser or a private window as an additional check: Yjs also exc
 updates directly between tabs in the same browser, so a cross-browser check verifies the
 WebSocket server is carrying the changes.
 
-If the button stays disabled, check that the sync server is still running on port `1234`.
-If Vite chooses a different port, open the exact same Vite URL in both tabs. If port `1234`
-is occupied, stop the other local server before starting this one.
+If the status stays on **Connecting**, check that the sync server is still running on port
+`1234`. If Vite chooses a different port, open the exact same Vite URL in both tabs. If port
+`1234` is occupied, stop the other local server before starting this one.
 
 > [!NOTE]
 > This example shares a numeric value. Simultaneous clicks can resolve to the same count;

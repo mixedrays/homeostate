@@ -1,5 +1,10 @@
 # @homeostate/crdt-automerge
 
+[![npm](https://img.shields.io/npm/v/@homeostate/crdt-automerge?color=2563eb)](https://www.npmjs.com/package/@homeostate/crdt-automerge)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fcrdt-automerge?externals=@homeostate/core,@automerge/automerge&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fcrdt-automerge&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%2C%22%40automerge%2Fautomerge%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/crdt-automerge?color=2563eb)](https://www.npmjs.com/package/@homeostate/crdt-automerge)
+[![license](https://img.shields.io/npm/l/@homeostate/crdt-automerge?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/crdt-automerge/LICENSE)
+
 [Automerge](https://automerge.org) backend for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It maps the synced state onto one key of an Automerge document (objects become maps, arrays
@@ -46,6 +51,13 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 `handle.update(fn)` replaces the document with the result of any Automerge call. See the
 [documentation](https://homeostate.pages.dev/docs/crdt-automerge/introduction) for details.
 
+To let an [automerge-repo](https://automerge.org/docs/repositories/) `Repo` store and sync the
+document instead, pass one of its `DocHandle`s:
+
+```ts
+createAutomergeBackend(await repo.find(url), "shared");
+```
+
 Strings are `ImmutableString` values, so concurrent writes keep one of them. Pass `text` to
 store chosen strings as Automerge text, whose concurrent edits merge character by character:
 
@@ -55,8 +67,9 @@ createAutomergeBackend(handle, "shared", {
 });
 ```
 
-To persist the document, pass `createAutomergePersistable(handle)` to `createPersistence`;
-see the [persistence guide](https://homeostate.pages.dev/docs/persistence).
+To persist the document, pass `createAutomergePersistable(handle)` to `createPersistence`, or
+use a `Repo`'s storage adapter; see the
+[persistence guide](https://homeostate.pages.dev/docs/persistence).
 
 ## License
 

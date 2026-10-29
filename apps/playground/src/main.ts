@@ -1,3 +1,5 @@
+import "../shared/homeostate-mark.css";
+import { mountHomeostateMark } from "../shared/mark.js";
 import { playgrounds, type Playground } from "./playgrounds.ts";
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -43,3 +45,7 @@ function card(playground: Playground) {
 }
 
 document.getElementById("playgrounds")!.append(...playgrounds.map(card));
+
+// Hovering the brand, wordmark included, plays the mark's Connect motion.
+const logo = document.querySelector("[data-homeostate-mark]");
+if (logo) mountHomeostateMark(logo, logo.closest(".brand") ?? logo);

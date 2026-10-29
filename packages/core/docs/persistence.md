@@ -20,7 +20,9 @@ declare function createPersistence(
 ```
 
 Subscribes to document updates immediately and queues the initial load. Await `whenLoaded`
-before connecting a sync engine that could seed initial state.
+before connecting a sync engine that could seed initial state, and check its
+[`PersistenceLoadResult`](#persistenceloadresult) to tell a first start from a restored
+document or a stored log that could not be restored in full.
 
 | Parameter | Required | Description                                                                                                                     |
 | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -30,7 +32,9 @@ before connecting a sync engine that could seed initial state.
 
 The initial load merges stored updates into the document and compacts them into one
 snapshot, which also stores whatever the document already held. Later updates, local and from
-peers, are appended one at a time, including those made during the load.
+peers, are appended one at a time, including those made during the load. If a stored update
+cannot be applied, the log is kept instead; see
+[Stored updates that cannot be applied](#stored-updates-that-cannot-be-applied).
 
 ### Example
 
@@ -51,7 +55,10 @@ const persistence = createPersistence(createYjsPersistable(doc), storage, {
   onError: (error) => console.error("Could not persist the counter", error),
 });
 
-await persistence.whenLoaded;
+const loaded = await persistence.whenLoaded;
+if (loaded.status === "failed" || loaded.status === "partial") {
+  // Offer recovery before seeding anything over what could not be restored.
+}
 // Connect your sync engine here, after the saved state has been applied.
 doc.getMap("shared").set("count", 1);
 await persistence.flush();
@@ -76,16 +83,17 @@ interface PersistenceConfig {
 | -------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `key`          | Required                     | Identifies the document in the storage adapter. Use different keys for independent documents.                                    |
 | `compactAfter` | `100`                        | Number of successful appends between compactions. Use a positive integer, or `Infinity` to compact only during the initial load. |
-| `onError`      | Logs through `console.error` | Receives storage failures and errors applying stored updates. Supply a handler that reports the error without throwing.          |
+| `onError`      | Logs through `console.error` | Receives each storage failure and each stored update it cannot apply, once. What it throws is logged.                            |
 
 Compaction loads the current log, merges it into the document, and replaces the loaded
-portion with one snapshot; updates another writer appended after that load remain.
+portion with one snapshot; updates another writer appended after that load remain. When an
+update in the loaded log cannot be applied, compaction leaves the log as it is.
 
 ## Persistence
 
 ```ts
 interface Persistence {
-  whenLoaded: Promise<void>;
+  whenLoaded: Promise<PersistenceLoadResult>;
   flush: () => Promise<void>;
   compact: () => Promise<void>;
   stats: () => Promise<PersistenceStats>;
@@ -101,20 +109,64 @@ interface PersistenceStats {
 
 ### whenLoaded
 
-Resolves once the stored updates have been applied. If loading fails, it resolves after
-`onError`, so the app starts without its saved state; it never rejects. It may resolve before
-the initial snapshot is written, and it does not wait for network peers. Await `flush()` to
-wait for storage work too.
+Resolves with a [`PersistenceLoadResult`](#persistenceloadresult) once the stored updates have
+been applied, and never rejects. If storage cannot be read, it resolves with `'failed'` after
+`onError`, and the document holds only what it held before. If some stored updates cannot be
+applied, it resolves with `'partial'` after `onError`, with the others applied. It resolves
+before the initial snapshot is written, and it does not wait for network peers: a failed
+initial snapshot leaves the result as it was and makes [`flush()`](#flush) reject instead.
+Await `flush()` to wait for storage work too.
+
+### PersistenceLoadResult
+
+```ts
+type PersistenceLoadResult =
+  | { status: "empty" }
+  | { status: "loaded" }
+  | { status: "partial"; errors: unknown[] }
+  | { status: "failed"; error: unknown };
+```
+
+| Status      | Meaning                                                                                                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"empty"`   | Nothing is stored under the key, as on a first visit. The document may still hold state of its own; the initial snapshot stores it.                                              |
+| `"loaded"`  | Every stored update was applied. The initial snapshot may still be pending.                                                                                                      |
+| `"partial"` | The log was read, but at least one stored update could not be applied, maybe none could. `errors` holds what `apply` threw for each, in log order. The log is kept for recovery. |
+| `"failed"`  | Storage could not be read. `error` is what the adapter's `load` rejected with. Nothing was restored.                                                                             |
+
+The errors are the objects `onError` received during the initial load, so an app can match
+them by identity; errors of later appends and compactions, which load the log again, are not
+included. A typical start connects the engine for `"empty"` and `"loaded"`, and offers recovery
+or starts without persistence otherwise:
+
+```ts
+const loaded = await persistence.whenLoaded;
+if (loaded.status === "empty" || loaded.status === "loaded") {
+  engine.connect();
+} else {
+  showRecovery(loaded);
+}
+```
+
+Code that only awaits `whenLoaded` keeps working, and still starts as it did after a failed or
+partial load. Before, it resolved with `undefined`: code that returns or assigns it where a
+`Promise<void>` is expected no longer type-checks. Type it as `Promise<PersistenceLoadResult>`,
+or pass `whenLoaded.then(() => {})` to keep `void`.
 
 ### flush
 
 Waits for storage work queued at the time of the call, including any compaction it
 triggers. Updates arriving later need another call.
 
+It resolves when every update reported so far is stored, and otherwise rejects; see
+[which failures a barrier reports](#which-failures-a-barrier-reports).
+
 ### compact
 
 Queues a compaction now, as every `compactAfter` appends do, and resolves once it is written.
-Failures go to `onError`. After `destroy()` or `clear()` it does nothing.
+It rejects with the storage error when loading the log or writing the snapshot fails. When a
+stored update cannot be applied, its error goes to `onError` and the log is not compacted,
+though the promise still resolves. After `destroy()` or `clear()` it does nothing.
 
 ### stats
 
@@ -126,23 +178,76 @@ the other methods, it rejects when storage cannot be read, rather than calling `
 
 ### destroy
 
-Stops storing updates immediately and waits for queued work; calling it again is safe. The
-stored data stays for a later `createPersistence` with the same adapter and key. It does not
+Stops storing updates immediately and waits for queued work; calling it again is safe. It
+settles as [`flush()`](#flush) does, and storing stops even when it rejects. The stored data
+stays for a later `createPersistence` with the same adapter and key. It does not
 destroy the document, disconnect its provider or sync engine, or close the storage adapter.
 
 ### clear
 
 Stops storing updates and removes the stored document after pending work, also after
-`destroy()`. The live document and other peers keep their state, and other persistence
-instances using the same key can write it again. To resume storing after `clear()` or
-`destroy()`, create a new persistence.
+`destroy()` and after earlier writes failed. It resolves once the document is removed and
+rejects with the storage error when it cannot be. It is how to delete a log holding updates that cannot be applied. The live
+document and other peers keep their state, and other persistence instances using the same key
+can write it again. To resume storing after `clear()` or `destroy()`, create a new
+persistence.
 
 ### Error handling
 
-Storage errors and stored updates that cannot be applied go to `onError`, and the queue
-moves on to the next operation. So the lifecycle promises resolving does not mean every
-write succeeded: track failures in `onError` if the app needs to show whether persistence
-works. Keep `onError` from throwing, or queued work rejects.
+Each storage error and each stored update that cannot be applied goes to `onError` once, as
+it happens, and the queue moves on to the next operation. `onError` only observes: what it
+throws is logged with `console.error`, and later storage work still runs.
+
+The methods report the result of their own work through their promises, rejecting with the
+same error object `onError` received, so an app can tell the two apart by identity:
+
+```ts
+try {
+  await persistence.flush(); // every update so far is stored
+  await persistence.clear(); // the stored document is gone
+} catch (error) {
+  showStorageFailure(error);
+}
+```
+
+A promise the app does not await never becomes an unhandled rejection, since its failure has
+already gone to `onError`. `whenLoaded` never rejects: it resolves with the
+[load result](#persistenceloadresult) instead. `stats()` rejects only when storage cannot be
+read.
+
+#### Which failures a barrier reports
+
+`flush()` and `destroy()` reject while storage may be missing an update the document
+reported: after a failed append, or a failed initial load or initial snapshot, which may leave
+what the document held before it was persisted unstored. This includes failures that happened
+before the call, and it rejects with the earliest such failure's error. Concurrent barriers
+reject alike, and `onError` is not called again.
+
+A failure stops affecting barriers once storage holds its update again: when a compaction
+writes a snapshot of the document, whether initial, automatic or from `compact()`, or the
+initial load appends one, or `clear()` removes the stored document. A barrier whose own queued
+work includes such a snapshot resolves. The operation that failed keeps its rejection.
+
+A failed automatic compaction leaves the log as it was, so it reports to `onError` without
+making barriers reject; neither does an update that cannot be applied.
+
+### Stored updates that cannot be applied
+
+A stored update the document cannot apply, such as damaged bytes or an update another CRDT
+library stored under a reused key, goes to `onError` with the error `apply` threw, and
+`whenLoaded` resolves with `'partial'` and those errors. The other updates are still applied,
+so the document holds what could be restored, and the stored log is kept as it is:
+
+- The initial load does not compact the log. It appends a snapshot of the document instead,
+  so what the document held before it was persisted is still stored.
+- Automatic and explicit compactions load the log again, report the same error again, and
+  leave the log in place.
+- Updates made after the load are appended as usual, and entries other writers stored remain.
+
+The unreadable bytes stay available through the adapter's `load(key)` until something deletes
+them. To recover, read the log, export or repair what the app can, then call `clear()`, or
+`adapter.clear(key)`, and persist the document again. Once the log can be applied in full,
+compaction resumes.
 
 ## PersistableDoc
 
@@ -157,7 +262,7 @@ interface PersistableDoc {
 | Member                | Contract                                                                                                                                                                                |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `encode()`            | Encodes the entire document as an update accepted by `apply`.                                                                                                                           |
-| `apply(update)`       | Merges binary updates or snapshots. Repeated and out-of-order updates must be safe.                                                                                                     |
+| `apply(update)`       | Merges binary updates or snapshots. Repeated and out-of-order updates must be safe. Throws for bytes it cannot apply, so that `createPersistence` keeps them in storage.                |
 | `subscribe(callback)` | Reports local changes and changes received from peers as binary updates. Changes made through this interface's own `apply` must not be reported again. Returns an unsubscribe function. |
 
 Not reporting `apply`'s own changes keeps restored updates from being stored again. Use
@@ -193,7 +298,8 @@ interface PersistenceAdapter {
 
 `version` is a storage-log position, not an application schema version. Store the bytes in
 the supplied `Uint8Array` view, which may cover only part of its backing buffer. Reject
-failed storage operations so `createPersistence` can report them through `onError`.
+failed storage operations so `createPersistence` can report them through `onError` and the
+promises of its methods.
 
 Use [IndexedDB](../../persist-indexeddb/docs/introduction.md),
 [localStorage](../../persist-local-storage/docs/introduction.md), or the

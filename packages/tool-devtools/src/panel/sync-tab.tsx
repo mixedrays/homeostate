@@ -1,4 +1,5 @@
-import { Database } from "lucide-react";
+import { CircleAlert, Database } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import {
   Empty,
   EmptyDescription,
@@ -7,10 +8,12 @@ import {
   EmptyTitle,
 } from "../components/ui/empty";
 import type { InspectorSnapshot, KeyStatus } from "../inspector";
+import { diffJson, type Json } from "../json";
 import { CopyButton } from "./copy-button";
 import { JsonTree } from "./json-tree";
 import { keyStatusInfo } from "./format";
 import { KeyStatusBadge } from "./value";
+import { JsonDiff } from "./json-diff";
 
 const ORDER: KeyStatus[] = [
   "diverged",
@@ -21,6 +24,33 @@ const ORDER: KeyStatus[] = [
 ];
 
 export function SyncTab({ snapshot }: { snapshot: InspectorSnapshot }) {
+  if (snapshot.backendError !== null) {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto">
+        <Alert variant="destructive" className="m-3 w-auto">
+          <CircleAlert />
+          <AlertTitle>Backend read failed</AlertTitle>
+          <AlertDescription>
+            <p>{snapshot.backendError}</p>
+            <p>
+              Key comparisons are unavailable until the backend can be read.
+            </p>
+          </AlertDescription>
+        </Alert>
+        {snapshot.backend !== null && (
+          <section>
+            <h3 className="px-3 text-xs font-medium">
+              Last successful backend document
+            </h3>
+            <JsonTree
+              label="Last successful backend document"
+              value={snapshot.backend}
+            />
+          </section>
+        )}
+      </div>
+    );
+  }
   if (snapshot.backend === null) {
     return (
       <Empty className="flex-1">
@@ -38,6 +68,7 @@ export function SyncTab({ snapshot }: { snapshot: InspectorSnapshot }) {
     );
   }
 
+  const { store, backend } = snapshot;
   const keys = Object.entries(snapshot.keyStatus).sort(
     ([a, statusA], [b, statusB]) =>
       ORDER.indexOf(statusA) - ORDER.indexOf(statusB) || a.localeCompare(b),
@@ -64,15 +95,24 @@ export function SyncTab({ snapshot }: { snapshot: InspectorSnapshot }) {
         </div>
         <ul className="mt-1.5 space-y-1">
           {keys.map(([key, status]) => (
-            <li key={key} className="flex items-start gap-2 text-xs">
-              <span className="min-w-0 shrink-0 truncate font-mono text-sky-700 dark:text-sky-400">
-                {key}
-              </span>
-              <KeyStatusBadge status={status} />
-              {status !== "synced" && (
-                <span className="min-w-0 text-muted-foreground">
-                  {keyStatusInfo[status].hint}
+            <li key={key} className="text-xs">
+              <div className="flex items-start gap-2">
+                <span className="min-w-0 shrink-0 truncate font-mono text-sky-700 dark:text-sky-400">
+                  {key}
                 </span>
+                <KeyStatusBadge status={status} />
+                {status !== "synced" && (
+                  <span className="min-w-0 text-muted-foreground">
+                    {keyStatusInfo[status].hint}
+                  </span>
+                )}
+              </div>
+              {status === "diverged" && (
+                <Divergence
+                  name={key}
+                  store={store[key]}
+                  backend={backend[key]}
+                />
               )}
             </li>
           ))}
@@ -92,5 +132,30 @@ export function SyncTab({ snapshot }: { snapshot: InspectorSnapshot }) {
         <JsonTree label="Backend document" value={snapshot.backend} />
       </section>
     </div>
+  );
+}
+
+/** Where a diverged key's value in the store differs from the backend's, path by path. */
+function Divergence({
+  name,
+  store,
+  backend,
+}: {
+  name: string;
+  store: Json | undefined;
+  backend: Json | undefined;
+}) {
+  const lines = diffJson(
+    backend === undefined ? {} : { [name]: backend },
+    store === undefined ? {} : { [name]: store },
+  );
+  return (
+    <JsonDiff
+      lines={lines}
+      label={`${name} in the store and the backend`}
+      beforeLabel="backend"
+      afterLabel="store"
+      beforeFirst={false}
+    />
   );
 }

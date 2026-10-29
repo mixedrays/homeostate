@@ -16,10 +16,15 @@ a state manager, and `crdt-*` packages implement `CrdtBackend` for a CRDT librar
 import { createSyncEngine } from "@homeostate/core";
 
 const engine = createSyncEngine(backend, adapter, { seed: "if-empty" });
+engine.subscribe((event) => console.log(event)); // "connect", then "disconnect"
 engine.connect();
 engine.isConnected(); // true
 engine.disconnect();
 ```
+
+Besides `isConnected()`, the engine reports a sync event after each local change it writes,
+remote change it applies, connect and disconnect, and `getSyncedState()` returns the store's
+synced keys; see [Sync events](../../../packages/core/docs/sync-engine.md#sync-events).
 
 ## Store adapters
 
@@ -34,35 +39,58 @@ interface StoreAdapter<S extends object> {
 ```
 
 `setState` is called only for changes that come from the backend. The engine ignores store
-notifications raised while it runs, so an adapter needs no echo suppression of its own.
+notifications raised while it runs, so an adapter needs no echo suppression of its own. What the
+store changes meanwhile, such as a key a reducer normalises or a subscriber, reaction or hook
+derives, is written to the backend once `setState` returns, in one write. A remote change the
+store keeps as it is writes nothing back, and neither does one it ignores: when `getState`
+returns the same object as before `setState`, the backend keeps the remote state.
+
+What the store changes while a remote change is applied must not change again when the same
+state is applied a second time, and every peer must agree on it. A store that breaks this, such
+as one that stamps the time on every `setState`, or two app versions that normalise a key in
+contradicting ways, would make the peers re-write each other's changes forever. Instead, when
+another peer changes the keys the engine's last write back changed and the store changes them
+again, the engine stops writing them back and reports them once: to `onError` as a
+`WriteLoopError`, or without `onError` with a warning in development. The store then keeps values
+for those keys that differ from the backend's.
 
 Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and `null`.
 Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are
 neither diffed nor synced. The supplied backends store `undefined` and nested functions as
 `JSON.stringify` does: object entries holding them are left out, and such array items become
-`null`.
+`null`. They store `NaN` and infinite numbers as `null`, as it does too.
 
 Keys sync as own properties, so a key such as `constructor` or `toString` behaves like any
 other. A `__proto__` key is never synced: assigning it would replace an object's prototype, so
-the engine leaves it out of remote state at any depth.
+the engine leaves it out of remote state at any depth, and copies an object a backend read with
+another prototype into a plain object of its own entries.
 
 ## CRDT backends
 
 A `CrdtBackend` holds the synced part of the state in a CRDT or any other replicated store:
 
 ```ts
+type JsonObject = Record<string, unknown>;
+type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
+
 interface CrdtBackend {
-  read: () => unknown;
-  write: (next: unknown, previous?: unknown) => void;
+  read: () => JsonObject;
+  write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
+  revision?: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
 
-- `read` returns a plain JSON snapshot that does not alias the backend's internals.
-- `write` makes the backend equal to `next` in one atomic transaction. The engine also passes
-  `previous`, what the backend holds as far as it knows. The supplied backends diff the two
-  with core's `applyChanges`, so a write becomes small edits instead of replacing the
-  document.
+- `read` returns a plain JSON snapshot, an object that does not alias the backend's internals.
+- `write` makes the backend equal to `next` in one atomic transaction. `next` is any object
+  but an array or another iterable, including state typed with an `interface`. The engine also passes
+  `previous`, what the backend holds as far as it knows. The supplied backends are built with
+  core's `createCrdtBackend`, which diffs the two with `applyChanges`, so a write becomes small
+  edits instead of replacing the document.
+- `revision` tells the engine whether the document may have changed since it last synced,
+  even before `subscribe` reports the change. If it has, the engine applies that change to the
+  store before writing a local one, which loses what it did to synced keys. Without
+  `revision`, the engine reads the backend before every local change.
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 
@@ -97,16 +125,20 @@ change replaces the string whole, so a concurrent edit to the old one is lost.
 
 ## Choosing what to sync
 
-The `filter` option decides which top-level keys are synced, in both directions:
+The engine syncs every top-level key of the store's state but its functions. `omit` keeps
+the keys it names local, in both directions:
 
 ```ts
-createSyncEngine(backend, adapter, {
-  filter: (key, value) => typeof value !== "function" && key !== "draft",
-});
+createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
 ```
 
-The default, `defaultSyncFilter`, excludes functions. Excluded keys are never read from the
-backend or written to it, so they stay local to each peer.
+`keys: ["todos"]` syncs the keys it lists instead, and ignores any other key the backend holds.
+Both take only the key names of the adapter's state, so a typo fails to compile. For a rule
+that depends on the value, `filter` decides per key: the default, `defaultSyncFilter`, excludes
+functions, and a custom filter replaces it. `keys` and `omit` apply on top of `filter`.
+
+Excluded keys are never read from the backend or written to it, so they stay local to each
+peer.
 
 ## Connecting
 

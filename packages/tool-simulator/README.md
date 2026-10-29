@@ -1,5 +1,10 @@
 # @homeostate/tool-simulator
 
+[![npm](https://img.shields.io/npm/v/@homeostate/tool-simulator?color=2563eb)](https://www.npmjs.com/package/@homeostate/tool-simulator)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Ftool-simulator?externals=@homeostate/core&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Ftool-simulator&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/tool-simulator?color=2563eb)](https://www.npmjs.com/package/@homeostate/tool-simulator)
+[![license](https://img.shields.io/npm/l/@homeostate/tool-simulator?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/tool-simulator/LICENSE)
+
 Test that peers synced by [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core)
 converge. It runs several peers, each a store, a backend and a sync engine, on a simulated
 network with latency, dropped and reordered messages and partitions, on virtual time, and

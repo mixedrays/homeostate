@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { site } from "@/site.config.ts";
 import { GithubIcon } from "./github-icon.tsx";
+import { HomeostateMark } from "./homeostate-mark.tsx";
+import { NpmIcon } from "./npm-icon.tsx";
 import { SearchDialog } from "./search-dialog.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
 
@@ -12,20 +14,7 @@ export function Logo() {
       to="/"
       className="flex items-center gap-2 font-semibold tracking-tight"
     >
-      <img
-        src="/homeostate.svg"
-        alt=""
-        width={28}
-        height={28}
-        className="dark:hidden"
-      />
-      <img
-        src="/homeostate-dark.svg"
-        alt=""
-        width={28}
-        height={28}
-        className="hidden dark:block"
-      />
+      <HomeostateMark className="size-8" />
       {site.name}
     </Link>
   );
@@ -62,6 +51,13 @@ export function SiteHeader({ start }: { start?: ReactNode }) {
             render={<a href={site.repo} aria-label="GitHub repository" />}
           >
             <GithubIcon className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            render={<a href={site.npmOrg} aria-label="npm packages" />}
+          >
+            <NpmIcon className="size-4" />
           </Button>
           <ThemeToggle />
         </div>

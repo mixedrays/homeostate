@@ -1,5 +1,10 @@
 # @homeostate/store-ngrx-signals
 
+[![npm](https://img.shields.io/npm/v/@homeostate/store-ngrx-signals?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-ngrx-signals)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fstore-ngrx-signals?externals=@homeostate/core,@angular/core,@ngrx/signals&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fstore-ngrx-signals&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%2C%22%40angular%2Fcore%22%2C%22%40ngrx%2Fsignals%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/store-ngrx-signals?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-ngrx-signals)
+[![license](https://img.shields.io/npm/l/@homeostate/store-ngrx-signals?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/store-ngrx-signals/LICENSE)
+
 [NgRx Signals](https://ngrx.io/guide/signals) adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a slice of a `signalState` or `signalStore` in sync with a CRDT backend such as

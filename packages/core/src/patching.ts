@@ -1,68 +1,84 @@
 import { applyStringChanges } from "./apply.js";
-import { ChangeType, type Change } from "./change.js";
-import { getChanges, PROTO_KEY, type Diffable } from "./diff.js";
+import { ChangeType, type ListChange, type RecordChange } from "./change.js";
+import { getChanges } from "./diff.js";
+import { isRecord, PROTO_KEY } from "./json.js";
 
-const isContainer = (value: unknown): value is Record<string, unknown> => {
-  if (value === null || typeof value !== "object") return false;
-  const prototype = Object.getPrototypeOf(value);
-  return (
-    Array.isArray(value) || prototype === Object.prototype || prototype === null
-  );
+/** Whether `value`, an object, is plain: its prototype is `Object.prototype` or `null`. */
+const isPlain = (value: object): boolean => {
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 };
 
 /**
- * Returns `value` without own `__proto__` keys in any array or plain object, copying only the
- * containers on a path to one. A store that copies such an object by assignment, as
- * `Object.assign` does, would hand the key's value to the copy as its prototype.
+ * Returns `value` as the store may hold it: every object that is not plain is replaced by a plain
+ * object of its own entries, and own `__proto__` keys are left out, at any depth. Arrays and
+ * binary values (`ArrayBuffer` views) stay what they are. Only the containers on a path to such
+ * an object or key are copied.
+ *
+ * A library that builds objects by assignment, as Yjs and Loro do in `toJSON`, turns a peer's
+ * `__proto__` entry into the prototype of the object holding it, so its entries would read as
+ * inherited properties of the store's state. A store that copies an object by assignment, as
+ * `Object.assign` does, would do the same with an own `__proto__` key.
  */
-const withoutProtoKeys = (value: unknown): unknown => {
-  if (!isContainer(value)) return value;
+const toPlain = (value: unknown): unknown => {
+  if (value === null || typeof value !== "object" || ArrayBuffer.isView(value))
+    return value;
 
-  let copy: Record<string, unknown> | undefined;
-  for (const key of Object.keys(value)) {
+  const source = value as Record<string, unknown>;
+  let copy = Array.isArray(value) || isPlain(value) ? undefined : copyOf(value);
+  for (const key of Object.keys(source)) {
     if (key === PROTO_KEY) delete (copy ??= copyOf(value))[key];
     else {
-      const item = withoutProtoKeys(value[key]);
-      if (item !== value[key]) (copy ??= copyOf(value))[key] = item;
+      const item = toPlain(source[key]);
+      if (item !== source[key]) (copy ??= copyOf(value))[key] = item;
     }
   }
 
   return copy ?? value;
 };
 
+/** A copy of an array or object of its own entries; an object's copy is a plain object. */
 const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
-const applyChanges = (state: Diffable, changes: Change[]): Diffable => {
-  if (typeof state === "string") return applyStringChanges(state, changes);
-  if (Array.isArray(state)) return applyChangesToArray(state, changes);
-  return applyChangesToObject(state, changes);
+/** The value the pending step `change` leaves at its key, given the value there now. */
+const applyPending = (
+  current: unknown,
+  change: Extract<RecordChange | ListChange, { type: "pending" }>,
+): unknown => {
+  // The diff found a container of `change.kind` at its key.
+  if (change.kind === "text")
+    return applyStringChanges(current as string, change.changes);
+  if (change.kind === "list")
+    return applyChangesToArray(current as unknown[], change.changes);
+  return applyChangesToObject(
+    current as Record<string, unknown>,
+    change.changes,
+  );
 };
 
 const applyChangesToArray = (
   array: unknown[],
-  changes: Change[],
+  changes: ListChange[],
 ): unknown[] => {
   const revised = [...array];
 
-  for (const [type, index, value] of changes) {
-    const i = index as number;
-
-    switch (type) {
+  for (const change of changes) {
+    switch (change.type) {
       case ChangeType.INSERT:
-        revised.splice(i, 0, withoutProtoKeys(value));
+        revised.splice(change.key, 0, toPlain(change.value));
         break;
 
       case ChangeType.UPDATE:
-        revised[i] = withoutProtoKeys(value);
+        revised[change.key] = toPlain(change.value);
         break;
 
       case ChangeType.PENDING:
-        revised[i] = applyChanges(revised[i] as Diffable, value as Change[]);
+        revised[change.key] = applyPending(revised[change.key], change);
         break;
 
       case ChangeType.DELETE:
-        revised.splice(i, 1);
+        revised.splice(change.key, change.count ?? 1);
         break;
     }
   }
@@ -72,25 +88,23 @@ const applyChangesToArray = (
 
 const applyChangesToObject = (
   object: Record<string, unknown>,
-  changes: Change[],
+  changes: RecordChange[],
 ): Record<string, unknown> => {
   const revised = { ...object };
 
-  for (const [type, property, value] of changes) {
-    const key = property as string;
-
-    switch (type) {
+  for (const change of changes) {
+    switch (change.type) {
       case ChangeType.INSERT:
       case ChangeType.UPDATE:
-        revised[key] = withoutProtoKeys(value);
+        revised[change.key] = toPlain(change.value);
         break;
 
       case ChangeType.PENDING:
-        revised[key] = applyChanges(object[key] as Diffable, value as Change[]);
+        revised[change.key] = applyPending(object[change.key], change);
         break;
 
       case ChangeType.DELETE:
-        delete revised[key];
+        delete revised[change.key];
         break;
     }
   }
@@ -99,20 +113,47 @@ const applyChangesToObject = (
 };
 
 /**
- * Returns a value identical to newState, built from oldState by copying every
- * container along a changed path and sharing every unchanged subtree. Neither
- * input is mutated. If oldState and newState are already identical (indicated
- * by an empty diff), then oldState itself is returned. Own `__proto__` keys in
- * newState are left out at any depth.
+ * Returns `next`, reusing every subtree of `previous` it leaves unchanged, without `__proto__`
+ * keys: built from `previous` by applying the edit script `getChanges` finds between them, so
+ * only the containers along a changed path are new, and an item that shifts in a list, such as
+ * after an insert at the top, keeps its identity. Neither input is mutated.
  *
- * @param oldState The state we want to patch.
- * @param newState The state we want the result to match.
+ * When nothing changed, `previous` itself is returned; when the two are of different kinds,
+ * `next` is. Every value taken from `next` is plain: own `__proto__` keys are left out at any
+ * depth, and an object whose prototype is neither `Object.prototype` nor `null` is replaced by a
+ * plain object of its own entries. Arrays and binary values (`ArrayBuffer` views) are kept.
  *
- * @returns The patched state, identical to newState.
+ * The sync engine builds the store's next state with it, so a store re-renders only what a
+ * remote change touched. Use it to write a whole state, such as a restored one, the same way.
+ *
+ * @example
+ * ```ts
+ * const previous = { todos: [{ id: "1" }], filter: "all" };
+ * const next = keepIdentity(previous, { todos: [{ id: "0" }, { id: "1" }], filter: "all" });
+ * next.todos[1] === previous.todos[0]; // true
+ * ```
  */
-export const patchState = <T>(oldState: T, newState: T): T => {
-  const changes = getChanges(oldState as Diffable, newState as Diffable);
-
-  if (changes.length === 0) return oldState;
-  return applyChanges(oldState as Diffable, changes) as T;
+export const keepIdentity = <T>(previous: T, next: T): T => {
+  const a: unknown = previous;
+  const b: unknown = next;
+  if (typeof a === "string" && typeof b === "string") {
+    const changes = getChanges(a, b);
+    return changes.length === 0
+      ? previous
+      : (applyStringChanges(a, changes) as T);
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const changes = getChanges(a, b);
+    return changes.length === 0
+      ? previous
+      : (applyChangesToArray(a, changes) as T);
+  }
+  if (isRecord(a) && isRecord(b)) {
+    const changes = getChanges(a, b);
+    return changes.length === 0
+      ? previous
+      : (applyChangesToObject(a, changes) as T);
+  }
+  // Values of different kinds have no edit script, so `next` replaces `previous` whole.
+  return toPlain(next) as T;
 };

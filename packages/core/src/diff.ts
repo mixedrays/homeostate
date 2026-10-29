@@ -1,7 +1,28 @@
-import { ChangeType, type Change } from "./change.js";
-import { isAbsent, toJsonValue } from "./json.js";
+import {
+  ChangeType,
+  type EditScript,
+  type ListChange,
+  type RecordChange,
+  type TextChange,
+} from "./change.js";
+import {
+  hasOwn,
+  isAbsent,
+  isRecord,
+  jsonItem,
+  jsonItemEqual,
+  kindOf,
+  PROTO_KEY,
+  toJsonPrimitive,
+  toJsonValue,
+} from "./json.js";
+import type { JsonObject, JsonObjectInput } from "./types.js";
 
-export type Diffable = Record<string, unknown> | Array<unknown> | string;
+/**
+ * The values `getChanges` diffs: a record, an array or a string. Both values passed to it must
+ * be of one of these kinds, so a value typed only as `Diffable` must be narrowed first.
+ */
+export type Diffable = JsonObject | unknown[] | string;
 
 /**
  * Decides which strings are collaborative text, by their path from the root of the diffed or
@@ -22,10 +43,10 @@ export interface DiffOptions {
   text?: TextPolicy;
   /**
    * Diff `a` and `b` as `JSON.stringify` would store them, without copying either first: object
-   * entries holding `undefined` or a function are absent, and such array items, holes included,
-   * are `null`. The values the changes carry are passed through `toJsonValue`. A CRDT backend
-   * sets it on `write(next, previous)`, so no change it applies holds a value JSON cannot, and
-   * none removes an entry its document never held.
+   * entries holding `undefined` or a function are absent, such array items, holes included, are
+   * `null`, and so are `NaN` and infinite numbers. The values the changes carry are passed
+   * through `toJsonValue`. A CRDT backend sets it on `write(next, previous)`, so no change it
+   * applies holds a value JSON cannot, and none removes an entry its document never held.
    */
   json?: boolean;
 }
@@ -37,27 +58,11 @@ const isArray = (value: unknown): value is Array<unknown> =>
 
 const isString = (value: unknown): value is string => typeof value === "string";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-/**
- * Whether `key` is an own property of `object`. `in` would also find inherited members such
- * as `constructor`, so a record keyed by user input could never lose a key by that name.
- */
-export const hasOwn = (object: object, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(object, key);
-
-/**
- * Assigning this key replaces an object's prototype instead of adding a property, so a peer
- * could make properties such as `isAdmin` appear on other users' state. It is never diffed.
- */
-export const PROTO_KEY = "__proto__";
-
-const isDiffable = (value: unknown): value is Diffable =>
-  isArray(value) || isString(value) || isRecord(value);
-
-const isSameKind = (a: Diffable, b: Diffable): boolean =>
-  isString(a) ? isString(b) : isArray(a) ? isArray(b) : isRecord(b);
+/** A nested edit script and the kind of container it edits. */
+type Nested =
+  | { kind: "record"; changes: RecordChange[] }
+  | { kind: "list"; changes: ListChange[] }
+  | { kind: "text"; changes: TextChange[] };
 
 /**
  * The changes turning `a` into `b` under `key` of the container at `path`, or `null` when `b`
@@ -69,16 +74,25 @@ const nestedChanges = (
   path: Path,
   key: string | number,
   options: DiffOptions,
-): Change[] | null => {
-  if (!isDiffable(a) || !isDiffable(b) || !isSameKind(a, b)) return null;
+): Nested | null => {
   const at = [...path, key];
-  if (isString(a) && options.text !== undefined && !options.text(at))
-    return null;
-  return diff(a, b, at, options);
+  if (isString(a) && isString(b))
+    return options.text === undefined || options.text(at)
+      ? { kind: "text", changes: getStringChanges(a, b) }
+      : null;
+  if (isArray(a) && isArray(b))
+    return { kind: "list", changes: getArrayChanges(a, b, at, options) };
+  if (isRecord(a) && isRecord(b))
+    return { kind: "record", changes: getRecordChanges(a, b, at, options) };
+  return null;
 };
 
+/** `===`, except that `NaN` equals itself, so a store that keeps holding it has not changed. */
+const isSame = (a: unknown, b: unknown): boolean =>
+  a === b || (Number.isNaN(a) && Number.isNaN(b));
+
 const deepEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
+  if (isSame(a, b)) return true;
   if (isArray(a) && isArray(b)) {
     if (a.length !== b.length) return false;
     // A loop, since `every` skips holes.
@@ -102,69 +116,55 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
 const keyCount = (keys: string[], record: object): number =>
   hasOwn(record, PROTO_KEY) ? keys.length - 1 : keys.length;
 
-/** An array item as `JSON.stringify` stores it. */
-const jsonItem = (value: unknown): unknown => (isAbsent(value) ? null : value);
-
-/** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an object. */
-const jsonEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
-  if (isArray(a) && isArray(b)) {
-    if (a.length !== b.length) return false;
-    // A loop, since `every` skips holes.
-    for (let i = 0; i < a.length; i++)
-      if (!jsonItemEqual(a[i], b[i])) return false;
-    return true;
-  }
-  if (isRecord(a) && isRecord(b)) {
-    let count = 0;
-    for (const key of Object.keys(a)) {
-      if (key === PROTO_KEY || isAbsent(a[key])) continue;
-      if (!hasOwn(b, key) || !jsonEqual(a[key], b[key])) return false;
-      count++;
-    }
-    // `b` rarely holds absent entries, so its own key count usually settles it.
-    return count === Object.keys(b).length || count === jsonKeyCount(b);
-  }
-  return false;
-};
-
-/** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
-const jsonItemEqual = (a: unknown, b: unknown): boolean =>
-  jsonEqual(jsonItem(a), jsonItem(b));
-
-/** The number of entries of `record` that `JSON.stringify` stores and the diff compares. */
-const jsonKeyCount = (record: Record<string, unknown>): number => {
-  let count = 0;
-  for (const key of Object.keys(record))
-    if (key !== PROTO_KEY && !isAbsent(record[key])) count++;
-  return count;
-};
-
 /** A value a change carries: with `options.json`, as JSON would store it. */
 const written = (value: unknown, options: DiffOptions): unknown =>
   options.json ? toJsonValue(value) : value;
 
 /**
- * Returns the ordered edit script that turns `a` into `b`. Two strings passed directly are
- * always diffed character by character; `options.text` decides for the strings nested in them.
+ * Returns the ordered edit script that turns `a` into `b`, without mutating either. Equal values
+ * have no steps, and so do containers shared by identity, whose contents are not visited.
+ *
+ * `a` and `b` must be of one kind: two records, such as states typed with an interface, two
+ * arrays or two strings. A script cannot replace its root, so values of different kinds throw a
+ * `TypeError` naming both kinds. Nested values that change kind are replaced by one `UPDATE`.
+ *
+ * The steps are applied in order. Each array index or string offset addresses the array or
+ * string as revised by the steps before it, so a backend applies them one by one without
+ * sorting or clamping. String offsets and delete counts are UTF-16 code units, as JavaScript
+ * indexes strings, and never split a surrogate pair.
+ *
+ * Two strings passed directly are always diffed character by character; `options.text` decides
+ * for the strings nested in a record or an array.
+ *
+ * @throws {TypeError} When `a` and `b` are not two records, two arrays or two strings.
  */
-export const getChanges = (
+export function getChanges(
+  a: string,
+  b: string,
+  options?: DiffOptions,
+): TextChange[];
+export function getChanges(
+  a: unknown[],
+  b: unknown[],
+  options?: DiffOptions,
+): ListChange[];
+export function getChanges(
+  a: JsonObjectInput,
+  b: JsonObjectInput,
+  options?: DiffOptions,
+): RecordChange[];
+export function getChanges(
   a: Diffable,
   b: Diffable,
   options: DiffOptions = {},
-): Change[] => diff(a, b, [], options);
-
-const diff = (
-  a: Diffable,
-  b: Diffable,
-  path: Path,
-  options: DiffOptions,
-): Change[] => {
+): EditScript {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
-  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, path, options);
-  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, path, options);
-  return [];
-};
+  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, [], options);
+  if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, [], options);
+  throw new TypeError(
+    `getChanges needs two strings, two arrays or two records, got ${kindOf(a)} and ${kindOf(b)}`,
+  );
+}
 
 /**
  * The length of the common prefix of two sequences, and of the common suffix of what remains,
@@ -197,13 +197,7 @@ const sharesCharacter = (a: string[], b: string[]): boolean => {
   return false;
 };
 
-const deleteCharacter = (index: number, character: string): Change => [
-  ChangeType.DELETE,
-  index,
-  character.length === 1 ? undefined : character.length,
-];
-
-const getStringChanges = (a: string, b: string): Change[] => {
+const getStringChanges = (a: string, b: string): TextChange[] => {
   if (a === b) return [];
   // Trim the common ends by UTF-16 unit, but never between the halves of a surrogate pair.
   let [start, end] = commonEnds(
@@ -218,14 +212,16 @@ const getStringChanges = (a: string, b: string): Change[] => {
   const from = Array.from(a.slice(start, a.length - end));
   const to = Array.from(b.slice(start, b.length - end));
   if (!sharesCharacter(from, to)) {
-    const deletes = from.map((character) => deleteCharacter(start, character));
+    const changes: TextChange[] = [];
+    const count = a.length - end - start;
+    if (count > 0) changes.push({ type: ChangeType.DELETE, key: start, count });
     const inserted = to.join("");
-    return inserted.length === 0
-      ? deletes
-      : [...deletes, [ChangeType.INSERT, start, inserted]];
+    if (inserted.length > 0)
+      changes.push({ type: ChangeType.INSERT, key: start, value: inserted });
+    return changes;
   }
 
-  const changes: Change[] = [];
+  const changes: TextChange[] = [];
   let index = start;
 
   for (const { step, a: source, b: position } of editScript(
@@ -233,17 +229,30 @@ const getStringChanges = (a: string, b: string): Change[] => {
     to,
     (x, y) => x === y,
   )) {
+    const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
     if (step === "eq") index += from[source].length;
-    else if (step === "del") changes.push(deleteCharacter(index, from[source]));
-    else {
-      const last = changes.length > 0 ? changes[changes.length - 1] : undefined;
+    else if (step === "del") {
+      // A run of deletions at one offset is one step, counting whole characters.
+      if (last?.type === ChangeType.DELETE && last.key === index)
+        last.count = (last.count ?? 1) + from[source].length;
+      else
+        changes.push({
+          type: ChangeType.DELETE,
+          key: index,
+          count: from[source].length,
+        });
+    } else {
       if (
-        last !== undefined &&
-        last[0] === ChangeType.INSERT &&
-        (last[1] as number) + (last[2] as string).length === index
-      ) {
-        last[2] = (last[2] as string) + to[position];
-      } else changes.push([ChangeType.INSERT, index, to[position]]);
+        last?.type === ChangeType.INSERT &&
+        last.key + last.value.length === index
+      )
+        last.value += to[position];
+      else
+        changes.push({
+          type: ChangeType.INSERT,
+          key: index,
+          value: to[position],
+        });
       index += to[position].length;
     }
   }
@@ -256,14 +265,15 @@ const getArrayChanges = (
   b: Array<unknown>,
   path: Path,
   options: DiffOptions,
-): Change[] => {
+): ListChange[] => {
+  if (a === b) return [];
   const equal = options.json ? jsonItemEqual : deepEqual;
   const [start, end] = commonEnds(a.length, b.length, (i, j) =>
     equal(a[i], b[j]),
   );
   const from = a.slice(start, a.length - end);
   const to = b.slice(start, b.length - end);
-  const changes: Change[] = [];
+  const changes: ListChange[] = [];
   let index = start;
   let deleted: number[] = [];
   let inserted: number[] = [];
@@ -281,16 +291,29 @@ const getArrayChanges = (
         options,
       );
       if (nested === null)
-        changes.push([ChangeType.UPDATE, index, written(next, options)]);
-      else if (nested.length > 0)
-        changes.push([ChangeType.PENDING, index, nested]);
+        changes.push({
+          type: ChangeType.UPDATE,
+          key: index,
+          value: written(next, options),
+        });
+      else if (nested.changes.length > 0)
+        changes.push({ type: ChangeType.PENDING, key: index, ...nested });
       index++;
     }
-    for (let i = pairs; i < deleted.length; i++)
-      changes.push([ChangeType.DELETE, index, undefined]);
+    // The unpaired deletions are adjacent, so they are one step.
+    if (deleted.length > pairs)
+      changes.push({
+        type: ChangeType.DELETE,
+        key: index,
+        count: deleted.length - pairs,
+      });
     for (let i = pairs; i < inserted.length; i++) {
       const next = itemOf(to[inserted[i]]);
-      changes.push([ChangeType.INSERT, index, written(next, options)]);
+      changes.push({
+        type: ChangeType.INSERT,
+        key: index,
+        value: written(next, options),
+      });
       index++;
     }
     deleted = [];
@@ -315,11 +338,15 @@ const getRecordChanges = (
   b: Record<string, unknown>,
   path: Path,
   options: DiffOptions,
-): Change[] => {
-  const changes: Change[] = [];
+): RecordChange[] => {
+  if (a === b) return [];
+  const changes: RecordChange[] = [];
   // With `options.json`, an entry holding `undefined` or a function is absent.
   const absent = (value: unknown): boolean =>
     options.json === true && isAbsent(value);
+  // With `options.json`, `NaN` and infinite numbers are `null`.
+  const same = (x: unknown, y: unknown): boolean =>
+    options.json ? toJsonPrimitive(x) === toJsonPrimitive(y) : isSame(x, y);
 
   for (const property of Object.keys(a))
     if (
@@ -327,19 +354,27 @@ const getRecordChanges = (
       !absent(a[property]) &&
       (!hasOwn(b, property) || absent(b[property]))
     )
-      changes.push([ChangeType.DELETE, property, undefined]);
+      changes.push({ type: ChangeType.DELETE, key: property });
 
   for (const [property, value] of Object.entries(b)) {
     if (property === PROTO_KEY || absent(value)) continue;
     if (!hasOwn(a, property) || absent(a[property]))
-      changes.push([ChangeType.INSERT, property, written(value, options)]);
+      changes.push({
+        type: ChangeType.INSERT,
+        key: property,
+        value: written(value, options),
+      });
     else {
       const nested = nestedChanges(a[property], value, path, property, options);
       if (nested === null) {
-        if (a[property] !== value)
-          changes.push([ChangeType.UPDATE, property, written(value, options)]);
-      } else if (nested.length > 0)
-        changes.push([ChangeType.PENDING, property, nested]);
+        if (!same(a[property], value))
+          changes.push({
+            type: ChangeType.UPDATE,
+            key: property,
+            value: written(value, options),
+          });
+      } else if (nested.changes.length > 0)
+        changes.push({ type: ChangeType.PENDING, key: property, ...nested });
     }
   }
 

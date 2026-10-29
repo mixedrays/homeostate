@@ -1,8 +1,4 @@
-import {
-  useSyncExternalStore,
-  type KeyboardEvent,
-  type PointerEvent,
-} from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import {
   ArrowLeftRight,
   HardDrive,
@@ -12,6 +8,7 @@ import {
   TriangleAlert,
   Wifi,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
@@ -22,21 +19,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "../components/ui/empty";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from "../components/ui/sheet";
-import { Switch } from "../components/ui/switch";
+import { Sheet, SheetClose, SheetContent } from "../components/ui/sheet";
 import {
   Tabs,
   TabsContent,
@@ -45,14 +28,16 @@ import {
 } from "../components/ui/tabs";
 import type { DevtoolsSource, Inspector } from "../inspector";
 import type { NetworkLink } from "../network";
+import { useInspectorSnapshot } from "../lib/use-inspector-snapshot";
 import { useNetworkSnapshot } from "../lib/use-network-snapshot";
 import { usePersistedState } from "../lib/use-persisted-state";
-import type { PanelPosition } from "../options";
-import { HomeostateMark } from "./mark";
+import type { ButtonPosition, DevtoolsTheme, PanelPosition } from "../options";
 import { LogTab } from "./log-tab";
 import { conditionsActive } from "./format";
 import { NetworkTab } from "./network-tab";
+import { SettingsMenu } from "./settings";
 import { StateTab } from "./state-tab";
+import { StatusBar } from "./status-bar";
 import { StorageTab } from "./storage-tab";
 import { SyncTab } from "./sync-tab";
 
@@ -69,6 +54,11 @@ interface DevtoolsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   position: PanelPosition;
+  onPositionChange: (position: PanelPosition) => void;
+  buttonPosition: ButtonPosition;
+  onButtonPositionChange: (position: ButtonPosition) => void;
+  theme: DevtoolsTheme;
+  onThemeChange: (theme: DevtoolsTheme) => void;
   sources: SourceInspector[];
   selected: number;
   onSelect: (name: string) => void;
@@ -82,16 +72,37 @@ export function DevtoolsPanel({
   open,
   onOpenChange,
   position,
+  onPositionChange,
+  buttonPosition,
+  onButtonPositionChange,
+  theme,
+  onThemeChange,
   sources,
   selected,
   onSelect,
 }: DevtoolsPanelProps) {
   const vertical = position === "left" || position === "right";
-  const [size, setSize] = usePersistedState<number>(
-    vertical ? "width" : "height",
-    vertical ? 440 : 360,
-  );
+  // One size per orientation, so docking to another side keeps both.
+  const [width, setWidth] = usePersistedState<number>("width", 440);
+  const [height, setHeight] = usePersistedState<number>("height", 360);
+  const size = vertical ? width : height;
+  const setSize = vertical ? setWidth : setHeight;
   const current = sources[selected];
+  const [storedTab, setTab] = usePersistedState<string>("tab", "state");
+  const tab = TABS.includes(storedTab) ? storedTab : "state";
+  const actions = (
+    <div className="flex shrink-0 items-center gap-0.5 px-0.5">
+      <SettingsMenu
+        position={position}
+        onPositionChange={onPositionChange}
+        buttonPosition={buttonPosition}
+        onButtonPositionChange={onButtonPositionChange}
+        theme={theme}
+        onThemeChange={onThemeChange}
+      />
+      <CloseButton />
+    </div>
+  );
 
   return (
     <Sheet
@@ -112,58 +123,6 @@ export function DevtoolsPanel({
         className="z-40 gap-0 overflow-visible p-0 shadow-2xl data-[side=left]:sm:max-w-none data-[side=right]:sm:max-w-none"
       >
         <ResizeHandle position={position} size={size} onResize={setSize} />
-        <header className="flex min-h-11 items-center gap-2 border-b px-3 py-1.5">
-          <HomeostateMark className="size-5 shrink-0" />
-          <SheetTitle className="text-sm font-semibold">Homeostate</SheetTitle>
-          <SheetDescription className="sr-only">
-            Inspect and edit the state homeostate keeps in sync.
-          </SheetDescription>
-          {sources.length > 1 ? (
-            <Select
-              value={current?.source.name ?? null}
-              onValueChange={(name) => name !== null && onSelect(name)}
-            >
-              <SelectTrigger
-                size="sm"
-                aria-label="Source"
-                className="min-w-0 text-xs"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {sources.map(({ source }) => (
-                  <SelectItem
-                    key={source.name}
-                    value={source.name}
-                    className="text-xs"
-                  >
-                    {source.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            current && (
-              <span className="min-w-0 truncate text-xs text-muted-foreground">
-                {current.source.name}
-              </span>
-            )
-          )}
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {current && <EngineSwitch inspector={current.inspector} />}
-            <SheetClose
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Close devtools"
-                />
-              }
-            >
-              <X />
-            </SheetClose>
-          </div>
-        </header>
 
         {current ? (
           <SourceView
@@ -171,75 +130,64 @@ export function DevtoolsPanel({
             name={current.source.name}
             inspector={current.inspector}
             network={current.source.network}
+            tab={tab}
+            onTabChange={setTab}
+            actions={actions}
           />
         ) : (
-          <Empty className="flex-1">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Layers />
-              </EmptyMedia>
-              <EmptyTitle>No sources</EmptyTitle>
-              <EmptyDescription>
-                Pass the stores to inspect in the <code>sources</code> prop.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <>
+            <div className="flex justify-end border-b bg-muted py-0.5 dark:bg-background">
+              {actions}
+            </div>
+            <Empty className="flex-1">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Layers />
+                </EmptyMedia>
+                <EmptyTitle>No sources</EmptyTitle>
+                <EmptyDescription>
+                  Pass the stores to inspect in the <code>sources</code> prop.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </>
         )}
+
+        <StatusBar sources={sources} current={current} onSelect={onSelect} />
       </SheetContent>
     </Sheet>
   );
-}
-
-function useInspectorSnapshot(inspector: Inspector) {
-  return useSyncExternalStore(inspector.subscribe, inspector.getSnapshot);
 }
 
 function SourceView({
   name,
   inspector,
   network,
+  tab,
+  onTabChange,
+  actions,
 }: {
   name: string;
   inspector: Inspector;
   network: NetworkLink | undefined;
+  tab: string;
+  onTabChange: (tab: string) => void;
+  actions: ReactNode;
 }) {
   const snapshot = useInspectorSnapshot(inspector);
   const link = useNetworkSnapshot(network);
-  const [stored, setTab] = usePersistedState<string>("tab", "state");
-  const tab = TABS.includes(stored) ? stored : "state";
 
   return (
-    <>
-      {snapshot.connected === false && (
-        <p className="border-b bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
-          Disconnected: changes stay in this store and peers do not see them.
-          Reconnecting adopts the backend&apos;s values, so edits made meanwhile
-          to keys it holds are dropped.
-        </p>
-      )}
-      {link && !link.connected && (
-        <p className="border-b bg-amber-500/10 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-300">
-          {link.conditions.offline
-            ? "Network offline"
-            : "Network down for a moment"}
-          : changes made here wait, and peers&apos; changes do not arrive.
-          Coming back online merges both.
-        </p>
-      )}
-      <Tabs
-        value={tab}
-        onValueChange={(value: string) => setTab(value)}
-        className="min-h-0 flex-1 gap-0"
-      >
-        <div className="overflow-x-auto border-b">
+    <Tabs
+      value={tab}
+      onValueChange={(value: string) => onTabChange(value)}
+      className="min-h-0 flex-1 gap-0"
+    >
+      {/* A shade darker than the panel, so the tabs read as their own bar. */}
+      <div className="@container/tabs flex items-center border-b bg-muted dark:bg-background">
+        <div className="min-w-0 flex-1 overflow-x-auto">
           <TabsList variant="line" className="h-7">
-            <TabsTrigger value="state" className="text-xs">
-              <ListTree
-                aria-hidden
-                data-icon="inline-start"
-                className="size-3.5"
-              />
-              State
+            <Tab value="state" icon={ListTree} label="State">
               {snapshot.warnings.length > 0 && (
                 <TriangleAlert
                   role="img"
@@ -247,37 +195,15 @@ function SourceView({
                   className="size-3! text-amber-600 dark:text-amber-400"
                 />
               )}
-            </TabsTrigger>
-            <TabsTrigger value="sync" className="text-xs">
-              <ArrowLeftRight
-                aria-hidden
-                data-icon="inline-start"
-                className="size-3.5"
-              />
-              Sync
-            </TabsTrigger>
-            <TabsTrigger value="log" className="text-xs">
-              <ScrollText
-                aria-hidden
-                data-icon="inline-start"
-                className="size-3.5"
-              />
-              Log
+            </Tab>
+            <Tab value="sync" icon={ArrowLeftRight} label="Sync" />
+            <Tab value="log" icon={ScrollText} label="Log">
               <span className="text-muted-foreground tabular-nums">
                 {snapshot.log.length}
               </span>
-            </TabsTrigger>
-            <TabsTrigger value="storage" className="text-xs">
-              <HardDrive
-                aria-hidden
-                data-icon="inline-start"
-                className="size-3.5"
-              />
-              Storage
-            </TabsTrigger>
-            <TabsTrigger value="network" className="text-xs">
-              <Wifi aria-hidden data-icon="inline-start" className="size-3.5" />
-              Network
+            </Tab>
+            <Tab value="storage" icon={HardDrive} label="Storage" />
+            <Tab value="network" icon={Wifi} label="Network">
               {link && conditionsActive(link) && (
                 <span
                   role="img"
@@ -285,52 +211,69 @@ function SourceView({
                   className="size-1.5 rounded-full bg-amber-500"
                 />
               )}
-            </TabsTrigger>
+            </Tab>
           </TabsList>
         </div>
-        <TabsContent value="state" className="flex min-h-0 flex-col">
-          <StateTab snapshot={snapshot} inspector={inspector} />
-        </TabsContent>
-        <TabsContent value="sync" className="flex min-h-0 flex-col">
-          <SyncTab snapshot={snapshot} />
-        </TabsContent>
-        <TabsContent value="log" className="flex min-h-0 flex-col">
-          <LogTab name={name} snapshot={snapshot} inspector={inspector} />
-        </TabsContent>
-        <TabsContent value="storage" className="flex min-h-0 flex-col">
-          <StorageTab snapshot={snapshot} inspector={inspector} />
-        </TabsContent>
-        <TabsContent value="network" className="flex min-h-0 flex-col">
-          <NetworkTab network={network} />
-        </TabsContent>
-      </Tabs>
-    </>
+        {actions}
+      </div>
+      <TabsContent value="state" className="flex min-h-0 flex-col">
+        <StateTab snapshot={snapshot} inspector={inspector} />
+      </TabsContent>
+      <TabsContent value="sync" className="flex min-h-0 flex-col">
+        <SyncTab snapshot={snapshot} />
+      </TabsContent>
+      <TabsContent value="log" className="flex min-h-0 flex-col">
+        <LogTab name={name} snapshot={snapshot} inspector={inspector} />
+      </TabsContent>
+      <TabsContent value="storage" className="flex min-h-0 flex-col">
+        <StorageTab snapshot={snapshot} inspector={inspector} />
+      </TabsContent>
+      <TabsContent value="network" className="flex min-h-0 flex-col">
+        <NetworkTab
+          snapshot={snapshot}
+          inspector={inspector}
+          network={network}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }
 
-function EngineSwitch({ inspector }: { inspector: Inspector }) {
-  const { connected } = useInspectorSnapshot(inspector);
-  if (connected === null) return null;
-
+/** A tab with its icon. In a narrow panel only the icon shows, and the name is its tooltip. */
+function Tab({
+  value,
+  icon: Icon,
+  label,
+  children,
+}: {
+  value: string;
+  icon: LucideIcon;
+  label: string;
+  children?: ReactNode;
+}) {
   return (
-    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span
-        aria-hidden
-        className={cn(
-          "size-1.5 rounded-full",
-          connected ? "bg-emerald-500" : "bg-amber-500",
-        )}
-      />
-      {connected ? "Connected" : "Disconnected"}
-      <Switch
-        size="sm"
-        checked={connected}
-        onCheckedChange={(checked: boolean) =>
-          checked ? inspector.connect() : inspector.disconnect()
-        }
-        aria-label="Sync engine connected"
-      />
-    </label>
+    <TabsTrigger value={value} title={label} className="text-xs">
+      <Icon aria-hidden data-icon="inline-start" className="size-3.5" />
+      <span className="@max-[27rem]/tabs:sr-only">{label}</span>
+      {children}
+    </TabsTrigger>
+  );
+}
+
+function CloseButton() {
+  return (
+    <SheetClose
+      render={
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Close devtools"
+          className="hover:bg-foreground/10"
+        />
+      }
+    >
+      <X />
+    </SheetClose>
   );
 }
 

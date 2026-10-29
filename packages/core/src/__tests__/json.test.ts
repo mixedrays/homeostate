@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { toJsonValue } from "../index.js";
-import { nonJsonWrites, prototypeHijacks } from "./helpers.js";
+import { jsonEqual, toJsonValue } from "../index.js";
+import {
+  nonJsonWrites,
+  prototypeHijacks,
+  prototypeMemberKeys,
+} from "./helpers.js";
 
 describe("toJsonValue", () => {
   it.each(nonJsonWrites)(
     "stores %s as JSON.stringify does",
     (_, _before, next, expected) => {
-      expect(toJsonValue(next)).toEqual(expected);
-      expect(toJsonValue(next)).toEqual(JSON.parse(JSON.stringify(next)));
+      expect(toJsonValue(next)).toStrictEqual(expected);
+      expect(toJsonValue(next)).toStrictEqual(JSON.parse(JSON.stringify(next)));
     },
   );
 
@@ -50,5 +54,46 @@ describe("toJsonValue", () => {
 
     expect(JSON.stringify(result)).toBe('{"a":{"b":1}}');
     expect(prototypeHijacks(result)).toEqual([]);
+  });
+});
+
+describe("jsonEqual", () => {
+  it.each(nonJsonWrites)(
+    "compares %s as JSON.stringify stores them",
+    (_, _before, next, expected) => {
+      expect(jsonEqual(next, expected)).toBe(true);
+      expect(jsonEqual(expected, next)).toBe(true);
+    },
+  );
+
+  it("tells different values apart at any depth", () => {
+    expect(jsonEqual({ a: [{ b: 1 }] }, { a: [{ b: 2 }] })).toBe(false);
+    expect(jsonEqual({ a: [1] }, { a: [1, 2] })).toBe(false);
+    expect(jsonEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+    expect(jsonEqual([1], { 0: 1 })).toBe(false);
+    expect(jsonEqual(null, {})).toBe(false);
+  });
+
+  it.each(prototypeMemberKeys)(
+    "never finds a %s key on an object that lacks it",
+    (key) => {
+      expect(jsonEqual({ [key]: {} }, {})).toBe(false);
+      expect(jsonEqual({}, { [key]: {} })).toBe(false);
+      expect(jsonEqual({ a: { [key]: 1 } }, { a: {} })).toBe(false);
+      expect(jsonEqual({ [key]: 1 }, { [key]: 1 })).toBe(true);
+    },
+  );
+
+  it("ignores __proto__ keys and prototypes on both sides", () => {
+    const owned = JSON.parse('{"a":1,"__proto__":{"isAdmin":true}}');
+    const inherited = Object.assign(Object.create({ isAdmin: true }), {
+      a: 1,
+    }) as object;
+
+    expect(jsonEqual(owned, { a: 1 })).toBe(true);
+    expect(jsonEqual({ a: 1 }, owned)).toBe(true);
+    expect(jsonEqual(inherited, { a: 1 })).toBe(true);
+    expect(jsonEqual(JSON.parse('{"__proto__":{}}'), {})).toBe(true);
+    expect(jsonEqual(JSON.parse('{"__proto__":{}}'), { b: 1 })).toBe(false);
   });
 });

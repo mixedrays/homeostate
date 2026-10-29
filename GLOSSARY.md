@@ -35,6 +35,10 @@ _Avoid_: Syncer, binding
 One of the interfaces in `packages/core/src/types.ts` that packages implement: `StoreAdapter`, `CrdtBackend`, `PersistableDoc` or `PersistenceAdapter`.
 _Avoid_: Protocol, spec
 
+**Conformance suite**:
+The shared scenarios every implementation of one contract must pass, so that all store adapters, CRDT backends, persistable documents or persistence adapters behave alike.
+_Avoid_: Contract suite
+
 **Store adapter**:
 An implementation of the `StoreAdapter` contract that lets the sync engine read, replace and watch one store; each `store-*` package provides one.
 "Adapter" alone means a store adapter; say "persistence adapter" for storage.
@@ -44,6 +48,10 @@ _Avoid_: Store binding, connector
 An implementation of the `CrdtBackend` contract that exposes a synced subtree as plain JSON through `read`, `write` and `subscribe`; each `crdt-*` package provides one.
 A backend never talks to the network; replication is the provider's job.
 _Avoid_: CRDT adapter, "backend" for a server
+
+**Backend parts**:
+The `CrdtBackendParts` a CRDT library supplies to `createCrdtBackend`: `read`, `transact`, which runs one edit tagged as the backend's own with the library's apply operations, `watch`, which says whether each change was its own, and optionally `revision`. Core builds the rest of the CRDT backend from them: the default text policy, what a write diffs against, and leaving its own writes out of `subscribe`.
+_Avoid_: Backend adapter, driver
 
 **Provider**:
 The CRDT library's network layer that replicates a document between peers, such as y-websocket's `WebsocketProvider`. Homeostate never replicates documents itself.
@@ -65,24 +73,24 @@ _Avoid_: Channel, session
 
 **Plain JSON**:
 Values made only of objects, arrays, strings, finite numbers, booleans and `null`; the only values synced state may hold.
-`Date`, `Map`, `Set` and class instances are neither diffed nor synced. `undefined` and nested functions are stored as `JSON.stringify` stores them.
+`Date`, `Map`, `Set` and class instances are neither diffed nor synced. `undefined`, nested functions, `NaN` and infinite numbers are stored as `JSON.stringify` stores them.
 _Avoid_: Serializable state, POJO
 
 **Synced state**:
-The plain JSON object the sync engine exchanges with a CRDT backend: the store's state reduced to its synced keys.
+The plain JSON object the sync engine exchanges with a CRDT backend: the store's state reduced to its synced keys. Typed `JsonObject`, `Record<string, unknown>`, as `CrdtBackend.read` returns it, and `JsonObjectInput`, any object but an array or another iterable, as `write` takes it.
 _Avoid_: Filtered state, shared state
 
 **JSON snapshot**:
-The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which never aliases the backend's internals.
+The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which never aliases the backend's internals. Its objects may carry a prototype a peer's `__proto__` entry set; the sync engine copies them into plain objects before they reach the store.
 "Snapshot" alone is ambiguous here: say "JSON snapshot" or "compacted snapshot". MobX-State-Tree and Valtio snapshots belong to those libraries.
 _Avoid_: State dump
 
 **Filter**:
-The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. `defaultSyncFilter` excludes functions.
+The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. `defaultSyncFilter` excludes functions. The `keys` and `omit` options narrow what it keeps by key name.
 _Avoid_: Sync filter, allowlist, selector
 
 **Synced key**:
-A top-level store key the filter lets through, so the sync engine reads it from and writes it to the CRDT backend.
+A top-level store key the filter lets through, and `keys` or `omit` allow by name, so the sync engine reads it from and writes it to the CRDT backend.
 
 **Local key**:
 A top-level store key the filter keeps out of sync, such as an action or a draft, so it stays on one peer.
@@ -114,6 +122,7 @@ The `seed` option in `SyncEngineConfig`: `"if-empty"`, the default, seeds during
 
 **Local change**:
 A change made to the store on this peer, which the sync engine writes to the CRDT backend as the whole synced state.
+When a pending apply waits, it runs first, so a local change never writes over a remote change the store has not been given.
 _Avoid_: Outgoing change, store change
 
 **Remote change**:
@@ -125,9 +134,18 @@ _Avoid_: Incoming change, peer change
 A store notification raised while the sync engine applies a remote change. The engine ignores echoes, so a store adapter needs no echo suppression of its own.
 _Avoid_: Feedback loop
 
+**Sync event**:
+A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, naming which of the four it was.
+A local change that first runs a pending apply is reported as a remote change, because the remote changes replace what it did to synced keys.
+_Avoid_: Engine event, sync notification
+
 **Pending apply**:
-Remote changes the sync engine defers, with its `schedule` option, to the next flush, which applies them all with one read of the CRDT backend. A local change made before the flush runs the apply first, which overrides what that change did to synced keys.
+Remote changes the CRDT backend holds and the sync engine has not applied to the store yet: those its `schedule` option defers to the next flush, which applies them all with one read of the backend, and those another listener of the document hears of before the engine. A local change made meanwhile runs the apply first, which overrides what that change did to synced keys.
 _Avoid_: Queued update, batch
+
+**Revision**:
+What a CRDT backend reports to tell whether its synced subtree may have changed: equal to an earlier revision only if nothing changed since, even when the change is not reported yet. The sync engine compares it with the revision it recorded when it last synced.
+_Avoid_: Version, document version
 
 **Offline editing**:
 Editing while the provider is disconnected and the sync engine stays connected, so the document records the edits and merges them when the provider reconnects.
@@ -154,15 +172,15 @@ Every backend writing to one document should use the same text policy.
 ## Diffing
 
 **Change**:
-One `[type, key, value]` step of an edit script, whose type is `INSERT`, `UPDATE`, `DELETE` or `PENDING`.
-In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the tuple is meant.
+One step of an edit script, an object whose `type` is `INSERT`, `UPDATE`, `DELETE` or `PENDING`: a `RecordChange` keyed by property name, or a `ListChange` or `TextChange` keyed by position. An array or string delete carries the `count` of adjacent items or UTF-16 units it removes.
+In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the step is meant.
 
 **Edit script**:
-The ordered `Change[]` that `getChanges(a, b)` returns to turn `a` into `b`; each numeric key addresses the array or string as revised by the steps before it.
+The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, two values of one container kind, all of that kind (`EditScript`); each numeric key addresses the array or string as revised by the steps before it.
 _Avoid_: Patch, delta, changeset
 
 **Pending change**:
-A `PENDING` change, whose value is the nested edit script for the container or text at its key, so it is edited in place rather than replaced.
+A `PENDING` change, whose `changes` are the nested edit script for the container or text at its key and whose `kind` names that container, so it is edited in place rather than replaced.
 _Avoid_: Recursive change, nested diff
 
 **Fine-grained write**:
@@ -209,6 +227,11 @@ The `encode()` of a whole document that compaction stores in place of the update
 
 **Version**:
 The position of the newest update that a persistence adapter's `load` returned, handed back to `compact`; a log position, not a schema version.
+
+**Load result**:
+The `PersistenceLoadResult` that `whenLoaded` resolves with: whether the initial load found nothing stored (`empty`), applied the whole update log (`loaded`), applied only part of it (`partial`), or could not read it (`failed`).
+It describes restoring the document only, not the initial compacted snapshot or later writes, which `flush()` reports.
+_Avoid_: Load status, hydration result
 
 ## Testing and tools
 
@@ -281,8 +304,12 @@ _Avoid_: Plugin, extension
 **Tool package**:
 A `tool-*` package for developing with Homeostate rather than shipping it: the devtools and the simulator.
 
+**Setup helper**:
+The one call in a `store-*` package that creates the store adapter and the sync engine for one store, taking the store, or what builds it, and one options object with the CRDT backend. It connects the engine itself unless its `connect` option is `"manual"`, which leaves connect to the app.
+_Avoid_: One-call setup, setup function
+
 **Homeostate middleware**:
-The `homeostate` Zustand middleware from `@homeostate/store-zustand`, which wraps a state creator, connects a sync engine when the store is created and exposes it as `store.homeostate`.
+The `homeostate` Zustand middleware from `@homeostate/store-zustand`, the setup helper for Zustand: `homeostate(creator, { backend })` wraps a state creator, connects a sync engine when the store is created, or when the app calls connect with `connect: "manual"`, and exposes it as `store.homeostate`.
 
 **Automerge handle**:
 The object from `createAutomergeHandle` that holds the current, immutable Automerge document so that the CRDT backend and replication code share it.

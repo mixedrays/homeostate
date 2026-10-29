@@ -15,8 +15,10 @@ import { docsPackage } from "@/content/docs-package.server.ts";
 import { renderPage } from "@/content/markdown.server.ts";
 import { neighbours } from "@/content/nav.server.ts";
 import { notFound, requestPath } from "@/content/respond.server.ts";
+import type { PackageSummary, PageSummary } from "@/content/types.ts";
+import { breadcrumbs, pageMeta } from "@/lib/meta.ts";
 import { siteUrl } from "@/lib/site-url.ts";
-import { site } from "@/site.config.ts";
+import { groups, site } from "@/site.config.ts";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const manifest = getManifest();
@@ -69,33 +71,41 @@ function infoStrip(
   return undefined;
 }
 
+// "Sync engine API · @homeostate/core · Homeostate". A package's introduction has the package
+// name as its H1, so its title leads with what the package is: "Yjs CRDT backend · @homeostate/crdt-yjs".
+function pageTitle(page: PageSummary, pkg: PackageSummary | undefined) {
+  if (!pkg) return `${page.title} · ${site.name}`;
+  if (page.title !== pkg.name)
+    return `${page.title} · ${pkg.name} · ${site.name}`;
+  const role = groups.find((g) => g.id === pkg.group)?.role;
+  return [role && `${pkg.label} ${role}`, pkg.name, site.name]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export const meta: Route.MetaFunction = ({ loaderData }) => {
   if (!loaderData) return [];
   const { page, pkg } = loaderData;
-  const title = [
-    page.title,
-    pkg && page.title !== pkg.name ? pkg.name : undefined,
-    site.name,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const url = `${siteUrl}${page.path}`;
   return [
-    { title },
-    { name: "description", content: page.description },
-    { tagName: "link", rel: "canonical", href: url },
+    ...pageMeta({
+      type: "article",
+      title: pageTitle(page, pkg),
+      description: page.description,
+      path: page.path,
+    }),
     {
       tagName: "link",
       rel: "alternate",
       type: "text/markdown",
       href: page.mdPath,
     },
-    { property: "og:type", content: "article" },
-    { property: "og:site_name", content: site.name },
-    { property: "og:title", content: title },
-    { property: "og:description", content: page.description },
-    { property: "og:url", content: url },
-    { name: "twitter:card", content: "summary" },
+    breadcrumbs([
+      { name: site.name, path: "/" },
+      ...(pkg && pkg.path !== page.path
+        ? [{ name: pkg.name, path: pkg.path }]
+        : []),
+      { name: page.title, path: page.path },
+    ]),
   ];
 };
 

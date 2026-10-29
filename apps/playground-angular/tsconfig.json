@@ -5,7 +5,21 @@
     "lib": ["ES2022", "DOM"],
     "experimentalDecorators": true,
     "outDir": "./dist/out-tsc",
-    "types": []
+    "types": [],
+    "paths": {
+      "@homeostate/core": ["../../packages/core/src/index.ts"],
+      "@homeostate/crdt-yjs": ["../../packages/crdt-yjs/src/index.ts"],
+      "@homeostate/persist-local-storage": [
+        "../../packages/persist-local-storage/src/index.ts"
+      ],
+      "@homeostate/store-ngrx-signals": [
+        "../../packages/store-ngrx-signals/src/index.ts"
+      ],
+      "@homeostate/tool-devtools/network": [
+        "../../packages/tool-devtools/src/network.ts"
+      ],
+      "@homeostate/playground/shared": ["../playground/shared/index.ts"]
+    }
   },
   "angularCompilerOptions": {
     "strictInjectionParameters": true,

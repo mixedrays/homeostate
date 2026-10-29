@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
 import { ChangeType } from "../change.js";
 import { getChanges } from "../diff.js";
-import { patchState } from "../patching.js";
+import { keepIdentity } from "../index.js";
 import { unicodeEdits } from "./helpers.js";
 
 /** A surrogate is valid only as part of a pair, which iteration returns as one code point. */
@@ -59,7 +59,7 @@ function checkEdits(before: string, after: string) {
     expect(isWellFormed(current)).toBe(true);
   }
   expect(current).toBe(after);
-  expect(patchState({ text: before }, { text: after })).toEqual({
+  expect(keepIdentity({ text: before }, { text: after })).toEqual({
     text: after,
   });
 
@@ -82,8 +82,15 @@ describe("Unicode string edits", () => {
   );
 
   it("uses UTF-16 offsets and a whole-pair deletion span", () => {
-    expect(getChanges("😀a😃b", "😀ab")).toEqual([[ChangeType.DELETE, 3, 2]]);
-    expect(getChanges("😀ab", "😀aXb")).toEqual([[ChangeType.INSERT, 3, "X"]]);
+    expect(getChanges("😀a😃b", "😀ab")).toEqual([
+      { type: ChangeType.DELETE, key: 3, count: 2 },
+    ]);
+    expect(getChanges("a😀😃b", "ab")).toEqual([
+      { type: ChangeType.DELETE, key: 1, count: 4 },
+    ]);
+    expect(getChanges("😀ab", "😀aXb")).toEqual([
+      { type: ChangeType.INSERT, key: 3, value: "X" },
+    ]);
   });
 
   it("preserves valid text through generated edit sequences", () => {

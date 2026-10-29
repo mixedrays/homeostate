@@ -122,7 +122,7 @@ function readPage(
   let fm: z.infer<typeof frontmatterSchema> = { description: "" };
   if (kind === "changelog") {
     fm = {
-      description: `Release notes for ${pkg ? `@homeostate/${pkg}` : "this package"}.`,
+      description: `Release notes for ${pkg ? `@homeostate/${pkg}` : "this package"}: what changed in each version, newest first.`,
     };
   } else {
     let data: unknown = {};

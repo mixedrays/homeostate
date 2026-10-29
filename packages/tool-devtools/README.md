@@ -1,5 +1,10 @@
 # @homeostate/tool-devtools
 
+[![npm](https://img.shields.io/npm/v/@homeostate/tool-devtools?color=2563eb)](https://www.npmjs.com/package/@homeostate/tool-devtools)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Ftool-devtools?externals=@base-ui/react,@homeostate/core,@mixedrays/keyrove,class-variance-authority,cn,lucide-react,react,react-dom&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Ftool-devtools&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40base-ui%2Freact%22%2C%22%40homeostate%2Fcore%22%2C%22%40mixedrays%2Fkeyrove%22%2C%22class-variance-authority%22%2C%22cn%22%2C%22lucide-react%22%2C%22react%22%2C%22react-dom%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/tool-devtools?color=2563eb)](https://www.npmjs.com/package/@homeostate/tool-devtools)
+[![license](https://img.shields.io/npm/l/@homeostate/tool-devtools?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/tool-devtools/LICENSE)
+
 Devtools for [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core),
 as a React component or mounted from any framework.
 A floating button opens a panel where you can inspect and edit a store's state, compare it
@@ -45,9 +50,9 @@ export function App() {
 Pass several sources to inspect several stores. With the Zustand `homeostate` middleware, use
 `createZustandAdapter(store)` as the adapter and `store.homeostate` as the engine. Pass what
 `createPersistence` returned as `persistence` to see and compact the stored document on the
-Storage tab. Pass the engine's `filter` too, if it has one, and a `network` link from
-`createNetworkLink` in `@homeostate/tool-devtools/network` to slow down or cut the
-connection on the Network tab: see the documentation.
+Storage tab. The engine tells the devtools which keys it keeps local and which changes are
+remote. Pass a `network` link from `createNetworkLink` in `@homeostate/tool-devtools/network`
+to slow down or cut the connection on the Network tab: see the documentation.
 
 | Prop             | Default          | Description                                                           |
 | ---------------- | ---------------- | --------------------------------------------------------------------- |
@@ -59,6 +64,9 @@ connection on the Network tab: see the documentation.
 | `onOpenChange`   |                  | Called with the new state when the panel is opened or closed          |
 | `theme`          | `"system"`       | `light`, `dark`, or `system` to follow `prefers-color-scheme`         |
 | `logLimit`       | `200`            | Log entries kept per source                                           |
+
+`buttonPosition`, `panelPosition` and `theme` are where the devtools start: a corner, side or
+theme picked in the panel's settings, behind the gear button, is remembered and applies instead.
 
 > **Warning:** edits go through the store like any local change, so every peer in the room
 > receives them. Restoring a log entry replaces the shared state for everyone.

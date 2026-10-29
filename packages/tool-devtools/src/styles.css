@@ -105,3 +105,225 @@
     cursor: pointer;
   }
 }
+
+/*
+ * The homeostate mark's Connect motion, from the identity kit. On hover, `HomeostateMark`
+ * sets `data-playing` while it runs: the parts pull apart quickly, the brackets meet, the
+ * crossbar grows in from both ends, the diamond grows where they meet and a ripple spreads.
+ * As a connection icon it sets `data-state`, and the same sequence runs as transitions, so a
+ * change mid-way turns around smoothly and nothing plays on first render.
+ *
+ * The ripple's progress is a registered property, hoisted to the document with Tailwind's.
+ */
+@property --hm-ripple {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@layer components {
+  .hm-mark {
+    --hm-ink: #203a40;
+    --hm-accent: #2563eb;
+    overflow: visible;
+  }
+
+  .dark .hm-mark {
+    --hm-ink: #f8fafc;
+    --hm-accent: #60a5fa;
+  }
+
+  .hm-mark :is(.hm-left, .hm-right, .hm-bar) {
+    stroke: var(--hm-ink);
+  }
+
+  .hm-mark .hm-ripple {
+    stroke: var(--hm-accent);
+    opacity: 0;
+  }
+
+  .hm-mark .hm-diamond {
+    fill: var(--hm-accent);
+  }
+
+  .hm-mark > * {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  /* Hover. The bar has pathLength="100", so its dashes are percentages of its length. */
+  .hm-mark[data-playing] .hm-left {
+    animation: hm-connect-left 1400ms;
+  }
+
+  .hm-mark[data-playing] .hm-right {
+    animation: hm-connect-right 1400ms;
+  }
+
+  .hm-mark[data-playing] .hm-bar {
+    animation: hm-connect-bar 1400ms;
+  }
+
+  .hm-mark[data-playing] .hm-diamond {
+    animation: hm-connect-diamond 1400ms;
+  }
+
+  .hm-mark[data-playing] .hm-ripple {
+    animation: hm-connect-ripple 1400ms;
+  }
+
+  /* Disconnected: the brackets apart with nothing between them. Coming from connected,
+     the diamond shrinks, the bar retracts into the brackets, then they part. */
+  .hm-mark[data-state="disconnected"] :is(.hm-left, .hm-right) {
+    transition: transform 420ms cubic-bezier(0.4, 0, 0.2, 1) 360ms;
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-left {
+    transform: translateX(-8px);
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-right {
+    transform: translateX(8px);
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-bar {
+    stroke-dasharray: 0 100 0 0;
+    transition: stroke-dasharray 260ms cubic-bezier(0.4, 0, 0.2, 1) 160ms;
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-diamond {
+    transform: scale(0);
+    transition: transform 240ms cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  /* Connected: the full mark. Coming from disconnected, the brackets close in, the bar
+     grows from both ends, the diamond grows and a ripple spreads. */
+  .hm-mark[data-state="connected"] :is(.hm-left, .hm-right) {
+    transition: transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+
+  .hm-mark[data-state="connected"] .hm-bar {
+    stroke-dasharray: 50 0 50 0;
+    transition: stroke-dasharray 300ms cubic-bezier(0.4, 0, 0.2, 1) 380ms;
+  }
+
+  .hm-mark[data-state="connected"] .hm-diamond {
+    transition: transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1) 600ms;
+  }
+
+  .hm-mark[data-state="connected"] .hm-ripple {
+    --hm-ripple: 1;
+    transition: --hm-ripple 600ms cubic-bezier(0.2, 0.6, 0.3, 1) 760ms;
+  }
+
+  /* Invisible at 0 and at 1, so the ripple shows only while connecting. */
+  .hm-mark[data-state] .hm-ripple {
+    opacity: calc(0.9 * (1 - var(--hm-ripple)) * min(1, var(--hm-ripple) * 40));
+    transform: scale(calc(1 + 2 * var(--hm-ripple)));
+    stroke-width: calc((4 - 2.7 * var(--hm-ripple)) * 1px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hm-mark > * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+@keyframes hm-connect-left {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  16% {
+    transform: translateX(-8px);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  42% {
+    transform: translateX(1.5px);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1);
+  }
+  52%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes hm-connect-right {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  16% {
+    transform: translateX(8px);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  42% {
+    transform: translateX(-1.5px);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1);
+  }
+  52%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes hm-connect-bar {
+  0% {
+    stroke-dasharray: 0 0 100 0;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  16% {
+    stroke-dasharray: 0 50 0 50;
+  }
+  17%,
+  38% {
+    stroke-dasharray: 0 100 0 0;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  56%,
+  100% {
+    stroke-dasharray: 50 0 50 0;
+  }
+}
+
+@keyframes hm-connect-diamond {
+  0% {
+    transform: scale(1);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  14%,
+  54% {
+    transform: scale(0);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  68% {
+    transform: scale(1.16);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1);
+  }
+  80%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes hm-connect-ripple {
+  0%,
+  62% {
+    opacity: 0;
+    transform: scale(1);
+    stroke-width: 4px;
+  }
+  64% {
+    opacity: 0.9;
+    transform: scale(1);
+    stroke-width: 4px;
+    animation-timing-function: cubic-bezier(0.2, 0.6, 0.3, 1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3);
+    stroke-width: 1.3px;
+  }
+}

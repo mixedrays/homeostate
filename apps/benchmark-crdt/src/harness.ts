@@ -439,6 +439,7 @@ export const collectMeta = (options: BenchmarkOptions): BenchmarkMeta => {
     date: new Date().toISOString(),
     node: process.version,
     commit: git("rev-parse --short HEAD"),
+    commitDate: git("log -1 --format=%cI"),
     dirty: status === null ? null : status.length > 0,
     versions,
     options: {

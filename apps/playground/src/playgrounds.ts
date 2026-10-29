@@ -2,6 +2,7 @@ import angularIcon from "../shared/icons/angular.svg";
 import reactIcon from "../shared/icons/react.svg";
 import svelteIcon from "../shared/icons/svelte.svg";
 import vueIcon from "../shared/icons/vue.svg";
+import { onPageHost } from "../shared/urls.js";
 
 /** One playground: a separately built app with its own demos. */
 export interface Playground {
@@ -21,10 +22,11 @@ const env = import.meta.env;
 
 /**
  * Where a playground lives: an explicit URL from the environment, its dev server when this
- * page runs in development, or a path next to this page in production.
+ * page runs in development, or a path next to this page in production. `localhost` follows
+ * this page's host, for devices on the network.
  */
 function locate(override: string | undefined, port: number, path: string) {
-  return override ?? (env.DEV ? `http://localhost:${port}` : path);
+  return onPageHost(override ?? (env.DEV ? `http://localhost:${port}` : path));
 }
 
 export const playgrounds: readonly Playground[] = [

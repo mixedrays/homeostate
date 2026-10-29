@@ -13,6 +13,12 @@ both sides and watch them merge on reconnect.
 `public/config.json` sets the WebSocket server and the link back to the landing page; see the
 [playground README](../playground/README.md) for configuration and deployment.
 
+The app compiles the `@homeostate/*` workspace packages from source, like its own code:
+`tsconfig.json` maps their imports to their sources, because TypeScript does not compile `.ts`
+files it finds through `node_modules`, and `angular.json` keeps them out of the dev server's
+prebundling, whose cache in `.angular/cache` would go stale after an edit. A new workspace
+import needs an entry in both.
+
 ## Structure
 
 - `src/todo.store.ts`: the SignalStore, its methods and derived values, sync and cleanup.

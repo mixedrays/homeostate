@@ -50,8 +50,8 @@ export function App() {
 }
 ```
 
-Pass several sources to inspect several stores; the panel then shows a switcher. With the
-Zustand `homeostate` middleware, create an adapter for the devtools with
+Pass several sources to inspect several stores; the panel's status bar then shows a switcher.
+With the Zustand `homeostate` middleware, create an adapter for the devtools with
 `createZustandAdapter(store)` and pass `store.homeostate` as the engine.
 
 | Prop             | Default          | Description                                                           |
@@ -65,13 +65,18 @@ Zustand `homeostate` middleware, create an adapter for the devtools with
 | `theme`          | `"system"`       | `light`, `dark`, or `system` to follow `prefers-color-scheme`         |
 | `logLimit`       | `200`            | Log entries kept per source                                           |
 
+`buttonPosition`, `panelPosition` and `theme` are where the devtools start: a corner, side or
+theme picked in the panel's settings, behind the gear button, is remembered and applies instead.
+
 To open the panel from your own UI, such as an "Inspect state" button, control it with
 `open` and `onOpenChange`; the devtools then leave remembering it to you.
 
-Pass the engine's `filter` in the source too, if it has one, so the keys it keeps out of sync
-are marked local. If the document is [persisted](/docs/persistence), pass what
-`createPersistence` returned as `persistence` to see and manage what is stored. Pass a
-[network link](#network-conditions) as `network` to slow down or cut the connection.
+With an `engine`, the devtools mark the keys its `filter` keeps out of sync as local, log the
+changes it applies from the backend as remote, and show its connection as it changes, through
+its [sync events](../../core/docs/sync-engine.md#sync-events). If the document is
+[persisted](/docs/persistence), pass what `createPersistence` returned as `persistence` to see
+and manage what is stored. Pass a [network link](#network-conditions) as `network` to slow down
+or cut the connection.
 
 ## Without React
 
@@ -108,20 +113,50 @@ devtools.unmount();
 
 The panel is not modal: the page stays usable while it is open, so you can use the app and
 watch its state change. Drag its inner edge, or focus it and use the arrow keys, to resize
-it. Whether it is open, its size and its tab are remembered in `localStorage`.
+it. In a narrow panel the tabs show only their icons. The gear button next to the close button
+opens its settings: the side it docks to, the floating button's corner and the theme, light,
+dark or the system's. Whether it is open, its size, its tab, its filters and its settings are
+remembered in `localStorage`.
 
 - **State** shows the store as a tree or as JSON. Click a value to edit it, click a boolean to
-  toggle it, edit an object or array as JSON, or delete a key or item. The JSON view edits
-  the whole state. Each top-level key is marked with how it relates to the backend. Values in
-  synced keys that are not plain JSON, such as a `Date`, a `Map`, a class instance or `NaN`,
+  toggle it, edit an object or array as JSON, or delete a key or item. The JSON view, with
+  its syntax highlighted, edits the whole state. An untouched inline editor never writes
+  on blur. If its value changes while you have a draft, the draft stays visible and cannot
+  be saved until you choose **Load latest** or cancel and reopen the editor.
+  Each top-level key is marked with how it
+  relates to the backend. Values in synced keys that are not plain JSON, such as a `Date`, a
+  `Map`, a class instance or `NaN`,
   are listed in a warning and marked in the tree: the engine does not sync them as they are,
-  and the tree shows them as JSON would, a `Date` as a string and a `Map` as `{}`.
+  and the tree shows them as JSON would, a `Date` as a string and a `Map` as `{}`. Filter the
+  tree by a path, such as `todos[0]`, or by a value: it shows what matches, with everything
+  under it and the containers on the way to it open. The button beside the filter expands every
+  container, then collapses them all.
+  The tree is one tab stop, navigated from the keyboard: **↑**/**↓** move between rows,
+  **Home**/**End** to the first and last, **→** opens a container or enters it, **←** closes it
+  or goes to its parent, and typing a key's name jumps to it. **Enter** edits the value,
+  toggles a boolean or edits a container as JSON, **Escape** cancels, and **Delete** or
+  **Backspace** deletes the key or item. The backend document on the Sync tab navigates the same
+  way, read-only.
 - **Sync** lists every key as `synced`, `diverged` (the backend holds another value, as it
   may while disconnected), `pending` (not in the backend yet), `local` (kept out by the
-  filter) or `backend only`, and shows the backend document read-only.
+  filter) or `backend only`, and shows the backend document read-only. Under a diverged key,
+  each path that differs shows its value in the store and in the backend. The first ten
+  differences show initially; **Show all** reveals the rest, and **Show first 10** collapses
+  them again. Click a long string, object or array to inspect its full JSON value. Each
+  path and each present value has a copy button; values are copied as JSON, including
+  quotes around strings. Missing values are shown as `not set` and cannot be copied.
+  If reading the backend fails, the panel reports the error and suspends key comparisons;
+  the last successfully read document remains available, marked as such.
 - **Log** records each change to the store with its diff, marked `local`, `remote` (a peer's
-  change applied through the backend) or `devtools`. Any entry can be restored. Recording
-  can be paused and the log cleared. **Export** saves the log as a JSON file and **Import**
+  change applied through the backend) or `devtools`. Open an entry to choose **Diff** for
+  its recorded before/after values, **Snapshot** for a read-only tree or JSON view of its
+  full state, or **Compare with current** for differences from that snapshot to the live
+  store. The comparison stays live while recording is paused. Both diff views support the
+  full-value inspection, copy actions and expandable results described under Sync.
+  **Restore this state** writes the snapshot back to the store; the adjacent note names
+  the source and explains whether the engine syncs that change to peers. Recording
+  can be paused and the log cleared. Filter it by a path that a change touches, and by
+  origin; the initial state always shows. **Export** saves the log as a JSON file and **Import**
   replaces the log with one, so a log recorded elsewhere, such as one attached to a bug
   report, can be stepped through and its states restored here.
 - **Storage** shows how many updates the stored document holds and their size, read again as
@@ -129,10 +164,20 @@ it. Whether it is open, its size and its tab are remembered in `localStorage`.
   updates do. **Clear** removes the stored document and stops storing it until the page
   reloads; the live document and its peers keep their state, and other tabs that store the
   same key may write it again.
-- **Network** sets the [network conditions](#network-conditions) of the source's link:
+  A Compact or Clear that fails in storage shows its error, and Clear marks the document
+  cleared only once it is removed. The error stays visible after stats refreshes, until
+  another operation is attempted.
+- **Network** shows whether the engine is connected, with a switch to disconnect and
+  reconnect it, and sets the [network conditions](#network-conditions) of the source's link:
   offline, latency, jitter and a flaky connection.
-- The header shows whether the engine is connected, with a switch to disconnect and
-  reconnect it.
+- The status bar at the bottom gives the source, or a switcher between several sources,
+  the available space. Hover the name to read it in full. Long source names wrap in the
+  switcher's list, which stays within the viewport in narrow panels. Beside the source,
+  **Online** takes the network link offline and back, and **Connected** disconnects and
+  reconnects the engine. Each shows only for a source with a link or an engine, and turns
+  amber while its side is down.
+- While the panel is closed, a dot on the floating button flags a disconnected engine, a link
+  that is down or has conditions on, or diverged keys, and its tooltip names them.
 
 ## Network conditions
 
@@ -165,14 +210,14 @@ Automerge through their `create*Persistable`. The panel sets four conditions:
 
 - **Offline** stops every update, both ways. Coming back online exchanges the whole
   documents, as a provider does on reconnecting, so both sides merge what the other missed.
-  Unlike the engine switch in the header, the store keeps syncing with this tab's document.
+  Unlike the engine switch above them, the store keeps syncing with this tab's document.
 - **Latency** delays every update, both ways.
 - **Jitter** adds up to that much more per update, at random. Updates still arrive in order,
   as over a WebSocket.
 - **Flaky** drops the link for 1 to 3 seconds every 3 to 10 seconds, at random.
 
-The tab also counts the updates on their way in each direction, and the panel says so while
-the link is down. Pass starting conditions as a third argument, such as `{ latency: 200 }`, or
+The tab also counts the updates on their way in each direction, and the tab and the status bar
+say so while the link is down. Pass starting conditions as a third argument, such as `{ latency: 200 }`, or
 change them from code with `network.setConditions`.
 
 Presence, such as cursors, goes through the provider directly and is not delayed. The second

@@ -1,11 +1,10 @@
 import type { LoroDoc } from "loro-crdt";
 import {
-  applyChanges,
+  createCrdtBackend,
   type CrdtBackend,
+  type JsonObject,
   type TextPolicy,
-  type Unsubscribe,
 } from "@homeostate/core";
-import { withPlainPrototypes } from "./mapping.js";
 import { createLoroOps } from "./patching.js";
 
 /** Options for `createLoroBackend` */
@@ -19,8 +18,6 @@ export interface LoroBackendOptions {
   text?: TextPolicy;
 }
 
-const noText: TextPolicy = () => false;
-
 let instances = 0;
 
 export const createLoroBackend = (
@@ -28,32 +25,28 @@ export const createLoroBackend = (
   name: string,
   options: LoroBackendOptions = {},
 ): CrdtBackend => {
-  const { text = noText } = options;
   const map = doc.getMap(name);
   const origin = `homeostate:${name}#${instances++}`;
-  const ops = createLoroOps(text);
 
-  return {
-    read: () => withPlainPrototypes(map.toJSON()),
+  return createCrdtBackend((text) => {
+    const ops = createLoroOps(text);
+    return {
+      // `toJSON` builds objects by assignment, so a peer's `__proto__` entry becomes a
+      // prototype; the sync engine copies such objects into plain ones before they reach the
+      // store.
+      read: (): JsonObject => map.toJSON(),
 
-    write: (next, previous) => {
-      // Edits other code has not committed are reported only once committed, so `previous`
-      // may lack them.
-      const current = (
-        previous !== undefined && doc.getPendingTxnLength() === 0
-          ? previous
-          : map.toJSON()
-      ) as object;
-      applyChanges(map, current, next as object, ops, {
-        text,
-        json: true,
-      });
-      doc.commit({ origin });
-    },
+      transact: (edit) => {
+        edit(map, ops);
+        doc.commit({ origin });
+      },
 
-    subscribe: (onRemoteChange): Unsubscribe =>
-      map.subscribe((event) => {
-        if (event.origin !== origin) onRemoteChange();
-      }),
-  };
+      watch: (onChange) =>
+        map.subscribe((event) => onChange(event.origin === origin)),
+
+      // The document counts every op, committed or not. A checkout changes the state without
+      // one.
+      revision: () => (doc.isDetached() ? undefined : doc.opCount()),
+    };
+  }, options);
 };

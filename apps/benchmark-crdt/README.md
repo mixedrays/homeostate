@@ -16,6 +16,21 @@ pnpm bench:crdt -- --help
 Progress goes to stderr and the Markdown report to stdout, so `pnpm bench:crdt > report.md`
 leaves a pasteable document.
 
+### Core diff workloads
+
+```bash
+pnpm --filter @homeostate/benchmark-crdt bench:diff > diff.md
+```
+
+This measures `getChanges` directly at 100, 1000 and 10,000 rows, with and without JSON
+semantics: a scalar edit alongside an unchanged record or array, one todo toggled in a
+normalized map or array, and equal arrays whose rows do not share identity. Inputs are built
+and their edit scripts checked before timing; text policies store strings as values. The
+report includes mean, margin of error, p99 and sample count. Compare reports from the same
+machine before and after a change.
+These timings exclude the sync engine, CRDT backends and rendering; the main matrix measures
+their effect on writes, roundtrips and row identity.
+
 ## Save, view and compare
 
 ```bash
@@ -30,6 +45,24 @@ A comparison prints `before → after (Δ%)` per backend, scenario and size, and
 regressions and ▼ improvements beyond `--threshold` (default 5 %) and, for timings, beyond both
 runs' margins of error. Render counts are exact, so any change in them is reported. `results/`
 is git-ignored; compare runs from the same machine.
+
+## Follow core across commits
+
+Save one report per commit and the viewer's Trend tab charts every metric across them and lists
+what changed at each step:
+
+```bash
+for commit in $(git rev-list --reverse main~10..main -- packages/core); do
+  git checkout -q "$commit" && pnpm install --frozen-lockfile &&
+    pnpm bench:crdt -- --quick --json "results/$(git rev-parse --short HEAD).json" > /dev/null
+done
+git switch -q develop
+```
+
+A report records its commit and the commit's date, and Trend orders runs by that date, so a commit
+benchmarked later still falls into place. A report from before the commit date existed is ordered
+by when it ran, which is why the loop goes oldest first. Each commit runs its own copy of this
+benchmark, so a change to the benchmark itself also shows up as a step.
 
 ## What is measured
 
@@ -52,7 +85,7 @@ Per backend, scenario, and size:
 | write        | store change to `backend.write` on a single peer, mean ± relative margin of error                       |
 | p99          | 99th percentile of write                                                                                |
 | vs best      | write mean relative to the fastest backend for that scenario and size                                   |
-| roundtrip    | store change on peer A until peer B's store holds it: B's `read`, `patchState`, `setState` included     |
+| roundtrip    | store change on peer A until peer B's store holds it: B's `read`, `keepIdentity`, `setState` included   |
 | renders / op | rows of peer B that survived the operation and came back as a new object, matched by `id`               |
 | wasted / op  | of those, the rows whose data is deep-equal, so the new object carried nothing new                      |
 | wire / op    | bytes over the wire per operation                                                                       |

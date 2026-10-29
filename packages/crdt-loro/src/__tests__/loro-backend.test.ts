@@ -1,20 +1,39 @@
-import { LoroDoc, LoroMap, LoroText, type LoroList } from "loro-crdt";
+import { LoroDoc, LoroList, LoroMap, LoroText } from "loro-crdt";
 import { describe, expect, it } from "vitest";
-import { createSyncEngine } from "@homeostate/core";
-import {
-  addTodo,
-  createTestStore,
-  deleteTodo,
-  describeCrdtBackend,
-  prototypeHijacks,
-  renameTodo,
-  threeTodos,
-  todo,
-  todoTitles,
-} from "@homeostate/core/conformance";
+import { describeCrdtBackend } from "@homeostate/core/conformance";
 import { createLoroBackend } from "../index.js";
 
 const NAME = "shared";
+
+/** The value at `path` from the synced map, a container or a plain value. */
+const at = (doc: LoroDoc, path: (string | number)[]): unknown =>
+  path.reduce<unknown>(
+    (container, key) =>
+      container instanceof LoroMap
+        ? container.get(key as string)
+        : (container as LoroList).get(key as number),
+    doc.getMap(NAME),
+  );
+
+/** A container for `value` if it is an object or an array, every key kept, else `undefined`. */
+const containerFor = (value: unknown): LoroMap | LoroList | undefined =>
+  Array.isArray(value)
+    ? new LoroList()
+    : value !== null && typeof value === "object"
+      ? new LoroMap()
+      : undefined;
+
+/** Fills the attached `container` with `value`'s entries, building containers at any depth. */
+const fill = (container: LoroMap | LoroList, value: object): void => {
+  Object.entries(value).forEach(([key, item]) => {
+    const child = containerFor(item);
+    if (container instanceof LoroList) {
+      if (child) fill(container.insertContainer(Number(key), child), item);
+      else container.insert(Number(key), item);
+    } else if (child) fill(container.setContainer(key, child), item);
+    else container.set(key, item);
+  });
+};
 
 describeCrdtBackend("createLoroBackend", {
   createDoc: (id) => {
@@ -32,123 +51,39 @@ describeCrdtBackend("createLoroBackend", {
     doc.getMap(NAME).set(key, value);
     doc.commit();
   },
+  storeForeignContainers: (doc, key, value) => {
+    fill(doc.getMap(NAME), { [key]: value });
+    doc.commit();
+  },
+  containerId: (doc, path) => (at(doc, path) as LoroMap | LoroList).id,
+  isText: (doc, path) => at(doc, path) instanceof LoroText,
 });
 
 describe("createLoroBackend", () => {
-  it("deletes a middle todo without rewriting the items after it", () => {
+  it("moves its revision with an edit other code has not committed", () => {
     const doc = new LoroDoc();
     const backend = createLoroBackend(doc, NAME);
-    backend.write(threeTodos());
-    const todos = doc.getMap(NAME).get("todos") as LoroList;
-    const third = (todos.get(2) as LoroMap).id;
+    backend.write({ count: 1 });
+    const before = backend.revision?.();
 
-    backend.write(deleteTodo(threeTodos(), "2"));
-
-    expect(todos.toJSON()).toEqual(deleteTodo(threeTodos(), "2").todos);
-    expect((todos.get(1) as LoroMap).id).toBe(third);
-  });
-
-  it("diffs against previous instead of reading its document", () => {
-    const doc = new LoroDoc();
-    const backend = createLoroBackend(doc, NAME);
-    backend.write({ count: 1, label: "a" });
-    // Unreported, so a `previous` that misses it shows which side the write diffed against.
-    doc.getMap(NAME).set("count", 2);
-    doc.commit();
-
-    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
-
-    expect(backend.read()).toEqual({ count: 2, label: "b" });
-  });
-
-  it("diffs against its document while edits by other code are uncommitted", () => {
-    const doc = new LoroDoc();
-    const backend = createLoroBackend(doc, NAME);
-    backend.write({ count: 1, label: "a" });
-    // Reported only once committed, so `previous` cannot hold it yet.
+    // Reported only once committed.
     doc.getMap(NAME).set("count", 2);
 
-    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
-
-    expect(backend.read()).toEqual({ count: 1, label: "b" });
+    expect(backend.revision?.()).not.toBe(before);
   });
-});
 
-describe("untrusted key names", () => {
-  it("never lets a peer's __proto__ entry reach the store", () => {
+  it("has no revision while checked out, and its latest one again after", () => {
     const doc = new LoroDoc();
-    const store = createTestStore({ todos: [{ id: "1" }] });
     const backend = createLoroBackend(doc, NAME);
-    createSyncEngine(backend, store.adapter).connect();
-    const todos = doc.getMap(NAME).get("todos") as LoroList;
+    backend.write({ count: 1 });
+    const earlier = doc.frontiers();
+    backend.write({ count: 2 });
+    const latest = backend.revision?.();
 
-    (todos.get(0) as LoroMap)
-      .setContainer("__proto__", new LoroMap())
-      .set("isAdmin", true);
-    const added = todos.insertContainer(1, new LoroMap());
-    added.set("id", "2");
-    added.setContainer("__proto__", new LoroMap()).set("isAdmin", true);
-    doc.commit();
+    doc.checkout(earlier);
+    expect(backend.revision?.()).toBeUndefined();
+    doc.checkoutToLatest();
 
-    expect(prototypeHijacks(backend.read())).toEqual([]);
-    expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
-    expect(prototypeHijacks(store.getState())).toEqual([]);
-  });
-});
-
-describe("strings", () => {
-  const map = (doc: LoroDoc) => doc.getMap(NAME);
-  const todoMap = (doc: LoroDoc, index: number) =>
-    (map(doc).get("todos") as LoroList).get(index) as LoroMap;
-
-  it("stores the strings the policy marks as LoroText and every other string as a value", () => {
-    const doc = new LoroDoc();
-    const backend = createLoroBackend(doc, NAME, { text: todoTitles });
-    backend.write(threeTodos());
-    backend.write(addTodo(threeTodos(), todo("4")));
-
-    expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
-    expect(todoMap(doc, 3).get("title")).toBeInstanceOf(LoroText);
-    expect(todoMap(doc, 3).get("id")).toBe("4");
-    expect(map(doc).get("filterStatus")).toBe("all");
-
-    const version = doc.oplogVersion();
-    backend.write(addTodo(threeTodos(), todo("4")));
-    expect(doc.oplogVersion().compare(version)).toBe(0);
-  });
-
-  it("reads strings held as LoroText by an earlier version, and stores each as a value once it changes", () => {
-    const doc = new LoroDoc();
-    createLoroBackend(doc, NAME, { text: () => true }).write(threeTodos());
-    const backend = createLoroBackend(doc, NAME);
-    expect(backend.read()).toEqual(threeTodos());
-
-    const next = {
-      ...renameTodo(threeTodos(), "2", "Two"),
-      filterStatus: "active",
-    };
-    backend.write(next);
-
-    expect(backend.read()).toEqual(next);
-    expect(map(doc).get("filterStatus")).toBe("active");
-    expect(todoMap(doc, 1).get("title")).toBe("Two");
-    expect(map(doc).get("searchTerm")).toBeInstanceOf(LoroText);
-    expect(todoMap(doc, 0).get("title")).toBeInstanceOf(LoroText);
-  });
-
-  it("turns a plain string at a text path into a LoroText when it next changes", () => {
-    const doc = new LoroDoc();
-    createLoroBackend(doc, NAME).write({ ...threeTodos(), tags: ["a"] });
-    const backend = createLoroBackend(doc, NAME, {
-      text: (path) => todoTitles(path) || path[0] === "tags",
-    });
-
-    const next = { ...renameTodo(threeTodos(), "2", "Todo 2!"), tags: ["ab"] };
-    backend.write(next);
-
-    expect(backend.read()).toEqual(next);
-    expect(todoMap(doc, 1).get("title")).toBeInstanceOf(LoroText);
-    expect((map(doc).get("tags") as LoroList).get(0)).toBeInstanceOf(LoroText);
-    expect(todoMap(doc, 0).get("title")).toBe("Todo 1");
+    expect(backend.revision?.()).toBe(latest);
   });
 });

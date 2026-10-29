@@ -1,6 +1,5 @@
 import {
   createSyncEngine,
-  defaultSyncFilter,
   type CrdtBackend,
   type PersistableDoc,
   type StoreAdapter,
@@ -8,13 +7,7 @@ import {
   type SyncEngineConfig,
   type Unsubscribe,
 } from "@homeostate/core";
-import {
-  asJson,
-  firstDifference,
-  formatPath,
-  formatValue,
-  syncedJson,
-} from "./compare.js";
+import { asJson, firstDifference, formatPath, formatValue } from "./compare.js";
 import { createRandom, randomSeed } from "./random.js";
 
 /**
@@ -28,8 +21,11 @@ export interface PeerSetup<S extends object = any> {
   adapter: StoreAdapter<S>;
   backend: CrdtBackend;
   doc: PersistableDoc;
-  /** Passed to `createSyncEngine`; its `filter` also decides what convergence compares. */
-  config?: SyncEngineConfig;
+  /**
+   * Passed to `createSyncEngine`, typed by the adapter's state; its `filter`, `keys` and `omit`
+   * also decide what convergence compares.
+   */
+  config?: NoInfer<SyncEngineConfig<S>>;
   /** Names the peer in convergence errors. Defaults to `peer-<index>`. */
   name?: string;
   /**
@@ -356,7 +352,6 @@ export function createNetwork(options: NetworkOptions = {}): Network {
         setup.adapter,
         setup.config,
       );
-      const filter = setup.config?.filter ?? defaultSyncFilter;
       const peer: Peer<S> = {
         index,
         name: setup.name ?? `peer-${index}`,
@@ -364,7 +359,7 @@ export function createNetwork(options: NetworkOptions = {}): Network {
         backend: setup.backend,
         doc: setup.doc,
         engine,
-        syncedState: () => syncedJson(setup.adapter.getState(), filter),
+        syncedState: () => asJson(engine.getSyncedState()),
       };
       peers.push(peer);
       unsubscribers.push(

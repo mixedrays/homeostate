@@ -88,8 +88,8 @@ const shadow = (): ShadowRoot => {
 };
 
 const byLabel = <T extends Element = HTMLElement>(label: string): T => {
-  const element = shadow().querySelector<T & Element>(
-    `[aria-label="${label}"]`,
+  const element = [...shadow().querySelectorAll<T>("[aria-label]")].find(
+    (candidate) => candidate.getAttribute("aria-label") === label,
   );
   if (!element) throw new Error(`no element labelled ${label}`);
   return element;
@@ -101,6 +101,15 @@ const buttonWithText = (text: string): HTMLButtonElement => {
   );
   if (!button) throw new Error(`no button with text ${text}`);
   return button;
+};
+
+/** One of the status bar's toggles, by its text. */
+const statusToggle = (text: string): HTMLButtonElement => {
+  const toggle = [...shadow().querySelectorAll("footer button")].find(
+    (button) => button.textContent?.trim() === text,
+  );
+  if (!toggle) throw new Error(`no status toggle ${text}`);
+  return toggle as HTMLButtonElement;
 };
 
 const click = async (element: Element) => {
@@ -150,7 +159,7 @@ describe("HomeostateDevtools", () => {
     await act(tick);
 
     expect(store.get().filter).toBe("done");
-    expect((backend.read() as State).filter).toBe("done");
+    expect((backend.read() as unknown as State).filter).toBe("done");
   });
 
   it("keeps keys typed into a field from reaching page shortcuts", async () => {
@@ -171,6 +180,170 @@ describe("HomeostateDevtools", () => {
     }
 
     expect(pageKeys).toEqual(["Tab"]);
+  });
+
+  it("does not overwrite a remote change when an untouched inline editor blurs", async () => {
+    await render();
+    await click(byLabel("Edit filter"));
+    const input = byLabel<HTMLInputElement>("Value of filter");
+    await act(async () =>
+      backend.receive({ ...store.get(), filter: "remote" }),
+    );
+    await act(tick);
+    await act(async () => input.blur());
+
+    expect(store.get().filter).toBe("remote");
+    expect((backend.read() as unknown as State).filter).toBe("remote");
+  });
+
+  it("keeps an inline draft when the value changes and can load the latest value", async () => {
+    await render();
+    await click(byLabel("Edit filter"));
+    const input = byLabel<HTMLInputElement>("Value of filter");
+    await type(input, "draft");
+    await act(async () =>
+      backend.receive({ ...store.get(), filter: "remote" }),
+    );
+    await act(tick);
+    await act(async () => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+      input.blur();
+    });
+
+    expect(store.get().filter).toBe("remote");
+    expect(input.value).toBe("draft");
+    expect(shadow().textContent).toContain(
+      "The value changed since you started editing.",
+    );
+    await click(buttonWithText("Load latest"));
+    expect(input.value).toBe("remote");
+    await type(input, "next");
+    await act(async () => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    await act(tick);
+    expect(store.get().filter).toBe("next");
+  });
+
+  it("filters the state tree and expands or collapses all of it", async () => {
+    await render();
+    const tree = () => byLabel("Store state").textContent;
+
+    await type(byLabel<HTMLInputElement>("Filter the state"), "milk");
+    expect(tree()).toContain("milk");
+    expect(tree()).not.toContain("done");
+    expect(tree()).not.toContain("filter");
+
+    await click(byLabel("Clear the filter"));
+    await click(byLabel("Expand all"));
+    await click(byLabel("Collapse all"));
+    expect(tree()).not.toContain("milk");
+    expect(byLabel("Expand all")).toBeTruthy();
+    await click(byLabel("Expand all"));
+    expect(tree()).toContain("milk");
+  });
+
+  it("highlights the JSON view, also while it is being typed", async () => {
+    await render();
+    await click(buttonWithText("JSON"));
+    const textarea = byLabel<HTMLTextAreaElement>("Store state as JSON");
+    const code = () => shadow().querySelector('[data-slot="json-highlight"]');
+    const tokens = (kind: string) =>
+      [...(code()?.querySelectorAll(`[data-token="${kind}"]`) ?? [])].map(
+        (token) => token.textContent,
+      );
+    expect(tokens("key")).toEqual(['"todos"', '"title"', '"done"', '"filter"']);
+    expect(tokens("string")).toEqual(['"milk"', '"all"']);
+    expect(tokens("boolean")).toEqual(["false"]);
+    expect(code()?.textContent).toBe(`${textarea.value}\n`);
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set?.call(textarea, '{ "count": -1.5e3, "note": "unclosed\n}');
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(tokens("number")).toEqual(["-1.5e3"]);
+    expect(tokens("string")).toEqual(['"unclosed']);
+    expect(code()?.textContent).toBe(`${textarea.value}\n`);
+  });
+
+  describe("tree keyboard navigation", () => {
+    const rows = () => [
+      ...byLabel("Store state").querySelectorAll<HTMLElement>(
+        '[role="treeitem"]',
+      ),
+    ];
+    const focused = () => shadow().activeElement?.getAttribute("aria-label");
+    const press = async (code: string, key = code) => {
+      await act(async () => {
+        shadow().activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", { code, key, bubbles: true }),
+        );
+      });
+      await act(tick);
+    };
+
+    it("is one tab stop, moved with the arrows, Home, End and typing", async () => {
+      await render();
+      expect(rows().filter((row) => row.tabIndex === 0)).toEqual([rows()[0]]);
+      await act(async () => rows()[0].focus());
+      expect(focused()).toBe("todos: Array(1), synced");
+
+      await press("ArrowDown");
+      expect(focused()).toBe("0: {…} 2 keys");
+      await press("ArrowLeft");
+      expect(rows()).toHaveLength(3);
+      expect(shadow().activeElement?.getAttribute("aria-expanded")).toBe(
+        "false",
+      );
+      await press("ArrowRight");
+      await press("ArrowRight");
+      expect(focused()).toBe('title: "milk"');
+      await press("ArrowLeft");
+      expect(focused()).toBe("0: {…} 2 keys");
+
+      await press("End");
+      expect(focused()).toBe('filter: "all", synced');
+      await press("Home");
+      expect(focused()).toBe("todos: Array(1), synced");
+      await press("KeyF", "f");
+      expect(focused()).toBe('filter: "all", synced');
+      expect(rows().filter((row) => row.tabIndex === 0)).toEqual([
+        shadow().activeElement,
+      ]);
+    });
+
+    it("edits with Enter and returns focus to the row", async () => {
+      await render();
+      await act(async () => rows()[4].focus());
+      await press("Enter");
+      const input = byLabel<HTMLInputElement>("Value of filter");
+      await type(input, "done");
+      await act(async () => {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
+      });
+      await act(tick);
+
+      expect(store.get().filter).toBe("done");
+      expect(focused()).toBe('filter: "done", synced');
+    });
+
+    it("deletes with Delete and keeps focus in the tree", async () => {
+      await render();
+      await act(async () => rows()[4].focus());
+      await press("Delete");
+
+      expect(store.get()).not.toHaveProperty("filter");
+      expect(focused()).toBe("done: false");
+    });
   });
 
   it("toggles a boolean with one click", async () => {
@@ -211,6 +384,202 @@ describe("HomeostateDevtools", () => {
     expect(store.get().filter).toBe("all");
   });
 
+  it("browses a historical snapshot as a tree and JSON while the live state keeps changing", async () => {
+    await render();
+    await act(async () => store.set({ ...store.get(), filter: "active" }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Snapshot"));
+    expect(byLabel("Snapshot #0").textContent).toContain('"all"');
+    expect(byLabel("Snapshot #0").textContent).toContain("milk");
+    expect(
+      byLabel("Snapshot #0").querySelector('[aria-label^="Edit "]'),
+    ).toBeNull();
+
+    await click(buttonWithText("JSON"));
+    const json = byLabel<HTMLTextAreaElement>("Snapshot #0 as JSON");
+    expect(json.readOnly).toBe(true);
+    expect(JSON.parse(json.value)).toEqual({
+      todos: [{ title: "milk", done: false }],
+      filter: "all",
+    });
+
+    await act(async () => store.set({ ...store.get(), filter: "done" }));
+    await act(tick);
+    expect(JSON.parse(json.value).filter).toBe("all");
+    expect(store.get().filter).toBe("done");
+    expect((backend.read() as unknown as State).filter).toBe("done");
+  });
+
+  it("compares a snapshot with the live state without restoring it, even while recording is paused", async () => {
+    await render();
+    await act(async () => store.set({ ...store.get(), filter: "active" }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Compare with current"));
+    const comparison = () =>
+      byLabel("Snapshot #0 compared with current state").textContent;
+    expect(comparison()).toContain('"all"');
+    expect(comparison()).toContain('"active"');
+    expect(store.get().filter).toBe("active");
+    expect((backend.read() as unknown as State).filter).toBe("active");
+
+    await click(buttonWithText("Pause"));
+    await act(async () => store.set({ ...store.get(), filter: "done" }));
+    await act(tick);
+    expect(comparison()).toContain('"done"');
+    expect(comparison()).not.toContain('"active"');
+    expect(
+      byLabel("Changes, newest first").querySelectorAll(
+        '[data-slot="collapsible-trigger"]',
+      ),
+    ).toHaveLength(2);
+
+    await act(async () => store.set({ ...store.get(), filter: "all" }));
+    await act(tick);
+    expect(shadow().textContent).toContain(
+      "This snapshot matches the current state.",
+    );
+    expect(buttonWithText("Current state").disabled).toBe(true);
+  });
+
+  it("distinguishes an entry's recorded diff from its comparison with current state", async () => {
+    await render();
+    await act(async () => store.set({ ...store.get(), filter: "active" }));
+    await act(tick);
+    await act(async () => store.set({ ...store.get(), filter: "done" }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#1"));
+    const recorded = () => byLabel("Recorded diff for entry #1").textContent;
+    expect(recorded()).toContain('"all"');
+    expect(recorded()).toContain('"active"');
+    expect(recorded()).not.toContain('"done"');
+
+    await click(buttonWithText("Compare with current"));
+    const comparison = byLabel(
+      "Snapshot #1 compared with current state",
+    ).textContent;
+    expect(comparison).toContain('"active"');
+    expect(comparison).toContain('"done"');
+    expect(comparison).not.toContain('"all"');
+    await click(buttonWithText("Diff"));
+    expect(recorded()).toContain('"all"');
+    expect(recorded()).not.toContain('"done"');
+  });
+
+  it("reports an unreadable live state instead of comparing a stale JSON view", async () => {
+    const compared = createTestStore<Record<string, unknown>>({ count: 0 });
+    await renderSources([{ name: "Counter", adapter: compared.adapter }]);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Compare with current"));
+    expect(shadow().textContent).toContain(
+      "This snapshot matches the current state.",
+    );
+    const cyclic: Record<string, unknown> = { count: 1 };
+    cyclic.self = cyclic;
+    await act(async () => compared.set(cyclic));
+    await act(tick);
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+      "Current state cannot be read as JSON",
+    );
+    expect(shadow().textContent).not.toContain(
+      "This snapshot matches the current state.",
+    );
+
+    await act(async () => compared.set({ count: 1 }));
+    await act(tick);
+    expect(shadow().querySelector('[role="alert"]')).toBeNull();
+    expect(
+      byLabel("Snapshot #0 compared with current state").textContent,
+    ).toContain("count");
+  });
+
+  it("inspects full historical and current values with explicit comparison headings", async () => {
+    const before = "Historical message ".repeat(8);
+    const after = "Current message ".repeat(8);
+    const compared = createTestStore({ message: before });
+    await renderSources([{ name: "Messages", adapter: compared.adapter }]);
+    await act(async () => compared.set({ message: after }));
+    await act(tick);
+    await click(buttonWithText("Log"));
+    await click(buttonWithText("#0"));
+    await click(buttonWithText("Compare with current"));
+    const table = byLabel("Snapshot #0 compared with current state");
+    expect(
+      [...table.querySelectorAll('th[scope="col"]')].map(
+        (cell) => cell.textContent,
+      ),
+    ).toEqual(["Path", "snapshot #0", "current"]);
+    await click(byLabel("Inspect snapshot #0 value at message"));
+    await click(byLabel("Inspect current value at message"));
+    expect(
+      JSON.parse(
+        byLabel("Full snapshot #0 value at message").textContent ?? "",
+      ),
+    ).toBe(before);
+    expect(
+      JSON.parse(byLabel("Full current value at message").textContent ?? ""),
+    ).toBe(after);
+    expect(compared.get().message).toBe(after);
+  });
+
+  it.each([
+    { connected: true, impact: "syncs this change to peers" },
+    { connected: false, impact: "changes only the local store" },
+    { connected: null, impact: "may sync to peers" },
+  ])(
+    "names the source and restoration impact when connected is $connected",
+    async ({ connected, impact }) => {
+      if (connected === false) engine.disconnect();
+      await renderSources([
+        {
+          name: "Review store",
+          adapter: store.adapter,
+          backend,
+          engine: connected === null ? undefined : engine,
+        },
+      ]);
+      await act(async () => store.set({ ...store.get(), filter: "active" }));
+      await act(tick);
+      await click(buttonWithText("Log"));
+      await click(buttonWithText("#0"));
+      const restore = buttonWithText("Restore this state");
+      const descriptionId = restore.getAttribute("aria-describedby");
+      expect(descriptionId).not.toBeNull();
+      const description = shadow().getElementById(descriptionId!);
+      expect(description?.textContent).toContain("Review store");
+      expect(description?.textContent).toContain(impact);
+    },
+  );
+
+  it("filters the log by path and by origin", async () => {
+    await render();
+    await act(async () => {
+      store.set({ ...store.get(), filter: "active" });
+    });
+    await act(tick);
+    await act(async () => {
+      store.set({ ...store.get(), todos: [] });
+    });
+    await act(tick);
+    await click(buttonWithText("Log"));
+    const log = () => byLabel("Changes, newest first").textContent;
+
+    await type(byLabel<HTMLInputElement>("Filter by path"), "todos");
+    expect(log()).toContain("todos");
+    expect(log()).not.toContain("filter");
+
+    await click(byLabel("Clear the filter"));
+    await click(buttonWithText("local"));
+    expect(log()).toContain("Initial state");
+    expect(log()).not.toContain("todos");
+    expect(shadow().textContent).toContain("1 of 3 entries");
+  });
+
   it("names the log's pause action without aria-pressed", async () => {
     await render();
     await click(buttonWithText("Log"));
@@ -220,15 +589,377 @@ describe("HomeostateDevtools", () => {
     expect(buttonWithText("Resume").getAttribute("aria-pressed")).toBeNull();
   });
 
-  it("disconnects and reconnects the engine", async () => {
+  it("disconnects and reconnects the engine from the Network tab", async () => {
     await render();
+    await click(buttonWithText("Network"));
+    const markState = () =>
+      byLabel("Sync engine connected")
+        .closest("label")
+        ?.querySelector(".hm-mark")
+        ?.getAttribute("data-state");
+    expect(markState()).toBe("connected");
+
     const toggle = byLabel("Sync engine connected");
     await click(toggle);
     expect(engine.isConnected()).toBe(false);
     expect(shadow().textContent).toContain("Disconnected");
+    expect(markState()).toBe("disconnected");
 
     await click(byLabel("Sync engine connected"));
     expect(engine.isConnected()).toBe(true);
+    expect(markState()).toBe("connected");
+  });
+
+  it("closes from the tabs row", async () => {
+    await render();
+    await click(byLabel("Close devtools"));
+    expect(shadow().querySelector('[aria-label="Store state"]')).toBeNull();
+    expect(byLabel("Open Homeostate devtools")).toBeTruthy();
+  });
+
+  it("docks the panel to another side from the settings", async () => {
+    await render();
+    const side = () =>
+      shadow()
+        .querySelector('[data-slot="sheet-content"]')
+        ?.getAttribute("data-side");
+    expect(side()).toBe("right");
+
+    await click(byLabel("Settings"));
+    await click(byLabel("Dock to the bottom"));
+    expect(side()).toBe("bottom");
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(side()).toBe("bottom");
+  });
+
+  it("moves the floating button to another corner from the settings", async () => {
+    await render();
+    await click(byLabel("Settings"));
+    await click(byLabel("Button at the top left"));
+    expect(byLabel("Close Homeostate devtools").className).toContain(
+      "top-4 left-4",
+    );
+  });
+
+  it("switches the theme from the settings over the theme prop", async () => {
+    await act(async () => {
+      root.render(
+        <HomeostateDevtools
+          initialIsOpen
+          theme="light"
+          sources={[{ name: "Todos", adapter: store.adapter }]}
+        />,
+      );
+    });
+    await act(tick);
+    const dark = () =>
+      shadow()
+        .querySelector("[data-devtools-root]")
+        ?.classList.contains("dark");
+    expect(dark()).toBe(false);
+
+    await click(byLabel("Settings"));
+    await click(byLabel("Dark theme"));
+    expect(dark()).toBe(true);
+  });
+
+  it("shows the source in the status bar", async () => {
+    await render();
+    expect(shadow().querySelector("footer")?.textContent).toContain("Todos");
+  });
+
+  it("shows the link and the engine as two toggles in the status bar", async () => {
+    engine.disconnect();
+    const network = createNetworkLink(createTestDoc(), createTestDoc(), {
+      offline: true,
+    });
+    try {
+      await renderSources([
+        { name: "Todos", adapter: store.adapter, backend, engine, network },
+      ]);
+      const toggles = [...shadow().querySelectorAll("footer button")]
+        .map((button) => button.textContent?.trim())
+        .filter((text) => text === "Online" || text === "Connected");
+      expect(toggles).toEqual(["Online", "Connected"]);
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("false");
+      expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
+        "false",
+      );
+
+      await click(statusToggle("Online"));
+      expect(network.getSnapshot().conditions.offline).toBe(false);
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("true");
+      await click(statusToggle("Connected"));
+      expect(engine.isConnected()).toBe(true);
+      expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+    } finally {
+      await act(async () => network.destroy());
+    }
+  });
+
+  it("switches between long source names and shows each source's own toggles", async () => {
+    const name = "A source with a long descriptive name ".repeat(5);
+    const otherName = "Another source with a long descriptive name ".repeat(5);
+    const other = createTestStore({ count: 3 });
+    await renderSources([
+      { name, adapter: store.adapter, backend, engine },
+      { name: otherName, adapter: other.adapter },
+    ]);
+    expect(byLabel("Source").getAttribute("title")).toBe(name);
+    expect(statusToggle("Connected")).toBeTruthy();
+    await click(byLabel("Source"));
+    const option = [...shadow().querySelectorAll('[role="option"]')].find(
+      (candidate) => candidate.textContent?.trim() === otherName.trim(),
+    );
+    expect(option).toBeTruthy();
+    await click(option!);
+
+    expect(byLabel("Source").getAttribute("title")).toBe(otherName);
+    expect(byLabel("Store state").textContent).toContain("count");
+    expect(byLabel("Store state").textContent).toContain("3");
+    expect(shadow().querySelector("footer")?.textContent).not.toContain(
+      "Connected",
+    );
+  });
+
+  it("follows the link's conditions on the Online toggle and takes it offline", async () => {
+    const network = createNetworkLink(createTestDoc(), createTestDoc(), {
+      offline: true,
+    });
+    try {
+      await renderSources([{ name: "Todos", adapter: store.adapter, network }]);
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("false");
+      await act(async () =>
+        network.setConditions({ offline: false, latency: 500 }),
+      );
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("true");
+
+      await click(statusToggle("Online"));
+      expect(network.getSnapshot().conditions).toMatchObject({
+        offline: true,
+        latency: 500,
+      });
+      expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("false");
+    } finally {
+      await act(async () => network.destroy());
+    }
+  });
+
+  it("shows a disconnected engine in the status bar and on the button", async () => {
+    await render();
+    const status = () => shadow().querySelector("footer")?.textContent;
+    const button = () => byLabel("Close Homeostate devtools");
+    expect(status()).toContain("Connected");
+    expect(button().getAttribute("title")).toBeNull();
+
+    await click(buttonWithText("Network"));
+    await click(byLabel("Sync engine connected"));
+    await click(buttonWithText("State"));
+    expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    expect(button().getAttribute("title")).toBe("Todos: disconnected");
+
+    await click(statusToggle("Connected"));
+    expect(engine.isConnected()).toBe(true);
+    expect(button().getAttribute("title")).toBeNull();
+  });
+
+  it("compares a diverged key in the store and the backend", async () => {
+    await render();
+    await click(buttonWithText("Network"));
+    await click(byLabel("Sync engine connected"));
+    await act(async () => {
+      store.set({ ...store.get(), filter: "done" });
+    });
+    await act(tick);
+
+    await click(buttonWithText("Sync"));
+    const values = byLabel("filter in the store and the backend").textContent;
+    expect(values).toContain('"done"');
+    expect(values).toContain('"all"');
+  });
+
+  it("expands and collapses differences beyond the first ten", async () => {
+    const values = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => [`key${index}`, index]),
+    );
+    const compared = createTestStore({ values });
+    const document = createMemoryBackend({
+      values: Object.fromEntries(Object.keys(values).map((key) => [key, -1])),
+    });
+    await renderSources([
+      { name: "Values", adapter: compared.adapter, backend: document },
+    ]);
+    await click(buttonWithText("Sync"));
+    const table = byLabel("values in the store and the backend");
+    const paths = () =>
+      [...table.querySelectorAll('tbody th[scope="row"]')].map(
+        (cell) => cell.textContent,
+      );
+    expect(paths()).toHaveLength(10);
+    expect(paths()).not.toContain("values.key11");
+
+    const expand = buttonWithText("Show all 12 differences");
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    await click(expand);
+    expect(paths()).toHaveLength(12);
+    expect(paths()).toContain("values.key11");
+    expect(
+      buttonWithText("Show first 10 differences").getAttribute("aria-expanded"),
+    ).toBe("true");
+
+    await click(buttonWithText("Show first 10 differences"));
+    expect(paths()).toHaveLength(10);
+  });
+
+  it("inspects and copies full values and paths from both sides of a difference", async () => {
+    const prefix = "A long shared prefix ".repeat(8);
+    const current = `${prefix}\nstore ending`;
+    const previous = `${prefix}\nbackend ending`;
+    const compared = createTestStore({ payload: { message: current } });
+    const document = createMemoryBackend({ payload: { message: previous } });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      await renderSources([
+        { name: "Values", adapter: compared.adapter, backend: document },
+      ]);
+      await click(buttonWithText("Sync"));
+      const table = byLabel("payload in the store and the backend");
+      expect(table.textContent).not.toContain("store ending");
+      expect(table.textContent).not.toContain("backend ending");
+
+      const inspect = byLabel("Inspect store value at payload.message");
+      expect(inspect.getAttribute("aria-expanded")).toBe("false");
+      await click(inspect);
+      expect(inspect.getAttribute("aria-expanded")).toBe("true");
+      expect(byLabel("Full store value at payload.message").textContent).toBe(
+        JSON.stringify(current, null, 2),
+      );
+      await click(byLabel("Inspect backend value at payload.message"));
+      expect(byLabel("Full backend value at payload.message").textContent).toBe(
+        JSON.stringify(previous, null, 2),
+      );
+
+      await click(byLabel("Copy path payload.message"));
+      expect(writeText).toHaveBeenLastCalledWith("payload.message");
+      await click(byLabel("Copy store value at payload.message"));
+      expect(writeText).toHaveBeenLastCalledWith(
+        JSON.stringify(current, null, 2),
+      );
+      await click(byLabel("Copy backend value at payload.message"));
+      expect(writeText).toHaveBeenLastCalledWith(
+        JSON.stringify(previous, null, 2),
+      );
+
+      await click(inspect);
+      expect(
+        shadow().querySelector(
+          '[aria-label="Full store value at payload.message"]',
+        ),
+      ).toBeNull();
+      expect(compared.get().payload.message).toBe(current);
+      expect(document.read()).toEqual({ payload: { message: previous } });
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it.each([
+    { value: { nested: { title: "Full nested value" }, empty: [] } },
+    { value: [null, false, 3, { title: "Full array item" }] },
+  ])("inspects a full container value: $value", async ({ value }) => {
+    const compared = createTestStore({ payload: { value } });
+    const document = createMemoryBackend({ payload: { value: null } });
+    await renderSources([
+      { name: "Values", adapter: compared.adapter, backend: document },
+    ]);
+    await click(buttonWithText("Sync"));
+    const inspect = byLabel("Inspect store value at payload.value");
+    await click(inspect);
+    const full = byLabel("Full store value at payload.value");
+    expect(inspect.getAttribute("aria-controls")).toBe(full.id);
+    expect(JSON.parse(full.textContent ?? "")).toEqual(value);
+  });
+
+  it("copies null and unusual paths while leaving missing values without a copy action", async () => {
+    const compared = createTestStore({
+      payload: { added: null, "odd.key": false },
+    });
+    const document = createMemoryBackend({
+      payload: { removed: null, "odd.key": true },
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      await renderSources([
+        { name: "Values", adapter: compared.adapter, backend: document },
+      ]);
+      await click(buttonWithText("Sync"));
+      expect(
+        byLabel("payload in the store and the backend").textContent,
+      ).toContain("not set");
+      expect(
+        shadow().querySelector(
+          '[aria-label="Copy backend value at payload.added"]',
+        ),
+      ).toBeNull();
+      expect(
+        shadow().querySelector(
+          '[aria-label="Copy store value at payload.removed"]',
+        ),
+      ).toBeNull();
+      await click(byLabel("Copy store value at payload.added"));
+      expect(writeText).toHaveBeenLastCalledWith("null");
+      await click(byLabel("Copy backend value at payload.removed"));
+      expect(writeText).toHaveBeenLastCalledWith("null");
+      await click(byLabel('Copy path payload["odd.key"]'));
+      expect(writeText).toHaveBeenLastCalledWith('payload["odd.key"]');
+      await click(byLabel('Copy store value at payload["odd.key"]'));
+      expect(writeText).toHaveBeenLastCalledWith("false");
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("keeps an inspected path open when another difference appears before it", async () => {
+    const message = "Full store message ".repeat(8);
+    const compared = createTestStore({ payload: { earlier: 0, message } });
+    const document = createMemoryBackend({
+      payload: { earlier: 0, message: "old" },
+    });
+    await renderSources([
+      { name: "Values", adapter: compared.adapter, backend: document },
+    ]);
+    await click(buttonWithText("Sync"));
+    await click(byLabel("Inspect store value at payload.message"));
+
+    await act(async () => compared.set({ payload: { earlier: 1, message } }));
+    await act(tick);
+    expect(byLabel("Full store value at payload.message").textContent).toBe(
+      JSON.stringify(message, null, 2),
+    );
+    expect(
+      byLabel("Inspect store value at payload.message").getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe("true");
   });
 
   it("shows the key status against the backend", async () => {
@@ -236,6 +967,44 @@ describe("HomeostateDevtools", () => {
     await click(buttonWithText("Sync"));
     expect(byLabel("Backend document").textContent).toContain("milk");
     expect(shadow().textContent).toContain("2 synced");
+  });
+
+  it("shows a backend read failure instead of an empty document and recovers", async () => {
+    let fail = true;
+    await renderSources([
+      {
+        name: "Todos",
+        adapter: store.adapter,
+        backend: {
+          ...backend,
+          read: () => {
+            if (fail) throw new Error("backend unavailable");
+            return backend.read();
+          },
+        },
+      },
+    ]);
+    expect(
+      byLabel("Close Homeostate devtools").getAttribute("title"),
+    ).toContain("backend read failed");
+    await click(buttonWithText("Sync"));
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+      "backend unavailable",
+    );
+    expect(shadow().textContent).not.toContain("No backend");
+    expect(
+      shadow().querySelector('[aria-label="Backend document"]'),
+    ).toBeNull();
+
+    fail = false;
+    await act(async () => backend.receive(store.get()));
+    await act(tick);
+    expect(shadow().querySelector('[role="alert"]')).toBeNull();
+    expect(shadow().textContent).toContain("2 synced");
+    expect(byLabel("Backend document").textContent).toContain("milk");
+    expect(
+      byLabel("Close Homeostate devtools").getAttribute("title"),
+    ).toBeNull();
   });
 
   it("follows a controlled open prop and reports changes", async () => {
@@ -338,6 +1107,15 @@ describe("HomeostateDevtools", () => {
     expect(log.textContent).not.toContain("Initial state");
 
     await click(buttonWithText("#4"));
+    await click(buttonWithText("Snapshot"));
+    expect(byLabel("Snapshot #4").textContent).toContain('"imported"');
+    expect(store.get().filter).toBe("all");
+    await click(buttonWithText("Compare with current"));
+    const comparison = byLabel(
+      "Snapshot #4 compared with current state",
+    ).textContent;
+    expect(comparison).toContain('"imported"');
+    expect(comparison).toContain('"all"');
     await click(buttonWithText("Restore this state"));
     expect(store.get()).toEqual({ todos: [], filter: "imported" });
   });
@@ -358,6 +1136,37 @@ describe("HomeostateDevtools", () => {
     expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
       "Import failed: The file is not a Homeostate devtools log.",
     );
+  });
+
+  it("rejects an invalid log timestamp and keeps the recorded log", async () => {
+    await render();
+    await click(buttonWithText("Log"));
+    const text = serializeLog("Todos", [
+      {
+        id: 4,
+        at: 1e20,
+        origin: "local",
+        state: { filter: "invalid" },
+        diff: [],
+      },
+    ]);
+    const input = byLabel<HTMLInputElement>("Log file to import");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File([text], "log.json", { type: "application/json" })],
+    });
+    await act(async () =>
+      input.dispatchEvent(new Event("change", { bubbles: true })),
+    );
+    await act(tick);
+
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
+      "Import failed: Entry 1 has no valid time.",
+    );
+    expect(byLabel("Changes, newest first").textContent).toContain(
+      "Initial state",
+    );
+    expect(store.get().filter).toBe("all");
   });
 
   it("shows what is stored and compacts it", async () => {
@@ -386,6 +1195,46 @@ describe("HomeostateDevtools", () => {
     await render();
     await click(buttonWithText("Storage"));
     expect(shadow().textContent).toContain("No persistence");
+  });
+
+  it("keeps a failed storage operation visible after stats refresh and removes it on retry", async () => {
+    const persistence = createPersistence(
+      createTestDoc(),
+      createMemoryPersistenceAdapter(),
+      { key: "todos" },
+    );
+    await persistence.whenLoaded;
+    let fail = true;
+    await renderSources([
+      {
+        name: "Todos",
+        adapter: store.adapter,
+        persistence: {
+          ...persistence,
+          compact: async () => {
+            if (fail) throw new Error("compact failed");
+            await persistence.compact();
+          },
+        },
+      },
+    ]);
+    try {
+      await click(buttonWithText("Storage"));
+      await click(buttonWithText("Compact"));
+      expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+        "compact failed",
+      );
+      await act(async () => store.set({ ...store.get(), filter: "active" }));
+      await act(tick);
+      expect(shadow().querySelector('[role="alert"]')?.textContent).toContain(
+        "compact failed",
+      );
+      fail = false;
+      await click(buttonWithText("Compact"));
+      expect(shadow().querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      await persistence.destroy();
+    }
   });
 
   it("changes network conditions from the Network tab", async () => {

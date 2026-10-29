@@ -65,11 +65,7 @@ class TodoStore implements TodoState {
 export const todoStore = new TodoStore();
 
 const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
-const adapter = createMobxAdapter(todoStore, [
-  "todos",
-  "searchTerm",
-  "filterStatus",
-]);
+const adapter = createMobxAdapter(todoStore);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 

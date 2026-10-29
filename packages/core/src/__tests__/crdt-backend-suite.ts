@@ -49,6 +49,24 @@ export interface CrdtBackendHarness<D> {
   /** Store `value` under `key` of the synced subtree as other code on this replica would */
   storeForeign?: (doc: D, key: string, value: unknown) => void;
   /**
+   * Like `storeForeign`, but building the library's own containers for `value`'s objects and
+   * arrays, at any depth, as other code using the library's container API would. Every key is
+   * stored, `__proto__` included.
+   */
+  storeForeignContainers?: (doc: D, key: string, value: unknown) => void;
+  /**
+   * What identifies the container at `path` from the synced subtree, such as the container
+   * object or its id: equal for the same container, and different for another one.
+   */
+  containerId?: (doc: D, path: (string | number)[]) => unknown;
+  /** Whether the string at `path` from the synced subtree is held as the library's text type */
+  isText?: (doc: D, path: (string | number)[]) => boolean;
+  /**
+   * Set for a backend that ignores `previous`, as the contract allows: the scenario that checks
+   * a write diffs against it is skipped.
+   */
+  ignoresPrevious?: boolean;
+  /**
    * Scenarios this backend is known to fail, by name, each with the reason. They run with
    * `it.fails`, so a fix flips them.
    */
@@ -266,6 +284,10 @@ export const describeCrdtBackend = <D>(
     exchange,
     onLocalUpdate,
     storeForeign,
+    storeForeignContainers,
+    containerId,
+    isText,
+    ignoresPrevious = false,
     knownFailures = {},
   } = harness;
   const unused = new Set(Object.keys(knownFailures));
@@ -334,7 +356,7 @@ export const describeCrdtBackend = <D>(
         written.write(before);
 
         expect(() => written.write(next)).not.toThrow();
-        expect(written.read()).toEqual(expected);
+        expect(written.read()).toStrictEqual(expected);
 
         const onUpdate = vi.fn();
         onLocalUpdate?.(doc, onUpdate);
@@ -357,7 +379,7 @@ export const describeCrdtBackend = <D>(
           written.write(next, next);
 
           expect(onUpdate).not.toHaveBeenCalled();
-          expect(written.read()).toEqual(expected);
+          expect(written.read()).toStrictEqual(expected);
         },
       );
 
@@ -388,14 +410,20 @@ export const describeCrdtBackend = <D>(
       ];
       const remoteEdit = (r: Random): void => {
         if (!exchange) return;
-        peer.write(r.pick(edits)(peer.read() as EditedState, r));
+        peer.write(r.pick(edits)(peer.read() as unknown as EditedState, r));
         exchange(doc, peerDoc);
       };
 
       const step = (r: Random): string => {
         const kind = r.pick(steps);
-        if (kind === "local") store.update((s) => r.pick(edits)(s, r));
-        else if (kind === "remote") remoteEdit(r);
+        if (kind === "local") {
+          const edited = r.pick(edits)(store.getState(), r);
+          store.setState(edited);
+          // The engine heard every other change as it happened, so the store keeps its own.
+          expect(snapshot(store.getState())).toEqual(
+            snapshot(resetCount(edited)),
+          );
+        } else if (kind === "remote") remoteEdit(r);
         else if (kind === "foreign")
           storeForeign?.(
             doc,
@@ -443,6 +471,169 @@ export const describeCrdtBackend = <D>(
       (backend(doc).read() as { obj: { a: number[] } }).obj.a.push(2);
 
       expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
+    });
+
+    scenario("keeps the document when a written value is mutated").run(() => {
+      const doc = createDoc();
+      const value = { obj: { a: [1] } };
+      backend(doc).write(value);
+
+      value.obj.a.push(2);
+
+      expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
+    });
+
+    if (containerId)
+      scenario(
+        "deletes a middle todo without rewriting the items after it",
+      ).run(() => {
+        const doc = createDoc();
+        const written = backend(doc);
+        written.write(threeTodos());
+        const third = containerId(doc, ["todos", 2]);
+
+        written.write(deleteTodo(threeTodos(), "2"));
+
+        expect(written.read()).toEqual(deleteTodo(threeTodos(), "2"));
+        expect(containerId(doc, ["todos", 1])).toBe(third);
+      });
+
+    if (storeForeign && !ignoresPrevious)
+      scenario("diffs against previous instead of reading its document").run(
+        () => {
+          const doc = createDoc();
+          const written = backend(doc);
+          written.write({ count: 1, label: "a" });
+          // Unreported, so a `previous` that misses it shows which side the write diffed against.
+          storeForeign(doc, "count", 2);
+
+          written.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+          expect(written.read()).toEqual({ count: 2, label: "b" });
+        },
+      );
+
+    if (isText) {
+      scenario(
+        "stores the strings the policy marks as text and every other string as a value",
+      ).run(() => {
+        const doc = createDoc();
+        const written = backend(doc, { text: todoTitles });
+        written.write(threeTodos());
+        written.write(addTodo(threeTodos(), todo("4")));
+
+        expect(written.read()).toEqual(addTodo(threeTodos(), todo("4")));
+        expect(isText(doc, ["todos", 3, "title"])).toBe(true);
+        expect(isText(doc, ["todos", 3, "id"])).toBe(false);
+        expect(isText(doc, ["filterStatus"])).toBe(false);
+      });
+
+      scenario(
+        "reads strings held as text by an earlier version, and stores each as a value once it changes",
+      ).run(() => {
+        const doc = createDoc();
+        backend(doc, { text: () => true }).write(threeTodos());
+        const written = backend(doc);
+        expect(written.read()).toEqual(threeTodos());
+
+        const next = {
+          ...renameTodo(threeTodos(), "2", "Two"),
+          filterStatus: "active",
+        };
+        written.write(next);
+
+        expect(written.read()).toEqual(next);
+        expect(isText(doc, ["filterStatus"])).toBe(false);
+        expect(isText(doc, ["todos", 1, "title"])).toBe(false);
+        expect(isText(doc, ["searchTerm"])).toBe(true);
+        expect(isText(doc, ["todos", 0, "title"])).toBe(true);
+      });
+
+      scenario(
+        "turns a plain string at a text path into text when it next changes",
+      ).run(() => {
+        const doc = createDoc();
+        backend(doc).write({ ...threeTodos(), tags: ["a"] });
+        const written = backend(doc, {
+          text: (path) => todoTitles(path) || path[0] === "tags",
+        });
+
+        const next = {
+          ...renameTodo(threeTodos(), "2", "Todo 2!"),
+          tags: ["ab"],
+        };
+        written.write(next);
+
+        expect(written.read()).toEqual(next);
+        expect(isText(doc, ["todos", 1, "title"])).toBe(true);
+        expect(isText(doc, ["tags", 0])).toBe(true);
+        expect(isText(doc, ["todos", 0, "title"])).toBe(false);
+      });
+    }
+
+    if (storeForeignContainers)
+      scenario(
+        "never lets a __proto__ entry in containers other code built reach the store",
+      ).run(() => {
+        const doc = createDoc();
+        const { store } = peer(doc, { todos: [{ id: "1" }] });
+
+        // An entry on an item already synced, and on an item added with it.
+        storeForeignContainers(
+          doc,
+          "todos",
+          JSON.parse(
+            '[{"id":"1","__proto__":{"isAdmin":true}},' +
+              '{"id":"2","__proto__":{"isAdmin":true},"meta":{"__proto__":{"isAdmin":true}}}]',
+          ),
+        );
+
+        const expected = { todos: [{ id: "1" }, { id: "2", meta: {} }] };
+        expect(store.getState()).toEqual(expected);
+        expect(prototypeHijacks(store.getState())).toEqual([]);
+        if (exchange) {
+          // A peer decodes the containers from an update.
+          const other = createDoc();
+          exchange(doc, other);
+          const late = peer(other, {});
+          expect(late.store.getState()).toEqual(expected);
+          expect(prototypeHijacks(late.store.getState())).toEqual([]);
+        }
+      });
+
+    // `revision` is optional in the contract, but every backend in this repository has one.
+    scenario(
+      "changes its revision with every change, and keeps it across reads",
+    ).run(() => {
+      const doc = createDoc();
+      const watched = backend(doc);
+      const revision = () => watched.revision?.();
+      const seen = [revision()];
+      const expectChanged = (change: string): void => {
+        const next = revision();
+        expect(next, change).toBeDefined();
+        expect(seen, change).not.toContain(next);
+        seen.push(next);
+      };
+
+      watched.read();
+      expect(revision()).toBe(seen[0]);
+      watched.write({ count: 1 });
+      expectChanged("its own write");
+      backend(doc).write({ count: 2 });
+      expectChanged("another backend's write");
+      if (storeForeign) {
+        storeForeign(doc, "count", 3);
+        expectChanged("other code's edit");
+      }
+      if (exchange) {
+        const other = createDoc();
+        backend(other).write({ label: "b" });
+        exchange(doc, other);
+        expectChanged("a peer's change");
+      }
+      watched.read();
+      expect(revision()).toBe(seen.at(-1));
     });
 
     if (onLocalUpdate) {
@@ -511,10 +702,15 @@ export const describeCrdtBackend = <D>(
         "never lets a __proto__ key in a value other code stored reach the store",
       ).run(() => {
         const doc = createDoc();
+        // At the top, and deeper in an object and in an array item.
         storeForeign(
           doc,
           "settings",
-          JSON.parse('{"theme":"dark","__proto__":{"isAdmin":true}}'),
+          JSON.parse(
+            '{"theme":"dark","__proto__":{"isAdmin":true},' +
+              '"layout":{"main":{"__proto__":{"isAdmin":true}}},' +
+              '"panels":[{"id":"p","__proto__":{"isAdmin":true}}]}',
+          ),
         );
         // A peer decodes the value from an update, which may build it by assignment.
         const docs = [doc];
@@ -526,7 +722,13 @@ export const describeCrdtBackend = <D>(
 
         for (const reader of docs) {
           const { store } = peer(reader, {});
-          expect(store.getState()).toEqual({ settings: { theme: "dark" } });
+          expect(store.getState()).toEqual({
+            settings: {
+              theme: "dark",
+              layout: { main: {} },
+              panels: [{ id: "p" }],
+            },
+          });
           expect(prototypeHijacks(store.getState())).toEqual([]);
         }
       });
@@ -612,6 +814,59 @@ export const describeCrdtBackend = <D>(
         exchange(a.doc, b.doc);
 
         const expected = toggleTodo(setSearchTerm(threeTodos(), "abc"), "2");
+        expect(a.store.getState()).toEqual(expected);
+        expect(b.store.getState()).toEqual(expected);
+      });
+
+      scenario(
+        "lets a remote delete win over a store change made before the engine hears of it",
+      ).run(() => {
+        const docA = createDoc(1);
+        const docB = createDoc(2);
+        const store = createTestStore(threeTodos());
+        // App code that reacts to a peer's change, subscribed before the engine connects, so it
+        // runs before the engine's own listener.
+        let armed = false;
+        backend(docA).subscribe(() => {
+          if (!armed) return;
+          armed = false;
+          store.update((s) => toggleTodo(s, "3"));
+        });
+        const onError = vi.fn();
+        createSyncEngine(backend(docA), store.adapter, { onError }).connect();
+        exchange(docA, docB);
+        const b = peer(docB, threeTodos());
+
+        b.store.update((s) => deleteTodo(s, "3"));
+        armed = true;
+        exchange(docA, docB);
+
+        const expected = deleteTodo(threeTodos(), "3");
+        expect(onError).not.toHaveBeenCalled();
+        expect(store.getState()).toEqual(expected);
+        expect(backend(docA).read()).toEqual(expected);
+        expect(b.store.getState()).toEqual(expected);
+      });
+
+      scenario(
+        "reads its document once per remote change, and not before local changes",
+      ).run(() => {
+        const { a, b } = twoSyncedPeers();
+        const read = vi.spyOn(a.backend, "read");
+
+        a.store.update((s) => toggleTodo(s, "1"));
+        expect(read).not.toHaveBeenCalled();
+        b.store.update((s) => toggleTodo(s, "2"));
+        exchange(a.doc, b.doc);
+        expect(read).toHaveBeenCalledTimes(1);
+        a.store.update((s) => toggleTodo(s, "3"));
+
+        expect(read).toHaveBeenCalledTimes(1);
+        exchange(a.doc, b.doc);
+        const expected = toggleTodo(
+          toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+          "3",
+        );
         expect(a.store.getState()).toEqual(expected);
         expect(b.store.getState()).toEqual(expected);
       });

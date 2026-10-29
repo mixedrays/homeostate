@@ -150,5 +150,9 @@ describe("runBenchmark", () => {
     expect(meta.commit === null || /^[0-9a-f]{7,}$/.test(meta.commit)).toBe(
       true,
     );
+    expect(
+      meta.commitDate === null ||
+        !Number.isNaN(Date.parse(meta.commitDate as string)),
+    ).toBe(true);
   });
 });

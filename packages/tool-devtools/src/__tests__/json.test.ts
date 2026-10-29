@@ -4,7 +4,6 @@ import {
   findNonJson,
   formatPath,
   setIn,
-  share,
   toJsonObject,
 } from "../json";
 
@@ -92,19 +91,6 @@ describe("setIn", () => {
   });
 });
 
-describe("share", () => {
-  it("reuses unchanged subtrees", () => {
-    const current = { todos: [{ id: "1" }, { id: "2" }], filter: "all" };
-    const next = share(current, {
-      todos: [{ id: "1" }, { id: "3" }],
-      filter: "all",
-    }) as typeof current;
-    expect(next.todos[0]).toBe(current.todos[0]);
-    expect(next.todos[1]).toEqual({ id: "3" });
-    expect(share(current, structuredClone(current))).toBe(current);
-  });
-});
-
 describe("formatPath", () => {
   it("reads like code", () => {
     expect(formatPath(["todos", 0, "title"])).toBe("todos[0].title");
@@ -142,6 +128,14 @@ describe("diffJson", () => {
         path: ["todos", 1],
         before: { title: "b", done: false },
       },
+    ]);
+  });
+
+  it("lists each item of a deleted run at the index the earlier lines left it", () => {
+    expect(diffJson({ l: [1, 2, 3, 4] }, { l: [1] })).toEqual([
+      { kind: "delete", path: ["l", 1], before: 2 },
+      { kind: "delete", path: ["l", 1], before: 3 },
+      { kind: "delete", path: ["l", 1], before: 4 },
     ]);
   });
 

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
 import { isRecord, type Json } from "../json";
+import { JsonCodeArea } from "./json-code";
 
 type Parsed = { ok: true; value: Json } | { ok: false; error: string };
 
@@ -21,15 +21,16 @@ interface JsonEditorProps {
   value: Json;
   /** Throws to report a store that rejected the value, e.g. a MobX-State-Tree type check. */
   onApply: (value: Json) => void;
-  /** Shows Cancel instead of Reset. */
+  /** Shows Cancel instead of Reset, and Escape cancels too. */
   onCancel?: () => void;
   requireObject?: boolean;
   label: string;
   className?: string;
+  autoFocus?: boolean;
 }
 
 /**
- * A JSON textarea over a live value. Until you type it follows the value; once you have,
+ * A highlighted JSON textarea over a live value. Until you type it follows the value; once you have,
  * a change underneath is flagged instead of overwriting your edit.
  */
 export function JsonEditor({
@@ -39,6 +40,7 @@ export function JsonEditor({
   requireObject = false,
   label,
   className,
+  autoFocus,
 }: JsonEditorProps) {
   const latest = useMemo(() => JSON.stringify(value, null, 2), [value]);
   const [base, setBase] = useState(latest);
@@ -87,11 +89,11 @@ export function JsonEditor({
           </Button>
         </div>
       )}
-      <Textarea
+      <JsonCodeArea
         value={text}
+        autoFocus={autoFocus}
         aria-label={label}
         aria-invalid={!parsed.ok || undefined}
-        spellCheck={false}
         onChange={(event) => {
           setText(event.target.value);
           setApplyError(null);
@@ -100,9 +102,13 @@ export function JsonEditor({
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
             event.preventDefault();
             apply();
+          } else if (event.key === "Escape" && onCancel) {
+            // Keep Escape from closing the panel.
+            event.stopPropagation();
+            onCancel();
           }
         }}
-        className="min-h-32 flex-1 resize-none field-sizing-fixed font-mono text-xs leading-5 md:text-xs"
+        className="min-h-32 flex-1"
       />
       <div className="flex items-center gap-2">
         <p

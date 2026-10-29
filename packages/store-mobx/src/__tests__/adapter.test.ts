@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   isObservableArray,
   makeAutoObservable,
+  makeObservable,
   observable,
   reaction,
   runInAction,
@@ -26,7 +27,7 @@ class TodoStore {
     { id: "2", title: "b", done: false },
   ];
   filter = "all";
-  /** Deliberately left out of `syncableKeys`, so the adapter must not carry it. */
+  /** Deliberately left out of `syncedKeys`, so the adapter must not carry it. */
   draft = "";
 
   constructor() {
@@ -43,7 +44,7 @@ class TodoStore {
   }
 }
 
-const syncedKeys: (keyof TodoStore)[] = ["todos", "filter"];
+const syncedKeys = ["todos", "filter"] as const;
 
 const connect = (
   store: TodoStore,
@@ -51,7 +52,7 @@ const connect = (
 ) => {
   const engine = createSyncEngine(
     backend,
-    createMobxAdapter(store, syncedKeys),
+    createMobxAdapter(store, { keys: syncedKeys }),
   );
   engine.connect();
   return { backend, engine };
@@ -74,6 +75,116 @@ const countingWrites = (backend: MemoryBackend) => {
 };
 
 describe("MobxAdapter", () => {
+  describe("without keys", () => {
+    class EditorStore {
+      todos: Todo[] = [{ id: "1", title: "a", done: false }];
+      filter = "all";
+      title?: string = undefined;
+      /** An arrow-function field: `makeAutoObservable` makes it an action on the instance. */
+      clear = () => {
+        this.todos = [];
+      };
+
+      constructor() {
+        makeAutoObservable(this, {}, { autoBind: true });
+      }
+
+      get count(): number {
+        return this.todos.length;
+      }
+
+      toggle(id: string): void {
+        const todo = this.todos.find((one) => one.id === id);
+        if (todo) todo.done = !todo.done;
+      }
+    }
+
+    it("syncs every observable data field, and no computed or action", () => {
+      const store = new EditorStore();
+      const backend = createMemoryBackend();
+      const adapter = createMobxAdapter(store);
+      createSyncEngine(backend, adapter).connect();
+
+      expect(backend.read()).toEqual({
+        todos: [{ id: "1", title: "a", done: false }],
+        filter: "all",
+      });
+
+      runInAction(() => {
+        store.title = "Week";
+      });
+      expect(backend.read()).toEqual({
+        todos: [{ id: "1", title: "a", done: false }],
+        filter: "all",
+        title: "Week",
+      });
+
+      backend.receive({ todos: [], filter: "done", title: "Week" });
+      expect(store.count).toBe(0);
+      expect(store.filter).toBe("done");
+    });
+
+    it("leaves out a field makeObservable did not annotate", () => {
+      class PartlyObservable {
+        todos: Todo[] = [];
+        local = 0;
+        constructor() {
+          makeObservable(this, { todos: observable });
+        }
+      }
+
+      const state = createMobxAdapter(new PartlyObservable()).getState();
+
+      expect(state).toEqual({ todos: [] });
+    });
+
+    it("syncs the data properties of an observable object", () => {
+      const store = observable({
+        todos: [] as Todo[],
+        filter: "all",
+        get count() {
+          return this.todos.length;
+        },
+        setFilter(filter: string) {
+          this.filter = filter;
+        },
+      });
+
+      expect(createMobxAdapter(store).getState()).toEqual({
+        todos: [],
+        filter: "all",
+      });
+    });
+
+    it("keeps the fields omit names local", () => {
+      const store = new TodoStore();
+      const backend = createMemoryBackend();
+      const adapter = createMobxAdapter(store, { omit: ["draft"] });
+      createSyncEngine(backend, adapter).connect();
+
+      store.draft = "typing";
+
+      expect(backend.read()).toEqual({
+        todos: [
+          { id: "1", title: "a", done: false },
+          { id: "2", title: "b", done: false },
+        ],
+        filter: "all",
+      });
+      expectTypeOf(adapter.getState()).toEqualTypeOf<
+        Pick<TodoStore, "todos" | "filter">
+      >();
+    });
+
+    it("throws for a store that is not observable", () => {
+      class Plain {
+        todos: Todo[] = [];
+      }
+
+      expect(() => createMobxAdapter(new Plain())).toThrow(/observable/);
+    });
+  });
+
   it("seeds the backend, writes store actions, and applies remote changes", () => {
     const store = new TodoStore();
     const { backend } = connect(store);
@@ -99,7 +210,7 @@ describe("MobxAdapter", () => {
 
   it("reads plain JSON for the synced keys and nothing else", () => {
     const store = new TodoStore();
-    const adapter = createMobxAdapter(store, syncedKeys);
+    const adapter = createMobxAdapter(store, { keys: syncedKeys });
 
     const state = adapter.getState();
 
@@ -236,6 +347,37 @@ describe("MobxAdapter", () => {
     expect(store.filter).toBe("active");
   });
 
+  it("writes a field a reaction derives during a remote apply", () => {
+    class CountedStore {
+      todos: Todo[] = new TodoStore().todos.map((todo) => ({ ...todo }));
+      filter = "all";
+      count = 2;
+
+      constructor() {
+        makeAutoObservable(this);
+      }
+    }
+    const store = new CountedStore();
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, createMobxAdapter(store)).connect();
+    const stop = reaction(
+      () => store.todos.length,
+      (length) =>
+        runInAction(() => {
+          store.count = length;
+        }),
+    );
+
+    backend.receive({
+      ...held(backend),
+      todos: [...held(backend).todos, { id: "3", title: "c", done: false }],
+    });
+
+    expect(store.count).toBe(3);
+    expect((backend.read() as { count: number }).count).toBe(3);
+    stop();
+  });
+
   it("still sends local changes to the backend after a remote apply", () => {
     const store = new TodoStore();
     const { backend } = connect(store);
@@ -247,6 +389,98 @@ describe("MobxAdapter", () => {
     store.toggle("9");
 
     expect(held(backend).todos).toEqual([{ id: "9", title: "i", done: true }]);
+  });
+
+  describe("a write that throws", () => {
+    const failingWrite = (onError?: () => void) => {
+      const store = new TodoStore();
+      const backend = createMemoryBackend();
+      createSyncEngine(
+        backend,
+        createMobxAdapter(store, { keys: syncedKeys }),
+        {
+          onError,
+        },
+      ).connect();
+      const offline = new Error("offline");
+      vi.spyOn(backend, "write").mockImplementationOnce(() => {
+        throw offline;
+      });
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      return { store, offline, consoleError };
+    };
+
+    it("reaches onError instead of MobX's reaction error boundary", () => {
+      const onError = vi.fn();
+      const { store, offline, consoleError } = failingWrite(onError);
+      try {
+        store.setFilter("done");
+
+        expect(onError).toHaveBeenCalledWith(offline, "backend");
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it("is caught and logged by MobX without onError, so the action returns", () => {
+      const { store, offline, consoleError } = failingWrite();
+      try {
+        expect(() => store.setFilter("done")).not.toThrow();
+
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        expect(consoleError.mock.calls[0]).toContain(offline);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  });
+
+  describe("keys", () => {
+    it("types the synced state as the listed fields, without the store's methods", () => {
+      const adapter = createMobxAdapter(new TodoStore(), {
+        keys: ["todos"],
+      });
+
+      expectTypeOf(adapter.getState()).toEqualTypeOf<
+        Pick<TodoStore, "todos">
+      >();
+      expectTypeOf(adapter.getState()).not.toHaveProperty("toggle");
+    });
+
+    it("takes a readonly tuple shared as a constant", () => {
+      const keys = ["todos", "filter"] as const;
+
+      expect(
+        Object.keys(createMobxAdapter(new TodoStore(), { keys }).getState()),
+      ).toEqual(["todos", "filter"]);
+    });
+
+    it("rejects method names, unknown names and omit at compile time", () => {
+      const store = new TodoStore();
+
+      // @ts-expect-error `toggle` is a method, not data
+      createMobxAdapter(store, { keys: ["todos", "toggle"] });
+      // @ts-expect-error `todo` is not a field of the store
+      createMobxAdapter(store, { keys: ["todo"] });
+      // @ts-expect-error `toggle` is a method, not data
+      createMobxAdapter(store, { omit: ["toggle"] });
+      // @ts-expect-error `keys` and `omit` do not combine
+      createMobxAdapter(store, { keys: ["todos"], omit: ["draft"] });
+    });
+
+    it("throws a TypeError naming the options form for a key array", () => {
+      const store = new TodoStore();
+      const legacy = createMobxAdapter as unknown as (
+        store: object,
+        keys: string[],
+      ) => unknown;
+
+      expect(() => legacy(store, ["todos"])).toThrow(TypeError);
+      expect(() => legacy(store, ["todos"])).toThrow(/\{ keys: \[\.\.\.\] \}/);
+    });
   });
 
   it("ignores keys it was not asked to sync, in both directions", () => {
@@ -295,7 +529,7 @@ describe.each<[string, () => SyncedStore, boolean]>([
   const removeFilter = () => {
     const store = create();
     const { backend, writes } = countingWrites(createMemoryBackend());
-    const adapter = createMobxAdapter(store, ["todos", "filter"]);
+    const adapter = createMobxAdapter(store, { keys: ["todos", "filter"] });
     createSyncEngine(backend, adapter).connect();
     const todos = store.todos;
     runInAction(() => {
