@@ -30,6 +30,7 @@ import {
   type TestStore,
   type TodoState,
 } from "./helpers.js";
+import type { SyncEngine, SyncEvent } from "../index.js";
 
 /**
  * A memory backend that records the `previous` of every write and checks that it is what the
@@ -1745,6 +1746,410 @@ describe("createSyncEngine", () => {
       expect(backendSubscriptions()).toBe(1);
       expect(storeSubscriptions()).toBe(1);
       expect(engine.isConnected()).toBe(true);
+    });
+  });
+
+  describe("sync events", () => {
+    /** Subscribes to `engine` and records each event with `isConnected()` as it arrives. */
+    const record = (engine: SyncEngine) => {
+      const events: [SyncEvent, boolean][] = [];
+      const unsubscribe = engine.subscribe((event) =>
+        events.push([event, engine.isConnected()]),
+      );
+      return {
+        events: () => events.map(([event]) => event),
+        seen: events,
+        unsubscribe,
+      };
+    };
+
+    it("sends local once a local change is written", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter);
+      engine.connect();
+      const recorded = record(engine);
+      let held: unknown;
+      engine.subscribe(() => (held = backend.read()));
+
+      store.update((s) => toggleTodo(s, "1"));
+
+      expect(recorded.events()).toEqual(["local"]);
+      expect(held).toEqual(toggleTodo(threeTodos(), "1"));
+    });
+
+    it("sends local for a store change to local keys only", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "searchTerm",
+      });
+      engine.connect();
+      const recorded = record(engine);
+
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(recorded.events()).toEqual(["local"]);
+    });
+
+    it("sends remote once the store holds the remote change and what it derived is written", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore({ todos: [] as string[], count: 0 });
+      // An echo: a subscriber that derives `count` while the change is applied.
+      store.adapter.subscribe(() => {
+        const state = store.getState();
+        if (state.count !== state.todos.length)
+          store.setState({ ...state, count: state.todos.length });
+      });
+      const engine = createSyncEngine(backend, store.adapter);
+      engine.connect();
+      const recorded = record(engine);
+      const seen: unknown[] = [];
+      engine.subscribe(() => seen.push([store.getState(), backend.read()]));
+
+      backend.receive({ todos: ["a", "b"], count: 0 });
+
+      expect(recorded.events()).toEqual(["remote"]);
+      const derived = { todos: ["a", "b"], count: 2 };
+      expect(seen).toEqual([[derived, derived]]);
+    });
+
+    it("sends connect once connected, covering seeding and the adopted values", () => {
+      const backend = createMemoryBackend({ todos: threeTodos().todos });
+      const store = createTestStore(setSearchTerm(threeTodos(), "x"));
+      const engine = createSyncEngine(backend, store.adapter);
+      const recorded = record(engine);
+      vi.spyOn(store.adapter, "setState");
+      const write = vi.spyOn(backend, "write");
+
+      engine.connect();
+      engine.connect();
+
+      expect(store.adapter.setState).not.toHaveBeenCalled();
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(recorded.seen).toEqual([["connect", true]]);
+    });
+
+    it("sends connect for a connect that adopts the backend's values", () => {
+      const backend = createMemoryBackend(toggleTodo(threeTodos(), "1"));
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter);
+      const recorded = record(engine);
+
+      engine.connect();
+
+      expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+      expect(recorded.seen).toEqual([["connect", true]]);
+    });
+
+    it("sends disconnect once disconnected, and nothing for a disconnect that changes nothing", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter);
+      const recorded = record(engine);
+
+      engine.disconnect();
+      engine.connect();
+      engine.disconnect();
+      engine.disconnect();
+
+      expect(recorded.seen).toEqual([
+        ["connect", true],
+        ["disconnect", false],
+      ]);
+    });
+
+    describe("with schedule", () => {
+      const manualScheduler = () => {
+        const queued: (() => void)[] = [];
+        return {
+          schedule: (flush: () => void) => {
+            queued.push(flush);
+          },
+          run: () => queued.splice(0).forEach((flush) => flush()),
+        };
+      };
+
+      it("sends one remote per flush", () => {
+        const backend = createMemoryBackend();
+        const store = createTestStore(threeTodos());
+        const scheduler = manualScheduler();
+        const engine = createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        });
+        engine.connect();
+        const recorded = record(engine);
+
+        backend.receive(toggleTodo(threeTodos(), "1"));
+        backend.receive(toggleTodo(toggleTodo(threeTodos(), "1"), "2"));
+        expect(recorded.events()).toEqual([]);
+        scheduler.run();
+        expect(recorded.events()).toEqual(["remote"]);
+
+        backend.receive(threeTodos());
+        scheduler.run();
+        expect(recorded.events()).toEqual(["remote", "remote"]);
+      });
+
+      it("sends remote, not local, for a local change that runs the pending apply", () => {
+        const backend = createMemoryBackend();
+        const store = createTestStore(threeTodos());
+        const scheduler = manualScheduler();
+        const engine = createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        });
+        engine.connect();
+        const recorded = record(engine);
+
+        backend.receive(toggleTodo(threeTodos(), "1"));
+        store.update((s) => toggleTodo(s, "2"));
+        scheduler.run();
+
+        expect(recorded.events()).toEqual(["remote"]);
+      });
+
+      it("sends the remote of a pending apply that disconnect runs before disconnect", () => {
+        const backend = createMemoryBackend();
+        const store = createTestStore(threeTodos());
+        const scheduler = manualScheduler();
+        const engine = createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        });
+        engine.connect();
+        const recorded = record(engine);
+
+        backend.receive(toggleTodo(threeTodos(), "1"));
+        engine.disconnect();
+        scheduler.run();
+
+        expect(recorded.seen).toEqual([
+          ["remote", true],
+          ["disconnect", false],
+        ]);
+      });
+    });
+
+    it("sends remote for a remote change the store ignores", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, {
+        ...store.adapter,
+        setState: () => {},
+      });
+      engine.connect();
+      const recorded = record(engine);
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+
+      expect(store.getState()).toEqual(threeTodos());
+      expect(recorded.events()).toEqual(["remote"]);
+    });
+
+    it("sends remote for a remote change to filtered-out keys only", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "searchTerm",
+      });
+      engine.connect();
+      const recorded = record(engine);
+      const setState = vi.spyOn(store.adapter, "setState");
+
+      backend.receive(setSearchTerm(threeTodos(), "remote"));
+
+      expect(setState).not.toHaveBeenCalled();
+      expect(recorded.events()).toEqual(["remote"]);
+    });
+
+    it.each([
+      ["without onError", undefined],
+      ["with onError", () => {}],
+    ])("sends nothing when write or setState throws, %s", (_, onError) => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      let failSetState = false;
+      const engine = createSyncEngine(
+        backend,
+        {
+          ...store.adapter,
+          setState: (next) => {
+            if (failSetState) throw new Error("invalid");
+            store.setState(next);
+          },
+        },
+        { onError },
+      );
+      engine.connect();
+      const recorded = record(engine);
+      vi.spyOn(backend, "write").mockImplementationOnce(() => {
+        throw new Error("offline");
+      });
+      failSetState = true;
+
+      const change = () => store.update((s) => toggleTodo(s, "1"));
+      const receive = () => backend.receive(toggleTodo(threeTodos(), "2"));
+      if (onError) {
+        change();
+        receive();
+      } else {
+        expect(change).toThrow("offline");
+        expect(receive).toThrow("invalid");
+      }
+
+      expect(recorded.events()).toEqual([]);
+    });
+
+    it("sends nothing when connect() throws", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, {
+        ...store.adapter,
+        subscribe: () => {
+          throw new Error("boom");
+        },
+      });
+      const recorded = record(engine);
+
+      expect(() => engine.connect()).toThrow("boom");
+      engine.disconnect();
+
+      expect(recorded.events()).toEqual([]);
+    });
+
+    it("sends disconnect when the pending apply disconnect() runs throws", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      let flush = (): void => {};
+      const engine = createSyncEngine(
+        backend,
+        {
+          ...store.adapter,
+          setState: () => {
+            throw new Error("invalid");
+          },
+        },
+        { schedule: (next) => (flush = next) },
+      );
+      engine.connect();
+      const recorded = record(engine);
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      expect(() => engine.disconnect()).toThrow("invalid");
+      flush();
+
+      expect(recorded.seen).toEqual([["disconnect", false]]);
+    });
+
+    describe("a listener that throws", () => {
+      let consoleError: MockInstance;
+      beforeEach(() => {
+        consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      });
+      afterEach(() => consoleError.mockRestore());
+
+      it("is reported, and the other listeners and the store's subscribers still run", () => {
+        const backend = createMemoryBackend();
+        const store = createTestStore(threeTodos());
+        const engine = createSyncEngine(backend, store.adapter);
+        engine.connect();
+        const failure = new Error("listener failed");
+        engine.subscribe(() => {
+          throw failure;
+        });
+        const recorded = record(engine);
+        const subscriber = vi.fn();
+        store.adapter.subscribe(subscriber);
+
+        expect(() => store.update((s) => toggleTodo(s, "1"))).not.toThrow();
+        expect(() =>
+          backend.receive(toggleTodo(threeTodos(), "2")),
+        ).not.toThrow();
+
+        expect(recorded.events()).toEqual(["local", "remote"]);
+        expect(subscriber).toHaveBeenCalledTimes(2);
+        expect(consoleError).toHaveBeenCalledTimes(2);
+        expect(consoleError).toHaveBeenCalledWith(
+          expect.stringContaining("listener"),
+          failure,
+        );
+      });
+    });
+
+    it("keeps sending across reconnects, and stops after unsubscribe", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter);
+      const recorded = record(engine);
+      const other = record(engine);
+
+      engine.connect();
+      engine.disconnect();
+      engine.connect();
+      other.unsubscribe();
+      store.update((s) => toggleTodo(s, "1"));
+      recorded.unsubscribe();
+      store.update((s) => toggleTodo(s, "2"));
+
+      expect(recorded.events()).toEqual([
+        "connect",
+        "disconnect",
+        "connect",
+        "local",
+      ]);
+      expect(other.events()).toEqual(["connect", "disconnect", "connect"]);
+    });
+
+    it("skips a listener another one unsubscribes during the same event", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter);
+      const late = vi.fn();
+      let unsubscribeLate = (): void => {};
+      engine.subscribe(() => unsubscribeLate());
+      unsubscribeLate = engine.subscribe(late);
+
+      engine.connect();
+
+      expect(late).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getSyncedState", () => {
+    it("returns the keys the filter keeps, with the store's values, while disconnected", () => {
+      const backend = createMemoryBackend();
+      const addTodoAction = () => {};
+      const state = { ...setSearchTerm(threeTodos(), "x"), addTodoAction };
+      const store = createTestStore(state);
+      const engine = createSyncEngine(backend, store.adapter, {
+        filter: (key, value) =>
+          typeof value !== "function" && key !== "searchTerm",
+      });
+
+      const synced = engine.getSyncedState();
+
+      expect(synced).toEqual({
+        todos: threeTodos().todos,
+        filterStatus: "all",
+      });
+      expect(synced.todos).toBe(state.todos);
+      expect(synced).not.toBe(store.getState());
+      expect(backend.read()).toEqual({});
+    });
+
+    it("leaves out __proto__ and keeps values that are not JSON", () => {
+      const when = new Date(0);
+      const state = JSON.parse(
+        '{"__proto__":{"isAdmin":true},"count":1}',
+      ) as Record<string, unknown>;
+      state.when = when;
+      const store = createTestStore(state);
+      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+      engine.connect();
+
+      const synced = engine.getSyncedState();
+
+      expect(Object.keys(synced)).toEqual(["count", "when"]);
+      expect(synced.when).toBe(when);
     });
   });
 });

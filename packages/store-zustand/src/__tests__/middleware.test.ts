@@ -100,6 +100,34 @@ describe("homeostate middleware", () => {
     expect(store.homeostate.isConnected()).toBe(false);
   });
 
+  it("forwards the engine's sync events and synced state", () => {
+    const backend = createMemoryBackend();
+    const store = createStore<CounterState>()(
+      homeostate(
+        (set) => ({
+          count: 0,
+          increment: () => set((s) => ({ count: s.count + 1 })),
+        }),
+        { backend, connect: "manual" },
+      ),
+    );
+    const events: string[] = [];
+    const unsubscribe = store.homeostate.subscribe((event) =>
+      events.push(event),
+    );
+
+    expect(store.homeostate.getSyncedState()).toEqual({ count: 0 });
+    store.homeostate.connect();
+    store.getState().increment();
+    backend.receive({ count: 5 });
+    store.homeostate.disconnect();
+    unsubscribe();
+    store.homeostate.connect();
+
+    expect(events).toEqual(["connect", "local", "remote", "disconnect"]);
+    expect(store.homeostate.getSyncedState()).toEqual({ count: 5 });
+  });
+
   it("leaves the backend untouched until connect() with the manual connect mode", () => {
     const backend = createMemoryBackend({ count: 7 });
     const calls = ["read", "write", "subscribe"] as const;

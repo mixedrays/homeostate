@@ -181,14 +181,20 @@ interface SyncEngine {
   connect: () => void;
   disconnect: () => void;
   isConnected: () => boolean;
+  getSyncedState: () => Record<string, unknown>;
+  subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
+
+type SyncEvent = "local" | "remote" | "connect" | "disconnect";
 ```
 
-| Method          | Returns   | Behavior                                                                                                                                                                        |
-| --------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connect()`     | `void`    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
-| `disconnect()`  | `void`    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `isConnected()` | `boolean` | Whether the engine is subscribed. This does not report network connectivity or whether a provider has received the room's state.                                                |
+| Method                | Returns                   | Behavior                                                                                                                                                                        |
+| --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`           | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
+| `disconnect()`        | `void`                    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
+| `isConnected()`       | `boolean`                 | Whether the engine is subscribed. This does not report network connectivity or whether a provider has received the room's state.                                                |
+| `getSyncedState()`    | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                   |
+| `subscribe(listener)` | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                 |
 
 After connection, each local notification writes the full filtered store state to the
 backend, along with what the backend holds, so the backend can diff against it instead of
@@ -204,6 +210,43 @@ while the engine applies remote state are ignored to avoid echoing that state ba
 Reconnecting runs reconciliation again: backend values replace disconnected local edits
 for matching keys. For offline editing, leave the engine connected and disconnect the
 network provider instead. See [Connecting](/docs/concepts#connecting).
+
+### Sync events
+
+`subscribe` reports what the engine has just handled, so a tool such as the devtools can tell a
+remote change from a local one and show the connection as it changes, without guessing from
+timing or polling `isConnected()`:
+
+```ts
+const unsubscribe = engine.subscribe((event) => {
+  if (event === "connect" || event === "disconnect")
+    showStatus(engine.isConnected());
+  if (event === "remote") markRemote();
+});
+```
+
+| Event          | Sent                                                                   | Once per                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"local"`      | after the write to the backend                                         | store notification handled while connected, even one that changed only local keys. An echo raised while a remote change is applied sends none.                             |
+| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                |
+| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own.                                  |
+| `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply it runs sends its `"remote"` first; if that apply throws, `"disconnect"` is still sent, since the engine is disconnected. |
+
+Events are sent synchronously, once the work is done. Nothing is sent when the work throws,
+whether the error goes to `onError` or to the caller, or when `connect()` or `disconnect()`
+changes nothing. Listeners run inside a store's or a document's notification loop, and some,
+such as Zustand's, stop at the first throw, so each listener runs on its own: what it throws goes
+to `console.error`, and the other listeners and the store's subscribers still run. A listener
+unsubscribed by an earlier one during the same event is not called.
+
+### Synced state
+
+`getSyncedState()` returns what the engine would write to the backend now: a new object holding
+the store's keys that `filter` keeps, without `__proto__`. It works while disconnected. Its
+values are the store's own, by identity, and are not turned into JSON, so a `Date` stays a
+`Date`; use it to tell the store's synced keys from its local keys, or compare it with the
+backend's state after `JSON.parse(JSON.stringify(...))`. Like `connect()`, it throws a
+`TypeError` when `getState()` does not return an object.
 
 ## defaultSyncFilter
 

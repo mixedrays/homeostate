@@ -42,7 +42,6 @@ const setup = (options: { filter?: (key: string) => boolean } = {}) => {
     adapter: store.adapter,
     backend,
     engine,
-    filter: options.filter,
   });
   inspector.start();
   return { store, backend, engine, inspector };
@@ -67,7 +66,10 @@ describe("createInspector", () => {
     inspector = createInspector({
       name: "counter",
       adapter: store.adapter,
-      filter: (key) => key !== "draft",
+      // Disconnected, so the store keeps its values; it still says which keys are local.
+      engine: createSyncEngine(backend, store.adapter, {
+        filter: (key) => key !== "draft",
+      }),
       backend: {
         ...backend,
         read: () => {
@@ -254,7 +256,9 @@ describe("createInspector", () => {
     inspector = createInspector({
       name: "dates",
       adapter: store.adapter,
-      filter: (key) => key !== "cache",
+      engine: createSyncEngine(createMemoryBackend(), store.adapter, {
+        filter: (key) => key !== "cache",
+      }),
     });
     inspector.start();
     expect(inspector.getSnapshot().warnings).toEqual([
@@ -296,6 +300,146 @@ describe("createInspector", () => {
     inspector.restore(7);
     await tick();
     expect(store.get().filter).toBe("imported");
+  });
+});
+
+describe("sync events", () => {
+  /** A scheduler that holds each flush until the test runs it. */
+  const manualScheduler = () => {
+    const queued: (() => void)[] = [];
+    return {
+      schedule: (flush: () => void) => {
+        queued.push(flush);
+      },
+      run: () => queued.splice(0).forEach((flush) => flush()),
+    };
+  };
+
+  const remoteChange = { ...initial(), filter: "active" };
+
+  it("logs a remote change applied by a flush run later as remote", async () => {
+    const store = createTestStore<State>(initial());
+    const backend = createMemoryBackend();
+    const scheduler = manualScheduler();
+    const engine = createSyncEngine(backend, store.adapter, {
+      schedule: scheduler.schedule,
+    });
+    engine.connect();
+    inspector = createInspector({
+      name: "todos",
+      adapter: store.adapter,
+      backend,
+      engine,
+    });
+    inspector.start();
+    await tick();
+
+    backend.receive(remoteChange);
+    await tick();
+    expect(inspector.getSnapshot().backend?.filter).toBe("active");
+    expect(inspector.getSnapshot().log).toHaveLength(1);
+
+    scheduler.run();
+    await tick();
+    expect(inspector.getSnapshot().log.at(-1)).toMatchObject({
+      origin: "remote",
+      state: { filter: "active" },
+    });
+  });
+
+  it.each([
+    ["the engine", true],
+    ["the inspector", false],
+  ])(
+    "logs a remote change applied in a microtask as remote when %s subscribed to the backend first",
+    async (_, engineFirst) => {
+      const store = createTestStore<State>(initial());
+      const backend = createMemoryBackend();
+      const engine = createSyncEngine(backend, store.adapter, {
+        schedule: (flush) => queueMicrotask(flush),
+      });
+      if (engineFirst) engine.connect();
+      inspector = createInspector({
+        name: "todos",
+        adapter: store.adapter,
+        backend,
+        engine,
+      });
+      inspector.start();
+      if (!engineFirst) engine.connect();
+      await tick();
+
+      backend.receive(remoteChange);
+      await tick();
+
+      const { log, store: state } = inspector.getSnapshot();
+      expect(state.filter).toBe("active");
+      expect(log.at(-1)?.origin).toBe("remote");
+    },
+  );
+
+  it("updates the connection status when the app connects or disconnects the engine", async () => {
+    const { engine, inspector } = setup();
+
+    engine.disconnect();
+    await tick();
+    expect(inspector.getSnapshot().connected).toBe(false);
+
+    engine.connect();
+    await tick();
+    expect(inspector.getSnapshot().connected).toBe(true);
+  });
+
+  it("logs a connect made by the app as adopting the backend", async () => {
+    const { store, engine, inspector } = setup();
+    engine.disconnect();
+    store.set({ ...store.get(), filter: "done" });
+    await tick();
+
+    engine.connect();
+    await tick();
+
+    expect(store.get().filter).toBe("all");
+    expect(inspector.getSnapshot().log.at(-1)).toMatchObject({
+      origin: "remote",
+      label: "Connected: adopted the backend",
+    });
+  });
+
+  it("stops hearing the engine after stop()", async () => {
+    const { engine, inspector } = setup();
+    inspector.stop();
+    engine.disconnect();
+    await tick();
+    expect(inspector.getSnapshot().connected).toBe(true);
+  });
+
+  it("marks keys and flags values as before for a source without an engine", async () => {
+    const store = createTestStore<Record<string, unknown>>({
+      count: 0,
+      draft: "x",
+      when: new Date(0),
+      add: () => {},
+    });
+    const backend = createMemoryBackend();
+    backend.receive({ count: 0, gone: true });
+    inspector = createInspector({
+      name: "plain",
+      adapter: store.adapter,
+      backend,
+    });
+    inspector.start();
+    await tick();
+
+    const snapshot = inspector.getSnapshot();
+    expect(snapshot.connected).toBeNull();
+    expect(snapshot.keyStatus).toEqual({
+      count: "synced",
+      draft: "pending",
+      when: "pending",
+      gone: "backend-only",
+    });
+    expect(snapshot.warnings).toEqual([{ path: ["when"], kind: "Date" }]);
   });
 });
 

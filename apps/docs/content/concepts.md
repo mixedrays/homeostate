@@ -16,10 +16,15 @@ a state manager, and `crdt-*` packages implement `CrdtBackend` for a CRDT librar
 import { createSyncEngine } from "@homeostate/core";
 
 const engine = createSyncEngine(backend, adapter, { seed: "if-empty" });
+engine.subscribe((event) => console.log(event)); // "connect", then "disconnect"
 engine.connect();
 engine.isConnected(); // true
 engine.disconnect();
 ```
+
+Besides `isConnected()`, the engine reports a sync event after each local change it writes,
+remote change it applies, connect and disconnect, and `getSyncedState()` returns the store's
+synced keys; see [Sync events](../../../packages/core/docs/sync-engine.md#sync-events).
 
 ## Store adapters
 

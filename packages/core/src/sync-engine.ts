@@ -4,6 +4,7 @@ import type {
   SyncEngine,
   SyncEngineConfig,
   SyncErrorSource,
+  SyncEvent,
   Unsubscribe,
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
@@ -150,6 +151,26 @@ export function createSyncEngine<S extends object>(
   const reportedLoops = new Set<string>();
   /** The side whose call threw the error now on its way out of the engine; see `call`. */
   let thrownBy: SyncErrorSource | undefined;
+  /** What `subscribe` was given; kept across reconnects. */
+  const listeners = new Set<(event: SyncEvent) => void>();
+
+  /**
+   * Tells every listener that the engine has handled `event`. A listener runs inside a store's or
+   * a document's notification loop, which may stop at the first throw, as Zustand's does, so what
+   * it throws is logged and the other listeners still run.
+   */
+  const emit = (event: SyncEvent): void => {
+    if (listeners.size === 0) return;
+    for (const listener of [...listeners]) {
+      // One unsubscribed by an earlier listener hears nothing more.
+      if (!listeners.has(listener)) continue;
+      try {
+        listener(event);
+      } catch (error) {
+        console.error("[homeostate] a sync event listener threw:", error);
+      }
+    }
+  };
 
   /** Runs `run`, a call into the store adapter or the backend, recording `source` if it throws. */
   const call = <T>(source: SyncErrorSource, run: () => T): T => {
@@ -325,6 +346,7 @@ export function createSyncEngine<S extends object>(
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
     lastSynced = readBackend();
     applyRemote(filterState(lastSynced), false);
+    emit("remote");
   };
 
   /** Runs the apply deferred by `schedule`, if one is pending, and returns whether it ran. */
@@ -389,6 +411,7 @@ export function createSyncEngine<S extends object>(
     remoteReads++;
     lastSynced = held;
     applyRemote(filterState(held), false);
+    emit("remote");
     return true;
   };
 
@@ -401,6 +424,7 @@ export function createSyncEngine<S extends object>(
     if (applyUnseenRemote()) return;
     lastWriteBack = null;
     writeSynced(filterState(readStore()));
+    emit("local");
   };
 
   const unsubscribeAll = (): void => {
@@ -440,6 +464,7 @@ export function createSyncEngine<S extends object>(
         throw error;
       }
       connected = true;
+      emit("connect");
     },
 
     disconnect: (): void => {
@@ -455,9 +480,20 @@ export function createSyncEngine<S extends object>(
         lastSynced = undefined;
         lastWriteBack = null;
         connected = false;
+        // Also when the pending apply threw: the engine is disconnected all the same.
+        emit("disconnect");
       }
     },
 
     isConnected: (): boolean => connected,
+
+    getSyncedState: (): Plain => filterState(readStore()),
+
+    subscribe: (listener): Unsubscribe => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
   };
 }

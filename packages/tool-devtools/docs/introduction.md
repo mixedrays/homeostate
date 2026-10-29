@@ -71,10 +71,12 @@ theme picked in the panel's settings, behind the gear button, is remembered and 
 To open the panel from your own UI, such as an "Inspect state" button, control it with
 `open` and `onOpenChange`; the devtools then leave remembering it to you.
 
-Pass the engine's `filter` in the source too, if it has one, so the keys it keeps out of sync
-are marked local. If the document is [persisted](/docs/persistence), pass what
-`createPersistence` returned as `persistence` to see and manage what is stored. Pass a
-[network link](#network-conditions) as `network` to slow down or cut the connection.
+With an `engine`, the devtools mark the keys its `filter` keeps out of sync as local, log the
+changes it applies from the backend as remote, and show its connection as it changes, through
+its [sync events](../../core/docs/sync-engine.md#sync-events). If the document is
+[persisted](/docs/persistence), pass what `createPersistence` returned as `persistence` to see
+and manage what is stored. Pass a [network link](#network-conditions) as `network` to slow down
+or cut the connection.
 
 ## Without React
 

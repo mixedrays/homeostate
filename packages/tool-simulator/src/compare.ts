@@ -1,5 +1,3 @@
-import { defaultSyncFilter } from "@homeostate/core";
-
 /** A key into an object or an index into an array, from the root down. */
 export type Path = (string | number)[];
 
@@ -21,22 +19,6 @@ const hasOwn = (object: object, key: string): boolean =>
 /** `value` as JSON stores it: functions and `undefined` dropped, a Date as a string. */
 export const asJson = (value: unknown): unknown =>
   JSON.parse(JSON.stringify(value) ?? "null") as unknown;
-
-/**
- * The keys of a store's state the engine syncs, as JSON: the keys `filter` keeps, without
- * `__proto__`, which the engine never syncs.
- */
-export const syncedJson = (
-  state: unknown,
-  filter: (key: string, value: unknown) => boolean = defaultSyncFilter,
-): unknown => {
-  const synced: Plain = {};
-  if (isRecord(state))
-    for (const key of Object.keys(state))
-      if (key !== "__proto__" && filter(key, state[key]))
-        synced[key] = state[key];
-  return asJson(synced);
-};
 
 /** The first place where two JSON values differ, or `null` when they are equal. */
 export const firstDifference = (
