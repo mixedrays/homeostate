@@ -78,11 +78,33 @@ const isProduction = (): boolean => {
 };
 
 /**
+ * The one test of whether a top-level key is synced, in both directions: `keys` and `omit` by
+ * name, then `filter`, which defaults to `defaultSyncFilter`.
+ */
+const syncPredicate = ({
+  filter = defaultSyncFilter,
+  keys,
+  omit,
+}: SyncEngineConfig): ((key: string, value: unknown) => boolean) => {
+  if (keys === undefined && omit === undefined) return filter;
+  const listed = keys === undefined ? undefined : new Set<string>(keys);
+  const omitted = new Set<string>(omit);
+  return (key, value) =>
+    (listed === undefined || listed.has(key)) &&
+    !omitted.has(key) &&
+    filter(key, value);
+};
+
+/**
  * Creates a sync engine that keeps a store (via its adapter) and a CRDT backend
  * in sync in both directions.
  *
  * This is the core abstraction that makes the sync logic state-manager and
  * CRDT-library agnostic.
+ *
+ * `config` is typed by the adapter's state, so `keys` and `omit` take only its key names:
+ * `{ omit: ['draft'] }` keeps one key local, `{ keys: ['todos'] }` syncs one alone. A key is
+ * synced when `filter`, by default `defaultSyncFilter`, keeps it too.
  *
  * On `connect()` the two sides are reconciled per key over the filtered view: a key the
  * backend holds wins over the store's value, and a synced key the backend lacks stays in
@@ -109,21 +131,18 @@ const isProduction = (): boolean => {
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
  * const adapter = createZustandAdapter(store);
- * const engine = createSyncEngine(backend, adapter);
+ * const engine = createSyncEngine(backend, adapter, { omit: ['draft'] });
  * engine.connect();
  * ```
  */
 export function createSyncEngine<S extends object>(
   backend: CrdtBackend,
   adapter: StoreAdapter<S>,
-  config: SyncEngineConfig = {},
+  config: NoInfer<SyncEngineConfig<S>> = {},
 ): SyncEngine {
-  const {
-    filter = defaultSyncFilter,
-    seed = "if-empty",
-    schedule,
-    onError,
-  } = config;
+  const { seed = "if-empty", schedule, onError } = config;
+  // Untyped: the engine also judges keys the backend holds that `S` does not declare.
+  const filter = syncPredicate(config as SyncEngineConfig);
 
   let connected = false;
   let storeUnsubscribe: Unsubscribe | null = null;

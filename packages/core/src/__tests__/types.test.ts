@@ -1,9 +1,13 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  createSyncEngine,
   defaultSyncFilter,
   type CrdtBackend,
   type JsonObject,
   type JsonObjectInput,
+  type SetupOptions,
+  type StoreAdapter,
+  type SyncEngineConfig,
 } from "../index.js";
 import { createMemoryBackend } from "../testing.js";
 
@@ -93,5 +97,72 @@ describe("JsonObjectInput", () => {
 
     const state = backend.read() as unknown as TodoState;
     expect(state.todos[0].title).toBe("a");
+  });
+});
+
+describe("SyncEngineConfig", () => {
+  /** A store adapter typed by `TodoState`, which is all the type checks below need. */
+  const adapter = (): StoreAdapter<TodoState> => ({
+    getState: todoState,
+    setState: () => {},
+    subscribe: () => () => {},
+  });
+
+  it("takes the state type from the adapter and type-checks keys and omit", () => {
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, adapter(), { omit: ["length"] });
+    createSyncEngine(backend, adapter(), { keys: ["todos"] });
+    // @ts-expect-error "todo" is not a key of TodoState.
+    createSyncEngine(backend, adapter(), { omit: ["todo"] });
+    // @ts-expect-error "todo" is not a key of TodoState.
+    createSyncEngine(backend, adapter(), { keys: ["todos", "todo"] });
+    // @ts-expect-error keys and omit cannot be given together.
+    createSyncEngine(backend, adapter(), { keys: ["todos"], omit: ["length"] });
+  });
+
+  it("accepts readonly key lists, such as an as const constant", () => {
+    const LOCAL = ["length"] as const;
+    const SYNCED: readonly "todos"[] = ["todos"];
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, adapter(), { omit: LOCAL });
+    createSyncEngine(backend, adapter(), { keys: SYNCED });
+  });
+
+  it("types the filter by the state, and takes existing string predicates and keys or omit", () => {
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, adapter(), {
+      filter: (key, value) => {
+        expectTypeOf(key).toEqualTypeOf<"todos" | "length">();
+        expectTypeOf(value).toEqualTypeOf<TodoState[keyof TodoState]>();
+        return key !== "length";
+      },
+    });
+    createSyncEngine(backend, adapter(), {
+      filter: (key: string, value: unknown) =>
+        defaultSyncFilter(key, value) && key !== "length",
+      keys: ["todos"],
+    });
+    createSyncEngine(backend, adapter(), { filter: defaultSyncFilter });
+  });
+
+  it("types keys as strings and values as unknown without a state type", () => {
+    type Filter = NonNullable<SyncEngineConfig["filter"]>;
+    expectTypeOf<Parameters<Filter>>().toEqualTypeOf<[string, unknown]>();
+    expectTypeOf<{ omit: string[] }>().toExtend<SyncEngineConfig>();
+  });
+
+  it("types SetupOptions by the state the same way", () => {
+    const backend = createMemoryBackend();
+    expectTypeOf({ backend, omit: ["length"] as const }).toExtend<
+      SetupOptions<TodoState>
+    >();
+    expectTypeOf({ backend, omit: ["todo"] as const }).not.toExtend<
+      SetupOptions<TodoState>
+    >();
+    expectTypeOf({
+      backend,
+      keys: ["todos"] as const,
+      omit: ["length"] as const,
+    }).not.toExtend<SetupOptions<TodoState>>();
   });
 });

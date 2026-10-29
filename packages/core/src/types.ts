@@ -126,15 +126,23 @@ export interface CrdtBackend {
 export type SeedStrategy = "if-empty" | "never";
 
 /**
- * Configuration options for the sync engine
+ * Configuration options for the sync engine, typed by the store's state `S`, which
+ * `createSyncEngine` takes from the store adapter. Without `S`, as `SyncEngineConfig`, a key is
+ * any string and a value `unknown`.
+ *
+ * A key is synced, in both directions, when `filter` keeps it and, by name, `keys` lists it or
+ * `omit` does not name it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is
+ * synced.
  */
-export interface SyncEngineConfig {
+export type SyncEngineConfig<S extends object = JsonObject> = {
   /**
-   * Filter function to determine which state keys should be synced, in both directions.
-   * Return true to sync the key, false to exclude it.
-   * By default, functions are excluded from sync.
+   * Decides per top-level key whether it is synced: return true to sync it. Defaults to
+   * `defaultSyncFilter`, which excludes functions; a custom filter replaces it. It is called only
+   * for the keys `keys` and `omit` leave. Its types follow `S`, but it is also called with the
+   * keys and values of a backend holding keys that `S` does not declare, such as those an older
+   * or newer peer writes.
    */
-  filter?: (key: string, value: unknown) => boolean;
+  filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
   /** Seeding strategy used by `connect()`; defaults to `'if-empty'` */
   seed?: SeedStrategy;
   /**
@@ -155,24 +163,43 @@ export interface SyncEngineConfig {
    * `connect()` always throws. See `SyncErrorSource`.
    */
   onError?: (error: unknown, source: SyncErrorSource) => void;
-}
+} & (
+  | {
+      /**
+       * The only keys to sync, if `filter` keeps them. A key the backend holds that it does not
+       * list is ignored, like one the store holds.
+       */
+      keys: readonly (keyof S & string)[];
+      omit?: never;
+    }
+  | {
+      keys?: never;
+      /**
+       * Keys to keep local; every other key `filter` keeps is synced, including one the
+       * backend holds that `S` does not declare.
+       */
+      omit?: readonly (keyof S & string)[];
+    }
+);
 
 /**
- * The options every setup helper takes. A setup helper is the one call in a `store-*` package,
- * such as the Zustand `homeostate` middleware, that creates the store adapter and the sync
- * engine for one store; its options extend these with its own.
+ * The options every setup helper takes, typed by the store's state `S`: the backend, the
+ * connect mode and the sync engine's config. A setup helper is the one call in a `store-*`
+ * package, such as the Zustand `homeostate` middleware, that creates the store adapter and the
+ * sync engine for one store; its options add their own to these.
  */
-export interface SetupOptions extends SyncEngineConfig {
-  /** The CRDT backend the store syncs with */
-  backend: CrdtBackend;
-  /**
-   * Who connects the engine:
-   * - `'auto'`: the helper, once the store is ready, such as when it is created (default)
-   * - `'manual'`: the app, by calling `connect()` on the engine the helper exposes; until then
-   *   the engine reads and writes neither the store nor the backend
-   */
-  connect?: "auto" | "manual";
-}
+export type SetupOptions<S extends object = JsonObject> =
+  SyncEngineConfig<S> & {
+    /** The CRDT backend the store syncs with */
+    backend: CrdtBackend;
+    /**
+     * Who connects the engine:
+     * - `'auto'`: the helper, once the store is ready, such as when it is created (default)
+     * - `'manual'`: the app, by calling `connect()` on the engine the helper exposes; until then
+     *   the engine reads and writes neither the store nor the backend
+     */
+    connect?: "auto" | "manual";
+  };
 
 /**
  * The side of the sync engine that an error reported to `onError` came from:
@@ -210,8 +237,8 @@ export interface SyncEngine {
   isConnected: () => boolean;
   /**
    * The store's synced keys with the values the store holds, connected or not: a new object
-   * holding the keys `filter` keeps, without `__proto__`. Its values are the store's own, by
-   * identity, and are not turned into JSON.
+   * holding the keys `filter`, `keys` and `omit` keep, without `__proto__`. Its values are the
+   * store's own, by identity, and are not turned into JSON.
    */
   getSyncedState: () => Record<string, unknown>;
   /**

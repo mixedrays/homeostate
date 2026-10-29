@@ -49,11 +49,14 @@ useCounter.homeostate.disconnect(); // stop syncing
 
 The second argument holds the options, as in Zustand's own middlewares:
 
-| Option                                  | Default  | Description                                                                        |
-| --------------------------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `backend`                               |          | The `CrdtBackend` the store syncs with                                             |
-| `connect`                               | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below               |
-| `filter`, `seed`, `schedule`, `onError` |          | The engine's [`SyncEngineConfig`](../../core/docs/sync-engine.md#syncengineconfig) |
+| Option                                                  | Default  | Description                                                                                                    |
+| ------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `backend`                                               |          | The `CrdtBackend` the store syncs with                                                                         |
+| `connect`                                               | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below                                           |
+| `omit`, `keys`, `filter`, `seed`, `schedule`, `onError` |          | The engine's [`SyncEngineConfig`](../../core/docs/sync-engine.md#syncengineconfig), typed by the store's state |
+
+`omit` and `keys` take the state's key names, so `{ backend, omit: ["draft"] }` keeps a draft
+on each device, and a misspelled key fails to compile.
 
 ### Connecting later
 

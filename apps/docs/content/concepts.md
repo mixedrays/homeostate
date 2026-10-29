@@ -124,16 +124,20 @@ change replaces the string whole, so a concurrent edit to the old one is lost.
 
 ## Choosing what to sync
 
-The `filter` option decides which top-level keys are synced, in both directions:
+The engine syncs every top-level key of the store's state but its functions. `omit` keeps
+the keys it names local, in both directions:
 
 ```ts
-createSyncEngine(backend, adapter, {
-  filter: (key, value) => typeof value !== "function" && key !== "draft",
-});
+createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
 ```
 
-The default, `defaultSyncFilter`, excludes functions. Excluded keys are never read from the
-backend or written to it, so they stay local to each peer.
+`keys: ["todos"]` syncs the keys it lists instead, and ignores any other key the backend holds.
+Both take only the key names of the adapter's state, so a typo fails to compile. For a rule
+that depends on the value, `filter` decides per key: the default, `defaultSyncFilter`, excludes
+functions, and a custom filter replaces it. `keys` and `omit` apply on top of `filter`.
+
+Excluded keys are never read from the backend or written to it, so they stay local to each
+peer.
 
 ## Connecting
 

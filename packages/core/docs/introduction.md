@@ -26,7 +26,7 @@ import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
-  filter: (key, value) => typeof value !== "function" && key !== "draft",
+  omit: ["draft"],
   seed: "if-empty",
   onError: (error, source) =>
     console.error(`Sync failed in the ${source}`, error),
@@ -38,7 +38,8 @@ engine.disconnect();
 ```
 
 Here, `doc` is your Yjs document and `adapter` comes from your state manager's `store-*`
-package. On `connect()` the backend's values win over the store's. Once connected, what the
+package. `omit` keeps `draft` on this device, and functions such as actions stay local by
+default. On `connect()` the backend's values win over the store's. Once connected, what the
 store or the backend throws goes to `onError` instead of the other side's notifier. See the
 [sync engine reference](./sync-engine.md) for all options, lifecycle methods and adapter
 contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation model.

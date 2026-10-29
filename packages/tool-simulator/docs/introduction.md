@@ -59,14 +59,14 @@ document as binary updates, from the CRDT package's `createYjsPersistable`,
 `createLoroPersistable` or `createAutomergePersistable`. That is what the network carries, so
 the simulator works with any backend that has one.
 
-| `addPeer` option | Default    | Description                                                              |
-| ---------------- | ---------- | ------------------------------------------------------------------------ |
-| `adapter`        |            | The store                                                                |
-| `backend`        |            | The backend the engine syncs the store through                           |
-| `doc`            |            | The backend's document as binary updates                                 |
-| `config`         |            | Passed to `createSyncEngine`; its `filter` also decides what is compared |
-| `name`           | `peer-<n>` | Names the peer in errors                                                 |
-| `connect`        | `true`     | Whether to connect the engine as the peer joins                          |
+| `addPeer` option | Default    | Description                                                                                |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `adapter`        |            | The store                                                                                  |
+| `backend`        |            | The backend the engine syncs the store through                                             |
+| `doc`            |            | The backend's document as binary updates                                                   |
+| `config`         |            | Passed to `createSyncEngine`; its `filter`, `keys` and `omit` also decide what is compared |
+| `name`           | `peer-<n>` | Names the peer in errors                                                                   |
+| `connect`        | `true`     | Whether to connect the engine as the peer joins                                            |
 
 `addPeer` returns the peer, with its `engine` and `syncedState()`, the store's synced keys as
 JSON. `network.peers` lists every peer in the order they joined.

@@ -82,11 +82,11 @@ The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which
 _Avoid_: State dump
 
 **Filter**:
-The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. `defaultSyncFilter` excludes functions.
+The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. `defaultSyncFilter` excludes functions. The `keys` and `omit` options narrow what it keeps by key name.
 _Avoid_: Sync filter, allowlist, selector
 
 **Synced key**:
-A top-level store key the filter lets through, so the sync engine reads it from and writes it to the CRDT backend.
+A top-level store key the filter lets through, and `keys` or `omit` allow by name, so the sync engine reads it from and writes it to the CRDT backend.
 
 **Local key**:
 A top-level store key the filter keeps out of sync, such as an action or a draft, so it stays on one peer.

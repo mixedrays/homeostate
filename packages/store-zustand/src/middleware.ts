@@ -1,6 +1,7 @@
 import type { StateCreator, StoreMutatorIdentifier } from "zustand";
 import {
   createSyncEngine,
+  type JsonObject,
   type SetupOptions,
   type SyncEngine,
 } from "@homeostate/core";
@@ -15,8 +16,11 @@ declare module "zustand/vanilla" {
   }
 }
 
-/** The `homeostate` middleware's options: the backend, the connect mode and the engine's config */
-export type HomeostateOptions = SetupOptions;
+/**
+ * The `homeostate` middleware's options for a store whose state is `T`: the backend, the connect
+ * mode and the engine's config, whose `filter`, `keys` and `omit` are typed by `T`.
+ */
+export type HomeostateOptions<T extends object = JsonObject> = SetupOptions<T>;
 
 export type HomeostateMiddleware = <
   T extends object,
@@ -24,13 +28,8 @@ export type HomeostateMiddleware = <
   Mcs extends [StoreMutatorIdentifier, unknown][] = [],
 >(
   creator: StateCreator<T, [...Mps, ["homeostate", SyncEngine]], Mcs>,
-  options: HomeostateOptions,
+  options: NoInfer<HomeostateOptions<T>>,
 ) => StateCreator<T, Mps, [["homeostate", SyncEngine], ...Mcs]>;
-
-type HomeostateMiddlewareImpl = <T extends object>(
-  creator: StateCreator<T, [], []>,
-  options: HomeostateOptions,
-) => StateCreator<T, [], []>;
 
 /** The part of the `persist` middleware's `store.persist` API the middleware uses. */
 interface PersistApi {
@@ -65,7 +64,10 @@ const rejectOuterPersist = (api: object, engine: SyncEngine): void => {
   });
 };
 
-const homeostateImpl: HomeostateMiddlewareImpl = (creator, options) => {
+const homeostateImpl = <T extends object>(
+  creator: StateCreator<T, [], []>,
+  options: HomeostateOptions<T>,
+): StateCreator<T, [], []> => {
   if (typeof creator !== "function") {
     throw new TypeError(
       "[homeostate] The middleware takes the state creator first and the backend in its " +
@@ -124,7 +126,8 @@ const homeostateImpl: HomeostateMiddlewareImpl = (creator, options) => {
  * Zustand middleware that mirrors the store into a CRDT backend for peer-to-peer synchronization.
  * It takes the state creator and its options: the `backend`, any `CrdtBackend` such as
  * `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
- * `connect` mode, and the sync engine's config (`filter`, `seed`, `schedule`, `onError`).
+ * `connect` mode, and the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
+ * `onError`), whose key names are checked against the store's state.
  * The engine is exposed as `store.homeostate`, so `store.homeostate.disconnect()` stops syncing.
  *
  * The store connects when it is created. With `connect: "manual"`, nothing reads or writes the
