@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   configureStore,
   createSlice,
@@ -10,7 +10,7 @@ import {
   createMemoryBackend,
   type MemoryBackend,
 } from "@homeostate/core/testing";
-import { createReduxAdapter } from "../index.js";
+import { createReduxAdapter, type ReduxLikeStore } from "../index.js";
 
 interface Todo {
   id: string;
@@ -253,5 +253,153 @@ describe("ReduxAdapter", () => {
 
     backend.receive({ filter: "done", todos: [] });
     expect(store.getState()).toEqual({ filter: "all", todos: [milk] });
+  });
+});
+
+describe("Redux-like stores", () => {
+  interface Counter {
+    count: number;
+  }
+  type CounterAction =
+    | { type: "counter/increment" }
+    | { type: "counter/replace"; payload: Counter };
+  const replace = (payload: Counter): CounterAction => ({
+    type: "counter/replace",
+    payload,
+  });
+  const counterReducer = (
+    state: Counter = { count: 0 },
+    action: CounterAction,
+  ): Counter => {
+    if (action.type === "counter/increment") return { count: state.count + 1 };
+    if (action.type === "counter/replace") return action.payload;
+    return state;
+  };
+
+  /** Redux 4's `Store` declaration, which Redux 5's `Store` type does not accept. */
+  interface Redux4Dispatch<A extends { type: string }> {
+    <T extends A>(action: T): T;
+  }
+  interface Redux4Store<S, A extends { type: string }> {
+    dispatch: Redux4Dispatch<A>;
+    getState(): S;
+    subscribe(listener: () => void): () => void;
+    replaceReducer(next: (state: S | undefined, action: A) => S): void;
+  }
+
+  const createRedux4Store = <S, A extends { type: string }>(
+    reducer: (state: S | undefined, action: A) => S,
+  ): Redux4Store<S, A> => {
+    let state = reducer(undefined, { type: "@@INIT" } as A);
+    const listeners = new Set<() => void>();
+    return {
+      dispatch: (action) => {
+        state = reducer(state, action);
+        listeners.forEach((listener) => listener());
+        return action;
+      },
+      getState: () => state,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      replaceReducer: (next) => {
+        reducer = next;
+      },
+    };
+  };
+
+  it("syncs a Redux 4-shaped store with a narrow action type", () => {
+    const store = createRedux4Store(counterReducer);
+    const backend = createMemoryBackend();
+    const adapter = createReduxAdapter(store, replace);
+    expectTypeOf(adapter.getState()).toEqualTypeOf<Counter>();
+
+    createSyncEngine(backend, adapter).connect();
+    store.dispatch({ type: "counter/increment" });
+    expect(backend.read()).toEqual({ count: 1 });
+
+    backend.receive({ count: 5 });
+    expect(store.getState()).toEqual({ count: 5 });
+  });
+
+  it("syncs a store shaped like Zustand's redux middleware store", () => {
+    // Zustand's `redux` middleware keeps `dispatch` in the state, merges what the reducer
+    // returns into it, and calls listeners with the new and previous state.
+    type State = Counter & {
+      dispatch: (action: CounterAction) => CounterAction;
+    };
+    let state: State;
+    const listeners = new Set<(state: State, previous: State) => void>();
+    const dispatch = (action: CounterAction) => {
+      const previous = state;
+      state = { ...state, ...counterReducer(state, action) };
+      listeners.forEach((listener) => listener(state, previous));
+      return action;
+    };
+    state = { count: 0, dispatch };
+    const store = {
+      getState: () => state,
+      dispatch,
+      subscribe: (listener: (state: State, previous: State) => void) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    };
+    const backend = createMemoryBackend();
+
+    createSyncEngine(
+      backend,
+      createReduxAdapter(store, (next: State) =>
+        replace({ count: next.count }),
+      ),
+    ).connect();
+    store.dispatch({ type: "counter/increment" });
+    expect(backend.read()).toEqual({ count: 1 });
+
+    backend.receive({ count: 5 });
+    expect(store.getState()).toEqual({ count: 5, dispatch });
+  });
+
+  it("takes a replace action that carries the state under another name", () => {
+    const store = legacy_createStore(
+      (
+        state: Counter = { count: 0 },
+        action: { type: string; next?: Counter },
+      ) => (action.type === "counter/set" && action.next ? action.next : state),
+    );
+    const backend = createMemoryBackend();
+
+    createSyncEngine(
+      backend,
+      createReduxAdapter(store, (next) => ({ type: "counter/set", next })),
+    ).connect();
+    backend.receive({ count: 3 });
+
+    expect(store.getState()).toEqual({ count: 3 });
+  });
+
+  it("types Redux Toolkit and Redux 5 stores as Redux-like stores", () => {
+    expectTypeOf(createTodoStore()).toExtend<ReduxLikeStore<TodosState>>();
+    expectTypeOf(legacy_createStore(counterReducer)).toExtend<
+      ReduxLikeStore<Counter>
+    >();
+    expectTypeOf(createRedux4Store(counterReducer)).toExtend<
+      ReduxLikeStore<Counter>
+    >();
+  });
+
+  it("rejects a store or replace action the adapter cannot use", () => {
+    const store = createRedux4Store(counterReducer);
+    const unsubscribable = {
+      getState: store.getState,
+      dispatch: store.dispatch,
+    };
+    // @ts-expect-error a store without `subscribe` cannot report local changes
+    createReduxAdapter(unsubscribable, replace);
+    // @ts-expect-error an action needs a `type`
+    createReduxAdapter(store, (next: Counter) => ({ payload: next }));
   });
 });

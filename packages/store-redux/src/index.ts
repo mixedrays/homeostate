@@ -1,1 +1,1 @@
-export { createReduxAdapter } from "./adapter.js";
+export { createReduxAdapter, type ReduxLikeStore } from "./adapter.js";
