@@ -1,5 +1,10 @@
 # @homeostate/store-mobx-state-tree
 
+[![npm](https://img.shields.io/npm/v/@homeostate/store-mobx-state-tree?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-mobx-state-tree)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fstore-mobx-state-tree?externals=@homeostate/core,mobx,mobx-state-tree&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fstore-mobx-state-tree&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%2C%22mobx%22%2C%22mobx-state-tree%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/store-mobx-state-tree?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-mobx-state-tree)
+[![license](https://img.shields.io/npm/l/@homeostate/store-mobx-state-tree?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/store-mobx-state-tree/LICENSE)
+
 [MobX-State-Tree](https://mobx-state-tree.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a state tree node in sync with a CRDT backend such as Yjs, Loro or Automerge.

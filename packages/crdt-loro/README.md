@@ -1,5 +1,10 @@
 # @homeostate/crdt-loro
 
+[![npm](https://img.shields.io/npm/v/@homeostate/crdt-loro?color=2563eb)](https://www.npmjs.com/package/@homeostate/crdt-loro)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fcrdt-loro?externals=@homeostate/core,loro-crdt&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fcrdt-loro&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%2C%22loro-crdt%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/crdt-loro?color=2563eb)](https://www.npmjs.com/package/@homeostate/crdt-loro)
+[![license](https://img.shields.io/npm/l/@homeostate/crdt-loro?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/crdt-loro/LICENSE)
+
 [Loro](https://github.com/loro-dev/loro) backend for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It maps the synced state onto a `LoroMap` (objects become `LoroMap`, arrays `LoroList`, and

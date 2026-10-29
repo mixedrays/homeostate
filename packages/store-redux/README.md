@@ -1,5 +1,10 @@
 # @homeostate/store-redux
 
+[![npm](https://img.shields.io/npm/v/@homeostate/store-redux?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-redux)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fstore-redux?externals=@homeostate/core&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fstore-redux&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/store-redux?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-redux)
+[![license](https://img.shields.io/npm/l/@homeostate/store-redux?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/store-redux/LICENSE)
+
 [Redux](https://redux.js.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a Redux store in sync with a CRDT backend such as Yjs, Loro or Automerge.

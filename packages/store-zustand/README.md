@@ -1,5 +1,10 @@
 # @homeostate/store-zustand
 
+[![npm](https://img.shields.io/npm/v/@homeostate/store-zustand?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-zustand)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fstore-zustand?externals=@homeostate/core,zustand&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fstore-zustand&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40homeostate%2Fcore%22%2C%22zustand%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/store-zustand?color=2563eb)](https://www.npmjs.com/package/@homeostate/store-zustand)
+[![license](https://img.shields.io/npm/l/@homeostate/store-zustand?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/store-zustand/LICENSE)
+
 [Zustand](https://github.com/pmndrs/zustand) store adapter and middleware for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
 It keeps a Zustand store in sync with a CRDT backend such as Yjs, Loro or Automerge.

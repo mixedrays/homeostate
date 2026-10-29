@@ -1,5 +1,10 @@
 # @homeostate/core
 
+[![npm](https://img.shields.io/npm/v/@homeostate/core?color=2563eb)](https://www.npmjs.com/package/@homeostate/core)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Fcore?color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Fcore)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/core?color=2563eb)](https://www.npmjs.com/package/@homeostate/core)
+[![license](https://img.shields.io/npm/l/@homeostate/core?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/core/LICENSE)
+
 Sync engine that keeps a store in sync with a CRDT document. Pair it with a store adapter
 (`@homeostate/store-*`) and a CRDT backend such as
 [`@homeostate/crdt-yjs`](https://github.com/mixedrays/homeostate/tree/main/packages/crdt-yjs).

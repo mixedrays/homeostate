@@ -1,5 +1,10 @@
 # @homeostate/tool-devtools
 
+[![npm](https://img.shields.io/npm/v/@homeostate/tool-devtools?color=2563eb)](https://www.npmjs.com/package/@homeostate/tool-devtools)
+[![minzipped size](https://img.shields.io/bundlejs/size/%40homeostate%2Ftool-devtools?externals=@base-ui/react,@homeostate/core,@mixedrays/keyrove,class-variance-authority,cn,lucide-react,react,react-dom&color=2563eb&label=minzipped%20size)](https://bundlejs.com/?q=%40homeostate%2Ftool-devtools&config=%7B%22esbuild%22%3A%7B%22external%22%3A%5B%22%40base-ui%2Freact%22%2C%22%40homeostate%2Fcore%22%2C%22%40mixedrays%2Fkeyrove%22%2C%22class-variance-authority%22%2C%22cn%22%2C%22lucide-react%22%2C%22react%22%2C%22react-dom%22%5D%7D%7D)
+[![downloads](https://img.shields.io/npm/dm/@homeostate/tool-devtools?color=2563eb)](https://www.npmjs.com/package/@homeostate/tool-devtools)
+[![license](https://img.shields.io/npm/l/@homeostate/tool-devtools?color=2563eb)](https://github.com/mixedrays/homeostate/blob/main/packages/tool-devtools/LICENSE)
+
 Devtools for [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core),
 as a React component or mounted from any framework.
 A floating button opens a panel where you can inspect and edit a store's state, compare it
