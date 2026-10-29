@@ -15,6 +15,16 @@ export interface AutomergeHandle<T = Record<string, unknown>> {
   ) => Unsubscribe;
 }
 
+/**
+ * The part of an `AutomergeHandle` that `createAutomergeBackend` uses, so any object with these
+ * methods can hold the document for it. `subscribe` reports every new document, with `local` set
+ * when `change` produced it.
+ */
+export type AutomergeDocSource<T = Record<string, unknown>> = Pick<
+  AutomergeHandle<T>,
+  "doc" | "change" | "subscribe"
+>;
+
 const sameHeads = (a: A.Heads, b: A.Heads): boolean =>
   a.length === b.length && a.every((hash, i) => hash === b[i]);
 

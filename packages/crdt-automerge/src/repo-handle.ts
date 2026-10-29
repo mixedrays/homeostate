@@ -1,6 +1,6 @@
 import type * as A from "@automerge/automerge";
 import type { Unsubscribe } from "@homeostate/core";
-import type { AutomergeHandle } from "./handle.js";
+import type { AutomergeDocSource } from "./handle.js";
 
 /** What an automerge-repo `DocHandle` reports on `"heads-changed"`. */
 export interface AutomergeRepoChange<T> {
@@ -25,14 +25,14 @@ export interface AutomergeRepoHandle<T> {
 }
 
 /**
- * Reads a `DocHandle` as an `AutomergeHandle`. It listens to `"heads-changed"`: `"change"` skips a
- * merge that moves the heads without changing a value, and the heads are the backend's
+ * Reads a `DocHandle` as an `AutomergeDocSource`. It listens to `"heads-changed"`: `"change"`
+ * skips a merge that moves the heads without changing a value, and the heads are the backend's
  * `revision`. The event does not say where a change came from, so a change is local when `change`
  * produced the document the event reports.
  */
 export const fromRepoHandle = <T>(
   docHandle: AutomergeRepoHandle<T>,
-): Pick<AutomergeHandle<T>, "doc" | "change" | "subscribe"> => {
+): AutomergeDocSource<T> => {
   const changed = new WeakSet<A.Doc<T>>();
 
   return {

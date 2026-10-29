@@ -17,6 +17,7 @@ import {
 import {
   createAutomergeBackend,
   createAutomergeHandle,
+  type AutomergeDocSource,
   type AutomergeHandle,
 } from "../index.js";
 
@@ -167,6 +168,48 @@ describe("createAutomergeBackend", () => {
     expect(second.todos[2]).toBe(first.todos[2]);
     expect(Object.getOwnPropertySymbols(second.todos[0])).toEqual([]);
     expect(backend.read()).toBe(second);
+  });
+
+  it("syncs a source with only doc, change and subscribe", () => {
+    const handle = createHandle();
+    const { doc, change, subscribe } = handle;
+    const store = createTestStore({ count: 0 });
+    createSyncEngine(
+      createAutomergeBackend({ doc, change, subscribe }, NAME),
+      store.adapter,
+    ).connect();
+
+    expect(doc()[NAME]).toEqual({ count: 0 });
+    handle.update((current) =>
+      A.merge(
+        current,
+        A.change(A.clone(current, actor(2)), (draft) => {
+          (draft[NAME] as { count: number }).count = 1;
+        }),
+      ),
+    );
+    expect(store.getState()).toEqual({ count: 1 });
+  });
+
+  it("hears a source's changes through subscribe even when it also has on", () => {
+    const handle = createHandle();
+    const { doc, change, subscribe } = handle;
+    const source: AutomergeDocSource<Root> & { on: () => void } = {
+      doc,
+      change,
+      subscribe,
+      on: () => {},
+    };
+    const store = createTestStore({ count: 0 });
+    createSyncEngine(
+      createAutomergeBackend(source, NAME),
+      store.adapter,
+    ).connect();
+
+    handle.change((draft) => {
+      (draft[NAME] as { count: number }).count = 1;
+    });
+    expect(store.getState()).toEqual({ count: 1 });
   });
 });
 

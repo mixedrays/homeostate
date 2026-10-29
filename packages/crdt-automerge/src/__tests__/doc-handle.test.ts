@@ -1,7 +1,17 @@
 import * as A from "@automerge/automerge";
-import { Repo, type DocHandle } from "@automerge/automerge-repo";
-import { afterAll } from "vitest";
-import { describeCrdtBackend } from "@homeostate/core/conformance";
+import {
+  NetworkAdapter,
+  Repo,
+  type DocHandle,
+  type Message,
+  type PeerId,
+} from "@automerge/automerge-repo";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { createSyncEngine } from "@homeostate/core";
+import {
+  createTestStore,
+  describeCrdtBackend,
+} from "@homeostate/core/conformance";
 import { createAutomergeBackend } from "../index.js";
 
 const NAME = "shared";
@@ -46,4 +56,73 @@ describeCrdtBackend("createAutomergeBackend with a DocHandle", {
       (doc[NAME] as Root)[key] = value;
     });
   },
+});
+
+/** One end of an in-memory network, which delivers each message to the other end. */
+class MemoryNetworkAdapter extends NetworkAdapter {
+  peer?: MemoryNetworkAdapter;
+
+  isReady(): boolean {
+    return true;
+  }
+
+  whenReady(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  connect(peerId: PeerId): void {
+    this.peerId = peerId;
+    const { peer } = this;
+    if (peer?.peerId === undefined) return;
+    this.emit("peer-candidate", { peerId: peer.peerId, peerMetadata: {} });
+    peer.emit("peer-candidate", { peerId, peerMetadata: {} });
+  }
+
+  send(message: Message): void {
+    setTimeout(() => this.peer?.emit("message", message));
+  }
+
+  disconnect(): void {}
+}
+
+describe("createAutomergeBackend with DocHandles of two repos", () => {
+  /** Two repos connected over an in-memory network, as two peers would be. */
+  const connectRepos = (): [Repo, Repo] => {
+    const aliceToBob = new MemoryNetworkAdapter();
+    const bobToAlice = new MemoryNetworkAdapter();
+    aliceToBob.peer = bobToAlice;
+    bobToAlice.peer = aliceToBob;
+    return [
+      new Repo({ peerId: "alice" as PeerId, network: [aliceToBob] }),
+      new Repo({ peerId: "bob" as PeerId, network: [bobToAlice] }),
+    ];
+  };
+
+  it("syncs the stores through the repos' network", async () => {
+    const [alice, bob] = connectRepos();
+    try {
+      const aliceHandle = alice.create<Root>({ [NAME]: { count: 0 } });
+      const bobHandle = await bob.find<Root>(aliceHandle.url);
+      const aliceStore = createTestStore({ count: 0 });
+      const bobStore = createTestStore({ count: 0 });
+      createSyncEngine(
+        createAutomergeBackend(aliceHandle, NAME),
+        aliceStore.adapter,
+      ).connect();
+      createSyncEngine(
+        createAutomergeBackend(bobHandle, NAME),
+        bobStore.adapter,
+      ).connect();
+
+      aliceStore.setState({ count: 1 });
+      await vi.waitFor(() => expect(bobStore.getState()).toEqual({ count: 1 }));
+
+      bobStore.setState({ count: 2 });
+      await vi.waitFor(() =>
+        expect(aliceStore.getState()).toEqual({ count: 2 }),
+      );
+    } finally {
+      await Promise.all([alice.shutdown(), bob.shutdown()]);
+    }
+  });
 });
