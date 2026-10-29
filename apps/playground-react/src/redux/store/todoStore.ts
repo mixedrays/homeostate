@@ -5,9 +5,9 @@ import {
 } from "@reduxjs/toolkit";
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
-import { createReduxAdapter } from "@homeostate/store-redux";
+import { createReduxAdapter, withHomeostate } from "@homeostate/store-redux";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
-import type { FilterStatus, TodoState } from "../../types/todo";
+import type { FilterStatus } from "../../types/todo";
 import {
   isTodoTitle,
   SYNC_MAP_NAME,
@@ -49,7 +49,6 @@ const todoSlice = createSlice({
     setFilterStatus: (state, action: PayloadAction<FilterStatus>) => {
       state.filterStatus = action.payload;
     },
-    setState: (_state, action: PayloadAction<TodoState>) => action.payload,
   },
 });
 
@@ -60,18 +59,17 @@ export const {
   deleteTodo,
   setSearchTerm,
   setFilterStatus,
-  setState,
 } = todoSlice.actions;
 
 export const store = configureStore({
-  reducer: todoSlice.reducer,
+  reducer: withHomeostate(todoSlice.reducer),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
 const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
-const adapter = createReduxAdapter(store, setState);
+const adapter = createReduxAdapter(store);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 

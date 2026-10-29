@@ -1,16 +1,24 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  combineReducers,
   configureStore,
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import { legacy_createStore, type Reducer } from "redux";
+import { legacy_createStore, type Reducer, type UnknownAction } from "redux";
 import { createSyncEngine } from "@homeostate/core";
 import {
   createMemoryBackend,
   type MemoryBackend,
 } from "@homeostate/core/testing";
-import { createReduxAdapter, type ReduxLikeStore } from "../index.js";
+import {
+  createReduxAdapter,
+  REPLACE_STATE,
+  replaceState,
+  withHomeostate,
+  type ReduxLikeStore,
+  type ReplaceStateAction,
+} from "../index.js";
 
 interface Todo {
   id: string;
@@ -34,11 +42,11 @@ const todos = createSlice({
       const todo = state.todos.find((t) => t.id === action.payload);
       if (todo) todo.done = !todo.done;
     },
-    replaceState: (_state, action: PayloadAction<TodosState>) => action.payload,
+    replaced: (_state, action: PayloadAction<TodosState>) => action.payload,
   },
 });
 
-const { added, toggled, replaceState } = todos.actions;
+const { added, toggled, replaced } = todos.actions;
 
 const createTodoStore = () => configureStore({ reducer: todos.reducer });
 
@@ -63,7 +71,7 @@ describe("ReduxAdapter", () => {
     const backend = createMemoryBackend();
     const engine = createSyncEngine(
       backend,
-      createReduxAdapter(store, replaceState),
+      createReduxAdapter(store, replaced),
     );
 
     engine.connect();
@@ -83,10 +91,7 @@ describe("ReduxAdapter", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend({ filter: "open", todos: [bread] });
 
-    createSyncEngine(
-      backend,
-      createReduxAdapter(store, replaceState),
-    ).connect();
+    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
 
     expect(store.getState()).toEqual({ filter: "open", todos: [bread] });
   });
@@ -94,10 +99,7 @@ describe("ReduxAdapter", () => {
   it("writes only when a dispatch produces a new state", () => {
     const store = createTodoStore();
     const { backend, writes } = countingWrites(createMemoryBackend());
-    createSyncEngine(
-      backend,
-      createReduxAdapter(store, replaceState),
-    ).connect();
+    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
     store.dispatch(added(milk));
     expect(writes).toHaveLength(2);
 
@@ -112,10 +114,7 @@ describe("ReduxAdapter", () => {
   it("does not echo a remote change back to the backend", () => {
     const store = createTodoStore();
     const { backend, writes } = countingWrites(createMemoryBackend());
-    createSyncEngine(
-      backend,
-      createReduxAdapter(store, replaceState),
-    ).connect();
+    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
     expect(writes).toHaveLength(1);
 
     backend.receive({ filter: "all", todos: [milk] });
@@ -128,10 +127,7 @@ describe("ReduxAdapter", () => {
   it("applies remote changes to Immer-frozen state and keeps untouched items", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend();
-    createSyncEngine(
-      backend,
-      createReduxAdapter(store, replaceState),
-    ).connect();
+    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
     store.dispatch(added(milk));
     store.dispatch(added(bread));
     const before = store.getState();
@@ -243,7 +239,7 @@ describe("ReduxAdapter", () => {
     const backend = createMemoryBackend();
     const engine = createSyncEngine(
       backend,
-      createReduxAdapter(store, replaceState),
+      createReduxAdapter(store, replaced),
     );
     engine.connect();
 
@@ -253,6 +249,127 @@ describe("ReduxAdapter", () => {
 
     backend.receive({ filter: "done", todos: [] });
     expect(store.getState()).toEqual({ filter: "all", todos: [milk] });
+  });
+});
+
+describe("withHomeostate and replaceState", () => {
+  const ui = createSlice({
+    name: "ui",
+    initialState: { dark: false },
+    reducers: {
+      darkened: (state) => {
+        state.dark = true;
+      },
+    },
+  });
+
+  it("syncs a store of several slices both ways with no replace case of its own", () => {
+    const store = configureStore({
+      reducer: withHomeostate(
+        combineReducers({ todos: todos.reducer, ui: ui.reducer }),
+      ),
+    });
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, createReduxAdapter(store)).connect();
+    expect(backend.read()).toEqual({
+      todos: { filter: "all", todos: [] },
+      ui: { dark: false },
+    });
+
+    store.dispatch(added(milk));
+    store.dispatch(ui.actions.darkened());
+    expect(backend.read()).toEqual({
+      todos: { filter: "all", todos: [milk] },
+      ui: { dark: true },
+    });
+
+    backend.receive({
+      todos: { filter: "done", todos: [bread] },
+      ui: { dark: false },
+    });
+    expect(store.getState()).toEqual({
+      todos: { filter: "done", todos: [bread] },
+      ui: { dark: false },
+    });
+
+    store.dispatch(toggled(bread.id));
+    expect(backend.read()).toEqual({
+      todos: { filter: "done", todos: [{ ...bread, done: true }] },
+      ui: { dark: false },
+    });
+  });
+  it("syncs a slice that handles replaceState in its extra reducers", () => {
+    const counter = createSlice({
+      name: "counter",
+      initialState: { count: 0 },
+      reducers: {
+        increment: (state) => {
+          state.count++;
+        },
+      },
+      extraReducers: (builder) =>
+        builder.addCase(
+          replaceState<{ count: number }>,
+          (_state, action) => action.payload,
+        ),
+    });
+    const store = configureStore({ reducer: counter.reducer });
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, createReduxAdapter(store)).connect();
+
+    store.dispatch(counter.actions.increment());
+    expect(backend.read()).toEqual({ count: 1 });
+
+    backend.receive({ count: 5 });
+    expect(store.getState()).toEqual({ count: 5 });
+  });
+  it("syncs a plain Redux store whose reducer is wrapped", () => {
+    const reducer = (
+      state: { count: number } = { count: 0 },
+      action: { type: string },
+    ) =>
+      action.type === "counter/increment" ? { count: state.count + 1 } : state;
+    const store = legacy_createStore(withHomeostate(reducer));
+    const backend = createMemoryBackend();
+    createSyncEngine(backend, createReduxAdapter(store)).connect();
+
+    store.dispatch({ type: "counter/increment" });
+    expect(backend.read()).toEqual({ count: 1 });
+
+    backend.receive({ count: 7 });
+    expect(store.getState()).toEqual({ count: 7 });
+
+    store.dispatch({ type: "counter/increment" });
+    expect(backend.read()).toEqual({ count: 8 });
+  });
+  it("keeps the wrapped reducer's types and types the replace action by its payload", () => {
+    const combined = combineReducers({ todos: todos.reducer, ui: ui.reducer });
+    type Root = { todos: TodosState; ui: { dark: boolean } };
+    const store = configureStore({ reducer: withHomeostate(combined) });
+    expectTypeOf(store.getState()).toEqualTypeOf<Root>();
+    expectTypeOf(withHomeostate(combined)).toEqualTypeOf<typeof combined>();
+
+    type Preloaded = Partial<{ count: number }>;
+    const preloading: Reducer<{ count: number }, UnknownAction, Preloaded> = (
+      state = { count: 0 },
+    ) => ({ count: state.count ?? 0 });
+    expectTypeOf(withHomeostate(preloading)).toEqualTypeOf<
+      Reducer<{ count: number }, UnknownAction, Preloaded>
+    >();
+
+    const action = replaceState(store.getState());
+    expectTypeOf(action).toEqualTypeOf<ReplaceStateAction<Root>>();
+    expectTypeOf(action.type).toEqualTypeOf<"@homeostate/replaceState">();
+    expect(action).toEqual({ type: REPLACE_STATE, payload: store.getState() });
+    expect(replaceState.type).toBe("@homeostate/replaceState");
+    store.dispatch(action);
+
+    const unknown: UnknownAction = action;
+    if (replaceState.match(unknown)) {
+      expectTypeOf(unknown.payload).toBeUnknown();
+    }
+    expect(replaceState.match(unknown)).toBe(true);
+    expect(replaceState.match(added(milk))).toBe(false);
   });
 });
 
