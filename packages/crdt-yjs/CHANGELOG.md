@@ -1,5 +1,71 @@
 # @homeostate/crdt-yjs
 
+## 0.3.0
+
+### Minor Changes
+
+- de1c8a7: `createYjsBackend` returns a `YjsBackend`, a `CrdtBackend` with two more members: `map`, the
+  synced `Y.Map`, and `origin`, which tags every transaction its `write` runs. Track that origin
+  with `Y.UndoManager` to undo and redo the store's own edits:
+
+  ```ts
+  const backend = createYjsBackend(doc, "shared");
+  createSyncEngine(backend, adapter).connect();
+  const undoManager = new Y.UndoManager(backend.map, {
+    trackedOrigins: new Set([backend.origin]),
+  });
+  ```
+
+  `createYjsBackend(map, options)` syncs a `Y.Map` you already have, such as one nested in another
+  map or in a subdocument; a map that is not part of a document throws a `TypeError`. The new
+  `origin` option sets the origin, which must be unique to the backend; it defaults to a private
+  Symbol, as before.
+
+- 6f2f2e1: Report a synced map that a peer replaced. Once a peer set a new map in place of a backend's
+  nested map, or of a map holding it, the backend lost every write, its store never saw the
+  peer's state, and nothing told the app. It now calls the new `onRemoved` option once, which
+  logs the error with `console.error` by default, so the app can connect a new engine over the
+  map that replaced it. `createYjsBackend` also throws a `TypeError` for a map already removed
+  from its document.
+- aa7cbc1: Implement `CrdtBackend.revision`: it counts the document's transactions that changed something,
+  and is `undefined` while one is open. The sync engine then applies a remote change another
+  listener heard of first before writing a local change, instead of the write throwing
+  `Length exceeded!` on items the peer had deleted. `write` now diffs against the `previous` it is
+  given even inside another transaction, where it used to read the document; the engine checks the
+  revision before passing `previous`. Use it with the `@homeostate/core` release that adds
+  `CrdtBackend.revision`, since an older engine passes `previous` without that check.
+
+### Patch Changes
+
+- a80be3b: Build the backend with `createCrdtBackend` from `@homeostate/core`, so the default text policy,
+  what a write diffs against and leaving its own writes out of `subscribe` are written once, in
+  core. Options, extras such as the Yjs backend's `map` and `origin`, and behaviour are unchanged.
+  Use it with the `@homeostate/core` release that adds `createCrdtBackend`.
+- ceca144: Leave copying objects that a peer's `__proto__` entry gave a prototype to the sync engine, which
+  now does it for every backend. `read()` may return such an object as the document holds it; the
+  store still never receives one. The Yjs backend still leaves `__proto__` entries of a `Y.Map`
+  out of what it reads. Use it with the `@homeostate/core` release whose engine copies such objects.
+- 55812ce: Implement the `CrdtBackend` whose `read` returns a `JsonObject` and whose `write` takes a
+  `JsonObjectInput`, with no casts at the boundary. Use it with the `@homeostate/core` release
+  that narrows `CrdtBackend.read` and `write`.
+- Updated dependencies [39809d7]
+- Updated dependencies [a80be3b]
+- Updated dependencies [60331b4]
+- Updated dependencies [567932b]
+- Updated dependencies [55812ce]
+- Updated dependencies [d2a66d8]
+- Updated dependencies [8ed9541]
+- Updated dependencies [ceca144]
+- Updated dependencies [3bdd635]
+- Updated dependencies [9a6e0c6]
+- Updated dependencies [aa7cbc1]
+- Updated dependencies [3b9d6dc]
+- Updated dependencies [9ce5ff0]
+- Updated dependencies [cde0b51]
+- Updated dependencies [074eadc]
+- Updated dependencies [7e7171a]
+  - @homeostate/core@0.4.0
+
 ## 0.2.0
 
 ### Minor Changes

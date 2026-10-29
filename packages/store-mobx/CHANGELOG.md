@@ -1,5 +1,45 @@
 # @homeostate/store-mobx
 
+## 0.3.0
+
+### Minor Changes
+
+- 12e1d73: **Breaking:** `createMobxAdapter` takes its synced keys as an option. `createMobxAdapter(store)`
+  syncs every observable data field of the store and leaves computeds, actions and fields MobX
+  does not observe local. `createMobxAdapter(store, { omit: ["draft"] })` keeps the named fields
+  local, and `createMobxAdapter(store, { keys: ["todos", "filter"] })` replaces
+  `createMobxAdapter(store, ["todos", "filter"])`, syncing the listed fields alone. Passing an
+  array throws a `TypeError` naming the new form.
+
+  `keys` and `omit` take readonly lists, such as an `as const` constant, and name only data
+  fields of the store: a method name, a typo, or both options together are compile errors. The
+  adapter's state is typed as the synced fields, `Pick<S, K>`, instead of the whole store, so it
+  no longer claims the store's methods. The options type is exported as `MobxAdapterOptions`.
+
+### Patch Changes
+
+- 074eadc: Document how a failed backend write surfaces with MobX. The engine writes local changes from
+  inside the adapter's reaction, which MobX's error boundary guards, so without the engine's new
+  `onError` option the error is only logged by MobX and the action returns normally. With
+  `onError`, the engine reports it there instead.
+- Updated dependencies [39809d7]
+- Updated dependencies [a80be3b]
+- Updated dependencies [60331b4]
+- Updated dependencies [567932b]
+- Updated dependencies [55812ce]
+- Updated dependencies [d2a66d8]
+- Updated dependencies [8ed9541]
+- Updated dependencies [ceca144]
+- Updated dependencies [3bdd635]
+- Updated dependencies [9a6e0c6]
+- Updated dependencies [aa7cbc1]
+- Updated dependencies [3b9d6dc]
+- Updated dependencies [9ce5ff0]
+- Updated dependencies [cde0b51]
+- Updated dependencies [074eadc]
+- Updated dependencies [7e7171a]
+  - @homeostate/core@0.4.0
+
 ## 0.2.1
 
 ### Patch Changes
