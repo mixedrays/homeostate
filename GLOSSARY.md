@@ -73,7 +73,7 @@ Values made only of objects, arrays, strings, finite numbers, booleans and `null
 _Avoid_: Serializable state, POJO
 
 **Synced state**:
-The plain JSON object the sync engine exchanges with a CRDT backend: the store's state reduced to its synced keys.
+The plain JSON object the sync engine exchanges with a CRDT backend: the store's state reduced to its synced keys. Typed `JsonObject`, `Record<string, unknown>`, as `CrdtBackend.read` returns it, and `JsonObjectInput`, any object but an array or another iterable, as `write` takes it.
 _Avoid_: Filtered state, shared state
 
 **JSON snapshot**:
@@ -172,7 +172,7 @@ One step of an edit script, an object whose `type` is `INSERT`, `UPDATE`, `DELET
 In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the step is meant.
 
 **Edit script**:
-The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, all of one container kind (`EditScript`); each numeric key addresses the array or string as revised by the steps before it.
+The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, two values of one container kind, all of that kind (`EditScript`); each numeric key addresses the array or string as revised by the steps before it.
 _Avoid_: Patch, delta, changeset
 
 **Pending change**:

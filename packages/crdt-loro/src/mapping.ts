@@ -1,5 +1,5 @@
 import { LoroList, LoroMap, LoroText } from "loro-crdt";
-import type { TextPolicy } from "@homeostate/core";
+import type { JsonObject, TextPolicy } from "@homeostate/core";
 
 export type SharedContainer = LoroMap | LoroList | LoroText;
 
@@ -75,7 +75,9 @@ const fillList = (
  * `value` with every such object replaced by a plain copy of its own properties, copying only
  * the containers on a path to one.
  */
-export const withPlainPrototypes = (value: unknown): unknown => {
+export function withPlainPrototypes(value: JsonObject): JsonObject;
+export function withPlainPrototypes(value: unknown): unknown;
+export function withPlainPrototypes(value: unknown): unknown {
   if (value === null || typeof value !== "object" || ArrayBuffer.isView(value))
     return value;
 
@@ -92,7 +94,7 @@ export const withPlainPrototypes = (value: unknown): unknown => {
   }
 
   return copy ?? value;
-};
+}
 
 const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;

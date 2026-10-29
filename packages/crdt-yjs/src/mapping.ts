@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import type { TextPolicy } from "@homeostate/core";
+import type { JsonObject, TextPolicy } from "@homeostate/core";
 
 export type SharedType = Y.Map<unknown> | Y.Array<unknown> | Y.Text;
 
@@ -50,17 +50,20 @@ const objectToYMap = (
  * whole go through `withPlainPrototypes`.
  */
 export const toPlainValue = (value: unknown): unknown => {
-  if (value instanceof Y.Map) {
-    const object: Record<string, unknown> = {};
-    value.forEach((item, key) => {
-      // Assigning this key would replace the object's prototype; the engine leaves it out anyway.
-      if (key !== "__proto__") object[key] = toPlainValue(item);
-    });
-    return object;
-  }
+  if (value instanceof Y.Map) return toPlainMap(value);
   if (value instanceof Y.Array) return value.map(toPlainValue);
   if (value instanceof Y.AbstractType) return value.toJSON();
   return withPlainPrototypes(value);
+};
+
+/** `toPlainValue` of a Y.Map, which is a plain object. */
+export const toPlainMap = (map: Y.Map<unknown>): JsonObject => {
+  const object: JsonObject = {};
+  map.forEach((item, key) => {
+    // Assigning this key would replace the object's prototype; the engine leaves it out anyway.
+    if (key !== "__proto__") object[key] = toPlainValue(item);
+  });
+  return object;
 };
 
 /**

@@ -9,6 +9,26 @@
 export type Unsubscribe = () => void;
 
 /**
+ * A plain object, which is what the sync engine and a `CrdtBackend` exchange. Its values are
+ * typed `unknown`: they are meant to be JSON, but a store's state may also hold what
+ * `JSON.stringify` leaves out or turns into `null`, such as `undefined` or `NaN`.
+ */
+export type JsonObject = Record<string, unknown>;
+
+/**
+ * Any object but an array or another iterable, which is what a caller may pass where a backend
+ * takes state, such as `CrdtBackend.write`. Unlike `JsonObject`, it accepts state typed with an
+ * `interface`, which has no index signature; arrays, `Map`s, `Set`s and primitives fail to
+ * compile. It is assignable to `JsonObject`, so a backend uses it as one without a cast.
+ */
+export type JsonObjectInput = {
+  // An interface is assignable to an index signature only when its values are `any`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+  [Symbol.iterator]?: never;
+};
+
+/**
  * Adapter interface that bridges a specific state manager with the sync engine.
  * Implement this interface to add support for any state manager (Zustand, Redux, MobX, etc.)
  *
@@ -57,10 +77,10 @@ export interface StoreAdapter<S extends object> {
  */
 export interface CrdtBackend {
   /**
-   * Plain JSON snapshot of the synced subtree, as an object; the engine throws a `TypeError` for
-   * anything else. Must not alias backend internals.
+   * Plain JSON snapshot of the synced subtree. Must not alias backend internals. The engine
+   * still checks that it is a plain object, and throws a `TypeError` for anything else.
    */
-  read: () => unknown;
+  read: () => JsonObject;
 
   /**
    * Make the backend equal to `next` in one atomic transaction.
@@ -74,7 +94,7 @@ export interface CrdtBackend {
    * instead of reading its document, and unchanged subtrees of `next` match it by identity.
    * A backend may ignore it.
    */
-  write: (next: unknown, previous?: unknown) => void;
+  write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
 
   /**
    * The synced subtree's revision: a value equal (`===`) to an earlier one only if the subtree

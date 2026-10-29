@@ -5,9 +5,14 @@ import {
   type RecordChange,
   type TextChange,
 } from "./change.js";
-import { isAbsent, toJsonPrimitive, toJsonValue } from "./json.js";
+import { isAbsent, kindOf, toJsonPrimitive, toJsonValue } from "./json.js";
+import type { JsonObject, JsonObjectInput } from "./types.js";
 
-export type Diffable = Record<string, unknown> | Array<unknown> | string;
+/**
+ * The values `getChanges` diffs: a record, an array or a string. Both values passed to it must
+ * be of one of these kinds, so a value typed only as `Diffable` must be narrowed first.
+ */
+export type Diffable = JsonObject | unknown[] | string;
 
 /**
  * Decides which strings are collaborative text, by their path from the root of the diffed or
@@ -160,8 +165,22 @@ const written = (value: unknown, options: DiffOptions): unknown =>
   options.json ? toJsonValue(value) : value;
 
 /**
- * Returns the ordered edit script that turns `a` into `b`. Two strings passed directly are
- * always diffed character by character; `options.text` decides for the strings nested in them.
+ * Returns the ordered edit script that turns `a` into `b`, without mutating either. Equal values
+ * have no steps, and so do containers shared by identity, whose contents are not visited.
+ *
+ * `a` and `b` must be of one kind: two records, such as states typed with an interface, two
+ * arrays or two strings. A script cannot replace its root, so values of different kinds throw a
+ * `TypeError` naming both kinds. Nested values that change kind are replaced by one `UPDATE`.
+ *
+ * The steps are applied in order. Each array index or string offset addresses the array or
+ * string as revised by the steps before it, so a backend applies them one by one without
+ * sorting or clamping. String offsets and delete counts are UTF-16 code units, as JavaScript
+ * indexes strings, and never split a surrogate pair.
+ *
+ * Two strings passed directly are always diffed character by character; `options.text` decides
+ * for the strings nested in a record or an array.
+ *
+ * @throws {TypeError} When `a` and `b` are not two records, two arrays or two strings.
  */
 export function getChanges(
   a: string,
@@ -174,34 +193,22 @@ export function getChanges(
   options?: DiffOptions,
 ): ListChange[];
 export function getChanges(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
+  a: JsonObjectInput,
+  b: JsonObjectInput,
   options?: DiffOptions,
 ): RecordChange[];
 export function getChanges(
   a: Diffable,
   b: Diffable,
-  options?: DiffOptions,
-): EditScript;
-export function getChanges(
-  a: Diffable,
-  b: Diffable,
   options: DiffOptions = {},
 ): EditScript {
-  return diff(a, b, options);
-}
-
-/** The script for two values of any kind; values of different kinds have none. */
-const diff = (
-  a: Diffable,
-  b: Diffable,
-  options: DiffOptions = {},
-): EditScript => {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
   if (isArray(a) && isArray(b)) return getArrayChanges(a, b, [], options);
   if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, [], options);
-  return [];
-};
+  throw new TypeError(
+    `getChanges needs two strings, two arrays or two records, got ${kindOf(a)} and ${kindOf(b)}`,
+  );
+}
 
 /**
  * The length of the common prefix of two sequences, and of the common suffix of what remains,

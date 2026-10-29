@@ -3,18 +3,18 @@ import { Bench } from "tinybench";
 import {
   ChangeType,
   getChanges,
-  type Diffable,
   type DiffOptions,
-  type EditScript,
+  type JsonObject,
+  type RecordChange,
 } from "@homeostate/core";
 import { formatDuration, table } from "./report.js";
 import { makeTodos } from "./scenarios.js";
 
 interface Fixture {
   name: string;
-  before: Diffable;
-  after: Diffable;
-  expected: EditScript;
+  before: JsonObject;
+  after: JsonObject;
+  expected: RecordChange[];
 }
 
 const { UPDATE, PENDING } = ChangeType;

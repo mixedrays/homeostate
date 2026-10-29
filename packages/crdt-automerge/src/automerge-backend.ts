@@ -29,6 +29,10 @@ export interface AutomergeBackendOptions {
 
 const noText: TextPolicy = () => false;
 
+/** What `value` is, as the error about a synced key holding no map names it. */
+const kindOf = (value: unknown): string =>
+  value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+
 export const createAutomergeBackend = <T>(
   source: AutomergeHandle<T> | AutomergeRepoHandle<T>,
   name: string,
@@ -44,7 +48,15 @@ export const createAutomergeBackend = <T>(
   const current = (): unknown => snapshot((handle.doc() as Container)[name]);
 
   return {
-    read: () => current() ?? {},
+    // A missing key reads as an empty map, which the first write creates.
+    read: () => {
+      const value = current();
+      if (value === undefined) return {};
+      if (isRecord(value)) return value;
+      throw new TypeError(
+        `The Automerge key ${JSON.stringify(name)} must hold a map, got ${kindOf(value)}`,
+      );
+    },
 
     // Every change gives the handle a new document, and so does a merge that brings nothing
     // new, which the heads tell apart. They are read once per document.
@@ -59,7 +71,6 @@ export const createAutomergeBackend = <T>(
     },
 
     write: (next, previous) => {
-      if (!isRecord(next)) return;
       // `current()` is a `read()` snapshot, in which every string is a plain string.
       const before = previous ?? current();
       writing = true;

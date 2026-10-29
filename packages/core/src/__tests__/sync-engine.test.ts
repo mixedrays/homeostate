@@ -10,6 +10,7 @@ import {
 import {
   createSyncEngine,
   type CrdtBackend,
+  type JsonObjectInput,
   WriteLoopError,
   type SyncEngineConfig,
 } from "../index.js";
@@ -34,7 +35,7 @@ import {
  * A memory backend that records the `previous` of every write and checks that it is what the
  * backend held, as JSON would store it, which is what `CrdtBackend.write` promises.
  */
-const checkedBackend = (initial?: unknown) => {
+const checkedBackend = (initial?: JsonObjectInput) => {
   const backend = createMemoryBackend(initial);
   const write = backend.write;
   const previous: unknown[] = [];
@@ -575,7 +576,7 @@ describe("createSyncEngine", () => {
 
         backend.receive({ count: 1, updatedAt: 0 });
         expect(write).toHaveBeenCalledTimes(1);
-        const stamped = (backend.read() as Stamped).updatedAt!;
+        const stamped = (backend.read() as unknown as Stamped).updatedAt!;
 
         backend.receive({ count: 1, updatedAt: -1 });
         backend.receive({ count: 1, updatedAt: -2 });
@@ -828,7 +829,7 @@ describe("createSyncEngine", () => {
       store.update((s) => toggleTodo(s, "2"));
       expect(read).toHaveBeenCalledTimes(2);
 
-      const remote = deleteTodo(memory.read() as TodoState, "3");
+      const remote = deleteTodo(memory.read() as unknown as TodoState, "3");
       memory.receive(remote);
 
       expect(store.getState()).toEqual(remote);
@@ -1572,7 +1573,8 @@ describe("createSyncEngine", () => {
       "throws from connect, without seeding, when read() returns %j",
       (held, kind) => {
         const backend = createMemoryBackend();
-        vi.spyOn(backend, "read").mockReturnValue(held);
+        // A backend that breaks its contract, which the types rule out.
+        vi.spyOn(backend, "read").mockReturnValue(held as never);
         const write = vi.spyOn(backend, "write");
         const store = createTestStore(threeTodos());
         const engine = createSyncEngine(backend, store.adapter);
@@ -1613,7 +1615,7 @@ describe("createSyncEngine", () => {
       const onError = vi.fn();
       createSyncEngine(backend, store.adapter, { onError }).connect();
 
-      backend.receive(null);
+      backend.receive(null as never);
 
       expect(onError).toHaveBeenCalledWith(noObject, "backend");
       expect(store.getState()).toEqual(threeTodos());
@@ -1624,7 +1626,7 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos());
       createSyncEngine(backend, store.adapter).connect();
 
-      expect(() => backend.receive(null)).toThrow(noObject);
+      expect(() => backend.receive(null as never)).toThrow(noObject);
 
       expect(store.getState()).toEqual(threeTodos());
     });

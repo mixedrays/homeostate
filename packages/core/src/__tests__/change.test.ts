@@ -4,7 +4,6 @@ import {
   getChanges,
   type Change,
   type Diffable,
-  type EditScript,
   type ListChange,
   type RecordChange,
   type TextChange,
@@ -30,9 +29,49 @@ describe("Change types", () => {
     expectTypeOf(getChanges({ a: 1 }, { a: 2 })).toEqualTypeOf<
       RecordChange[]
     >();
-    expectTypeOf(
-      getChanges("a" as Diffable, ["a"] as Diffable),
-    ).toEqualTypeOf<EditScript>();
+    const items: readonly number[] = [1];
+    expectTypeOf(getChanges([...items], [2])).toEqualTypeOf<ListChange[]>();
+  });
+
+  it("diffs two states typed with an interface as records", () => {
+    interface State {
+      todos: { id: string; done: boolean }[];
+      title: string;
+    }
+    const before: State = { todos: [{ id: "1", done: false }], title: "a" };
+    const after: State = { todos: [{ id: "1", done: true }], title: "a" };
+
+    const changes = getChanges(before, after);
+
+    expectTypeOf(changes).toEqualTypeOf<RecordChange[]>();
+    expect(changes).toEqual([
+      {
+        type: "pending",
+        key: "todos",
+        kind: "list",
+        changes: [
+          {
+            type: "pending",
+            key: 0,
+            kind: "record",
+            changes: [{ type: "update", key: "done", value: true }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("accepts only two values of one kind", () => {
+    const text = "a" as Diffable;
+    const list = ["a"] as Diffable;
+    expect(() =>
+      // @ts-expect-error A string and an array have no edit script.
+      getChanges("a", ["a"]),
+    ).toThrow(TypeError);
+    expect(() =>
+      // @ts-expect-error Values typed only as `Diffable` may be of different kinds.
+      getChanges(text, list),
+    ).toThrow(TypeError);
   });
 
   it("narrows a key to the kind of its container", () => {

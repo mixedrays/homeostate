@@ -2,6 +2,7 @@ import type { LoroDoc } from "loro-crdt";
 import {
   applyChanges,
   type CrdtBackend,
+  type JsonObject,
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
@@ -34,11 +35,14 @@ export const createLoroBackend = (
   const ops = createLoroOps(text);
 
   return {
-    read: () => withPlainPrototypes(map.toJSON()),
+    read: () => {
+      const json: JsonObject = map.toJSON();
+      return withPlainPrototypes(json);
+    },
 
     write: (next, previous) => {
-      const current = (previous ?? map.toJSON()) as object;
-      applyChanges(map, current, next as object, ops, {
+      const current: JsonObject = previous ?? map.toJSON();
+      applyChanges(map, current, next, ops, {
         text,
         json: true,
       });

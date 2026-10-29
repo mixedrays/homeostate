@@ -388,7 +388,7 @@ export const describeCrdtBackend = <D>(
       ];
       const remoteEdit = (r: Random): void => {
         if (!exchange) return;
-        peer.write(r.pick(edits)(peer.read() as EditedState, r));
+        peer.write(r.pick(edits)(peer.read() as unknown as EditedState, r));
         exchange(doc, peerDoc);
       };
 

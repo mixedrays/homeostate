@@ -130,7 +130,7 @@ describe("createInspector", () => {
     await tick();
 
     expect(store.get().todos[0].done).toBe(true);
-    expect((backend.read() as State).todos[0].done).toBe(true);
+    expect((backend.read() as unknown as State).todos[0].done).toBe(true);
     expect(inspector.getSnapshot().log.at(-1)).toMatchObject({
       origin: "devtools",
       label: "Edited todos[0].done",
@@ -171,7 +171,7 @@ describe("createInspector", () => {
     await tick();
 
     expect(store.get().filter).toBe("all");
-    expect((backend.read() as State).filter).toBe("all");
+    expect((backend.read() as unknown as State).filter).toBe("all");
     expect(inspector.getSnapshot().log.at(-1)?.label).toBe("Restored #0");
   });
 

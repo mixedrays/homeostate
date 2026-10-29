@@ -98,6 +98,35 @@ describe("createAutomergeBackend", () => {
     expect(backend.read()).toEqual({ count: 1 });
   });
 
+  it.each([
+    ["a string", "text", "string"],
+    ["a list", [1], "array"],
+    ["null", null, "null"],
+  ])(
+    "throws a TypeError from read() when a peer stores %s at the synced key",
+    (_, held, kind) => {
+      const handle = createHandle();
+      handle.change((doc) => {
+        doc[NAME] = held;
+      });
+      const backend = createAutomergeBackend(handle, NAME);
+      const error = new TypeError(
+        `The Automerge key "${NAME}" must hold a map, got ${kind}`,
+      );
+
+      expect(() => backend.read()).toThrow(error);
+      expect(() =>
+        createSyncEngine(
+          backend,
+          createTestStore(threeTodos()).adapter,
+        ).connect(),
+      ).toThrow(error);
+
+      backend.write({ count: 1 });
+      expect(backend.read()).toEqual({ count: 1 });
+    },
+  );
+
   it("reports a peer's update merged while its own write notifies, and only that", () => {
     const handle = createHandle(1);
     const backend = createAutomergeBackend(handle, NAME);
@@ -124,10 +153,10 @@ describe("createAutomergeBackend", () => {
   it("shares unchanged subtrees between reads and copies the changed path", () => {
     const backend = createAutomergeBackend(createHandle(), NAME);
     backend.write(threeTodos());
-    const first = backend.read() as TodoState;
+    const first = backend.read() as unknown as TodoState;
 
     backend.write(toggleTodo(threeTodos(), "1"));
-    const second = backend.read() as TodoState;
+    const second = backend.read() as unknown as TodoState;
 
     expect(second).toEqual(toggleTodo(threeTodos(), "1"));
     expect(first).toEqual(threeTodos());

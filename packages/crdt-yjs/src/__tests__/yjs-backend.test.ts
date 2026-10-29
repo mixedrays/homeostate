@@ -401,7 +401,7 @@ describe("undo", () => {
 
     store.update((s) => toggleTodo(s, "1"));
     const peer = createYjsBackend(peerDoc, NAME);
-    peer.write(addTodo(peer.read() as TodoState, todo("4")));
+    peer.write(addTodo(peer.read() as unknown as TodoState, todo("4")));
     replication.exchange(doc, peerDoc);
     undo.undo();
 

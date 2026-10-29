@@ -242,13 +242,26 @@ Adapters whose `getState()` returns a fresh copy, such as the MobX adapter, meet
 ## CrdtBackend
 
 ```ts
+type JsonObject = Record<string, unknown>;
+type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
+
 interface CrdtBackend {
-  read: () => unknown;
-  write: (next: unknown, previous?: unknown) => void;
+  read: () => JsonObject;
+  write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
   revision?: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
+
+The engine only exchanges plain objects with a backend, so `read` returns a `JsonObject` and
+`write` receives objects. `JsonObject` keeps its values `unknown`: they are meant to be JSON, but
+`next` and `previous` may also hold what `JSON.stringify` leaves out or turns into `null`.
+
+`write` takes a `JsonObjectInput`: any object but an array or another iterable, so state typed
+with an `interface` passes as it is, while arrays, `Map`s, `Set`s and primitives fail to compile.
+It is assignable to `JsonObject`, so a backend uses `next` as one without a cast. An interface
+has no index signature, so `read()` converts to one through `unknown`:
+`backend.read() as unknown as State`.
 
 | Member                   | Contract                                                                                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -274,7 +287,8 @@ applies what it finds first if that differs; see [SyncEngine](#syncengine). With
 subtree changing, which costs only that read: the Yjs backend counts the document's
 transactions, the Loro backend its ops, and the Automerge backend uses the document's heads.
 
-`read()` must return an object; the engine throws a `TypeError` for anything else. Objects in the
+`read()` must return an object; the engine still checks, and throws a `TypeError` for anything
+else, such as what a peer stored in place of the synced map. Objects in the
 snapshot must inherit from `Object.prototype`: a library that builds them by assignment turns
 a peer's `__proto__` entry into the prototype, which the Yjs and Loro backends undo before
 returning. Keep document replication in your CRDT provider. To write small edits instead of
