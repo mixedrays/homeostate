@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import {
   ArrowDownUpIcon,
+  ArrowLeftRightIcon,
   ArrowRightIcon,
   DatabaseIcon,
   LayersIcon,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router";
 import type { Route } from "./+types/home";
+import { SyncDemo } from "@/components/home/sync-demo.tsx";
 import { GithubIcon } from "@/components/layout/github-icon.tsx";
 import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
@@ -52,6 +54,7 @@ export const meta: Route.MetaFunction = () => [
 
 const orList = new Intl.ListFormat("en", { type: "disjunction" });
 
+/** Vertical on small screens, horizontal from `lg`, where it sits above the two package lists. */
 function SyncDiagram({ backends }: { backends: string[] }) {
   return (
     <figure className="relative overflow-hidden rounded-2xl border bg-muted/30 p-6 sm:p-8">
@@ -68,45 +71,41 @@ function SyncDiagram({ backends }: { backends: string[] }) {
             Two-way sync
           </span>
         </div>
-        <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-xs">
-          <LayersIcon
-            aria-hidden="true"
-            className="size-5 text-muted-foreground"
-          />
-          <div>
-            <p className="text-sm font-medium">Your existing store</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Same state. Same actions. Same UI.
-            </p>
+        <div className="flex flex-col lg:flex-row lg:items-center">
+          <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-xs lg:flex-1">
+            <LayersIcon
+              aria-hidden="true"
+              className="size-5 text-muted-foreground"
+            />
+            <div>
+              <p className="text-sm font-medium">Your existing store</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Same state. Same actions. Same UI.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center justify-center gap-3 py-3 text-muted-foreground">
-          <ArrowDownUpIcon aria-hidden="true" className="size-4" />
-          <span className="font-mono text-[11px]">store adapter</span>
-        </div>
-        <div className="flex items-center gap-4 rounded-xl border border-primary/30 bg-background p-5 shadow-[0_4px_24px_-8px_var(--primary)]">
-          <NetworkIcon aria-hidden="true" className="size-6 text-primary" />
-          <div>
-            <p className="font-semibold tracking-tight">Homeostate</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The sync engine between them.
-            </p>
+          <DiagramLink label="store adapter" />
+          <div className="flex items-center gap-4 rounded-xl border border-primary/30 bg-background p-5 shadow-[0_4px_24px_-8px_var(--primary)] lg:flex-1">
+            <NetworkIcon aria-hidden="true" className="size-6 text-primary" />
+            <div>
+              <p className="font-semibold tracking-tight">Homeostate</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The sync engine between them.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center justify-center gap-3 py-3 text-muted-foreground">
-          <ArrowDownUpIcon aria-hidden="true" className="size-4" />
-          <span className="font-mono text-[11px]">CRDT backend</span>
-        </div>
-        <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-xs">
-          <DatabaseIcon
-            aria-hidden="true"
-            className="size-5 text-muted-foreground"
-          />
-          <div>
-            <p className="text-sm font-medium">Your CRDT document</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {orList.format(backends)}
-            </p>
+          <DiagramLink label="CRDT backend" />
+          <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-xs lg:flex-1">
+            <DatabaseIcon
+              aria-hidden="true"
+              className="size-5 text-muted-foreground"
+            />
+            <div>
+              <p className="text-sm font-medium">Your CRDT document</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {orList.format(backends)}
+              </p>
+            </div>
           </div>
         </div>
         <figcaption className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
@@ -114,6 +113,19 @@ function SyncDiagram({ backends }: { backends: string[] }) {
         </figcaption>
       </div>
     </figure>
+  );
+}
+
+function DiagramLink({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center gap-3 py-3 text-muted-foreground lg:flex-col lg:gap-1.5 lg:px-4 lg:py-0">
+      <ArrowDownUpIcon aria-hidden="true" className="size-4 lg:hidden" />
+      <ArrowLeftRightIcon
+        aria-hidden="true"
+        className="hidden size-4 lg:block"
+      />
+      <span className="font-mono text-[11px]">{label}</span>
+    </div>
   );
 }
 
@@ -226,7 +238,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               Open source · MIT licensed · Framework agnostic
             </p>
           </div>
-          <SyncDiagram backends={byGroup("crdt").map((pkg) => pkg.label)} />
+          <SyncDemo />
         </section>
 
         <section
@@ -275,20 +287,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <ArrowRightIcon aria-hidden="true" className="size-4" />
             </Link>
           </div>
-          <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
-            <PackageColumn
-              step="01"
-              title="Store adapters"
-              hint="Keep the state manager you know."
-              packages={byGroup("store")}
-              columns
-            />
-            <PackageColumn
-              step="02"
-              title="CRDT backends"
-              hint="Choose how your state replicates."
-              packages={byGroup("crdt")}
-            />
+          <div className="grid gap-5">
+            <SyncDiagram backends={byGroup("crdt").map((pkg) => pkg.label)} />
+            <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+              <PackageColumn
+                step="01"
+                title="Store adapters"
+                hint="Keep the state manager you know."
+                packages={byGroup("store")}
+                columns
+              />
+              <PackageColumn
+                step="02"
+                title="CRDT backends"
+                hint="Choose how your state replicates."
+                packages={byGroup("crdt")}
+              />
+            </div>
           </div>
         </section>
 

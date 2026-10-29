@@ -179,10 +179,21 @@
 }
 
 /*
- * The homeostate mark's Connect motion, from the identity kit. `HomeostateMark` sets
+ * The homeostate mark's Connect motion, from the identity kit. On hover, `HomeostateMark` sets
  * `data-playing` while it runs: the parts pull apart quickly, the brackets meet, the crossbar
- * grows in from both ends, the diamond grows where they meet and a ripple spreads out.
+ * grows in from both ends, the diamond grows where they meet and a ripple spreads out. As a
+ * connection icon it sets `data-state`, and the same sequence runs as transitions, so a change
+ * mid-way turns around smoothly and nothing plays on first render. The same rules as the
+ * devtools mark, in packages/tool-devtools/src/styles.css.
+ *
+ * The ripple's progress is a registered property, so it can transition.
  */
+@property --hm-ripple {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
 @layer components {
   .hm-mark {
     --hm-ink: #203a40;
@@ -234,9 +245,61 @@
     animation: hm-connect-ripple 1400ms;
   }
 
+  /* Disconnected: the brackets apart with nothing between them. Coming from connected,
+     the diamond shrinks, the bar retracts into the brackets, then they part. */
+  .hm-mark[data-state="disconnected"] :is(.hm-left, .hm-right) {
+    transition: transform 420ms cubic-bezier(0.4, 0, 0.2, 1) 360ms;
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-left {
+    transform: translateX(-8px);
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-right {
+    transform: translateX(8px);
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-bar {
+    stroke-dasharray: 0 100 0 0;
+    transition: stroke-dasharray 260ms cubic-bezier(0.4, 0, 0.2, 1) 160ms;
+  }
+
+  .hm-mark[data-state="disconnected"] .hm-diamond {
+    transform: scale(0);
+    transition: transform 240ms cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  /* Connected: the full mark. Coming from disconnected, the brackets close in, the bar
+     grows from both ends, the diamond grows and a ripple spreads. */
+  .hm-mark[data-state="connected"] :is(.hm-left, .hm-right) {
+    transition: transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+
+  .hm-mark[data-state="connected"] .hm-bar {
+    stroke-dasharray: 50 0 50 0;
+    transition: stroke-dasharray 300ms cubic-bezier(0.4, 0, 0.2, 1) 380ms;
+  }
+
+  .hm-mark[data-state="connected"] .hm-diamond {
+    transition: transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1) 600ms;
+  }
+
+  .hm-mark[data-state="connected"] .hm-ripple {
+    --hm-ripple: 1;
+    transition: --hm-ripple 600ms cubic-bezier(0.2, 0.6, 0.3, 1) 760ms;
+  }
+
+  /* Invisible at 0 and at 1, so the ripple shows only while connecting. */
+  .hm-mark[data-state] .hm-ripple {
+    opacity: calc(0.9 * (1 - var(--hm-ripple)) * min(1, var(--hm-ripple) * 40));
+    transform: scale(calc(1 + 2 * var(--hm-ripple)));
+    stroke-width: calc((4 - 2.7 * var(--hm-ripple)) * 1px);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .hm-mark > * {
       animation: none !important;
+      transition: none !important;
     }
   }
 }
@@ -335,6 +398,103 @@
     opacity: 0;
     transform: scale(3);
     stroke-width: 1.3px;
+  }
+}
+
+/*
+ * The hero's sync demo (`SyncDemo`). A row's highlight and a window's glow are overlays keyed by
+ * a counter, so each plays once when it mounts. Rows the script adds grow in, and shrink out when
+ * the loop rewinds. The script makes packets and click rings itself and removes them when their
+ * animation ends.
+ */
+@layer components {
+  .sd-flash {
+    animation: sd-flash 1s ease-out;
+  }
+
+  .sd-glow {
+    animation: sd-glow 0.9s ease-out;
+  }
+
+  .sd-enter {
+    animation: sd-enter 0.42s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  .sd-leave {
+    animation: sd-leave 0.36s ease-in forwards;
+  }
+
+  .sd-caption {
+    animation: sd-caption 0.4s ease-out;
+  }
+
+  .sd-packet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border-radius: 3px;
+    rotate: 45deg;
+    background: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 22%, transparent);
+  }
+
+  .sd-ring {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :is(.sd-flash, .sd-glow, .sd-enter, .sd-leave, .sd-caption) {
+      animation: none;
+    }
+  }
+}
+
+@keyframes sd-flash {
+  from {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes sd-glow {
+  from {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+@keyframes sd-enter {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes sd-leave {
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes sd-caption {
+  from {
+    opacity: 0;
+    translate: 0 3px;
   }
 }
 

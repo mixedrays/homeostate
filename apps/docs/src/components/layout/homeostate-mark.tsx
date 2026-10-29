@@ -14,17 +14,27 @@ const diamond = (
 
 /**
  * The homeostate mark, inline so its parts can move: two brackets, one per synced store,
- * joined into an H by the shared state diamond. Hovering or focusing the closest link plays
- * the Connect motion from app.css once: the brackets meet, the crossbar joins them, the
- * diamond grows and a ripple spreads.
+ * joined into an H by the shared state diamond. Its motion lives in app.css.
+ *
+ * Without `state`, hovering or focusing the closest link plays the Connect motion once: the
+ * brackets meet, the crossbar joins them, the diamond grows and a ripple spreads. With
+ * `state`, it is a connection icon: "disconnected" shows only the brackets, and a change
+ * plays the same sequence forward or back.
  */
-export function HomeostateMark({ className }: { className?: string }) {
+export function HomeostateMark({
+  className,
+  state,
+}: {
+  className?: string;
+  state?: "connected" | "disconnected";
+}) {
   const ref = useRef<SVGSVGElement>(null);
+  const toggle = state !== undefined;
 
   useEffect(() => {
     const mark = ref.current;
-    return mark ? playOnHover(mark) : undefined;
-  }, []);
+    return mark && !toggle ? playOnHover(mark) : undefined;
+  }, [toggle]);
 
   return (
     <svg
@@ -33,6 +43,7 @@ export function HomeostateMark({ className }: { className?: string }) {
       fill="none"
       strokeWidth={10}
       aria-hidden
+      data-state={state}
       className={cn("hm-mark", className)}
     >
       <path
