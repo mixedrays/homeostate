@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
 import { ChangeType } from "../change.js";
 import { getChanges } from "../diff.js";
-import { patchState } from "../patching.js";
+import { keepIdentity } from "../index.js";
 import { unicodeEdits } from "./helpers.js";
 
 /** A surrogate is valid only as part of a pair, which iteration returns as one code point. */
@@ -59,7 +59,7 @@ function checkEdits(before: string, after: string) {
     expect(isWellFormed(current)).toBe(true);
   }
   expect(current).toBe(after);
-  expect(patchState({ text: before }, { text: after })).toEqual({
+  expect(keepIdentity({ text: before }, { text: after })).toEqual({
     text: after,
   });
 

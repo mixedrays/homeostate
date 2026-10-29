@@ -45,7 +45,7 @@ export interface RenderCount {
  *
  * A row the operation added is not counted — it has to mount whatever core does. A row that
  * disappeared is not counted either. What is counted is a surviving row handed to the store
- * as a new object, which is exactly what structural sharing in `patchState` is there to
+ * as a new object, which is exactly what structural sharing in `keepIdentity` is there to
  * prevent, and `wasted` is the part of that which carries no new data at all.
  */
 export const countRenders = (

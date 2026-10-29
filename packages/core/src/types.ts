@@ -79,6 +79,11 @@ export interface CrdtBackend {
   /**
    * Plain JSON snapshot of the synced subtree. Must not alias backend internals. The engine
    * still checks that it is a plain object, and throws a `TypeError` for anything else.
+   *
+   * An object in it may carry a prototype that a peer's `__proto__` entry set, as when a library
+   * builds objects by assignment. The engine copies every object whose prototype is neither
+   * `Object.prototype` nor `null` into a plain object of its own entries before it reaches the
+   * store, so a backend needs no guard of its own.
    */
   read: () => JsonObject;
 

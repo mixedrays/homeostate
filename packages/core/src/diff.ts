@@ -5,7 +5,17 @@ import {
   type RecordChange,
   type TextChange,
 } from "./change.js";
-import { isAbsent, kindOf, toJsonPrimitive, toJsonValue } from "./json.js";
+import {
+  hasOwn,
+  isAbsent,
+  isRecord,
+  jsonItem,
+  jsonItemEqual,
+  kindOf,
+  PROTO_KEY,
+  toJsonPrimitive,
+  toJsonValue,
+} from "./json.js";
 import type { JsonObject, JsonObjectInput } from "./types.js";
 
 /**
@@ -47,22 +57,6 @@ const isArray = (value: unknown): value is Array<unknown> =>
   Array.isArray(value);
 
 const isString = (value: unknown): value is string => typeof value === "string";
-
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-/**
- * Whether `key` is an own property of `object`. `in` would also find inherited members such
- * as `constructor`, so a record keyed by user input could never lose a key by that name.
- */
-export const hasOwn = (object: object, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(object, key);
-
-/**
- * Assigning this key replaces an object's prototype instead of adding a property, so a peer
- * could make properties such as `isAdmin` appear on other users' state. It is never diffed.
- */
-export const PROTO_KEY = "__proto__";
 
 /** A nested edit script and the kind of container it edits. */
 type Nested =
@@ -121,44 +115,6 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
 /** The number of `keys` the diff compares, so records equal under `deepEqual` diff to nothing. */
 const keyCount = (keys: string[], record: object): number =>
   hasOwn(record, PROTO_KEY) ? keys.length - 1 : keys.length;
-
-/** An array item as `JSON.stringify` stores it. */
-const jsonItem = (value: unknown): unknown => (isAbsent(value) ? null : value);
-
-/** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an object. */
-export const jsonEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
-  if (isArray(a) && isArray(b)) {
-    if (a.length !== b.length) return false;
-    // A loop, since `every` skips holes.
-    for (let i = 0; i < a.length; i++)
-      if (!jsonItemEqual(a[i], b[i])) return false;
-    return true;
-  }
-  if (isRecord(a) && isRecord(b)) {
-    let count = 0;
-    for (const key of Object.keys(a)) {
-      if (key === PROTO_KEY || isAbsent(a[key])) continue;
-      if (!hasOwn(b, key) || !jsonEqual(a[key], b[key])) return false;
-      count++;
-    }
-    // `b` rarely holds absent entries, so its own key count usually settles it.
-    return count === Object.keys(b).length || count === jsonKeyCount(b);
-  }
-  return toJsonPrimitive(a) === toJsonPrimitive(b);
-};
-
-/** `deepEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
-const jsonItemEqual = (a: unknown, b: unknown): boolean =>
-  jsonEqual(jsonItem(a), jsonItem(b));
-
-/** The number of entries of `record` that `JSON.stringify` stores and the diff compares. */
-const jsonKeyCount = (record: Record<string, unknown>): number => {
-  let count = 0;
-  for (const key of Object.keys(record))
-    if (key !== PROTO_KEY && !isAbsent(record[key])) count++;
-  return count;
-};
 
 /** A value a change carries: with `options.json`, as JSON would store it. */
 const written = (value: unknown, options: DiffOptions): unknown =>

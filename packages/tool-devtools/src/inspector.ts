@@ -1,5 +1,7 @@
 import {
   defaultSyncFilter,
+  jsonEqual,
+  keepIdentity,
   type CrdtBackend,
   type Persistence,
   type PersistenceStats,
@@ -9,12 +11,10 @@ import {
   type Unsubscribe,
 } from "@homeostate/core";
 import {
-  deepEqual,
   diffJson,
   findNonJson,
   isRecord,
   setIn,
-  share,
   toJsonObject,
   type DiffLine,
   type JsonObject,
@@ -195,13 +195,13 @@ const keyStatusOf = (
   for (const key of Object.keys(store)) {
     if (localKeys.includes(key)) status[key] = "local";
     else if (backend === null) continue;
-    else if (!(key in backend)) status[key] = "pending";
+    else if (!hasOwn(backend, key)) status[key] = "pending";
     else
-      status[key] = deepEqual(store[key], backend[key]) ? "synced" : "diverged";
+      status[key] = jsonEqual(store[key], backend[key]) ? "synced" : "diverged";
   }
   if (backend !== null)
     for (const key of Object.keys(backend))
-      if (!(key in store)) status[key] = "backend-only";
+      if (!hasOwn(store, key)) status[key] = "backend-only";
   return status;
 };
 
@@ -257,10 +257,10 @@ export function createInspector(
     }
 
     // Keep the previous objects when nothing changed, so memoized views stay quiet.
-    if (previous && deepEqual(previous.store, store)) store = previous.store;
-    if (previous?.backend && deepEqual(previous.backend, backend))
+    if (previous && jsonEqual(previous.store, store)) store = previous.store;
+    if (previous?.backend && jsonEqual(previous.backend, backend))
       backend = previous.backend;
-    if (previous && deepEqual(previous.warnings, warnings))
+    if (previous && jsonEqual(previous.warnings, warnings))
       warnings = previous.warnings;
 
     return {
@@ -329,7 +329,7 @@ export function createInspector(
       next.connected !== snapshot.connected ||
       next.storeError !== snapshot.storeError ||
       next.warnings !== snapshot.warnings ||
-      !deepEqual(next.keyStatus, snapshot.keyStatus);
+      !jsonEqual(next.keyStatus, snapshot.keyStatus);
     if (changed) emit({ ...snapshot, ...next, log });
   };
 
@@ -357,9 +357,9 @@ export function createInspector(
     const current = source.adapter.getState() as Plain;
     const next: Plain = { ...current };
     for (const key of Object.keys(toJsonObject(current)))
-      if (!(key in state)) delete next[key];
+      if (!hasOwn(state, key)) delete next[key];
     for (const [key, value] of Object.entries(state))
-      next[key] = share(current[key], value);
+      next[key] = keepIdentity(current[key], value);
     commit(next, label);
   };
 

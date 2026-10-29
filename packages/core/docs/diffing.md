@@ -1,5 +1,5 @@
 ---
-description: getChanges, Change and ChangeType, ordered array and UTF-16 string edits, text policies, toJsonValue, and applying changes in place with ApplyOps.
+description: getChanges and its edit script, text policies, the JSON helpers toJsonValue, jsonEqual and keepIdentity, and applying changes in place with ApplyOps.
 label: Diff and apply API
 order: 3
 ---
@@ -245,6 +245,63 @@ import { toJsonValue } from "@homeostate/core";
 
 console.log(toJsonValue({ a: undefined, list: [1, undefined], fn: () => 1 }));
 // { list: [1, null] }
+```
+
+## jsonEqual
+
+```ts
+declare const jsonEqual: (a: unknown, b: unknown) => boolean;
+```
+
+Returns whether `a` and `b` are equal as `JSON.stringify` would store them: object entries
+holding `undefined` or a function are absent, such array items, holes included, equal `null`,
+and so do `NaN` and infinite numbers. Records compare their own keys only, so a key named after
+an `Object.prototype` member, such as `constructor` or `toString`, is never found on an object
+that lacks it, and `__proto__` keys are ignored on both sides. It is the equality the sync
+engine uses to tell whether a key changed. Pass it JSON values: any other object, such as a
+`Date`, compares as a record of its own enumerable entries.
+
+```ts title="json-equal-example.ts"
+import { jsonEqual } from "@homeostate/core";
+
+console.log(
+  jsonEqual({ a: 1, b: undefined, list: [NaN] }, { a: 1, list: [null] }),
+);
+// true
+console.log(jsonEqual({}, { constructor: "x" }));
+// false
+```
+
+## keepIdentity
+
+```ts
+declare const keepIdentity: <T>(previous: T, next: T) => T;
+```
+
+Returns `next`, reusing every subtree of `previous` it leaves unchanged. It applies the edit
+script `getChanges` finds between them to copies of `previous`'s containers, so only the
+containers along a changed path are new, and an item that shifts in a list, such as after an
+insert at the top, keeps its identity. Neither input is mutated. When nothing changed, it
+returns `previous` itself; when the two are of different kinds, `next`.
+
+Every value it takes from `next` is plain: own `__proto__` keys are left out at any depth, and
+an object whose prototype is neither `Object.prototype` nor `null` is replaced by a plain object
+of its own entries. Arrays and binary values (`ArrayBuffer` views) are kept as they are.
+
+The sync engine builds the store's next state with it, so components showing what a remote
+change left alone do not re-render. Use it when writing a whole state into a store, such as a
+restored one, for the same effect.
+
+```ts title="keep-identity-example.ts"
+import { keepIdentity } from "@homeostate/core";
+
+const previous = { todos: [{ id: "1" }, { id: "2" }], filter: "all" };
+const next = keepIdentity(previous, {
+  todos: [{ id: "0" }, { id: "1" }, { id: "2" }],
+  filter: "all",
+});
+
+console.log(next.todos[1] === previous.todos[0]); // true
 ```
 
 ## applyChanges

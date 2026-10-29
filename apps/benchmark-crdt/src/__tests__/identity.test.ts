@@ -22,9 +22,9 @@ import type { Scenario, TodoState } from "../types.js";
  * a literal: two peers on Yjs, a thousand todos, one operation, and a count of how many rows
  * the receiving store gets back as new objects.
  *
- * `packages/core/src/__tests__/patching.test.ts` asserts the same contract on two-element
+ * `packages/core/src/__tests__/keep-identity.test.ts` asserts the same contract on two-element
  * arrays, which passes for any implementation that gets the trivial case right. The value of
- * `patchState` is entirely in the large case: replace it with `structuredClone(newState)` and
+ * `keepIdentity` is entirely in the large case: replace it with `structuredClone(next)` and
  * that unit test still passes while every number below goes from 1 to 1000, which is the
  * difference between a collaborative list that repaints one row per keystroke and one that
  * repaints all of them.

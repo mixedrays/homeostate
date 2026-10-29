@@ -5,8 +5,8 @@ import {
   type RecordChange,
   type TextChange,
 } from "./change.js";
-import { getChanges, isRecord, type DiffOptions } from "./diff.js";
-import { toJsonValue } from "./json.js";
+import { getChanges, type DiffOptions } from "./diff.js";
+import { isRecord, toJsonValue } from "./json.js";
 
 export type { ContainerKind } from "./change.js";
 

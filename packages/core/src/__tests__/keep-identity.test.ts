@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { patchState } from "../patching.js";
+import { keepIdentity } from "../index.js";
 import { deepFreeze, prototypeHijacks, snapshot } from "./helpers.js";
 
-describe("patchState", () => {
+describe("keepIdentity", () => {
   it("returns the same reference when nothing changed", () => {
     const state = { a: [1, 2], b: "x", o: { n: null } };
 
-    expect(patchState(state, { a: [1, 2], b: "x", o: { n: null } })).toBe(
+    expect(keepIdentity(state, { a: [1, 2], b: "x", o: { n: null } })).toBe(
       state,
     );
   });
@@ -14,7 +14,7 @@ describe("patchState", () => {
   it("returns the same reference for a NaN that stays NaN", () => {
     const state = { progress: NaN, list: [NaN] };
 
-    expect(patchState(state, { progress: NaN, list: [NaN] })).toBe(state);
+    expect(keepIdentity(state, { progress: NaN, list: [NaN] })).toBe(state);
   });
 
   it("never mutates its inputs", () => {
@@ -29,7 +29,7 @@ describe("patchState", () => {
     const oldSnapshot = snapshot(oldState);
     const newSnapshot = snapshot(newState);
 
-    const result = patchState(oldState, newState);
+    const result = keepIdentity(oldState, newState);
 
     expect(result).toEqual(newState);
     expect(oldState).toEqual(oldSnapshot);
@@ -48,7 +48,7 @@ describe("patchState", () => {
       nested: { l: [{ x: 1 }, { x: 3 }] },
     };
 
-    const result = patchState(oldState, newState);
+    const result = keepIdentity(oldState, newState);
 
     expect(result).toEqual(newState);
     expect(result).not.toBe(oldState);
@@ -61,13 +61,15 @@ describe("patchState", () => {
     expect(result.nested.l[1]).not.toBe(oldState.nested.l[1]);
   });
 
-  it("patches frozen state", () => {
+  it("builds on frozen state", () => {
     const oldState = deepFreeze({ list: [{ id: "1", done: false }] });
 
     expect(Object.isFrozen(oldState.list[0])).toBe(true);
-    expect(patchState(oldState, { list: [{ id: "1", done: true }] })).toEqual({
-      list: [{ id: "1", done: true }],
-    });
+    expect(keepIdentity(oldState, { list: [{ id: "1", done: true }] })).toEqual(
+      {
+        list: [{ id: "1", done: true }],
+      },
+    );
   });
 
   it("leaves out __proto__ keys at any depth of inserted and updated values", () => {
@@ -78,7 +80,7 @@ describe("patchState", () => {
     );
     const newSnapshot = snapshot(newState);
 
-    const result = patchState({ todos: [{ id: "1" }], v: "x" }, newState);
+    const result = keepIdentity({ todos: [{ id: "1" }], v: "x" }, newState);
 
     expect(JSON.stringify(result)).toBe(
       '{"todos":[{"id":"1"},{"id":"2","tags":[{}]}],"v":{}}',
@@ -93,16 +95,77 @@ describe("patchState", () => {
     settings["__proto__"] = { isAdmin: true };
     settings.theme = "dark";
 
-    const result = patchState<Record<string, unknown>>({}, { settings });
+    const result = keepIdentity<Record<string, unknown>>({}, { settings });
 
     expect(JSON.stringify(result)).toBe('{"settings":{"theme":"dark"}}');
     expect(prototypeHijacks(result)).toEqual([]);
   });
 
+  it("copies an object with another prototype into a plain object of its own entries, at any depth", () => {
+    // What a library that builds objects by assignment makes of a peer's `__proto__` entry.
+    const hijacked = <T extends object>(entries: T): T =>
+      Object.assign(Object.create({ isAdmin: true }) as T, entries);
+    const newState = {
+      todos: [{ id: "1" }, hijacked({ id: "2", tags: [hijacked({ a: 1 })] })],
+      settings: { layout: hijacked({ main: hijacked({ width: 2 }) }) },
+    };
+
+    const result = keepIdentity<Record<string, unknown>>(
+      { todos: [{ id: "1" }] },
+      newState,
+    );
+
+    expect(JSON.stringify(result)).toBe(
+      '{"todos":[{"id":"1"},{"id":"2","tags":[{"a":1}]}],' +
+        '"settings":{"layout":{"main":{"width":2}}}}',
+    );
+    expect(prototypeHijacks(result)).toEqual([]);
+    expect(Object.getPrototypeOf(newState.todos[1])).toEqual({
+      isAdmin: true,
+    });
+  });
+
+  it("copies next whole into a plain object when the kinds differ and it has another prototype", () => {
+    const newState = Object.assign(Object.create({ isAdmin: true }), {
+      list: [],
+    }) as object;
+
+    const result = keepIdentity<unknown>(["a"], newState);
+
+    expect(result).toEqual({ list: [] });
+    expect(prototypeHijacks(result)).toEqual([]);
+  });
+
+  it("leaves arrays, binary values and objects without a prototype as they are", () => {
+    const bytes = new Uint8Array([1, 2]);
+    const list = [1, [2]];
+    const bare = Object.assign(Object.create(null) as object, { a: 1 });
+
+    const result = keepIdentity<Record<string, unknown>>(
+      {},
+      { bytes, list, bare },
+    );
+
+    expect(result.bytes).toBe(bytes);
+    expect(result.list).toBe(list);
+    expect(result.bare).toBe(bare);
+  });
+
+  it("keeps the identity of the items that shift when one is inserted at the top", () => {
+    const oldState = { todos: [{ id: "1" }, { id: "2" }] };
+
+    const result = keepIdentity(oldState, {
+      todos: [{ id: "0" }, { id: "1" }, { id: "2" }],
+    });
+
+    expect(result.todos[1]).toBe(oldState.todos[0]);
+    expect(result.todos[2]).toBe(oldState.todos[1]);
+  });
+
   it("shares inserted values that hold no __proto__ key", () => {
     const item = { id: "2", tags: ["a"] };
 
-    const result = patchState(
+    const result = keepIdentity(
       { todos: [{ id: "1" }] },
       { todos: [{ id: "1" }, item] },
     );
@@ -110,7 +173,7 @@ describe("patchState", () => {
     expect(result.todos[1]).toBe(item);
   });
 
-  it("patches nested arrays inside objects inside arrays", () => {
+  it("edits nested arrays inside objects inside arrays", () => {
     const oldState = { todos: [{ id: "1", tags: ["a"] }] };
     const newState = {
       todos: [
@@ -119,15 +182,15 @@ describe("patchState", () => {
       ],
     };
 
-    expect(patchState(oldState, newState)).toEqual(newState);
+    expect(keepIdentity(oldState, newState)).toEqual(newState);
   });
 
   it("returns newState, without its __proto__ keys, when the kinds differ", () => {
     const list = [{ id: "1" }];
     const newState = JSON.parse('{"list":[],"__proto__":{"isAdmin":true}}');
 
-    expect(patchState<unknown>("todos", list)).toBe(list);
-    const result = patchState<unknown>(["a"], newState);
+    expect(keepIdentity<unknown>("todos", list)).toBe(list);
+    const result = keepIdentity<unknown>(["a"], newState);
     expect(JSON.stringify(result)).toBe('{"list":[]}');
     expect(prototypeHijacks(result)).toEqual([]);
   });

@@ -4,6 +4,7 @@ import {
   createSyncEngine,
   type Persistence,
 } from "@homeostate/core";
+import { prototypeMemberKeys } from "@homeostate/core/conformance";
 import {
   createMemoryBackend,
   createMemoryPersistenceAdapter,
@@ -176,6 +177,61 @@ describe("createInspector", () => {
     expect((backend.read() as unknown as State).filter).toBe("all");
     expect(inspector.getSnapshot().log.at(-1)?.label).toBe("Restored #0");
   });
+
+  it("keeps the identity of every other todo when a restore inserts one at the top", async () => {
+    const { store, inspector } = setup();
+    const first = { title: "first", done: false };
+    store.set({ ...store.get(), todos: [first, ...store.get().todos] });
+    await tick();
+    const entry = inspector.getSnapshot().log.at(-1)!;
+    const kept = store.get().todos.slice(1);
+    store.set({ ...store.get(), todos: kept });
+    await tick();
+
+    inspector.restore(entry.id);
+    await tick();
+
+    expect(store.get().todos).toEqual([first, ...kept]);
+    expect(store.get().todos[1]).toBe(kept[0]);
+  });
+
+  it.each(prototypeMemberKeys)(
+    "removes a %s key missing from a replacement",
+    (key) => {
+      const store = createTestStore<Record<string, unknown>>({
+        [key]: "x",
+        count: 1,
+      });
+      inspector = createInspector({ name: "keys", adapter: store.adapter });
+
+      inspector.replaceState({ count: 2 }, "Replaced");
+
+      expect(store.get()).toEqual({ count: 2 });
+    },
+  );
+
+  it.each(prototypeMemberKeys)(
+    "compares a %s key with the backend's own key only",
+    (key) => {
+      const status = (store: object, backend: object) => {
+        const source = createInspector({
+          name: "keys",
+          adapter: createTestStore(store).adapter,
+          backend: createMemoryBackend(backend),
+        });
+        return source.getSnapshot().keyStatus;
+      };
+
+      expect(status({ [key]: "x" }, {})).toEqual({ [key]: "pending" });
+      expect(status({ [key]: "x" }, { [key]: "x" })).toEqual({
+        [key]: "synced",
+      });
+      expect(status({ [key]: "x" }, { [key]: "y" })).toEqual({
+        [key]: "diverged",
+      });
+      expect(status({}, { [key]: "x" })).toEqual({ [key]: "backend-only" });
+    },
+  );
 
   it("marks filtered keys local and unsynced edits while disconnected", async () => {
     const { store, inspector } = setup({ filter: (key) => key !== "draft" });
