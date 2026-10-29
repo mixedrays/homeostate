@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPersistence,
   createSyncEngine,
   type Persistence,
+  type PersistenceAdapter,
 } from "@homeostate/core";
 import { prototypeMemberKeys } from "@homeostate/core/conformance";
 import {
@@ -502,11 +503,15 @@ describe("sync events", () => {
 describe("storage", () => {
   const setupStorage = async (
     wrap: (persistence: Persistence) => Persistence = (p) => p,
+    adapt: (storage: PersistenceAdapter) => PersistenceAdapter = (s) => s,
   ) => {
     const store = createTestStore({ count: 0 });
     const doc = createTestDoc();
     const storage = createMemoryPersistenceAdapter();
-    const persistence = createPersistence(doc, storage, { key: "doc" });
+    const persistence = createPersistence(doc, adapt(storage), {
+      key: "doc",
+      onError: () => {},
+    });
     await persistence.whenLoaded;
     inspector = createInspector({
       name: "count",
@@ -589,14 +594,19 @@ describe("storage", () => {
   it.each(["compact", "clear"] as const)(
     "keeps a failed %s visible after refreshing stats and clears it on retry",
     async (operation) => {
-      let fail = true;
-      const { inspector } = await setupStorage((persistence) => ({
-        ...persistence,
-        [operation]: async () => {
-          if (fail) throw new Error(`${operation} failed`);
-          await persistence[operation]();
+      let fail = (): void => {};
+      const { inspector, persistence, storage } = await setupStorage(
+        (persistence) => persistence,
+        (memory) => {
+          const call = vi.fn(memory[operation]);
+          fail = () => {
+            call.mockRejectedValueOnce(new Error(`${operation} failed`));
+          };
+          return { ...memory, [operation]: call };
         },
-      }));
+      );
+      await persistence.flush();
+      fail();
       const change =
         operation === "compact"
           ? inspector.compactStorage
@@ -611,9 +621,9 @@ describe("storage", () => {
         stats: { updates: 1 },
         cleared: false,
       });
-      fail = false;
       await change();
       expect(inspector.getSnapshot().storage?.operationError).toBeNull();
+      expect(storage.size("doc")).toBe(operation === "clear" ? 0 : 1);
     },
   );
 });

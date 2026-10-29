@@ -9,6 +9,17 @@ const reportError = (error: unknown): void => {
   console.error("[homeostate] persistence failed:", error);
 };
 
+const ignore = (): void => {};
+
+/**
+ * Mark a promise returned to the caller as handled: its failure has gone to `onError`, so a
+ * caller that does not await it gets no unhandled rejection. Awaiting it still rejects.
+ */
+const handled = <T>(promise: Promise<T>): Promise<T> => {
+  promise.catch(ignore);
+  return promise;
+};
+
 /**
  * Keeps a CRDT document in a `PersistenceAdapter`, so its state outlives every peer and
  * the sync server: restore it on start, then store every update the document makes or
@@ -23,6 +34,10 @@ const reportError = (error: unknown): void => {
  * across tabs: compaction only removes updates it has applied to its own document first.
  * When a stored update cannot be applied, the log is not compacted, so its bytes stay
  * available for recovery until `clear()`.
+ *
+ * Every failure goes to `onError` once, and the queue moves on. `compact()` and `clear()`
+ * reject with their own storage error; `flush()` and `destroy()` reject while an update the
+ * document reported may be missing from storage, until a snapshot or `clear()` succeeds.
  *
  * @example
  * ```typescript
@@ -44,14 +59,37 @@ export function createPersistence(
 ): Persistence {
   const { key, compactAfter = 100, onError = reportError } = config;
 
+  /** Report to `onError`, which only observes: what it throws is logged, not passed on. */
+  const report = (error: unknown): void => {
+    try {
+      onError(error);
+    } catch (thrown) {
+      console.error("[homeostate] persistence onError threw:", thrown);
+    }
+  };
+
   let stopped = false;
   let appended = 0;
   let queue: Promise<void> = Promise.resolve();
+  /**
+   * The earliest write failure storage may still be missing the document's content for, until
+   * a full snapshot or `clear()` succeeds; barriers reject with its error until then.
+   */
+  let unresolved: { error: unknown } | undefined;
 
-  /** Storage calls run one at a time, in order; a failure is reported and skipped. */
+  const unstored = (error: unknown): never => {
+    unresolved ??= { error };
+    throw error;
+  };
+
+  /**
+   * Storage calls run one at a time, in order. The returned promise settles as the task does;
+   * the queue reports a failure and moves on.
+   */
   const enqueue = (task: () => Promise<void>): Promise<void> => {
-    queue = queue.then(task).catch(onError);
-    return queue;
+    const run = queue.then(task);
+    queue = run.catch(report);
+    return run;
   };
 
   /** Apply every stored update it can; false when one of them could not be applied. */
@@ -62,7 +100,7 @@ export function createPersistence(
         doc.apply(update);
       } catch (error) {
         complete = false;
-        onError(error);
+        report(error);
       }
     }
     return complete;
@@ -87,18 +125,30 @@ export function createPersistence(
     // a first load that keeps the log appends it instead.
     if (complete) await adapter.compact(key, doc.encode(), version);
     else if (initial) await adapter.append(key, doc.encode());
+    else return;
+    // The snapshot holds everything the document reported before it, failed writes included.
+    unresolved = undefined;
   };
 
   // Subscribe before loading, so no update made in the meantime is missed.
   const unsubscribe = doc.subscribe((update) => {
     if (stopped) return;
     void enqueue(async () => {
-      await adapter.append(key, update);
+      await adapter.append(key, update).catch(unstored);
       if (++appended >= compactAfter) await compact();
     });
   });
 
-  void enqueue(() => compact(true)).finally(markLoaded);
+  // Until the first snapshot is written, storage may lack what the document held before.
+  void enqueue(() => compact(true).catch(unstored));
+  // After `onError` when the load fails; the queue itself never rejects.
+  void queue.then(markLoaded);
+
+  /** Wait for the work queued so far, then reject while a write failure is unresolved. */
+  const barrier = (): Promise<void> =>
+    queue.then(() => {
+      if (unresolved) throw unresolved.error;
+    });
 
   const stop = (): void => {
     if (stopped) return;
@@ -109,27 +159,37 @@ export function createPersistence(
   return {
     whenLoaded,
 
-    flush: () => queue,
+    flush: () => handled(barrier()),
 
-    compact: () => (stopped ? queue : enqueue(() => compact())),
+    compact: () => (stopped ? queue : handled(enqueue(() => compact()))),
 
-    stats: async () => {
-      await queue;
-      const { updates } = await adapter.load(key);
-      return {
-        updates: updates.length,
-        bytes: updates.reduce((total, update) => total + update.byteLength, 0),
-      };
-    },
+    stats: () =>
+      handled(
+        queue.then(async () => {
+          const { updates } = await adapter.load(key);
+          return {
+            updates: updates.length,
+            bytes: updates.reduce(
+              (total, update) => total + update.byteLength,
+              0,
+            ),
+          };
+        }),
+      ),
 
     destroy: () => {
       stop();
-      return queue;
+      return handled(barrier());
     },
 
     clear: () => {
       stop();
-      return enqueue(() => adapter.clear(key));
+      return handled(
+        enqueue(async () => {
+          await adapter.clear(key);
+          unresolved = undefined;
+        }),
+      );
     },
   };
 }
