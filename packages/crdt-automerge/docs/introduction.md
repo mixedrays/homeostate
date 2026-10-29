@@ -54,6 +54,9 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 - `handle.subscribe(({ doc, local }) => ...)` fires whenever the heads change; `local` is
   true for `change` and false for `update`.
 
+The backend uses only `doc`, `change` and `subscribe`, typed `AutomergeDocSource`, so any object
+with those three can hold the document in place of a handle.
+
 The engine picks up every change that did not come through its own write, imports and local
 edits alike.
 

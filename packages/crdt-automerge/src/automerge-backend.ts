@@ -6,7 +6,7 @@ import {
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
-import type { AutomergeHandle } from "./handle.js";
+import type { AutomergeDocSource } from "./handle.js";
 import { fromRepoHandle, type AutomergeRepoHandle } from "./repo-handle.js";
 import {
   createAutomergeOps,
@@ -30,12 +30,13 @@ export interface AutomergeBackendOptions {
 const noText: TextPolicy = () => false;
 
 export const createAutomergeBackend = <T>(
-  source: AutomergeHandle<T> | AutomergeRepoHandle<T>,
+  source: AutomergeDocSource<T> | AutomergeRepoHandle<T>,
   name: string,
   options: AutomergeBackendOptions = {},
 ): CrdtBackend => {
   const { text = noText } = options;
-  const handle = "on" in source ? fromRepoHandle(source) : source;
+  // A `DocHandle` has no `subscribe`, while a source of the app's own may also have an `on`.
+  const handle = "subscribe" in source ? source : fromRepoHandle(source);
   const snapshot = createSnapshot();
   /** The heads of each document `revision` was asked about. */
   const heads = new WeakMap<object, string>();
