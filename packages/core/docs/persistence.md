@@ -78,7 +78,7 @@ interface PersistenceConfig {
 | -------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `key`          | Required                     | Identifies the document in the storage adapter. Use different keys for independent documents.                                    |
 | `compactAfter` | `100`                        | Number of successful appends between compactions. Use a positive integer, or `Infinity` to compact only during the initial load. |
-| `onError`      | Logs through `console.error` | Receives storage failures and errors applying stored updates. Supply a handler that reports the error without throwing.          |
+| `onError`      | Logs through `console.error` | Receives each storage failure and each stored update it cannot apply, once. What it throws is logged.                            |
 
 Compaction loads the current log, merges it into the document, and replaces the loaded
 portion with one snapshot; updates another writer appended after that load remain. When an
@@ -115,12 +115,15 @@ wait for storage work too.
 Waits for storage work queued at the time of the call, including any compaction it
 triggers. Updates arriving later need another call.
 
+It resolves when every update reported so far is stored, and otherwise rejects; see
+[which failures a barrier reports](#which-failures-a-barrier-reports).
+
 ### compact
 
 Queues a compaction now, as every `compactAfter` appends do, and resolves once it is written.
-Failures go to `onError`. When a stored update cannot be applied, its error goes to `onError`
-and the log is not compacted, though the promise still resolves. After `destroy()` or
-`clear()` it does nothing.
+It rejects with the storage error when loading the log or writing the snapshot fails. When a
+stored update cannot be applied, its error goes to `onError` and the log is not compacted,
+though the promise still resolves. After `destroy()` or `clear()` it does nothing.
 
 ### stats
 
@@ -132,24 +135,57 @@ the other methods, it rejects when storage cannot be read, rather than calling `
 
 ### destroy
 
-Stops storing updates immediately and waits for queued work; calling it again is safe. The
-stored data stays for a later `createPersistence` with the same adapter and key. It does not
+Stops storing updates immediately and waits for queued work; calling it again is safe. It
+settles as [`flush()`](#flush) does, and storing stops even when it rejects. The stored data
+stays for a later `createPersistence` with the same adapter and key. It does not
 destroy the document, disconnect its provider or sync engine, or close the storage adapter.
 
 ### clear
 
 Stops storing updates and removes the stored document after pending work, also after
-`destroy()`. It is how to delete a log holding updates that cannot be applied. The live
+`destroy()` and after earlier writes failed. It resolves once the document is removed and
+rejects with the storage error when it cannot be. It is how to delete a log holding updates that cannot be applied. The live
 document and other peers keep their state, and other persistence instances using the same key
 can write it again. To resume storing after `clear()` or `destroy()`, create a new
 persistence.
 
 ### Error handling
 
-Storage errors and stored updates that cannot be applied go to `onError`, and the queue
-moves on to the next operation. So the lifecycle promises resolving does not mean every
-write succeeded: track failures in `onError` if the app needs to show whether persistence
-works. Keep `onError` from throwing, or queued work rejects.
+Each storage error and each stored update that cannot be applied goes to `onError` once, as
+it happens, and the queue moves on to the next operation. `onError` only observes: what it
+throws is logged with `console.error`, and later storage work still runs.
+
+The methods report the result of their own work through their promises, rejecting with the
+same error object `onError` received, so an app can tell the two apart by identity:
+
+```ts
+try {
+  await persistence.flush(); // every update so far is stored
+  await persistence.clear(); // the stored document is gone
+} catch (error) {
+  showStorageFailure(error);
+}
+```
+
+A promise the app does not await never becomes an unhandled rejection, since its failure has
+already gone to `onError`. `whenLoaded` still never rejects, and `stats()` rejects only when
+storage cannot be read.
+
+#### Which failures a barrier reports
+
+`flush()` and `destroy()` reject while storage may be missing an update the document
+reported: after a failed append, or a failed initial load or initial snapshot, which may leave
+what the document held before it was persisted unstored. This includes failures that happened
+before the call, and it rejects with the earliest such failure's error. Concurrent barriers
+reject alike, and `onError` is not called again.
+
+A failure stops affecting barriers once storage holds its update again: when a compaction
+writes a snapshot of the document, whether initial, automatic or from `compact()`, or the
+initial load appends one, or `clear()` removes the stored document. A barrier whose own queued
+work includes such a snapshot resolves. The operation that failed keeps its rejection.
+
+A failed automatic compaction leaves the log as it was, so it reports to `onError` without
+making barriers reject; neither does an update that cannot be applied.
 
 ### Stored updates that cannot be applied
 
@@ -218,7 +254,8 @@ interface PersistenceAdapter {
 
 `version` is a storage-log position, not an application schema version. Store the bytes in
 the supplied `Uint8Array` view, which may cover only part of its backing buffer. Reject
-failed storage operations so `createPersistence` can report them through `onError`.
+failed storage operations so `createPersistence` can report them through `onError` and the
+promises of its methods.
 
 Use [IndexedDB](../../persist-indexeddb/docs/introduction.md),
 [localStorage](../../persist-local-storage/docs/introduction.md), or the

@@ -51,5 +51,6 @@ createLocalStorageAdapter({
 
 Each document is one JSON entry holding its updates in base64, rewritten on every update.
 Browsers allow about 5 MB per origin; a write past that fails and is reported through
-`createPersistence`'s `onError`. For larger documents use
+`createPersistence`'s `onError`, and `flush()` rejects until a compaction stores the whole
+document again. For larger documents use
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md).

@@ -171,6 +171,24 @@ await persistence.clear(); // stop storing and delete the stored document, e.g. 
 `whenLoaded` never rejects. If storage is unavailable or fails, the error goes to `onError`
 (`console.error` by default) and the app starts without its stored state.
 
+The other methods reject when their storage work fails, with the error `onError` also
+received. `flush()` and `destroy()` reject while an update the document reported may be
+missing from storage, also after a failure before the call, until a later compaction or
+`clear()` stores or removes it; `compact()` and `clear()` reject with their own storage error.
+So a sign-out can tell whether local data was deleted:
+
+```ts
+try {
+  await persistence.clear();
+} catch (error) {
+  showStorageFailure(error); // the stored document is still there
+}
+```
+
+A promise left unawaited never becomes an unhandled rejection. The
+[API reference](../../../packages/core/docs/persistence.md#which-failures-a-barrier-reports)
+says which failures each method reports.
+
 ## Unreadable stored updates
 
 A stored update can fail to apply: its bytes were damaged, or the key was used before for a

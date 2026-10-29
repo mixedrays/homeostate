@@ -164,8 +164,9 @@ remembered in `localStorage`.
   updates do. **Clear** removes the stored document and stops storing it until the page
   reloads; the live document and its peers keep their state, and other tabs that store the
   same key may write it again.
-  Failed Compact or Clear operations remain visible after stats refreshes, until another
-  operation is attempted.
+  A Compact or Clear that fails in storage shows its error, and Clear marks the document
+  cleared only once it is removed. The error stays visible after stats refreshes, until
+  another operation is attempted.
 - **Network** shows whether the engine is connected, with a switch to disconnect and
   reconnect it, and sets the [network conditions](#network-conditions) of the source's link:
   offline, latency, jitter and a flaky connection.

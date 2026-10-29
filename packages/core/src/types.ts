@@ -330,7 +330,11 @@ export interface PersistenceConfig {
    * defaults to 100. `Infinity` only compacts on load.
    */
   compactAfter?: number;
-  /** Called when storage fails or a stored update cannot be applied; defaults to `console.error`. */
+  /**
+   * Called once for each storage failure and each stored update that cannot be applied, as it
+   * happens; defaults to `console.error`. It only observes: what it throws is logged with
+   * `console.error`, and storage work goes on.
+   */
   onError?: (error: unknown) => void;
 }
 
@@ -342,7 +346,11 @@ export interface PersistenceStats {
   bytes: number;
 }
 
-/** A document kept in storage by `createPersistence` */
+/**
+ * A document kept in storage by `createPersistence`. Its methods report failures through
+ * their promises, with the error `onError` already received; a promise left unawaited never
+ * becomes an unhandled rejection.
+ */
 export interface Persistence {
   /**
    * Resolves once the stored updates are applied to the document. It also resolves when
@@ -350,12 +358,19 @@ export interface Persistence {
    * starts with what could be restored.
    */
   whenLoaded: Promise<void>;
-  /** Resolves when every update reported so far has been written. */
+  /**
+   * Resolves once the work queued so far is done and every update reported so far is stored.
+   * Otherwise rejects with the error of the earliest failed write not repaired since: an
+   * append, the initial load or the initial snapshot, also one that failed before this call.
+   * A later snapshot, from any compaction, or `clear()` repairs it. Updates reported after
+   * the call need another one.
+   */
   flush: () => Promise<void>;
   /**
    * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
-   * once it is written; does nothing once storing has stopped. Keeps the log, after
-   * `onError`, when one of its updates cannot be applied.
+   * once it is written, and rejects with the storage error when it fails; does nothing once
+   * storing has stopped. Keeps the log, after `onError`, when one of its updates cannot be
+   * applied, and still resolves.
    */
   compact: () => Promise<void>;
   /**
@@ -363,11 +378,15 @@ export interface Persistence {
    * storage cannot be read.
    */
   stats: () => Promise<PersistenceStats>;
-  /** Stop storing updates; stored data is kept. Resolves once pending writes finish. */
+  /**
+   * Stop storing updates; stored data is kept. Settles once pending writes finish, as `flush()`
+   * does; storing stops even when it rejects.
+   */
   destroy: () => Promise<void>;
   /**
    * Stop storing updates and remove the stored document, also a log holding updates that
-   * cannot be applied.
+   * cannot be applied. Resolves once it is removed, even after earlier writes failed, and
+   * rejects with the storage error when it cannot be.
    */
   clear: () => Promise<void>;
 }
