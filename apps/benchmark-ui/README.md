@@ -5,7 +5,7 @@ Private browser viewer for the reports the two benchmarks save with `--json`.
 ```bash
 pnpm bench:crdt -- --json results/main.json        # the backend matrix
 pnpm bench:store -- --json results/quick.json      # the adapter render counts
-pnpm bench:ui                                      # viewer on http://localhost:5180
+pnpm bench:ui                                      # viewer on http://localhost:5191
 pnpm --filter @homeostate/benchmark-ui build       # static site in dist/, reports bundled in
 ```
 

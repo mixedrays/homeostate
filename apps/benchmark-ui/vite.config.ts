@@ -5,5 +5,6 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { tsconfigPaths: true },
-  server: { port: 5180 },
+  // 5180-5184 belong to the playgrounds, which `pnpm dev` starts alongside.
+  server: { port: 5191 },
 });
