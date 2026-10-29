@@ -1,7 +1,8 @@
 export { createSyncEngine, WriteLoopError } from "./sync-engine.js";
 export { createPersistence } from "./persistence.js";
 export { getChanges } from "./diff.js";
-export { toJsonValue } from "./json.js";
+export { jsonEqual, toJsonValue } from "./json.js";
+export { keepIdentity } from "./patching.js";
 export { applyChanges, applyStringChanges } from "./apply.js";
 export type { ApplyOps, ContainerKind } from "./apply.js";
 export type { Diffable, DiffOptions, TextPolicy } from "./diff.js";

@@ -17,17 +17,12 @@ import {
   type GroupOptions,
 } from "@mixedrays/keyrove";
 import { Braces, ChevronRight, Trash2 } from "lucide-react";
+import { jsonEqual } from "@homeostate/core";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import type { KeyStatus } from "../inspector";
-import {
-  deepEqual,
-  formatPath,
-  type Json,
-  type JsonObject,
-  type JsonPath,
-} from "../json";
+import { formatPath, type Json, type JsonObject, type JsonPath } from "../json";
 import { JsonEditor } from "./json-editor";
 import { keyStatusInfo, previewOf } from "./format";
 import { KeyStatusBadge, JsonValue, NonJsonBadge } from "./value";
@@ -540,7 +535,7 @@ function ValueInput({
   );
   const initialText = isString ? base : JSON.stringify(base);
   const dirty = text !== initialText;
-  const stale = !deepEqual(value, base);
+  const stale = !jsonEqual(value, base);
   const warningId = useId();
   const parsed = useMemo((): ParsedValue => {
     if (isString) return { ok: true, value: text };

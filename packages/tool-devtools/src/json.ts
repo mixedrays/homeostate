@@ -86,39 +86,6 @@ export const findNonJson = (
   return found;
 };
 
-export const deepEqual = (a: unknown, b: unknown): boolean => {
-  if (Object.is(a, b)) return true;
-  if (Array.isArray(a) && Array.isArray(b))
-    return (
-      a.length === b.length && a.every((value, i) => deepEqual(value, b[i]))
-    );
-  if (isRecord(a) && isRecord(b)) {
-    const keys = Object.keys(a);
-    return (
-      keys.length === Object.keys(b).length &&
-      keys.every((key) => key in b && deepEqual(a[key], b[key]))
-    );
-  }
-  return false;
-};
-
-/**
- * `next`, reusing every subtree of `current` that is deep-equal to its counterpart, so a
- * store handed the result sees new references only where something changed.
- */
-export const share = (current: unknown, next: unknown): unknown => {
-  if (deepEqual(current, next)) return current;
-  if (Array.isArray(current) && Array.isArray(next))
-    return next.map((value, i) => share(current[i], value));
-  if (isRecord(current) && isRecord(next)) {
-    const result: Plain = {};
-    for (const [key, value] of Object.entries(next))
-      result[key] = share(current[key], value);
-    return result;
-  }
-  return next;
-};
-
 export const getIn = (value: unknown, path: JsonPath): unknown => {
   let node = value;
   for (const key of path) {

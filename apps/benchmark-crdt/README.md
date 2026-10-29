@@ -85,7 +85,7 @@ Per backend, scenario, and size:
 | write        | store change to `backend.write` on a single peer, mean ± relative margin of error                       |
 | p99          | 99th percentile of write                                                                                |
 | vs best      | write mean relative to the fastest backend for that scenario and size                                   |
-| roundtrip    | store change on peer A until peer B's store holds it: B's `read`, `patchState`, `setState` included     |
+| roundtrip    | store change on peer A until peer B's store holds it: B's `read`, `keepIdentity`, `setState` included   |
 | renders / op | rows of peer B that survived the operation and came back as a new object, matched by `id`               |
 | wasted / op  | of those, the rows whose data is deep-equal, so the new object carried nothing new                      |
 | wire / op    | bytes over the wire per operation                                                                       |

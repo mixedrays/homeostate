@@ -331,11 +331,13 @@ subtree changing, which costs only that read: the Yjs backend counts the documen
 transactions, the Loro backend its ops, and the Automerge backend uses the document's heads.
 
 `read()` must return an object; the engine still checks, and throws a `TypeError` for anything
-else, such as what a peer stored in place of the synced map. Objects in the
-snapshot must inherit from `Object.prototype`: a library that builds them by assignment turns
-a peer's `__proto__` entry into the prototype, which the Yjs and Loro backends undo before
-returning. Keep document replication in your CRDT provider. To write small edits instead of
-replacing the document, see the [Diff and apply API](./diffing.md).
+else, such as what a peer stored in place of the synced map. Objects in the snapshot may carry
+a prototype: a library that builds them by assignment, as Yjs and Loro do in `toJSON`, turns a
+peer's `__proto__` entry into the prototype of the object holding it. The engine copies every
+object whose prototype is neither `Object.prototype` nor `null` into a plain object of its own
+entries, and leaves out own `__proto__` keys, before they reach the store, so a backend needs
+no guard of its own. Keep document replication in your CRDT provider. To write small edits
+instead of replacing the document, see the [Diff and apply API](./diffing.md).
 
 ## Unsubscribe
 

@@ -62,7 +62,8 @@ neither diffed nor synced. The supplied backends store `undefined` and nested fu
 
 Keys sync as own properties, so a key such as `constructor` or `toString` behaves like any
 other. A `__proto__` key is never synced: assigning it would replace an object's prototype, so
-the engine leaves it out of remote state at any depth.
+the engine leaves it out of remote state at any depth, and copies an object a backend read with
+another prototype into a plain object of its own entries.
 
 ## CRDT backends
 

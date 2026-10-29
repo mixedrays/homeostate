@@ -6,7 +6,6 @@ import {
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
-import { withPlainPrototypes } from "./mapping.js";
 import { createLoroOps } from "./patching.js";
 
 /** Options for `createLoroBackend` */
@@ -35,10 +34,9 @@ export const createLoroBackend = (
   const ops = createLoroOps(text);
 
   return {
-    read: () => {
-      const json: JsonObject = map.toJSON();
-      return withPlainPrototypes(json);
-    },
+    // `toJSON` builds objects by assignment, so a peer's `__proto__` entry becomes a prototype;
+    // the sync engine copies such objects into plain ones before they reach the store.
+    read: (): JsonObject => map.toJSON(),
 
     write: (next, previous) => {
       const current: JsonObject = previous ?? map.toJSON();

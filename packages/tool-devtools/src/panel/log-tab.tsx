@@ -8,6 +8,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { jsonEqual } from "@homeostate/core";
 import { cn } from "cn";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -23,7 +24,7 @@ import type {
   LogEntry,
   LogOrigin,
 } from "../inspector";
-import { deepEqual, diffJson, formatPath, type JsonObject } from "../json";
+import { diffJson, formatPath, type JsonObject } from "../json";
 import { usePersistedState } from "../lib/use-persisted-state";
 import { parseLog, serializeLog } from "../log-file";
 import { CopyButton } from "./copy-button";
@@ -296,7 +297,7 @@ function LogRow({
   const current =
     open &&
     snapshot.storeError === null &&
-    deepEqual(entry.state, snapshot.store);
+    jsonEqual(entry.state, snapshot.store);
 
   return (
     <li className="border-b">

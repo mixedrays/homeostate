@@ -5,10 +5,10 @@ import {
   type ListChange,
   type Diffable,
   type JsonObject,
+  keepIdentity,
   type TextPolicy,
   toJsonValue,
 } from "../index.js";
-import { patchState } from "../patching.js";
 import { nonJsonWrites, prototypeMemberKeys, todoTitles } from "./helpers.js";
 
 const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
@@ -16,7 +16,7 @@ const { INSERT, UPDATE, DELETE, PENDING } = ChangeType;
 const item = (id: string, done = false) => ({ id, done });
 
 const appliesCleanly = (a: Diffable, b: Diffable): void => {
-  expect(patchState(a, b)).toEqual(b);
+  expect(keepIdentity(a, b)).toEqual(b);
 };
 
 const applySequentially = (

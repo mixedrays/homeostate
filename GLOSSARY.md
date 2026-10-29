@@ -77,7 +77,7 @@ The plain JSON object the sync engine exchanges with a CRDT backend: the store's
 _Avoid_: Filtered state, shared state
 
 **JSON snapshot**:
-The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which never aliases the backend's internals.
+The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which never aliases the backend's internals. Its objects may carry a prototype a peer's `__proto__` entry set; the sync engine copies them into plain objects before they reach the store.
 "Snapshot" alone is ambiguous here: say "JSON snapshot" or "compacted snapshot". MobX-State-Tree and Valtio snapshots belong to those libraries.
 _Avoid_: State dump
 

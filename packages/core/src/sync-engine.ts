@@ -8,9 +8,15 @@ import type {
   Unsubscribe,
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
-import { patchState } from "./patching.js";
-import { hasOwn, isRecord, jsonEqual, PROTO_KEY } from "./diff.js";
-import { isAbsent, kindOf } from "./json.js";
+import { keepIdentity } from "./patching.js";
+import {
+  hasOwn,
+  isAbsent,
+  isRecord,
+  jsonEqual,
+  kindOf,
+  PROTO_KEY,
+} from "./json.js";
 
 type Plain = Record<string, unknown>;
 
@@ -235,7 +241,7 @@ export function createSyncEngine<S extends object>(
 
   /** Builds the next store state from `current`, whose synced part `synced` becomes `target`. */
   const mergeStates = (current: S, synced: Plain, target: Plain): S => {
-    const patched = patchState(synced, target);
+    const patched = keepIdentity(synced, target);
     if (patched === synced) return current;
 
     const merged: Plain = { ...current, ...patched };

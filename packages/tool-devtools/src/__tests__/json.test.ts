@@ -4,7 +4,6 @@ import {
   findNonJson,
   formatPath,
   setIn,
-  share,
   toJsonObject,
 } from "../json";
 
@@ -89,19 +88,6 @@ describe("setIn", () => {
   it("works on frozen state", () => {
     const root = Object.freeze({ list: Object.freeze([1, 2]) });
     expect(setIn(root, ["list", 0], 5)).toEqual({ list: [5, 2] });
-  });
-});
-
-describe("share", () => {
-  it("reuses unchanged subtrees", () => {
-    const current = { todos: [{ id: "1" }, { id: "2" }], filter: "all" };
-    const next = share(current, {
-      todos: [{ id: "1" }, { id: "3" }],
-      filter: "all",
-    }) as typeof current;
-    expect(next.todos[0]).toBe(current.todos[0]);
-    expect(next.todos[1]).toEqual({ id: "3" });
-    expect(share(current, structuredClone(current))).toBe(current);
   });
 });
 

@@ -10,6 +10,7 @@ import {
 import {
   createSyncEngine,
   type CrdtBackend,
+  type JsonObject,
   type JsonObjectInput,
   WriteLoopError,
   type SyncEngineConfig,
@@ -1063,6 +1064,43 @@ describe("createSyncEngine", () => {
       );
       expect(prototypeHijacks(store.getState())).toEqual([]);
     });
+
+    it.each(["connect", "a remote change"])(
+      "copies a remote object with another prototype into a plain object on %s, at any depth",
+      (when) => {
+        // What a backend that builds objects by assignment reads from a peer's `__proto__` entry.
+        const hijacked = <T extends object>(entries: T): T =>
+          Object.assign(Object.create({ isAdmin: true }) as T, entries);
+        const backend = createMemoryBackend();
+        const read = (): JsonObject =>
+          hijacked({
+            todos: [
+              { id: "1" },
+              hijacked({ id: "2", tags: [hijacked({ name: "a" })] }),
+            ],
+            settings: hijacked({ layout: hijacked({ width: 2 }) }),
+          });
+        const store = createTestStore<Record<string, unknown>>({
+          todos: [{ id: "1" }],
+        });
+        const engine = createSyncEngine(
+          when === "connect" ? { ...backend, read } : backend,
+          store.adapter,
+        );
+        engine.connect();
+
+        if (when !== "connect") {
+          backend.read = read;
+          backend.receive({});
+        }
+
+        expect(store.getState()).toEqual({
+          todos: [{ id: "1" }, { id: "2", tags: [{ name: "a" }] }],
+          settings: { layout: { width: 2 } },
+        });
+        expect(prototypeHijacks(store.getState())).toEqual([]);
+      },
+    );
   });
 
   describe("filter", () => {

@@ -1,5 +1,5 @@
 import { LoroList, LoroMap, LoroText } from "loro-crdt";
-import type { JsonObject, TextPolicy } from "@homeostate/core";
+import type { TextPolicy } from "@homeostate/core";
 
 export type SharedContainer = LoroMap | LoroList | LoroText;
 
@@ -68,33 +68,3 @@ const fillList = (
     insertListItem(list, index, value, path, text),
   );
 };
-
-/**
- * `toJSON` builds objects by assignment, so a map entry a peer named `__proto__` becomes the
- * prototype of the object holding it, and its entries read as inherited properties. Returns
- * `value` with every such object replaced by a plain copy of its own properties, copying only
- * the containers on a path to one.
- */
-export function withPlainPrototypes(value: JsonObject): JsonObject;
-export function withPlainPrototypes(value: unknown): unknown;
-export function withPlainPrototypes(value: unknown): unknown {
-  if (value === null || typeof value !== "object" || ArrayBuffer.isView(value))
-    return value;
-
-  const source = value as Record<string, unknown>;
-  let copy =
-    Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype
-      ? undefined
-      : copyOf(value);
-  for (const key of Object.keys(source)) {
-    // Assigning this key would replace the copy's prototype; the engine leaves it out anyway.
-    if (key === "__proto__") continue;
-    const item = withPlainPrototypes(source[key]);
-    if (item !== source[key]) (copy ??= copyOf(value))[key] = item;
-  }
-
-  return copy ?? value;
-}
-
-const copyOf = (value: object): Record<string, unknown> =>
-  (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
