@@ -1,9 +1,19 @@
-import type { Store } from "redux";
 import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 
+/**
+ * The part of a Redux store the adapter uses. A Redux 4 or Redux 5 store, a Redux Toolkit
+ * store, and any store with Redux's interface, such as one made with Zustand's `redux`
+ * middleware, satisfy it, so the package needs no `redux` dependency.
+ */
+export interface ReduxLikeStore<S> {
+  getState(): S;
+  dispatch(action: { type: string }): unknown;
+  subscribe(listener: () => void): () => void;
+}
+
 class ReduxAdapter<S extends object> implements StoreAdapter<S> {
-  private store: Store<S>;
-  private setStateAction: (state: S) => { type: string; payload: S };
+  private store: ReduxLikeStore<S>;
+  private setStateAction: (state: S) => { type: string };
 
   /**
    * Create a Redux adapter
@@ -11,8 +21,8 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
    * @param setStateAction - Action creator that replaces the entire state (for sync updates)
    */
   constructor(
-    store: Store<S>,
-    setStateAction: (state: S) => { type: string; payload: S },
+    store: ReduxLikeStore<S>,
+    setStateAction: (state: S) => { type: string },
   ) {
     this.store = store;
     this.setStateAction = setStateAction;
@@ -42,8 +52,9 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
  * Creates a Redux-specific store adapter that bridges Redux stores with the sync engine.
  * Immer-frozen state is fine: the engine never mutates store state in place.
  *
- * @param store - The Redux store instance
- * @param setStateAction - Action creator that replaces the entire state
+ * @param store - A Redux 4 or 5 store, a Redux Toolkit store, or any {@link ReduxLikeStore}
+ * @param setStateAction - Action creator for an action that a reducer case answers by
+ *   returning the given state as the new root state. Only its `type` is required.
  * @returns StoreAdapter instance for the Redux store
  *
  * @example
@@ -68,8 +79,8 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
  * ```
  */
 export function createReduxAdapter<S extends object>(
-  store: Store<S>,
-  setStateAction: (state: S) => { type: string; payload: S },
+  store: ReduxLikeStore<S>,
+  setStateAction: (state: S) => { type: string },
 ): StoreAdapter<S> {
   return new ReduxAdapter(store, setStateAction);
 }

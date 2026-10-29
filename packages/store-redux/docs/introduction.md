@@ -17,7 +17,10 @@ It keeps a Redux store in sync with a CRDT backend such as
 npm install @homeostate/core @homeostate/store-redux @reduxjs/toolkit @homeostate/crdt-yjs yjs
 ```
 
-`redux` 5 is a peer dependency; Redux Toolkit 2 already depends on it.
+The package does not depend on `redux`: the adapter takes any store with Redux's `getState`,
+`dispatch` and `subscribe`. Redux Toolkit, Redux 4 and Redux 5 stores work, and so does a
+store made with Zustand's `redux` middleware. For a plain Redux store, install `redux` instead
+of `@reduxjs/toolkit`.
 
 ## Usage
 
