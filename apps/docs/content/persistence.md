@@ -82,6 +82,34 @@ await persistence.whenLoaded;
 useTodos.homeostate.connect();
 ```
 
+## Checking what was restored
+
+`whenLoaded` resolves with a `PersistenceLoadResult`, so the app can tell a first visit from a
+restored document, and both from a stored log it could not restore:
+
+| `status`    | When                                                                     | Typical start                                       |
+| ----------- | ------------------------------------------------------------------------ | --------------------------------------------------- |
+| `"empty"`   | Nothing is stored under the key, as on a first visit                     | Connect; the store's defaults seed the document     |
+| `"loaded"`  | Every stored update was applied                                          | Connect                                             |
+| `"partial"` | Some stored updates could not be applied; `errors` holds what each threw | Offer recovery, or connect with what was restored   |
+| `"failed"`  | Storage could not be read; `error` holds why                             | Offer recovery, or continue without the saved state |
+
+```ts
+const loaded = await persistence.whenLoaded;
+if (loaded.status === "empty" || loaded.status === "loaded") {
+  engine.connect();
+} else {
+  showRecovery(loaded);
+}
+```
+
+Connecting after `"partial"` or `"failed"` can seed the store's defaults for what was not
+restored, as on a first visit; a log that could not be applied stays in storage either way, see
+[Unreadable stored updates](#unreadable-stored-updates). The errors are the ones `onError`
+received while loading, not those of later writes. The result only describes restoring the
+document: `"loaded"` does not mean the initial snapshot is written or that peers have synced.
+Await `flush()` for storage writes.
+
 ## Choosing storage
 
 - **IndexedDB** stores each update as a row, so appending stays cheap as the document grows.
@@ -169,7 +197,8 @@ await persistence.clear(); // stop storing and delete the stored document, e.g. 
 ```
 
 `whenLoaded` never rejects. If storage is unavailable or fails, the error goes to `onError`
-(`console.error` by default) and the app starts without its stored state.
+(`console.error` by default) and `whenLoaded` resolves with `"failed"`; see
+[Checking what was restored](#checking-what-was-restored).
 
 The other methods reject when their storage work fails, with the error `onError` also
 received. `flush()` and `destroy()` reject while an update the document reported may be
@@ -193,7 +222,7 @@ says which failures each method reports.
 
 A stored update can fail to apply: its bytes were damaged, or the key was used before for a
 document of another CRDT library. The error goes to `onError`, the rest of the log is applied,
-and the stored log is kept as it is: compaction leaves it alone, so nothing that failed to
+`whenLoaded` resolves with `"partial"`, and the stored log is kept as it is: compaction leaves it alone, so nothing that failed to
 restore is deleted. To recover, read the log with the adapter's `load(key)`, keep what the app
 can use, then call `persistence.clear()` to delete it on purpose. Use a distinct key for each
 CRDT library. The

@@ -31,7 +31,8 @@ createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
 ```
 
 Connect the engine after `whenLoaded`, so it adopts the restored state instead of seeding the
-store's defaults over it. See the [persistence guide](https://homeostate.pages.dev/docs/persistence).
+store's defaults over it. Its result tells whether a stored document was found and restored in
+full; see the [persistence guide](https://homeostate.pages.dev/docs/persistence#checking-what-was-restored).
 
 `createIndexedDbAdapter({ name, indexedDB })` takes an optional database name (default
 `"homeostate"`) and IndexedDB implementation, such as `fake-indexeddb` in tests. Several tabs

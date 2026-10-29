@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createPersistence, type PersistableDoc } from "@homeostate/core";
 import { describePersistenceAdapter } from "@homeostate/core/conformance";
 import { createLocalStorageAdapter } from "../index.js";
 import { fromBase64, toBase64 } from "../base64.js";
@@ -49,6 +50,67 @@ describe("createLocalStorageAdapter", () => {
         new Uint8Array([1]),
       ),
     ).rejects.toThrow("full");
+  });
+});
+
+/** A document of strings, stored as JSON arrays; `apply` throws for anything else. */
+const createListDoc = (initial: string[] = []) => {
+  const items = new Set(initial);
+  const persistable: PersistableDoc = {
+    encode: () => new TextEncoder().encode(JSON.stringify([...items])),
+    apply: (update) => {
+      for (const item of JSON.parse(
+        new TextDecoder().decode(update),
+      ) as string[])
+        items.add(item);
+    },
+    subscribe: () => () => {},
+  };
+  return { persistable, items: () => [...items].sort() };
+};
+
+describe("createLocalStorageAdapter with createPersistence", () => {
+  beforeEach(() => localStorage.clear());
+
+  const load = (doc = createListDoc(), onError = vi.fn()) =>
+    createPersistence(doc.persistable, createLocalStorageAdapter(), {
+      key: "todos",
+      onError,
+    });
+
+  it("loads empty on a first visit, then loaded on the next", async () => {
+    const first = load(createListDoc(["seed"]));
+    await expect(first.whenLoaded).resolves.toEqual({ status: "empty" });
+    await first.destroy();
+
+    const doc = createListDoc();
+    await expect(load(doc).whenLoaded).resolves.toEqual({ status: "loaded" });
+    expect(doc.items()).toEqual(["seed"]);
+  });
+
+  it("loads partially when a stored update cannot be applied", async () => {
+    const adapter = createLocalStorageAdapter();
+    await adapter.append("todos", new Uint8Array([255, 254]));
+    await adapter.append("todos", createListDoc(["kept"]).persistable.encode());
+    const doc = createListDoc();
+
+    await expect(load(doc).whenLoaded).resolves.toEqual({
+      status: "partial",
+      errors: [expect.any(SyntaxError)],
+    });
+    expect(doc.items()).toEqual(["kept"]);
+  });
+
+  it("fails to load an entry that is not a stored log, and keeps it", async () => {
+    localStorage.setItem("homeostate:todos", "{ not json");
+
+    const loaded = await load().whenLoaded;
+
+    expect(loaded).toEqual({
+      status: "failed",
+      error: expect.any(SyntaxError),
+    });
+    expect(localStorage.getItem("homeostate:todos")).toBe("{ not json");
   });
 });
 
