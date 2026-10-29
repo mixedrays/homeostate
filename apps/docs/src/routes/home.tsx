@@ -5,12 +5,12 @@ import {
   ArrowRightIcon,
   DatabaseIcon,
   LayersIcon,
-  NetworkIcon,
 } from "lucide-react";
 import { Link } from "react-router";
 import type { Route } from "./+types/home";
 import { SyncDemo } from "@/components/home/sync-demo.tsx";
 import { GithubIcon } from "@/components/layout/github-icon.tsx";
+import { HomeostateMark } from "@/components/layout/homeostate-mark.tsx";
 import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
 import { Markdown } from "@/components/markdown/markdown.tsx";
@@ -86,7 +86,7 @@ function SyncDiagram({ backends }: { backends: string[] }) {
           </div>
           <DiagramLink label="store adapter" />
           <div className="flex items-center gap-4 rounded-xl border border-primary/30 bg-background p-5 shadow-[0_4px_24px_-8px_var(--primary)] lg:flex-1">
-            <NetworkIcon aria-hidden="true" className="size-6 text-primary" />
+            <HomeostateMark className="size-7 shrink-0" />
             <div>
               <p className="font-semibold tracking-tight">Homeostate</p>
               <p className="mt-1 text-xs text-muted-foreground">
