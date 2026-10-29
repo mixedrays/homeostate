@@ -46,12 +46,12 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                                                                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `JsonObject`, `JsonObjectInput`, `Unsubscribe`             |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                   |
-| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `EditScript`, `ChangeType`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `applyChanges`, `applyStringChanges`, `ApplyOps`, `ContainerKind` |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                   |
+| Page                            | APIs and types                                                                                                                                                                                                                                                                                            |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `CrdtBackendOptions`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                      |
+| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `EditScript`, `ChangeType`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `applyChanges`, `applyStringChanges`, `ApplyOps`, `ContainerKind`                                                    |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                      |
 
 `createPersistence` keeps the document in browser storage through
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or
@@ -60,20 +60,21 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 
 ## Writing a backend
 
-Implement `write(next, previous)` with `applyChanges(root, current, next, ops, { text, json: true })`.
-It diffs `current` against `next` and applies only the difference through your `ApplyOps`,
-which read and write your library's maps, lists and texts:
+Build it with [`createCrdtBackend`](./sync-engine.md#createcrdtbackend), from the parts that
+differ by CRDT library: `read` for the synced subtree as plain JSON, `transact` to run one edit
+tagged as the backend's own, `watch` to hear of every change and say whether it was its own,
+and `revision`. Core does the rest: it applies the default text policy, diffs each write against
+`previous` or the document with `applyChanges` and `json: true`, and leaves the backend's own
+writes out of `subscribe`.
 
-- Pass `previous` as `current` when the engine gives it, and read your document only when it
-  does not. Unchanged subtrees then match by identity instead of item by item.
+- `transact` hands its edit your [`ApplyOps`](./diffing.md), which read and write your
+  library's maps, lists and texts. `createCrdtBackend` gives `build` the text policy: in `set`
+  and `splice`, store the strings it marks in your library's text type and every other string
+  as a plain value; text is then edited through `editText`.
 - Implement `revision()` from something your library updates with every change, reported or
   not, such as a version vector or an op count, and return `undefined` while it cannot tell.
   Without it, the engine reads your document before every local change to check that
   `previous` is still current.
-- `json: true` keeps `undefined` and functions out of the CRDT library.
-- Accept a `text` policy and pass it on. In `set` and `splice`, store the strings it marks in
-  your library's text type and every other string as a plain value; text is then edited
-  through `editText`.
 - Delete in `splice` and `editText` with one library call for the whole `deleteCount`, such as
   `Y.Text.delete(index, length)`: clearing a list or deleting a paragraph arrives as one run.
 

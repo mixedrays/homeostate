@@ -4,13 +4,9 @@ import { createSyncEngine } from "@homeostate/core";
 import {
   addTodo,
   createTestStore,
-  deleteTodo,
   describeCrdtBackend,
-  prototypeHijacks,
-  renameTodo,
   threeTodos,
   todo,
-  todoTitles,
   toggleTodo,
   type TodoState,
 } from "@homeostate/core/conformance";
@@ -42,6 +38,43 @@ const replication = {
   },
 };
 
+/** Builds shared types for `value`'s objects and arrays, keeping every key, `__proto__` too. */
+const toShared = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    const array = new Y.Array<unknown>();
+    array.push(value.map(toShared));
+    return array;
+  }
+  if (value !== null && typeof value === "object")
+    return new Y.Map(
+      Object.entries(value).map(([key, item]) => [key, toShared(item)]),
+    );
+  return value;
+};
+
+/** What the suite needs to look inside the synced map `mapOf` returns. */
+const inspection = (mapOf: (doc: Y.Doc) => Y.Map<unknown>) => {
+  const at = (doc: Y.Doc, path: (string | number)[]): unknown =>
+    path.reduce<unknown>(
+      (container, key) =>
+        container instanceof Y.Map
+          ? container.get(key as string)
+          : (container as Y.Array<unknown>).get(key as number),
+      mapOf(doc),
+    );
+  return {
+    storeForeign: (doc: Y.Doc, key: string, value: unknown) => {
+      mapOf(doc).set(key, value);
+    },
+    storeForeignContainers: (doc: Y.Doc, key: string, value: unknown) => {
+      mapOf(doc).set(key, toShared(value));
+    },
+    containerId: at,
+    isText: (doc: Y.Doc, path: (string | number)[]) =>
+      at(doc, path) instanceof Y.Text,
+  };
+};
+
 describeCrdtBackend("createYjsBackend", {
   createDoc: (id) => {
     const doc = new Y.Doc();
@@ -50,9 +83,7 @@ describeCrdtBackend("createYjsBackend", {
   },
   backend: (doc, options) => createYjsBackend(doc, NAME, options),
   ...replication,
-  storeForeign: (doc, key, value) => {
-    doc.getMap(NAME).set(key, value);
-  },
+  ...inspection((doc) => doc.getMap(NAME)),
 });
 
 /**
@@ -78,37 +109,10 @@ describeCrdtBackend("createYjsBackend over a nested Y.Map", {
   },
   backend: (doc, options) => createYjsBackend(nestedMap(doc), options),
   ...replication,
-  storeForeign: (doc, key, value) => {
-    nestedMap(doc).set(key, value);
-  },
+  ...inspection(nestedMap),
 });
 
 describe("createYjsBackend", () => {
-  it("deletes a middle todo without rewriting the items after it", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME);
-    backend.write(threeTodos());
-    const todos = doc.getMap(NAME).get("todos") as Y.Array<Y.Map<unknown>>;
-    const third = todos.get(2);
-
-    backend.write(deleteTodo(threeTodos(), "2"));
-
-    expect(todos.toJSON()).toEqual(deleteTodo(threeTodos(), "2").todos);
-    expect(todos.get(1)).toBe(third);
-  });
-
-  it("diffs against previous instead of reading its document", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME);
-    backend.write({ count: 1, label: "a" });
-    // Unreported, so a `previous` that misses it shows which side the write diffed against.
-    doc.getMap(NAME).set("count", 2);
-
-    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
-
-    expect(backend.read()).toEqual({ count: 2, label: "b" });
-  });
-
   it("has no revision inside a transaction, and a new one once its observers are called", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
@@ -406,85 +410,5 @@ describe("undo", () => {
     undo.undo();
 
     expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
-  });
-});
-
-describe("untrusted key names", () => {
-  it("never lets a peer's __proto__ entry reach the store", () => {
-    const doc = new Y.Doc();
-    const store = createTestStore({ todos: [{ id: "1" }] });
-    const backend = createYjsBackend(doc, NAME);
-    createSyncEngine(backend, store.adapter).connect();
-    const todos = doc.getMap(NAME).get("todos") as Y.Array<Y.Map<unknown>>;
-    const admin = () => new Y.Map<unknown>([["isAdmin", true]]);
-
-    doc.transact(() => {
-      todos.get(0).set("__proto__", admin());
-      todos.push([
-        new Y.Map<unknown>([
-          ["id", "2"],
-          ["__proto__", admin()],
-        ]),
-      ]);
-    });
-
-    expect(prototypeHijacks(backend.read())).toEqual([]);
-    expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
-    expect(prototypeHijacks(store.getState())).toEqual([]);
-  });
-});
-
-describe("strings", () => {
-  const map = (doc: Y.Doc) => doc.getMap<unknown>(NAME);
-  const todoMaps = (doc: Y.Doc) =>
-    map(doc).get("todos") as Y.Array<Y.Map<unknown>>;
-
-  it("stores the strings the policy marks as Y.Text and every other string as a value", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME, { text: todoTitles });
-    backend.write(threeTodos());
-    backend.write(addTodo(threeTodos(), todo("4")));
-
-    expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
-    expect(todoMaps(doc).get(3).get("title")).toBeInstanceOf(Y.Text);
-    expect(todoMaps(doc).get(3).get("id")).toBe("4");
-    expect(map(doc).get("filterStatus")).toBe("all");
-  });
-
-  it("reads strings held as Y.Text by an earlier version, and stores each as a value once it changes", () => {
-    const doc = new Y.Doc();
-    createYjsBackend(doc, NAME, { text: () => true }).write(threeTodos());
-    const backend = createYjsBackend(doc, NAME);
-    expect(backend.read()).toEqual(threeTodos());
-
-    const next = {
-      ...renameTodo(threeTodos(), "2", "Two"),
-      filterStatus: "active",
-    };
-    backend.write(next);
-
-    expect(backend.read()).toEqual(next);
-    expect(map(doc).get("filterStatus")).toBe("active");
-    expect(todoMaps(doc).get(1).get("title")).toBe("Two");
-    expect(map(doc).get("searchTerm")).toBeInstanceOf(Y.Text);
-    expect(todoMaps(doc).get(0).get("title")).toBeInstanceOf(Y.Text);
-  });
-
-  it("turns a plain string at a text path into a Y.Text when it next changes", () => {
-    const doc = new Y.Doc();
-    createYjsBackend(doc, NAME).write({ ...threeTodos(), tags: ["a"] });
-    const backend = createYjsBackend(doc, NAME, {
-      text: (path) => todoTitles(path) || path[0] === "tags",
-    });
-
-    const next = { ...renameTodo(threeTodos(), "2", "Todo 2!"), tags: ["ab"] };
-    backend.write(next);
-
-    expect(backend.read()).toEqual(next);
-    expect(todoMaps(doc).get(1).get("title")).toBeInstanceOf(Y.Text);
-    expect((map(doc).get("tags") as Y.Array<unknown>).get(0)).toBeInstanceOf(
-      Y.Text,
-    );
-    expect(todoMaps(doc).get(0).get("title")).toBe("Todo 1");
   });
 });

@@ -339,8 +339,9 @@ has no index signature, so `read()` converts to one through `unknown`:
 
 `previous`, when given, is what the synced subtree holds now: the synced state the engine last
 wrote, or the whole state it last read after a remote change. A backend can diff `next`
-against it with `applyChanges` and `json: true` instead of reading its document; unchanged
-subtrees of `next` are then the same objects and compare by identity. Like `next`, it may
+against it with `applyChanges` and `json: true` instead of reading its document, as one built
+with [`createCrdtBackend`](#createcrdtbackend) does; unchanged subtrees of `next` are then the
+same objects and compare by identity. Like `next`, it may
 hold `undefined` and functions, which `json: true` treats as absent. The engine passes nothing
 for the seed write during `connect()`, after a write that threw, and for a write back after
 `setState` during which the revision moved. A backend may ignore `previous`.
@@ -363,6 +364,78 @@ entries, and leaves out own `__proto__` keys, before they reach the store, so a 
 no guard of its own. Keep document replication in your CRDT provider. To write small edits
 instead of replacing the document, see the [Diff and apply API](./diffing.md).
 
+## createCrdtBackend
+
+```ts
+function createCrdtBackend(
+  build: (text: TextPolicy) => CrdtBackendParts,
+  options?: CrdtBackendOptions,
+): CrdtBackend;
+
+interface CrdtBackendParts {
+  read: () => JsonObject;
+  transact: (
+    edit: (root: object, ops: ApplyOps, created?: boolean) => void,
+  ) => void;
+  watch: (onChange: (own: boolean) => void) => Unsubscribe;
+  revision?: () => unknown;
+}
+
+interface CrdtBackendOptions {
+  text?: TextPolicy;
+}
+```
+
+Builds a `CrdtBackend` for a CRDT library from the parts that differ by library. It imports no
+CRDT library. `build` is called once with the text policy, `options.text` or, by default, one
+that marks no string as text, so build the library's [`ApplyOps`](./diffing.md) with it.
+
+| Part       | Supplies                                                                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `read`     | The backend's `read`: the synced subtree as a JSON snapshot that never aliases the document.                                                                                                                                   |
+| `transact` | Runs `edit` as one transaction tagged as this backend's own, with the synced root and the `ApplyOps` that write into it. When the document holds no map there, it puts an empty one in its place and passes `created` as true. |
+| `watch`    | Calls `onChange` after every change to the synced subtree, with `own` set when the change carries the tag `transact` gives. Returns the cleanup.                                                                               |
+| `revision` | Optional. The backend's `revision`, as it is; see [CrdtBackend](#crdtbackend).                                                                                                                                                 |
+
+The backend it returns:
+
+- `write(next, previous)` runs `transact` once and applies `next` with `applyChanges` and
+  `json: true`, diffing against `{}` when `transact` created the root, otherwise against
+  `previous` when the engine gives it, and otherwise against `read()`, inside the transaction.
+- `subscribe` reports only the changes `watch` does not call its own.
+- `read` and `revision` are the parts' own functions, called directly.
+
+The Loro backend, in short, with `createLoroOps` its `ApplyOps`:
+
+```ts
+import { createCrdtBackend, type CrdtBackend } from "@homeostate/core";
+
+export const createLoroBackend = (
+  doc: LoroDoc,
+  name: string,
+  options?: { text?: TextPolicy },
+): CrdtBackend => {
+  const map = doc.getMap(name);
+  const origin = `homeostate:${name}`;
+  return createCrdtBackend((text) => {
+    const ops = createLoroOps(text);
+    return {
+      read: () => map.toJSON(),
+      transact: (edit) => {
+        edit(map, ops);
+        doc.commit({ origin });
+      },
+      watch: (onChange) =>
+        map.subscribe((event) => onChange(event.origin === origin)),
+      revision: () => doc.opCount(),
+    };
+  }, options);
+};
+```
+
+The Yjs, Loro and Automerge backends are built this way. A backend with members of its own, such
+as the Yjs backend's `map` and `origin`, spreads the result into its own object.
+
 ## Unsubscribe
 
 ```ts
@@ -371,4 +444,5 @@ type Unsubscribe = () => void;
 
 The cleanup function returned by a subscription. The engine calls it on disconnect.
 
-Source: [sync-engine.ts](../src/sync-engine.ts) and [types.ts](../src/types.ts).
+Source: [sync-engine.ts](../src/sync-engine.ts), [crdt-backend.ts](../src/crdt-backend.ts) and
+[types.ts](../src/types.ts).

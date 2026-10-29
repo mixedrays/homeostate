@@ -2,15 +2,9 @@ import * as A from "@automerge/automerge";
 import { describe, expect, it } from "vitest";
 import { createSyncEngine } from "@homeostate/core";
 import {
-  addTodo,
   createTestStore,
-  deleteTodo,
   describeCrdtBackend,
-  prototypeHijacks,
-  renameTodo,
   threeTodos,
-  todo,
-  todoTitles,
   toggleTodo,
   type TodoState,
 } from "@homeostate/core/conformance";
@@ -33,6 +27,20 @@ const createHandle = (id?: number): Handle =>
     id === undefined ? A.init<Root>() : A.init<Root>(actor(id)),
   );
 
+const storeIn = (handle: Handle, key: string, value: unknown): void => {
+  handle.change((doc) => {
+    doc[NAME] ??= {};
+    (doc[NAME] as Root)[key] = value;
+  });
+};
+
+/** What the synced key holds at `path`, as Automerge reads it. */
+const at = (handle: Handle, path: (string | number)[]): unknown =>
+  path.reduce<unknown>(
+    (container, key) => (container as Record<string | number, unknown>)[key],
+    handle.doc()[NAME],
+  );
+
 describeCrdtBackend("createAutomergeBackend", {
   createDoc: createHandle,
   backend: (handle, options) => createAutomergeBackend(handle, NAME, options),
@@ -44,12 +52,12 @@ describeCrdtBackend("createAutomergeBackend", {
     handle.subscribe(({ doc, local }) => {
       if (local) listener(A.getLastLocalChange(doc) ?? new Uint8Array());
     }),
-  storeForeign: (handle, key, value) => {
-    handle.change((doc) => {
-      doc[NAME] ??= {};
-      (doc[NAME] as Root)[key] = value;
-    });
-  },
+  storeForeign: storeIn,
+  // Automerge builds maps and lists for every object and array it is given.
+  storeForeignContainers: storeIn,
+  containerId: (handle, path) => A.getObjectId(at(handle, path) as object),
+  // Text reads as a string, and every other string as an `ImmutableString`.
+  isText: (handle, path) => typeof at(handle, path) === "string",
 });
 
 describe("createAutomergeBackend", () => {
@@ -62,33 +70,6 @@ describe("createAutomergeBackend", () => {
     expect(backend.read()).toEqual({ a: 1, list: [null, 1] });
     backend.write({ a: undefined, list: [null, 1] });
     expect(backend.read()).toEqual({ list: [null, 1] });
-  });
-
-  it("deletes a middle todo without rewriting the items after it", () => {
-    const handle = createHandle();
-    const backend = createAutomergeBackend(handle, NAME);
-    backend.write(threeTodos());
-    const todos = () => (handle.doc()[NAME] as TodoState).todos;
-    const third = A.getObjectId(todos()[2]);
-
-    backend.write(deleteTodo(threeTodos(), "2"));
-
-    expect(backend.read()).toEqual(deleteTodo(threeTodos(), "2"));
-    expect(A.getObjectId(todos()[1])).toBe(third);
-  });
-
-  it("diffs against previous instead of reading its document", () => {
-    const handle = createHandle();
-    const backend = createAutomergeBackend(handle, NAME);
-    backend.write({ count: 1, label: "a" });
-    // Unreported, so a `previous` that misses it shows which side the write diffed against.
-    handle.change((doc) => {
-      (doc[NAME] as Root).count = 2;
-    });
-
-    backend.write({ count: 1, label: "b" }, { count: 1, label: "a" });
-
-    expect(backend.read()).toEqual({ count: 2, label: "b" });
   });
 
   it("creates the synced key when given previous for a document without it", () => {
@@ -210,91 +191,5 @@ describe("createAutomergeBackend", () => {
       (draft[NAME] as { count: number }).count = 1;
     });
     expect(store.getState()).toEqual({ count: 1 });
-  });
-});
-
-describe("untrusted key names", () => {
-  it("never lets a peer's __proto__ entry reach the store", () => {
-    const handle = createHandle();
-    const store = createTestStore({ todos: [{ id: "1" }] });
-    const backend = createAutomergeBackend(handle, NAME);
-    createSyncEngine(backend, store.adapter).connect();
-
-    // Automerge stores the key; its document proxies leave it out of Object.keys.
-    handle.update((doc) =>
-      A.change(doc, (draft) => {
-        (draft[NAME] as { todos: unknown[] }).todos.push(
-          JSON.parse('{"id":"2","__proto__":{"isAdmin":true}}'),
-        );
-      }),
-    );
-
-    expect(prototypeHijacks(backend.read())).toEqual([]);
-    expect(store.getState()).toEqual({ todos: [{ id: "1" }, { id: "2" }] });
-    expect(prototypeHijacks(store.getState())).toEqual([]);
-  });
-});
-
-describe("strings", () => {
-  type Stored = Record<string, unknown> & {
-    todos: Record<string, unknown>[];
-    tags: unknown[];
-  };
-  const stored = (handle: Handle) => handle.doc()[NAME] as Stored;
-
-  it("stores the strings the policy marks as text and every other string as an ImmutableString", () => {
-    const handle = createHandle();
-    const backend = createAutomergeBackend(handle, NAME, { text: todoTitles });
-    backend.write(threeTodos());
-    backend.write(addTodo(threeTodos(), todo("4")));
-
-    expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
-    expect(stored(handle).todos[3].title).toBe("Todo 4");
-    expect(A.isImmutableString(stored(handle).todos[3].id)).toBe(true);
-    expect(A.isImmutableString(stored(handle).filterStatus)).toBe(true);
-
-    const heads = A.getHeads(handle.doc());
-    backend.write(addTodo(threeTodos(), todo("4")));
-    expect(A.getHeads(handle.doc())).toEqual(heads);
-  });
-
-  it("reads strings held as text by an earlier version, and stores each as an ImmutableString once it changes", () => {
-    const handle = createHandle();
-    createAutomergeBackend(handle, NAME, { text: () => true }).write(
-      threeTodos(),
-    );
-    const backend = createAutomergeBackend(handle, NAME);
-    expect(backend.read()).toEqual(threeTodos());
-
-    const next = {
-      ...renameTodo(threeTodos(), "2", "Two"),
-      filterStatus: "active",
-    };
-    backend.write(next);
-
-    expect(backend.read()).toEqual(next);
-    expect(A.isImmutableString(stored(handle).filterStatus)).toBe(true);
-    expect(A.isImmutableString(stored(handle).todos[1].title)).toBe(true);
-    expect(stored(handle).searchTerm).toBe("");
-    expect(stored(handle).todos[0].title).toBe("Todo 1");
-  });
-
-  it("turns an ImmutableString at a text path into text when it next changes", () => {
-    const handle = createHandle();
-    createAutomergeBackend(handle, NAME).write({
-      ...threeTodos(),
-      tags: ["a"],
-    });
-    const backend = createAutomergeBackend(handle, NAME, {
-      text: (path) => todoTitles(path) || path[0] === "tags",
-    });
-
-    const next = { ...renameTodo(threeTodos(), "2", "Todo 2!"), tags: ["ab"] };
-    backend.write(next);
-
-    expect(backend.read()).toEqual(next);
-    expect(stored(handle).todos[1].title).toBe("Todo 2!");
-    expect(stored(handle).tags[0]).toBe("ab");
-    expect(A.isImmutableString(stored(handle).todos[0].title)).toBe(true);
   });
 });

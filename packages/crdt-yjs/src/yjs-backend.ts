@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import {
-  applyChanges,
+  createCrdtBackend,
   type CrdtBackend,
   type TextPolicy,
   type Unsubscribe,
@@ -41,8 +41,6 @@ export interface YjsBackend extends CrdtBackend {
    */
   readonly origin: unknown;
 }
-
-const noText: TextPolicy = () => false;
 
 const reportRemoved = (error: Error): void => {
   console.error("[homeostate] Yjs backend lost its map:", error);
@@ -138,52 +136,41 @@ export function createYjsBackend(
       "createYjsBackend needs a Y.Doc and a name, or a Y.Map that is part of a Y.Doc",
     );
   const {
-    text = noText,
     origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`),
     onRemoved = reportRemoved,
   } = options;
-  const ops = createYjsOps(text);
   const transactions = countTransactions(doc);
   let reported = false;
 
-  return {
-    map,
-    origin,
+  const backend = createCrdtBackend((text) => {
+    const ops = createYjsOps(text);
+    return {
+      read: () => toPlainMap(map),
 
-    read: () => toPlainMap(map),
+      transact: (edit) => doc.transact(() => edit(map, ops), origin),
 
-    // Every change in the document, since telling which ones changed the map takes more.
-    revision: () => (transactions.open > 0 ? undefined : transactions.done),
+      watch: (onChange): Unsubscribe => {
+        const handler = (_events: unknown, transaction: Y.Transaction): void =>
+          onChange(transaction.origin === origin);
+        // Yjs sends a deleted map no event, so look for the removal after every transaction.
+        const watchRemoval = (): void => {
+          if (reported || !isRemoved(map)) return;
+          reported = true;
+          onRemoved(removedError());
+        };
+        map.observeDeep(handler);
+        const nested = map._item !== null;
+        if (nested) doc.on("afterTransaction", watchRemoval);
+        return () => {
+          map.unobserveDeep(handler);
+          if (nested) doc.off("afterTransaction", watchRemoval);
+        };
+      },
 
-    write: (next, previous) => {
-      const current = previous ?? map.toJSON();
-      doc.transact(
-        () =>
-          applyChanges(map, current, next, ops, {
-            text,
-            json: true,
-          }),
-        origin,
-      );
-    },
+      // Every change in the document, since telling which ones changed the map takes more.
+      revision: () => (transactions.open > 0 ? undefined : transactions.done),
+    };
+  }, options);
 
-    subscribe: (onRemoteChange): Unsubscribe => {
-      const handler = (_events: unknown, transaction: Y.Transaction): void => {
-        if (transaction.origin !== origin) onRemoteChange();
-      };
-      // Yjs sends a deleted map no event, so look for the removal after every transaction.
-      const watchRemoval = (): void => {
-        if (reported || !isRemoved(map)) return;
-        reported = true;
-        onRemoved(removedError());
-      };
-      map.observeDeep(handler);
-      const nested = map._item !== null;
-      if (nested) doc.on("afterTransaction", watchRemoval);
-      return () => {
-        map.unobserveDeep(handler);
-        if (nested) doc.off("afterTransaction", watchRemoval);
-      };
-    },
-  };
+  return { ...backend, map, origin };
 }
