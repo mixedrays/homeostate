@@ -212,6 +212,42 @@ describe("homeostate middleware", () => {
 
     expectTypeOf(useStore.getState().count).toEqualTypeOf<number>();
   });
+
+  it("keeps the keys omit names local, checking their names against the state", () => {
+    interface DraftState extends CounterState {
+      draft: string;
+      setDraft: (draft: string) => void;
+    }
+    const backend = createMemoryBackend({ count: 3, draft: "room" });
+    const useStore = create<DraftState>()(
+      homeostate(
+        (set) => ({
+          count: 0,
+          draft: "",
+          increment: () => set((s) => ({ count: s.count + 1 })),
+          setDraft: (draft) => set({ draft }),
+        }),
+        { backend, omit: ["draft"] },
+      ),
+    );
+
+    expect(useStore.getState()).toMatchObject({ count: 3, draft: "" });
+    useStore.getState().setDraft("local");
+    expect(backend.read()).toEqual({ count: 3 });
+
+    create<DraftState>()(
+      homeostate(
+        (set) => ({
+          count: 0,
+          draft: "",
+          increment: () => set((s) => ({ count: s.count + 1 })),
+          setDraft: (draft) => set({ draft }),
+        }),
+        // @ts-expect-error "drafts" is not a key of DraftState.
+        { backend: createMemoryBackend(), omit: ["drafts"] },
+      ),
+    );
+  });
 });
 
 describe("homeostate middleware with persist", () => {

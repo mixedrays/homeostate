@@ -21,8 +21,11 @@ export interface PeerSetup<S extends object = any> {
   adapter: StoreAdapter<S>;
   backend: CrdtBackend;
   doc: PersistableDoc;
-  /** Passed to `createSyncEngine`; its `filter` also decides what convergence compares. */
-  config?: SyncEngineConfig;
+  /**
+   * Passed to `createSyncEngine`, typed by the adapter's state; its `filter`, `keys` and `omit`
+   * also decide what convergence compares.
+   */
+  config?: NoInfer<SyncEngineConfig<S>>;
   /** Names the peer in convergence errors. Defaults to `peer-<index>`. */
   name?: string;
   /**

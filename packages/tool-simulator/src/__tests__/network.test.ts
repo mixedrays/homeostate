@@ -306,6 +306,27 @@ describe("createNetwork", () => {
     expect((error as ConvergenceError).seed).toBe(9);
   });
 
+  it("leaves the keys a peer's config omits out of what converges", async () => {
+    const [, yjs] = backends[0];
+    network = createNetwork({ seed: 11 });
+    const peers = [0, 1].map((index) =>
+      todoPeer(yjs, index, { config: { omit: ["title"] } }),
+    );
+    for (const { setup } of peers) network.addPeer(setup);
+    await network.settle();
+
+    peers[0].store.setState({ title: "mine" });
+    peers[1].store.setState({ todos: [{ title: "milk", done: false }] });
+    await network.settle();
+
+    network.expectConverged();
+    expect(peers[0].store.getState()).toMatchObject({
+      title: "mine",
+      todos: [{ title: "milk", done: false }],
+    });
+    expect(peers[1].store.getState().title).toBe("");
+  });
+
   it("waits for stores that notify asynchronously", async () => {
     const [, yjs] = backends[0];
     network = createNetwork({ seed: 10 });

@@ -15,7 +15,7 @@ Import these APIs and types from `@homeostate/core`. For an app you can run, sta
 declare function createSyncEngine<S extends object>(
   backend: CrdtBackend,
   adapter: StoreAdapter<S>,
-  config?: SyncEngineConfig,
+  config?: SyncEngineConfig<S>,
 ): SyncEngine;
 ```
 
@@ -26,7 +26,7 @@ watching both sides. Creation alone does not read, write or subscribe to either 
 | --------- | -------- | --------------------------------------------------------- |
 | `backend` | Yes      | The replicated state, exposed through `CrdtBackend`.      |
 | `adapter` | Yes      | The application store, exposed through `StoreAdapter<S>`. |
-| `config`  | No       | Sync options. Defaults to `{}`.                           |
+| `config`  | No       | Sync options, typed by `S`. Defaults to `{}`.             |
 
 Returns a `SyncEngine`. The engine is synchronous and does not retry. `connect()` throws what
 it runs into. Once connected, adapter and backend errors go to `onError` when it is given;
@@ -41,14 +41,14 @@ This example uses the [Zustand adapter](../../store-zustand/docs/introduction.md
 
 ```ts title="sync-engine-example.ts"
 import { createStore } from "zustand/vanilla";
-import { createSyncEngine, defaultSyncFilter } from "@homeostate/core";
+import { createSyncEngine } from "@homeostate/core";
 import { createMemoryBackend } from "@homeostate/core/testing";
 import { createZustandAdapter } from "@homeostate/store-zustand";
 
 const store = createStore(() => ({ count: 0, draft: "Only on this device" }));
 const backend = createMemoryBackend({ count: 7 });
 const engine = createSyncEngine(backend, createZustandAdapter(store), {
-  filter: (key, value) => defaultSyncFilter(key, value) && key !== "draft",
+  omit: ["draft"],
   seed: "if-empty",
 });
 
@@ -68,12 +68,15 @@ console.log(engine.isConnected()); // false
 ## SyncEngineConfig
 
 ```ts
-interface SyncEngineConfig {
-  filter?: (key: string, value: unknown) => boolean;
+type SyncEngineConfig<S extends object = JsonObject> = {
+  filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
   seed?: SeedStrategy;
   schedule?: (flush: () => void) => void;
   onError?: (error: unknown, source: SyncErrorSource) => void;
-}
+} & (
+  | { keys: readonly (keyof S & string)[]; omit?: never }
+  | { keys?: never; omit?: readonly (keyof S & string)[] }
+);
 
 type SeedStrategy = "if-empty" | "never";
 type SyncErrorSource = "store" | "backend";
@@ -81,14 +84,34 @@ type SyncErrorSource = "store" | "backend";
 
 | Option     | Default             | Behavior                                                                                                             |
 | ---------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `omit`     | none                | Top-level keys to keep local, by name. Every other key `filter` keeps is synced.                                     |
+| `keys`     | none                | The only top-level keys to sync, by name, if `filter` keeps them. Give `keys` or `omit`, not both.                   |
 | `filter`   | `defaultSyncFilter` | Selects top-level keys independently in the store and backend, in both directions. Excluded keys stay local.         |
 | `seed`     | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
 | `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.    |
 | `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.     |
 
-A custom filter replaces the default. Call `defaultSyncFilter` within it if you also want
-to exclude functions. Filtering is top-level; it does not remove nested functions or turn
-non-JSON values into JSON. Use plain JSON for the synced data.
+`createSyncEngine` takes `S` from the adapter, so `keys` and `omit` accept only the state's key
+names, and a typo fails to compile. Readonly lists work too, such as an `as const` constant
+shared with other code. Without `S`, as `SyncEngineConfig`, a key is any string.
+
+`omit` is the usual way to keep a key such as a draft or a search term on one device:
+
+```ts
+createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
+```
+
+`keys` lists the synced keys instead. A key the backend holds that it does not list is ignored,
+as if it were a local key, while under `omit` a backend key the state's type does not declare is
+synced like any other.
+
+A key is synced when `filter` keeps it and, by name, `keys` lists it or `omit` does not name
+it, so `filter` still runs with either: a function under a key `keys` lists stays local by
+default. A custom filter replaces the default, and `keys` or `omit` narrow what it keeps. Call
+`defaultSyncFilter` within it if you also want to exclude functions. Its parameters are typed
+by `S`, but it is also called with keys the backend holds that `S` does not declare; type its
+`key` as `string` to compare it with such a key. Filtering is top-level; it does not remove
+nested functions or turn non-JSON values into JSON. Use plain JSON for the synced data.
 
 Despite its name, `"if-empty"` works per key, even when the backend already holds other
 keys. With either strategy, a backend key wins over the corresponding store value, and a
@@ -156,10 +179,10 @@ reported once, in every build. Without `onError`, the engine warns once in devel
 ## SetupOptions
 
 ```ts
-interface SetupOptions extends SyncEngineConfig {
+type SetupOptions<S extends object = JsonObject> = SyncEngineConfig<S> & {
   backend: CrdtBackend;
   connect?: "auto" | "manual";
-}
+};
 ```
 
 The options shared by every setup helper: the one call in a store adapter package that creates
@@ -172,7 +195,8 @@ store, or what builds it, then these options, flat, with its own added.
 | `backend` |          | The CRDT backend the store syncs with.                                                                                       |
 | `connect` | `"auto"` | `"auto"` connects once the store is ready. `"manual"` leaves `connect()` to the app, and until then neither side is touched. |
 
-The other options are the engine's `SyncEngineConfig`.
+The other options are the engine's `SyncEngineConfig`, typed by the store's state like the
+engine's, so a helper checks `keys` and `omit` against it.
 
 ## SyncEngine
 
@@ -242,9 +266,9 @@ unsubscribed by an earlier one during the same event is not called.
 ### Synced state
 
 `getSyncedState()` returns what the engine would write to the backend now: a new object holding
-the store's keys that `filter` keeps, without `__proto__`. It works while disconnected. Its
-values are the store's own, by identity, and are not turned into JSON, so a `Date` stays a
-`Date`; use it to tell the store's synced keys from its local keys, or compare it with the
+the store's keys that `filter`, `keys` and `omit` keep, without `__proto__`. It works while
+disconnected. Its values are the store's own, by identity, and are not turned into JSON, so a
+`Date` stays a `Date`; use it to tell the store's synced keys from its local keys, or compare it with the
 backend's state after `JSON.parse(JSON.stringify(...))`. Like `connect()`, it throws a
 `TypeError` when `getState()` does not return an object.
 

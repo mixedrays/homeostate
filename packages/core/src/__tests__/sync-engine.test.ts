@@ -132,7 +132,7 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos());
 
       createSyncEngine(backend, store.adapter, {
-        filter: (key) => key !== "secret",
+        filter: (key: string) => key !== "secret",
       }).connect();
 
       expect(store.getState()).toEqual(threeTodos());
@@ -569,7 +569,7 @@ describe("createSyncEngine", () => {
       });
 
       /** One stamping peer whose write back another peer re-stamps twice. */
-      const restampWriteBack = (config?: SyncEngineConfig) => {
+      const restampWriteBack = (config?: SyncEngineConfig<Stamped>) => {
         rulesOn = true;
         const backend = createMemoryBackend();
         const store = stampingStore();
@@ -861,7 +861,7 @@ describe("createSyncEngine", () => {
       });
       const store = createTestStore<object>(threeTodos());
       createSyncEngine(backend, store.adapter, {
-        filter: (key) => key !== "secret",
+        filter: (key: string) => key !== "secret",
       }).connect();
 
       expect(store.getState()).toEqual(threeTodos());
@@ -879,7 +879,7 @@ describe("createSyncEngine", () => {
       });
       const store = createTestStore(threeTodos());
       createSyncEngine(backend, store.adapter, {
-        filter: (key) => key !== "secret",
+        filter: (key: string) => key !== "secret",
       }).connect();
       const seeded = { ...threeTodos(), todos: [todo("remote")] };
       expect(backend.read()).toEqual(seeded);
@@ -893,7 +893,7 @@ describe("createSyncEngine", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore<object>(threeTodos());
       createSyncEngine(backend, store.adapter, {
-        filter: (key) => key !== "secret",
+        filter: (key: string) => key !== "secret",
       }).connect();
       const remote = { ...toggleTodo(threeTodos(), "2"), secret: "remote" };
       backend.receive(remote);
@@ -1123,6 +1123,105 @@ describe("createSyncEngine", () => {
         ...toggleTodo(threeTodos(), "1"),
         searchTerm: "local",
       });
+    });
+  });
+
+  describe("keys and omit", () => {
+    it("keeps the keys omit names local in both directions and on connect", () => {
+      const backend = createMemoryBackend({
+        todos: [todo("9")],
+        searchTerm: "room",
+      });
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        omit: ["searchTerm"],
+      }).connect();
+
+      expect(store.getState()).toEqual({
+        ...threeTodos(),
+        todos: [todo("9")],
+      });
+      expect(backend.read()).toEqual({
+        todos: [todo("9")],
+        filterStatus: "all",
+      });
+
+      store.update((s) => setSearchTerm(s, "local"));
+      expect(backend.read()).toEqual({
+        todos: [todo("9")],
+        filterStatus: "all",
+      });
+
+      backend.receive({ todos: [], filterStatus: "done", searchTerm: "peer" });
+      expect(store.getState()).toEqual({
+        todos: [],
+        filterStatus: "done",
+        searchTerm: "local",
+      });
+    });
+
+    it("syncs only the keys listed, ignoring backend keys the store lacks", () => {
+      const backend = createMemoryBackend({
+        todos: [todo("9")],
+        filterStatus: "completed",
+        theme: "dark",
+      });
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter, { keys: ["todos"] }).connect();
+
+      expect(store.getState()).toEqual({
+        ...threeTodos(),
+        todos: [todo("9")],
+      });
+
+      store.update((s) => setSearchTerm(s, "local"));
+      expect(backend.read()).toEqual({ todos: [todo("9")] });
+
+      backend.receive({ todos: [], filterStatus: "active", theme: "light" });
+      expect(store.getState()).toEqual({
+        ...setSearchTerm(threeTodos(), "local"),
+        todos: [],
+      });
+    });
+
+    it("still drops functions by default, even under a key keys lists", () => {
+      const backend = createMemoryBackend();
+      const add = () => {};
+      const store = createTestStore({ ...threeTodos(), add });
+      const engine = createSyncEngine(backend, store.adapter, {
+        keys: ["todos", "add"],
+      });
+      engine.connect();
+
+      expect(backend.read()).toEqual({ todos: threeTodos().todos });
+      expect(engine.getSyncedState()).toEqual({ todos: threeTodos().todos });
+    });
+
+    it("syncs only what both a custom filter and omit keep", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      const filter = vi.fn((key: string) => key !== "filterStatus");
+      createSyncEngine(backend, store.adapter, {
+        filter,
+        omit: ["searchTerm"],
+      }).connect();
+
+      expect(backend.read()).toEqual({ todos: threeTodos().todos });
+      expect(filter.mock.calls.map(([key]) => key)).not.toContain("searchTerm");
+    });
+
+    it("syncs the keys listed less those omitted when given both at runtime", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore(threeTodos());
+      // A type error, so only a JavaScript caller or a cast gives both.
+      const config = { keys: ["todos", "searchTerm"], omit: ["searchTerm"] };
+      createSyncEngine(
+        backend,
+        store.adapter,
+        config as unknown as SyncEngineConfig<TodoState>,
+      ).connect();
+
+      expect(backend.read()).toEqual({ todos: threeTodos().todos });
     });
   });
 
