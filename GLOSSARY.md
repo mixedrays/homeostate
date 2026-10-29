@@ -49,6 +49,10 @@ An implementation of the `CrdtBackend` contract that exposes a synced subtree as
 A backend never talks to the network; replication is the provider's job.
 _Avoid_: CRDT adapter, "backend" for a server
 
+**Backend parts**:
+The `CrdtBackendParts` a CRDT library supplies to `createCrdtBackend`: `read`, `transact`, which runs one edit tagged as the backend's own with the library's apply operations, `watch`, which says whether each change was its own, and optionally `revision`. Core builds the rest of the CRDT backend from them: the default text policy, what a write diffs against, and leaving its own writes out of `subscribe`.
+_Avoid_: Backend adapter, driver
+
 **Provider**:
 The CRDT library's network layer that replicates a document between peers, such as y-websocket's `WebsocketProvider`. Homeostate never replicates documents itself.
 _Avoid_: Transport, connection

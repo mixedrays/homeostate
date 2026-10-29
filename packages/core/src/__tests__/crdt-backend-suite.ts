@@ -49,6 +49,24 @@ export interface CrdtBackendHarness<D> {
   /** Store `value` under `key` of the synced subtree as other code on this replica would */
   storeForeign?: (doc: D, key: string, value: unknown) => void;
   /**
+   * Like `storeForeign`, but building the library's own containers for `value`'s objects and
+   * arrays, at any depth, as other code using the library's container API would. Every key is
+   * stored, `__proto__` included.
+   */
+  storeForeignContainers?: (doc: D, key: string, value: unknown) => void;
+  /**
+   * What identifies the container at `path` from the synced subtree, such as the container
+   * object or its id: equal for the same container, and different for another one.
+   */
+  containerId?: (doc: D, path: (string | number)[]) => unknown;
+  /** Whether the string at `path` from the synced subtree is held as the library's text type */
+  isText?: (doc: D, path: (string | number)[]) => boolean;
+  /**
+   * Set for a backend that ignores `previous`, as the contract allows: the scenario that checks
+   * a write diffs against it is skipped.
+   */
+  ignoresPrevious?: boolean;
+  /**
    * Scenarios this backend is known to fail, by name, each with the reason. They run with
    * `it.fails`, so a fix flips them.
    */
@@ -266,6 +284,10 @@ export const describeCrdtBackend = <D>(
     exchange,
     onLocalUpdate,
     storeForeign,
+    storeForeignContainers,
+    containerId,
+    isText,
+    ignoresPrevious = false,
     knownFailures = {},
   } = harness;
   const unused = new Set(Object.keys(knownFailures));
@@ -460,6 +482,124 @@ export const describeCrdtBackend = <D>(
 
       expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
     });
+
+    if (containerId)
+      scenario(
+        "deletes a middle todo without rewriting the items after it",
+      ).run(() => {
+        const doc = createDoc();
+        const written = backend(doc);
+        written.write(threeTodos());
+        const third = containerId(doc, ["todos", 2]);
+
+        written.write(deleteTodo(threeTodos(), "2"));
+
+        expect(written.read()).toEqual(deleteTodo(threeTodos(), "2"));
+        expect(containerId(doc, ["todos", 1])).toBe(third);
+      });
+
+    if (storeForeign && !ignoresPrevious)
+      scenario("diffs against previous instead of reading its document").run(
+        () => {
+          const doc = createDoc();
+          const written = backend(doc);
+          written.write({ count: 1, label: "a" });
+          // Unreported, so a `previous` that misses it shows which side the write diffed against.
+          storeForeign(doc, "count", 2);
+
+          written.write({ count: 1, label: "b" }, { count: 1, label: "a" });
+
+          expect(written.read()).toEqual({ count: 2, label: "b" });
+        },
+      );
+
+    if (isText) {
+      scenario(
+        "stores the strings the policy marks as text and every other string as a value",
+      ).run(() => {
+        const doc = createDoc();
+        const written = backend(doc, { text: todoTitles });
+        written.write(threeTodos());
+        written.write(addTodo(threeTodos(), todo("4")));
+
+        expect(written.read()).toEqual(addTodo(threeTodos(), todo("4")));
+        expect(isText(doc, ["todos", 3, "title"])).toBe(true);
+        expect(isText(doc, ["todos", 3, "id"])).toBe(false);
+        expect(isText(doc, ["filterStatus"])).toBe(false);
+      });
+
+      scenario(
+        "reads strings held as text by an earlier version, and stores each as a value once it changes",
+      ).run(() => {
+        const doc = createDoc();
+        backend(doc, { text: () => true }).write(threeTodos());
+        const written = backend(doc);
+        expect(written.read()).toEqual(threeTodos());
+
+        const next = {
+          ...renameTodo(threeTodos(), "2", "Two"),
+          filterStatus: "active",
+        };
+        written.write(next);
+
+        expect(written.read()).toEqual(next);
+        expect(isText(doc, ["filterStatus"])).toBe(false);
+        expect(isText(doc, ["todos", 1, "title"])).toBe(false);
+        expect(isText(doc, ["searchTerm"])).toBe(true);
+        expect(isText(doc, ["todos", 0, "title"])).toBe(true);
+      });
+
+      scenario(
+        "turns a plain string at a text path into text when it next changes",
+      ).run(() => {
+        const doc = createDoc();
+        backend(doc).write({ ...threeTodos(), tags: ["a"] });
+        const written = backend(doc, {
+          text: (path) => todoTitles(path) || path[0] === "tags",
+        });
+
+        const next = {
+          ...renameTodo(threeTodos(), "2", "Todo 2!"),
+          tags: ["ab"],
+        };
+        written.write(next);
+
+        expect(written.read()).toEqual(next);
+        expect(isText(doc, ["todos", 1, "title"])).toBe(true);
+        expect(isText(doc, ["tags", 0])).toBe(true);
+        expect(isText(doc, ["todos", 0, "title"])).toBe(false);
+      });
+    }
+
+    if (storeForeignContainers)
+      scenario(
+        "never lets a __proto__ entry in containers other code built reach the store",
+      ).run(() => {
+        const doc = createDoc();
+        const { store } = peer(doc, { todos: [{ id: "1" }] });
+
+        // An entry on an item already synced, and on an item added with it.
+        storeForeignContainers(
+          doc,
+          "todos",
+          JSON.parse(
+            '[{"id":"1","__proto__":{"isAdmin":true}},' +
+              '{"id":"2","__proto__":{"isAdmin":true},"meta":{"__proto__":{"isAdmin":true}}}]',
+          ),
+        );
+
+        const expected = { todos: [{ id: "1" }, { id: "2", meta: {} }] };
+        expect(store.getState()).toEqual(expected);
+        expect(prototypeHijacks(store.getState())).toEqual([]);
+        if (exchange) {
+          // A peer decodes the containers from an update.
+          const other = createDoc();
+          exchange(doc, other);
+          const late = peer(other, {});
+          expect(late.store.getState()).toEqual(expected);
+          expect(prototypeHijacks(late.store.getState())).toEqual([]);
+        }
+      });
 
     // `revision` is optional in the contract, but every backend in this repository has one.
     scenario(

@@ -5,6 +5,7 @@ import { describeCrdtBackend } from "./crdt-backend-suite.js";
 describeCrdtBackend("createMemoryBackend", {
   createDoc: () => createMemoryBackend(),
   backend: (doc) => doc,
+  ignoresPrevious: true,
   storeForeign: (doc, key, value) => {
     doc.receive({ ...(doc.read() as object), [key]: value });
   },

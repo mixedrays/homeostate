@@ -84,9 +84,9 @@ interface CrdtBackend {
 - `read` returns a plain JSON snapshot, an object that does not alias the backend's internals.
 - `write` makes the backend equal to `next` in one atomic transaction. `next` is any object
   but an array or another iterable, including state typed with an `interface`. The engine also passes
-  `previous`, what the backend holds as far as it knows. The supplied backends diff the two
-  with core's `applyChanges`, so a write becomes small edits instead of replacing the
-  document.
+  `previous`, what the backend holds as far as it knows. The supplied backends are built with
+  core's `createCrdtBackend`, which diffs the two with `applyChanges`, so a write becomes small
+  edits instead of replacing the document.
 - `revision` tells the engine whether the document may have changed since it last synced,
   even before `subscribe` reports the change. If it has, the engine applies that change to the
   store before writing a local one, which loses what it did to synced keys. Without
