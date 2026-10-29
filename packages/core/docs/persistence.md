@@ -20,7 +20,9 @@ declare function createPersistence(
 ```
 
 Subscribes to document updates immediately and queues the initial load. Await `whenLoaded`
-before connecting a sync engine that could seed initial state.
+before connecting a sync engine that could seed initial state, and check its
+[`PersistenceLoadResult`](#persistenceloadresult) to tell a first start from a restored
+document or a stored log that could not be restored in full.
 
 | Parameter | Required | Description                                                                                                                     |
 | --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,7 +55,10 @@ const persistence = createPersistence(createYjsPersistable(doc), storage, {
   onError: (error) => console.error("Could not persist the counter", error),
 });
 
-await persistence.whenLoaded;
+const loaded = await persistence.whenLoaded;
+if (loaded.status === "failed" || loaded.status === "partial") {
+  // Offer recovery before seeding anything over what could not be restored.
+}
 // Connect your sync engine here, after the saved state has been applied.
 doc.getMap("shared").set("count", 1);
 await persistence.flush();
@@ -88,7 +93,7 @@ update in the loaded log cannot be applied, compaction leaves the log as it is.
 
 ```ts
 interface Persistence {
-  whenLoaded: Promise<void>;
+  whenLoaded: Promise<PersistenceLoadResult>;
   flush: () => Promise<void>;
   compact: () => Promise<void>;
   stats: () => Promise<PersistenceStats>;
@@ -104,11 +109,49 @@ interface PersistenceStats {
 
 ### whenLoaded
 
-Resolves once the stored updates have been applied. If loading fails, it resolves after
-`onError`, so the app starts without its saved state; it never rejects. If some stored updates
-cannot be applied, it resolves after `onError` with the others applied. It may resolve before
-the initial snapshot is written, and it does not wait for network peers. Await `flush()` to
-wait for storage work too.
+Resolves with a [`PersistenceLoadResult`](#persistenceloadresult) once the stored updates have
+been applied, and never rejects. If storage cannot be read, it resolves with `'failed'` after
+`onError`, and the document holds only what it held before. If some stored updates cannot be
+applied, it resolves with `'partial'` after `onError`, with the others applied. It resolves
+before the initial snapshot is written, and it does not wait for network peers: a failed
+initial snapshot leaves the result as it was and makes [`flush()`](#flush) reject instead.
+Await `flush()` to wait for storage work too.
+
+### PersistenceLoadResult
+
+```ts
+type PersistenceLoadResult =
+  | { status: "empty" }
+  | { status: "loaded" }
+  | { status: "partial"; errors: unknown[] }
+  | { status: "failed"; error: unknown };
+```
+
+| Status      | Meaning                                                                                                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"empty"`   | Nothing is stored under the key, as on a first visit. The document may still hold state of its own; the initial snapshot stores it.                                              |
+| `"loaded"`  | Every stored update was applied. The initial snapshot may still be pending.                                                                                                      |
+| `"partial"` | The log was read, but at least one stored update could not be applied, maybe none could. `errors` holds what `apply` threw for each, in log order. The log is kept for recovery. |
+| `"failed"`  | Storage could not be read. `error` is what the adapter's `load` rejected with. Nothing was restored.                                                                             |
+
+The errors are the objects `onError` received during the initial load, so an app can match
+them by identity; errors of later appends and compactions, which load the log again, are not
+included. A typical start connects the engine for `"empty"` and `"loaded"`, and offers recovery
+or starts without persistence otherwise:
+
+```ts
+const loaded = await persistence.whenLoaded;
+if (loaded.status === "empty" || loaded.status === "loaded") {
+  engine.connect();
+} else {
+  showRecovery(loaded);
+}
+```
+
+Code that only awaits `whenLoaded` keeps working, and still starts as it did after a failed or
+partial load. Before, it resolved with `undefined`: code that returns or assigns it where a
+`Promise<void>` is expected no longer type-checks. Type it as `Promise<PersistenceLoadResult>`,
+or pass `whenLoaded.then(() => {})` to keep `void`.
 
 ### flush
 
@@ -168,8 +211,9 @@ try {
 ```
 
 A promise the app does not await never becomes an unhandled rejection, since its failure has
-already gone to `onError`. `whenLoaded` still never rejects, and `stats()` rejects only when
-storage cannot be read.
+already gone to `onError`. `whenLoaded` never rejects: it resolves with the
+[load result](#persistenceloadresult) instead. `stats()` rejects only when storage cannot be
+read.
 
 #### Which failures a barrier reports
 
@@ -190,9 +234,9 @@ making barriers reject; neither does an update that cannot be applied.
 ### Stored updates that cannot be applied
 
 A stored update the document cannot apply, such as damaged bytes or an update another CRDT
-library stored under a reused key, goes to `onError` with the error `apply` threw. The other
-updates are still applied, so the document holds what could be restored, and the stored log
-is kept as it is:
+library stored under a reused key, goes to `onError` with the error `apply` threw, and
+`whenLoaded` resolves with `'partial'` and those errors. The other updates are still applied,
+so the document holds what could be restored, and the stored log is kept as it is:
 
 - The initial load does not compact the log. It appends a snapshot of the document instead,
   so what the document held before it was persisted is still stored.

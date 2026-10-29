@@ -347,17 +347,39 @@ export interface PersistenceStats {
 }
 
 /**
+ * How the initial load of `createPersistence` restored the document, as `whenLoaded` resolves
+ * with it. It describes reading and applying the stored log only: not the initial snapshot
+ * written after it, nor any later storage work, which `flush()` reports.
+ * - `'empty'`: nothing is stored under the key, as on a first visit. The document may still
+ *   hold state of its own, which the initial snapshot then stores.
+ * - `'loaded'`: every stored update was applied.
+ * - `'partial'`: the log was read, but at least one stored update could not be applied, maybe
+ *   none could. `errors` holds what `apply` threw for each, in log order. The document holds
+ *   the others, and the log is kept for recovery.
+ * - `'failed'`: storage could not be read, and `error` is what the adapter's `load` rejected
+ *   with. The document holds only what it held before.
+ *
+ * The errors are the objects `onError` received for the load, not those of later storage work.
+ */
+export type PersistenceLoadResult =
+  | { status: "empty" }
+  | { status: "loaded" }
+  | { status: "partial"; errors: unknown[] }
+  | { status: "failed"; error: unknown };
+
+/**
  * A document kept in storage by `createPersistence`. Its methods report failures through
  * their promises, with the error `onError` already received; a promise left unawaited never
  * becomes an unhandled rejection.
  */
 export interface Persistence {
   /**
-   * Resolves once the stored updates are applied to the document. It also resolves when
-   * loading fails, or a stored update cannot be applied, after `onError`, so the app still
-   * starts with what could be restored.
+   * Resolves with how the stored updates were restored, once they are applied to the document
+   * and before the initial snapshot is written. It never rejects: a failed load, or a stored
+   * update that cannot be applied, resolves after `onError` with `'failed'` or `'partial'`, so
+   * the app decides whether to start with what could be restored. See `PersistenceLoadResult`.
    */
-  whenLoaded: Promise<void>;
+  whenLoaded: Promise<PersistenceLoadResult>;
   /**
    * Resolves once the work queued so far is done and every update reported so far is stored.
    * Otherwise rejects with the error of the earliest failed write not repaired since: an

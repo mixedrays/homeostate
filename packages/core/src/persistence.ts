@@ -3,6 +3,7 @@ import type {
   PersistableDoc,
   PersistenceAdapter,
   PersistenceConfig,
+  PersistenceLoadResult,
 } from "./types.js";
 
 const reportError = (error: unknown): void => {
@@ -27,7 +28,9 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  *
  * Stored updates are applied to the document asynchronously; connect the sync engine
  * after `whenLoaded`, so `connect()` sees the restored keys instead of seeding the store's
- * defaults over them. The provider can connect at any time.
+ * defaults over them. It resolves with a `PersistenceLoadResult`, which tells a first start
+ * from a restored document, and both from a log that could not be read or applied in full.
+ * The provider can connect at any time.
  *
  * Updates are appended one by one, and every `compactAfter` appends the stored log is
  * merged into a single snapshot. Several documents may share one key, in one tab or
@@ -48,8 +51,12 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  *   { key: 'todos' },
  * );
  * new WebsocketProvider(url, 'todos', doc);
- * await persistence.whenLoaded;
- * createSyncEngine(createYjsBackend(doc, 'shared'), adapter).connect();
+ * const loaded = await persistence.whenLoaded;
+ * if (loaded.status === 'empty' || loaded.status === 'loaded') {
+ *   createSyncEngine(createYjsBackend(doc, 'shared'), adapter).connect();
+ * } else {
+ *   showRecovery(loaded);
+ * }
  * ```
  */
 export function createPersistence(
@@ -92,22 +99,22 @@ export function createPersistence(
     return run;
   };
 
-  /** Apply every stored update it can; false when one of them could not be applied. */
-  const applyStored = (updates: Uint8Array[]): boolean => {
-    let complete = true;
+  /** Apply every stored update it can; returns what applying the others threw, in log order. */
+  const applyStored = (updates: Uint8Array[]): unknown[] => {
+    const errors: unknown[] = [];
     for (const update of updates) {
       try {
         doc.apply(update);
       } catch (error) {
-        complete = false;
+        errors.push(error);
         report(error);
       }
     }
-    return complete;
+    return errors;
   };
 
-  let markLoaded!: () => void;
-  const whenLoaded = new Promise<void>((resolve) => {
+  let markLoaded!: (result: PersistenceLoadResult) => void;
+  const whenLoaded = new Promise<PersistenceLoadResult>((resolve) => {
     markLoaded = resolve;
   });
 
@@ -118,8 +125,16 @@ export function createPersistence(
    */
   const compact = async (initial = false): Promise<void> => {
     const { updates, version } = await adapter.load(key);
-    const complete = applyStored(updates);
-    if (initial) markLoaded();
+    const errors = applyStored(updates);
+    const complete = errors.length === 0;
+    if (initial)
+      markLoaded(
+        updates.length === 0
+          ? { status: "empty" }
+          : complete
+            ? { status: "loaded" }
+            : { status: "partial", errors },
+      );
     appended = 0;
     // The first snapshot also stores whatever the document held before it was persisted, so
     // a first load that keeps the log appends it instead.
@@ -140,9 +155,13 @@ export function createPersistence(
   });
 
   // Until the first snapshot is written, storage may lack what the document held before.
-  void enqueue(() => compact(true).catch(unstored));
-  // After `onError` when the load fails; the queue itself never rejects.
-  void queue.then(markLoaded);
+  const initialLoad = enqueue(() => compact(true).catch(unstored));
+  // Only reading the log can fail before `whenLoaded` resolves, and the queue reports that to
+  // `onError` first. A failed initial snapshot rejects too, once `whenLoaded` has resolved, so
+  // it leaves the result as it was.
+  void initialLoad.catch((error: unknown) => {
+    markLoaded({ status: "failed", error });
+  });
 
   /** Wait for the work queued so far, then reject while a write failure is unresolved. */
   const barrier = (): Promise<void> =>

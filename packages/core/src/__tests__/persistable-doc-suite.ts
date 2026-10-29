@@ -54,8 +54,8 @@ export const describePersistableDoc = <D>(
       key: "room",
       onError,
     });
-    await persistence.whenLoaded;
-    return { doc, persistence, store: connect(doc, initial), adapter };
+    const loaded = await persistence.whenLoaded;
+    return { doc, persistence, loaded, store: connect(doc, initial), adapter };
   };
 
   describe(`${name} persistence`, () => {
@@ -71,7 +71,24 @@ export const describePersistableDoc = <D>(
         filterStatus: "all",
       });
 
+      expect(first.loaded).toEqual({ status: "empty" });
+      expect(reloaded.loaded).toEqual({ status: "loaded" });
       expect(reloaded.store.getState()).toEqual(first.store.getState());
+    });
+
+    it("loads with the error storage failed with, and keeps the document's state", async () => {
+      const error = new Error("storage unavailable");
+      const onError = vi.fn();
+      const adapter = {
+        ...createMemoryPersistenceAdapter(),
+        load: () => Promise.reject(error),
+      };
+
+      const failed = await open(adapter, undefined, onError);
+
+      expect(failed.loaded).toEqual({ status: "failed", error });
+      expect(onError).toHaveBeenCalledWith(error);
+      expect(failed.store.getState()).toEqual(threeTodos());
     });
 
     it("merges a restored document with a peer without duplicating it", async () => {
@@ -157,6 +174,10 @@ export const describePersistableDoc = <D>(
         await reloaded.persistence.flush();
         await reloaded.persistence.compact();
 
+        expect(reloaded.loaded).toEqual({
+          status: "partial",
+          errors: [onError.mock.calls[0][0]],
+        });
         expect(reloaded.store.getState()).toEqual(expected);
         expect(onError).toHaveBeenCalledTimes(2);
         const kept = (await first.adapter.load("room")).updates;
