@@ -346,18 +346,66 @@ describe("createPersistence", () => {
     await expect(persistence.flush()).resolves.toBeUndefined();
   });
 
-  it("still loads when storage fails, and reports the error", async () => {
+  it("loads empty when nothing is stored, even if the document holds state", async () => {
+    const persistence = createPersistence(
+      createToyDoc(["seed"]),
+      createMemoryPersistenceAdapter(),
+      { key: "doc" },
+    );
+
+    await expect(persistence.whenLoaded).resolves.toEqual({ status: "empty" });
+  });
+
+  it("loads once every stored update is applied, before the initial snapshot is written", async () => {
+    const memory = createMemoryPersistenceAdapter();
+    await memory.append("doc", createToyDoc(["stored"]).encode());
+    let writeSnapshot!: () => void;
+    const compact = vi.fn(
+      async (...args: Parameters<typeof memory.compact>) => {
+        await new Promise<void>((resolve) => {
+          writeSnapshot = resolve;
+        });
+        await memory.compact(...args);
+      },
+    );
+    const doc = createToyDoc();
+    const persistence = createPersistence(
+      doc,
+      { ...memory, compact },
+      { key: "doc" },
+    );
+
+    await expect(persistence.whenLoaded).resolves.toEqual({
+      status: "loaded",
+    });
+    expect(doc.ops()).toEqual(["stored"]);
+    expect(compact).toHaveBeenCalledOnce();
+    expect(memory.size("doc")).toBe(1);
+    writeSnapshot();
+    await persistence.flush();
+  });
+
+  it("fails to load when storage cannot be read, after reporting the error", async () => {
     const error = new Error("storage unavailable");
     const onError = vi.fn();
     const adapter: PersistenceAdapter = {
       ...createMemoryPersistenceAdapter(),
       load: () => Promise.reject(error),
     };
+    const doc = createToyDoc(["seed"]);
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      onError,
+    });
 
-    await createPersistence(createToyDoc(), adapter, { key: "doc", onError })
-      .whenLoaded;
+    const loaded = await persistence.whenLoaded.then((result) => {
+      expect(onError).toHaveBeenCalledWith(error);
+      return result;
+    });
 
-    expect(onError).toHaveBeenCalledWith(error);
+    expect(loaded).toEqual({ status: "failed", error });
+    expect(loaded.status === "failed" && loaded.error).toBe(error);
+    expect(doc.ops()).toEqual(["seed"]);
   });
 
   it("applies the stored updates it can and keeps the one it cannot apply", async () => {
@@ -381,6 +429,48 @@ describe("createPersistence", () => {
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0][0]).toBeInstanceOf(SyntaxError);
     expect(await storedPrefix(adapter, stored.length)).toEqual(stored);
+  });
+
+  it("loads partially with the error of each stored update it cannot apply, not later ones", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    for (const update of [
+      encoder.encode("not json"),
+      createToyDoc(["valid"]).encode(),
+      encoder.encode("[1"),
+    ])
+      await adapter.append("doc", update);
+    const reported: unknown[] = [];
+    const doc = createToyDoc();
+    const persistence = createPersistence(doc, adapter, {
+      key: "doc",
+      compactAfter: 1,
+      onError: (error) => reported.push(error),
+    });
+    doc.add("a");
+    await persistence.flush();
+
+    const loaded = await persistence.whenLoaded;
+
+    // The compaction after the append reported both errors again.
+    expect(reported).toHaveLength(4);
+    expect(loaded).toEqual({ status: "partial", errors: reported.slice(0, 2) });
+    expect(loaded.status === "partial" && loaded.errors[0]).toBe(reported[0]);
+    expect(loaded.status === "partial" && loaded.errors[1]).toBe(reported[1]);
+  });
+
+  it("loads partially when no stored update can be applied", async () => {
+    const adapter = createMemoryPersistenceAdapter();
+    await adapter.append("doc", encoder.encode("not json"));
+
+    const loaded = await createPersistence(createToyDoc(), adapter, {
+      key: "doc",
+      onError: vi.fn(),
+    }).whenLoaded;
+
+    expect(loaded).toEqual({
+      status: "partial",
+      errors: [expect.any(SyntaxError)],
+    });
   });
 
   it("stores what the document held before it was persisted when it keeps the log", async () => {
@@ -551,14 +641,18 @@ describe("createPersistence", () => {
       onError,
     });
 
-    await expect(persistence.whenLoaded).resolves.toBeUndefined();
+    await expect(persistence.whenLoaded).resolves.toEqual({
+      status: "failed",
+      error,
+    });
     await expect(persistence.flush()).rejects.toBe(error);
     expect(onError).toHaveBeenCalledOnce();
   });
 
-  it("rejects barriers when the initial snapshot cannot be written", async () => {
+  it("rejects barriers when the initial snapshot cannot be written, which the load result leaves out", async () => {
     const error = new Error("quota exceeded");
     const memory = createMemoryPersistenceAdapter();
+    await memory.append("doc", createToyDoc(["stored"]).encode());
     const compact = vi.fn(memory.compact).mockRejectedValueOnce(error);
     const persistence = createPersistence(
       createToyDoc(["seed"]),
@@ -567,6 +661,9 @@ describe("createPersistence", () => {
     );
 
     await expect(persistence.flush()).rejects.toBe(error);
+    await expect(persistence.whenLoaded).resolves.toEqual({
+      status: "loaded",
+    });
   });
 
   it("resolves barriers after a failed automatic compaction, which keeps the log", async () => {

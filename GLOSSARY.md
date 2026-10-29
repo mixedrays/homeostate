@@ -228,6 +228,11 @@ The `encode()` of a whole document that compaction stores in place of the update
 **Version**:
 The position of the newest update that a persistence adapter's `load` returned, handed back to `compact`; a log position, not a schema version.
 
+**Load result**:
+The `PersistenceLoadResult` that `whenLoaded` resolves with: whether the initial load found nothing stored (`empty`), applied the whole update log (`loaded`), applied only part of it (`partial`), or could not read it (`failed`).
+It describes restoring the document only, not the initial compacted snapshot or later writes, which `flush()` reports.
+_Avoid_: Load status, hydration result
+
 ## Testing and tools
 
 **Memory backend**:
