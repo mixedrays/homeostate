@@ -3,7 +3,7 @@ import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 import { createJotaiAdapter } from "@homeostate/store-jotai";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
-import type { FilterStatus, Todo, TodoState } from "../../types/todo";
+import type { FilterStatus, Todo } from "../../types/todo";
 import { countTodos, filterTodos } from "../../lib/todos";
 import {
   isTodoTitle,
@@ -17,19 +17,6 @@ const initialState = createInitialTodoState();
 export const todosAtom = atom<Todo[]>(initialState.todos);
 export const searchTermAtom = atom(initialState.searchTerm);
 export const filterStatusAtom = atom<FilterStatus>(initialState.filterStatus);
-
-export const todoStateAtom = atom(
-  (get): TodoState => ({
-    todos: get(todosAtom),
-    searchTerm: get(searchTermAtom),
-    filterStatus: get(filterStatusAtom),
-  }),
-  (_get, set, next: TodoState) => {
-    set(todosAtom, next.todos);
-    set(searchTermAtom, next.searchTerm);
-    set(filterStatusAtom, next.filterStatus);
-  },
-);
 
 export const visibleTodosAtom = atom((get) =>
   filterTodos(get(todosAtom), get(searchTermAtom), get(filterStatusAtom)),
@@ -75,7 +62,14 @@ export const deleteTodoAtom = atom(null, (get, set, id: string) => {
 export const store = createStore();
 
 const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
-const adapter = createJotaiAdapter(todoStateAtom, store);
+const adapter = createJotaiAdapter(
+  {
+    todos: todosAtom,
+    searchTerm: searchTermAtom,
+    filterStatus: filterStatusAtom,
+  },
+  store,
+);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 const syncEngine = createSyncEngine(backend, adapter);
 

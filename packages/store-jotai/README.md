@@ -7,7 +7,8 @@
 
 [Jotai](https://jotai.org) store adapter for
 [`@homeostate/core`](https://github.com/mixedrays/homeostate/tree/main/packages/core).
-It keeps a writable atom in sync with a CRDT backend such as Yjs, Loro or Automerge.
+It keeps a writable atom, or a record of atoms, in sync with a CRDT backend such as Yjs, Loro
+or Automerge.
 
 ## Install
 
@@ -40,9 +41,18 @@ engine.connect();
 ```
 
 The store argument defaults to Jotai's default store; pass the one you give `<Provider>` if
-you use one. To sync several atoms, pass a derived writable atom that reads them and fans a
-replacement out to each; see the
-[documentation](https://homeostate.pages.dev/docs/store-jotai/introduction) for an example.
+you use one. To sync several atoms, pass a record of them; the state is typed from the atoms:
+
+```ts
+// StoreAdapter<{ todos: Todo[]; filter: string }>
+createJotaiAdapter({ todos: todosAtom, filter: filterAtom }, store);
+```
+
+A key a peer removes resets its atom to its initial value. A key the room holds that the record
+does not list is removed by the next write, even with the sync engine's `keys` option, so every
+peer sharing a room should sync the same set of atoms. See the
+[documentation](https://homeostate.pages.dev/docs/store-jotai/introduction) for how removed keys
+sync, and for a custom root atom that fans a replacement out to several atoms.
 
 ## License
 

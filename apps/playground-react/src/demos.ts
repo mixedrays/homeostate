@@ -115,8 +115,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     path: "/todo/jotai",
     name: "Jotai",
     title: "Jotai Todo",
-    description:
-      "Atoms composed into one writable root atom kept in sync through createJotaiAdapter.",
+    description: "A record of atoms kept in sync through createJotaiAdapter.",
     adapter: "@homeostate/store-jotai",
     accent: "cyan",
     icon: Orbit,
