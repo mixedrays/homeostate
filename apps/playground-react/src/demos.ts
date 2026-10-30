@@ -105,7 +105,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     name: "Redux",
     title: "Redux Todo",
     description:
-      "A Redux Toolkit slice kept in sync through createReduxAdapter.",
+      "A Redux Toolkit slice kept in sync by the homeostate store enhancer.",
     adapter: "@homeostate/store-redux",
     accent: "emerald",
     icon: Layers,

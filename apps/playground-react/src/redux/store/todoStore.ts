@@ -3,9 +3,8 @@ import {
   configureStore,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
-import { createReduxAdapter, withHomeostate } from "@homeostate/store-redux";
+import { createReduxAdapter, homeostate } from "@homeostate/store-redux";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus } from "../../types/todo";
 import {
@@ -16,6 +15,8 @@ import {
 } from "../../sync";
 
 const initialState = createInitialTodoState();
+const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
+const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
 
 const todoSlice = createSlice({
   name: "todos",
@@ -62,23 +63,20 @@ export const {
 } = todoSlice.actions;
 
 export const store = configureStore({
-  reducer: withHomeostate(todoSlice.reducer),
+  reducer: todoSlice.reducer,
+  enhancers: (getDefaultEnhancers) =>
+    getDefaultEnhancers().prepend(homeostate({ backend })),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
-const adapter = createReduxAdapter(store);
-const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
-const syncEngine = createSyncEngine(backend, adapter);
-
-syncEngine.connect();
+const syncEngine = store.homeostate;
 
 /** The store as the devtools panel sees it. */
 const devtoolsSource: DevtoolsSource = {
   name: "Redux todos",
-  adapter,
+  adapter: createReduxAdapter(store),
   backend,
   engine: syncEngine,
   persistence,
