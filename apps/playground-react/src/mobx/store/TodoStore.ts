@@ -1,7 +1,6 @@
 import { makeAutoObservable } from "mobx";
-import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
-import { createMobxAdapter } from "@homeostate/store-mobx";
+import { createMobxAdapter, syncMobxStore } from "@homeostate/store-mobx";
 import type { DevtoolsSource } from "@homeostate/tool-devtools";
 import type { FilterStatus, Todo, TodoState } from "../../types/todo";
 import { countTodos, filterTodos } from "../../lib/todos";
@@ -65,16 +64,13 @@ class TodoStore implements TodoState {
 export const todoStore = new TodoStore();
 
 const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
-const adapter = createMobxAdapter(todoStore);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
-const syncEngine = createSyncEngine(backend, adapter);
-
-syncEngine.connect();
+const syncEngine = syncMobxStore(todoStore, { backend });
 
 /** The store as the devtools panel sees it. */
 const devtoolsSource: DevtoolsSource = {
   name: "MobX todos",
-  adapter,
+  adapter: createMobxAdapter(todoStore),
   backend,
   engine: syncEngine,
   persistence,

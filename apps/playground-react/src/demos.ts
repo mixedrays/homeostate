@@ -93,8 +93,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     path: "/todo/mobx",
     name: "MobX",
     title: "MobX Todo",
-    description:
-      "An observable class store kept in sync through createMobxAdapter.",
+    description: "An observable class store kept in sync by syncMobxStore.",
     adapter: "@homeostate/store-mobx",
     accent: "violet",
     icon: Atom,
