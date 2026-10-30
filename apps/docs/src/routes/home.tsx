@@ -1,16 +1,10 @@
 import { cn } from "cn";
-import {
-  ArrowDownUpIcon,
-  ArrowLeftRightIcon,
-  ArrowRightIcon,
-  DatabaseIcon,
-  LayersIcon,
-} from "lucide-react";
+import { ArrowRightIcon } from "lucide-react";
 import { Link } from "react-router";
 import type { Route } from "./+types/home";
 import { SyncDemo } from "@/components/home/sync-demo.tsx";
+// import { SyncDiagram } from "@/components/home/sync-diagram.tsx";
 import { GithubIcon } from "@/components/layout/github-icon.tsx";
-import { HomeostateMark } from "@/components/layout/homeostate-mark.tsx";
 import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
 import { Markdown } from "@/components/markdown/markdown.tsx";
@@ -51,83 +45,6 @@ export const meta: Route.MetaFunction = () => [
     },
   },
 ];
-
-const orList = new Intl.ListFormat("en", { type: "disjunction" });
-
-/** Vertical on small screens, horizontal from `lg`, where it sits above the two package lists. */
-function SyncDiagram({ backends }: { backends: string[] }) {
-  return (
-    <figure className="relative overflow-hidden rounded-2xl border bg-muted/30 p-6 sm:p-8">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(var(--border)_1px,transparent_1px)] bg-size-[18px_18px] mask-[linear-gradient(to_bottom,black,transparent)]"
-      />
-      <div className="relative">
-        <div className="mb-7 flex items-center justify-between gap-3">
-          <span className="font-mono text-xs text-muted-foreground uppercase">
-            How it connects
-          </span>
-          <span className="rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-            Two-way sync
-          </span>
-        </div>
-        <div className="flex flex-col lg:flex-row lg:items-center">
-          <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-xs lg:flex-1">
-            <LayersIcon
-              aria-hidden="true"
-              className="size-5 text-muted-foreground"
-            />
-            <div>
-              <p className="text-sm font-medium">Your existing store</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Same state. Same actions. Same UI.
-              </p>
-            </div>
-          </div>
-          <DiagramLink label="store adapter" />
-          <div className="flex items-center gap-4 rounded-xl border border-primary/30 bg-background p-5 shadow-[0_4px_24px_-8px_var(--primary)] lg:flex-1">
-            <HomeostateMark className="size-7 shrink-0" />
-            <div>
-              <p className="font-semibold tracking-tight">Homeostate</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The sync engine between them.
-              </p>
-            </div>
-          </div>
-          <DiagramLink label="CRDT backend" />
-          <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-xs lg:flex-1">
-            <DatabaseIcon
-              aria-hidden="true"
-              className="size-5 text-muted-foreground"
-            />
-            <div>
-              <p className="text-sm font-medium">Your CRDT document</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {orList.format(backends)}
-              </p>
-            </div>
-          </div>
-        </div>
-        <figcaption className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-          Local changes flow out. Remote changes flow in.
-        </figcaption>
-      </div>
-    </figure>
-  );
-}
-
-function DiagramLink({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center gap-3 py-3 text-muted-foreground lg:flex-col lg:gap-1.5 lg:px-4 lg:py-0">
-      <ArrowDownUpIcon aria-hidden="true" className="size-4 lg:hidden" />
-      <ArrowLeftRightIcon
-        aria-hidden="true"
-        className="hidden size-4 lg:block"
-      />
-      <span className="font-mono text-[11px]">{label}</span>
-    </div>
-  );
-}
 
 function PackageColumn({
   title,
@@ -288,7 +205,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </Link>
           </div>
           <div className="grid gap-5">
-            <SyncDiagram backends={byGroup("crdt").map((pkg) => pkg.label)} />
+            {/* <SyncDiagram backends={byGroup("crdt").map((pkg) => pkg.label)} /> */}
             <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
               <PackageColumn
                 step="01"
