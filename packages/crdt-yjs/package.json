@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/crdt-yjs",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Yjs CRDT backend for @homeostate/core",
   "license": "MIT",
   "type": "module",

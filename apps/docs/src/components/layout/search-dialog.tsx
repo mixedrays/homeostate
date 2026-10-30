@@ -164,7 +164,7 @@ export function SearchDialog() {
           <Button
             variant="outline"
             size="sm"
-            className="justify-between gap-6 text-muted-foreground max-sm:size-8 max-sm:px-0 sm:w-52"
+            className="justify-between gap-6 text-muted-foreground max-sm:size-8 max-sm:justify-center max-sm:px-0 sm:w-52"
             aria-label="Search the docs"
           />
         }

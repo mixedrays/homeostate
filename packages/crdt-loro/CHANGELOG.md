@@ -1,5 +1,54 @@
 # @homeostate/crdt-loro
 
+## 0.3.0
+
+### Minor Changes
+
+- aa7cbc1: Implement `CrdtBackend.revision` from the document's op count, which includes ops not committed
+  yet, and is `undefined` while the document is checked out. The sync engine then applies a remote
+  change another listener heard of first, or an edit other code has not committed, before writing
+  a local change, instead of the write throwing `Index out of bound` on items the peer had deleted.
+  `write` now diffs against the `previous` it is given even while other code has uncommitted
+  edits, where it used to read the document; the engine checks the revision before passing
+  `previous`. Use it with the `@homeostate/core` release that adds `CrdtBackend.revision`, since
+  an older engine passes `previous` without that check.
+
+### Patch Changes
+
+- a80be3b: Build the backend with `createCrdtBackend` from `@homeostate/core`, so the default text policy,
+  what a write diffs against and leaving its own writes out of `subscribe` are written once, in
+  core. Options, extras such as the Yjs backend's `map` and `origin`, and behaviour are unchanged.
+  Use it with the `@homeostate/core` release that adds `createCrdtBackend`.
+- ceca144: Leave copying objects that a peer's `__proto__` entry gave a prototype to the sync engine, which
+  now does it for every backend. `read()` may return such an object as the document holds it; the
+  store still never receives one. The Yjs backend still leaves `__proto__` entries of a `Y.Map`
+  out of what it reads. Use it with the `@homeostate/core` release whose engine copies such objects.
+- 902c23c: Report what is committed while an update is applied. Loro notifies listeners before `import`
+  returns, and `createLoroPersistable` skipped every change until then, so a commit a listener
+  made in response, such as the sync engine writing what a store derived from the update, was
+  neither stored nor relayed, and the peers that missed it could not apply any later change of
+  that document. `apply` now skips only the update it imports.
+- 55812ce: Implement the `CrdtBackend` whose `read` returns a `JsonObject` and whose `write` takes a
+  `JsonObjectInput`, with no casts at the boundary. Use it with the `@homeostate/core` release
+  that narrows `CrdtBackend.read` and `write`.
+- Updated dependencies [39809d7]
+- Updated dependencies [a80be3b]
+- Updated dependencies [60331b4]
+- Updated dependencies [567932b]
+- Updated dependencies [55812ce]
+- Updated dependencies [d2a66d8]
+- Updated dependencies [8ed9541]
+- Updated dependencies [ceca144]
+- Updated dependencies [3bdd635]
+- Updated dependencies [9a6e0c6]
+- Updated dependencies [aa7cbc1]
+- Updated dependencies [3b9d6dc]
+- Updated dependencies [9ce5ff0]
+- Updated dependencies [cde0b51]
+- Updated dependencies [074eadc]
+- Updated dependencies [7e7171a]
+  - @homeostate/core@0.4.0
+
 ## 0.2.0
 
 ### Minor Changes

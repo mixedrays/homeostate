@@ -1,5 +1,70 @@
 # @homeostate/crdt-automerge
 
+## 0.3.0
+
+### Minor Changes
+
+- 7c08812: `createAutomergeBackend` accepts any object with `doc`, `change` and `subscribe`, exported as
+  `AutomergeDocSource`, so a document holder of your own no longer needs an `update` the backend
+  never calls.
+- 9a99393: Sync a document kept by automerge-repo. `createAutomergeBackend` now takes a `DocHandle` as
+  well as an `AutomergeHandle`, so a `Repo`'s storage and network adapters store and sync what the
+  engine writes:
+
+  ```ts
+  createAutomergeBackend(await repo.find(url), "shared");
+  ```
+
+  The engine picks up every change that did not come through its own write: changes loaded from
+  storage, received from peers, or made through `docHandle.change`. Either handle may now hold any
+  document type, such as the `unknown` of an untyped `repo.find` or an interface.
+
+- aa7cbc1: Implement `CrdtBackend.revision` from the document's heads. The sync engine then applies a remote
+  change another listener heard of first before writing a local change, instead of the write
+  bringing back what the peer had deleted.
+
+### Patch Changes
+
+- 55812ce: Implement the `CrdtBackend` whose `read` returns a `JsonObject` and whose `write` takes a
+  `JsonObjectInput`. `read()` throws a `TypeError` naming what the synced key holds when a peer
+  stored something other than a map there, such as a string, a list or `null`, instead of
+  returning it, or `{}` for `null`. The sync engine reports it as before, and `write` still
+  replaces the value with a map. Use it with the `@homeostate/core` release that narrows
+  `CrdtBackend.read` and `write`.
+- 8c3322a: Report and hear changes made while an update is applied. `createAutomergePersistable` skipped
+  every change to the handle while `apply` ran, so a change a handle listener made in response,
+  such as the sync engine writing what a store derived from the update, was neither stored nor
+  relayed, and the peers that missed it could not apply any later change of that document.
+  `apply` now skips only the update it applies. `createAutomergeBackend` ignored every change
+  while its own write notified, so a peer's update merged at that moment, as a synchronous relay
+  does, never reached the store; it now ignores only its own write.
+- 3bdd635: Throw from `createAutomergePersistable`'s `apply` for bytes that are not Automerge data. Once a
+  document held changes, `A.loadIncremental` skipped such bytes silently, so `createPersistence`
+  took a log holding damaged bytes or another CRDT library's update for one it had restored in
+  full, and compacted them away. A repeated update, or one waiting for an earlier change, still
+  applies without an error.
+- a80be3b: Build the backend with `createCrdtBackend` from `@homeostate/core`, so the default text policy,
+  what a write diffs against and leaving its own writes out of `subscribe` are written once, in
+  core. Options, extras such as the Yjs backend's `map` and `origin`, and behaviour are unchanged.
+  Use it with the `@homeostate/core` release that adds `createCrdtBackend`.
+- Updated dependencies [39809d7]
+- Updated dependencies [a80be3b]
+- Updated dependencies [60331b4]
+- Updated dependencies [567932b]
+- Updated dependencies [55812ce]
+- Updated dependencies [d2a66d8]
+- Updated dependencies [8ed9541]
+- Updated dependencies [ceca144]
+- Updated dependencies [3bdd635]
+- Updated dependencies [9a6e0c6]
+- Updated dependencies [aa7cbc1]
+- Updated dependencies [3b9d6dc]
+- Updated dependencies [9ce5ff0]
+- Updated dependencies [cde0b51]
+- Updated dependencies [074eadc]
+- Updated dependencies [7e7171a]
+  - @homeostate/core@0.4.0
+
 ## 0.2.0
 
 ### Minor Changes
