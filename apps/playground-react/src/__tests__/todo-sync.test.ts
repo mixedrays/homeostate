@@ -187,7 +187,7 @@ const demos = [
     name: "Jotai",
     load: async () => {
       const demo = await import("../jotai/store/todoAtoms");
-      return { ...demo, read: () => demo.store.get(demo.todoStateAtom) };
+      return { ...demo, read: () => demo.devtoolsSource.adapter.getState() };
     },
   },
   {
