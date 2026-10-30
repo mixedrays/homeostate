@@ -24,6 +24,10 @@ export type AnyAtoms = Record<
   WritableAtom<unknown, [unknown], unknown>
 >;
 
+/** Whether `target` is an atom rather than a record of atoms, whose values are objects. */
+export const isAtom = (target: object): target is SyncedAtom<object> =>
+  typeof (target as { read?: unknown }).read === "function";
+
 /**
  * Combines a record of atoms into one writable root atom, which the sync engine can treat like
  * any synced atom. Its value holds every atom's value under the atom's key. Writing it sets, in

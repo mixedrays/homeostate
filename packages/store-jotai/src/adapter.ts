@@ -6,6 +6,7 @@ import {
 import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
 import {
   combineAtoms,
+  isAtom,
   type AnyAtoms,
   type SyncedAtoms,
   type SyncedAtomsState,
@@ -117,7 +118,3 @@ export function createJotaiAdapter(
   if (isAtom(target)) return new JotaiAdapter(target, store);
   return new JotaiAdapter(combineAtoms(target), store);
 }
-
-/** Whether `target` is an atom rather than a record of atoms, whose values are objects. */
-const isAtom = (target: object): target is SyncedAtom<object> =>
-  typeof (target as { read?: unknown }).read === "function";

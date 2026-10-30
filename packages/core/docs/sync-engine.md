@@ -196,7 +196,9 @@ store, or what builds it, then these options, flat, with its own added.
 | `connect` | `"auto"` | `"auto"` connects once the store is ready. `"manual"` leaves `connect()` to the app, and until then neither side is touched. |
 
 The other options are the engine's `SyncEngineConfig`, typed by the store's state like the
-engine's, so a helper checks `keys` and `omit` against it.
+engine's, so a helper checks `keys` and `omit` against it. The Jotai
+[`atomWithSync`](../../store-jotai/docs/introduction.md) takes them without `connect`: it connects
+when it is mounted.
 
 ## SyncEngine
 

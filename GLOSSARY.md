@@ -311,6 +311,9 @@ _Avoid_: One-call setup, setup function
 **Homeostate middleware**:
 The `homeostate` Zustand middleware from `@homeostate/store-zustand`, the setup helper for Zustand: `homeostate(creator, { backend })` wraps a state creator, connects a sync engine when the store is created, or when the app calls connect with `connect: "manual"`, and exposes it as `store.homeostate`.
 
+**`atomWithSync`**:
+The setup helper for Jotai from `@homeostate/store-jotai`: `atomWithSync(target, { backend })` wraps a writable atom or a record of atoms and returns an atom that connects a sync engine when it is first mounted in a Jotai store and disconnects when its last subscriber unmounts. It keeps one engine per store and syncs one store at a time; it has no `connect` option and exposes no engine.
+
 **Automerge handle**:
 The object from `createAutomergeHandle` that holds the current, immutable Automerge document so that the CRDT backend and replication code share it.
 

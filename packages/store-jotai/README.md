@@ -54,6 +54,27 @@ peer sharing a room should sync the same set of atoms. See the
 [documentation](https://homeostate.pages.dev/docs/store-jotai/introduction) for how removed keys
 sync, and for a custom root atom that fans a replacement out to several atoms.
 
+To tie sync to mounting instead of connecting at import, wrap the atom, or a record of atoms, in
+`atomWithSync` (Jotai 2.12 or later). It connects when the returned atom is first mounted and
+disconnects when its last subscriber unmounts:
+
+```ts
+import { atomWithSync } from "@homeostate/store-jotai";
+
+const syncedAtom = atomWithSync(
+  { todos: todosAtom, filter: filterAtom },
+  { backend: createYjsBackend(new Y.Doc(), "todos") },
+);
+```
+
+Only mounting the returned atom starts sync; reading a record's atom or the wrapped target does
+not. Each mount is a reconnect, so edits made while unmounted are dropped for keys the backend
+holds. An `atomWithSync` atom syncs one store at a time, and mounting it in a second store while
+the first is mounted throws. If connecting throws, the error reaches whoever mounted the atom,
+and that store stays unsynced until it is discarded. See the
+[documentation](https://homeostate.pages.dev/docs/store-jotai/introduction) for mounting it from
+a small component and for syncing two stores at once.
+
 ## License
 
 MIT — see [LICENSE](https://github.com/mixedrays/homeostate/blob/main/LICENSE).
