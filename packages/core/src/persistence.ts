@@ -6,6 +6,9 @@ import type {
   PersistenceLoadResult,
 } from "./types.js";
 
+// Declared here so that core needs no Node types; the ES libs have no `console`.
+declare const console: { error: (...data: unknown[]) => void };
+
 const reportError = (error: unknown): void => {
   console.error("[homeostate] persistence failed:", error);
 };

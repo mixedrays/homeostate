@@ -99,6 +99,12 @@ export class WriteLoopError extends Error {
 // Declared here so that core needs no Node types; bundlers replace `process.env.NODE_ENV`.
 declare const process: { env: { NODE_ENV?: string } };
 
+// Likewise, as the ES libs have no `console`.
+declare const console: {
+  error: (...data: unknown[]) => void;
+  warn: (...data: unknown[]) => void;
+};
+
 /** Whether the app runs a production build, where development warnings stay silent. */
 const isProduction = (): boolean => {
   try {

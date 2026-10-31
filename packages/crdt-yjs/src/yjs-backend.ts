@@ -42,6 +42,9 @@ export interface YjsBackend extends CrdtBackend {
   readonly origin: unknown;
 }
 
+// Declared here so that this package needs no Node types; the ES libs have no `console`.
+declare const console: { error: (...data: unknown[]) => void };
+
 const reportRemoved = (error: Error): void => {
   console.error("[homeostate] Yjs backend lost its map:", error);
 };
