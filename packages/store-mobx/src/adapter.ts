@@ -48,7 +48,7 @@ const removeKey = (store: object, key: string): void => {
 };
 
 /** The keys of `S` that hold data rather than methods: the keys a MobX store can sync. */
-type DataKey<S> = {
+export type DataKey<S> = {
   [K in keyof S]-?: S[K] extends (...args: never[]) => unknown ? never : K;
 }[keyof S] &
   string;
