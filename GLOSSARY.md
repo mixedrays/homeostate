@@ -44,6 +44,13 @@ An implementation of the `StoreAdapter` contract that lets the sync engine read,
 "Adapter" alone means a store adapter; say "persistence adapter" for storage.
 _Avoid_: Store binding, connector
 
+**Scoped adapter**:
+The store adapter `scopeAdapter` makes from another one, which presents one slice of the store as the store's whole state to the sync engine.
+_Avoid_: Slice adapter, lens adapter
+
+**Slice**:
+The part of a store's state that a scoped adapter reads and writes through its `get` and `set`. Its top-level keys are what the sync engine sees as the store's keys.
+
 **CRDT backend**:
 An implementation of the `CrdtBackend` contract that exposes a synced subtree as plain JSON through `read`, `write` and `subscribe`; each `crdt-*` package provides one.
 A backend never talks to the network; replication is the provider's job.

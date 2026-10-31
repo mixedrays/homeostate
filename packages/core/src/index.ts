@@ -1,5 +1,7 @@
 export { createSyncEngine, WriteLoopError } from "./sync-engine.js";
 export { createPersistence } from "./persistence.js";
+export { scopeAdapter } from "./scope-adapter.js";
+export type { AdapterScope } from "./scope-adapter.js";
 export { getChanges } from "./diff.js";
 export { jsonEqual, toJsonValue } from "./json.js";
 export { keepIdentity } from "./patching.js";

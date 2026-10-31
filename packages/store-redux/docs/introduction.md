@@ -163,6 +163,11 @@ A store of a single slice wraps that slice's reducer the same way:
 `withHomeostate(counter.reducer)`. The adapter dispatches `replaceState` on `store.dispatch`,
 so remote changes go through the middleware.
 
+The enhancer syncs the root state and cannot take a scoped adapter. To sync a nested slice, or
+several slices to several rooms, wire the store by hand as above and wrap `createReduxAdapter` in
+[`scopeAdapter`](../../core/docs/sync-engine.md#scopeadapter). A dispatch that leaves the slice
+unchanged then adds no write.
+
 ### Handling the replace action yourself
 
 A reducer case that handles the replace action must return the payload as is: it is the
