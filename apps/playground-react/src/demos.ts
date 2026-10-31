@@ -147,7 +147,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     name: "MobX-State-Tree",
     title: "MobX-State-Tree Todo",
     description:
-      "A typed model tree kept in sync through its snapshots with createMobxStateTreeAdapter.",
+      "A typed model tree kept in sync through its snapshots by syncStateTree.",
     adapter: "@homeostate/store-mobx-state-tree",
     accent: "fuchsia",
     icon: TreePine,
