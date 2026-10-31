@@ -91,3 +91,75 @@ const syncedAtom = atom(
 
 createJotaiAdapter(syncedAtom, store);
 ```
+
+## Tying sync to mounting
+
+`atomWithSync` wraps a writable atom, or a record of atoms, so that sync follows Jotai's mounting
+instead of starting at import. The returned atom reads and writes like its target, connects when
+it is first mounted in a store and disconnects when its last subscriber unmounts:
+
+```ts
+import * as Y from "yjs";
+import { atom } from "jotai";
+import { createYjsBackend } from "@homeostate/crdt-yjs";
+import { atomWithSync } from "@homeostate/store-jotai";
+
+const counterAtom = atomWithSync(atom({ count: 0 }), {
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+});
+
+// { todos: Todo[]; filter: Filter }
+const syncedAtom = atomWithSync(
+  { todos: todosAtom, filter: filterAtom },
+  { backend: createYjsBackend(new Y.Doc(), "todos") },
+);
+```
+
+The options are the `backend`, a `CrdtBackend` instance, and the sync engine's config, with key
+names checked against the state. There is no `connect` option, and no engine to reach: for a
+status display or a manual `connect()`, use `createJotaiAdapter` with `createSyncEngine`.
+`atomWithSync` needs Jotai 2.12 or later, while `createJotaiAdapter` works with every Jotai the
+package supports. It uses the store of whoever mounts it, so `<Provider>` needs no extra setup.
+
+> [!IMPORTANT]
+> Only mounting the returned atom, or an atom derived from it, starts sync. Reading a record's
+> atom or the wrapped target does not, even from a mounted component.
+
+When components read the record's atoms directly, mount the returned atom in a small component
+of its own. It re-renders on every change, which stays inside it:
+
+```tsx
+function SyncTodos() {
+  useAtomValue(syncedAtom);
+  return null;
+}
+```
+
+The first render shows the atoms' initial values, since the atom connects after that render and
+then adopts what the room holds.
+
+Each mount is a reconnect, which follows [the reconnect rule](/docs/concepts#connecting): edits
+made to the atoms while unmounted are dropped for every key the backend holds. To edit offline,
+keep the atom mounted and disconnect the CRDT library's provider instead.
+
+If connecting throws, the error reaches whoever mounted the atom, and that store stays unsynced
+until it is discarded.
+
+Every peer sharing a room should sync the same set of atoms, as with the record form of
+`createJotaiAdapter`.
+
+One `atomWithSync` atom syncs one store at a time. Stores mounted one after another each sync,
+with one engine per store, but mounting the atom in a second store while the first is mounted
+throws: a backend skips its own writes for every subscriber, so the two stores would not hear
+each other, and a store's edits would be lost. To sync two stores at once, call `atomWithSync`
+once per store, each with its own backend on the same document:
+
+```ts
+const doc = new Y.Doc();
+const leftAtom = atomWithSync(todosAtom, {
+  backend: createYjsBackend(doc, "todos"),
+});
+const rightAtom = atomWithSync(todosAtom, {
+  backend: createYjsBackend(doc, "todos"),
+});
+```
