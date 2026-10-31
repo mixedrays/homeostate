@@ -76,9 +76,10 @@ list, such as one a peer running a newer version of the app adds, is removed by 
 Passing the sync engine's `keys` option does not prevent this, so every peer sharing a room should
 sync the same set of atoms.
 
-For a custom root, pass a derived writable atom that reads the atoms and fans a replacement out to
-each. Its write receives the whole remote state, which lacks any key a peer removed, so give each
-atom a fallback rather than setting it to `undefined`:
+Write a custom root when the synced state is not one key per atom, or a removed key needs another
+fallback than the atom's initial value. Pass a derived writable atom that reads the atoms and fans
+a replacement out to each. Its write receives the whole remote state, which lacks any key a peer
+removed, so give each atom a fallback rather than setting it to `undefined`:
 
 ```ts
 const syncedAtom = atom(
@@ -91,6 +92,25 @@ const syncedAtom = atom(
 
 createJotaiAdapter(syncedAtom, store);
 ```
+
+To sync one slice of an atom, pass a derived writable atom that reads the slice and writes it back.
+A change elsewhere in the base atom leaves the derived atom's value alone, so it writes nothing:
+
+```ts
+const appAtom = atom({ doc: { title: "" }, ui: { open: false } });
+
+const docAtom = atom(
+  (get) => get(appAtom).doc,
+  (get, set, doc: { title: string }) => set(appAtom, { ...get(appAtom), doc }),
+);
+
+createJotaiAdapter(docAtom, store);
+```
+
+`atomWithSync` takes such an atom too. Its read must return the slice's own object: one that builds
+a new object changes with every change to `appAtom`, and each is written. With `createSyncEngine`,
+[`scopeAdapter`](../../core/docs/sync-engine.md#scopeadapter) does the same over an adapter of
+`appAtom`, and also accepts a `get` that builds an object.
 
 ## Tying sync to mounting
 

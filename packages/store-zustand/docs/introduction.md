@@ -94,6 +94,12 @@ engine.connect();
 Only data is synced: the default filter skips actions and other functions in the state, and
 remote changes leave them in place.
 
+`homeostate` syncs the store's root and cannot take a scoped adapter. To sync a nested slice, or
+several slices to several rooms, wrap `createZustandAdapter` in
+[`scopeAdapter`](../../core/docs/sync-engine.md#scopeadapter) and create the engine yourself. With
+`persist` on async storage, [wait for hydration](../../core/docs/sync-engine.md#setup-helpers)
+before `connect()`.
+
 ## Combining with other middlewares
 
 Put `persist` inside `homeostate`:

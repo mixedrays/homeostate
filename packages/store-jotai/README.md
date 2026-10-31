@@ -52,7 +52,8 @@ A key a peer removes resets its atom to its initial value. A key the room holds 
 does not list is removed by the next write, even with the sync engine's `keys` option, so every
 peer sharing a room should sync the same set of atoms. See the
 [documentation](https://homeostate.pages.dev/docs/store-jotai/introduction) for how removed keys
-sync, and for a custom root atom that fans a replacement out to several atoms.
+sync, for a custom root atom that fans a replacement out to several atoms, and for syncing one
+slice of an atom.
 
 To tie sync to mounting instead of connecting at import, wrap the atom, or a record of atoms, in
 `atomWithSync` (Jotai 2.12 or later). It connects when the returned atom is first mounted and
