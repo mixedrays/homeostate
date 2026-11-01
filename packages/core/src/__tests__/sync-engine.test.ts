@@ -2809,6 +2809,61 @@ describe("createSyncEngine", () => {
         expect(seen).not.toContain(true);
       });
 
+      it("is neither ready nor reports it after a store subscriber disconnects while reconciling", async () => {
+        const backend = createMemoryBackend({ count: 1 });
+        const store = createTestStore({ count: 0 });
+        const ready = deferred();
+        const engine = createSyncEngine(backend, store.adapter, {
+          ready: ready.promise,
+        });
+        const events: string[] = [];
+        engine.subscribe((event) => events.push(event));
+        engine.connect();
+        store.adapter.subscribe(() => engine.disconnect());
+
+        backend.write({ count: 2 });
+        ready.resolve();
+        await settled();
+
+        expect(engine.isConnected()).toBe(false);
+        expect(engine.isReady()).toBe(false);
+        expect(events).toEqual(["connect", "disconnect"]);
+      });
+
+      it("keeps waiting after a store subscriber reconnects while reconciling", async () => {
+        const backend = createMemoryBackend({ count: 1 });
+        const store = createTestStore({ count: 0 });
+        const first = deferred();
+        const second = deferred();
+        const waits = [first.promise, second.promise];
+        const engine = createSyncEngine(backend, store.adapter, {
+          ready: () => waits.shift() as Promise<void>,
+        });
+        const events: string[] = [];
+        engine.subscribe((event) => events.push(event));
+        engine.connect();
+        let reconnected = false;
+        store.adapter.subscribe(() => {
+          if (reconnected) return;
+          reconnected = true;
+          engine.disconnect();
+          engine.connect();
+        });
+
+        backend.write({ count: 2 });
+        first.resolve();
+        await settled();
+
+        expect(engine.isReady()).toBe(false);
+        expect(events).toEqual(["connect", "disconnect", "connect"]);
+
+        second.resolve();
+        await settled();
+
+        expect(engine.isReady()).toBe(true);
+        expect(events).toEqual(["connect", "disconnect", "connect", "ready"]);
+      });
+
       it("writes back what the store changes while reconciling at settling", async () => {
         const backend = createMemoryBackend({ count: 1 });
         const store = createTestStore({ count: 0, doubled: 0 }, (state) => ({

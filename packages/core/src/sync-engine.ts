@@ -572,6 +572,8 @@ export function createSyncEngine<S extends object>(
       failConnect(error, source);
       return;
     }
+    // Code reconciling notified may have disconnected the engine, or started another wait.
+    if (!connected || waiting !== null) return;
     reconciled = true;
     emit("ready");
   };
