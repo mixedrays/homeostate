@@ -34,6 +34,9 @@ a populated room adopts it. Keys only the store has are written to the backend (
 "if-empty"`, the default) or left for the next local change (`seed: "never"`). A reconnect
 adopts the backend again, so edits made while disconnected to keys it holds are dropped.
 
+`scopeAdapter` turns a store adapter into one for a slice of the store, to sync a nested slice,
+or several slices to several rooms.
+
 Remote changes are applied to the store as they arrive. Pass
 `schedule: (flush) => queueMicrotask(flush)` to apply a burst of them with one store update.
 

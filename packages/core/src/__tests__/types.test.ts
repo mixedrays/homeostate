@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   createSyncEngine,
   defaultSyncFilter,
+  scopeAdapter,
   type CrdtBackend,
   type JsonObject,
   type JsonObjectInput,
@@ -164,5 +165,69 @@ describe("SyncEngineConfig", () => {
       keys: ["todos"] as const,
       omit: ["length"] as const,
     }).not.toExtend<SetupOptions<TodoState>>();
+  });
+});
+
+describe("scopeAdapter", () => {
+  /** A slice typed with an interface, one the store may lack, and an array. */
+  interface Root {
+    state: TodoState;
+    optional?: TodoState;
+    list: string[];
+    count: number;
+  }
+
+  const adapter = (): StoreAdapter<Root> => ({
+    getState: () => ({ state: todoState(), list: [], count: 0 }),
+    setState: () => {},
+    subscribe: () => () => {},
+  });
+
+  const stateScope = {
+    get: (root: Root) => root.state,
+    set: (root: Root, state: TodoState) => ({ ...root, state }),
+  };
+
+  it("takes the slice's type from get", () => {
+    expectTypeOf(
+      scopeAdapter(adapter(), {
+        get: (root) => root.state,
+        set: (root, state) => ({ ...root, state }),
+      }),
+    ).toEqualTypeOf<StoreAdapter<TodoState>>();
+  });
+
+  it("types the engine's config by the slice", () => {
+    const backend = createMemoryBackend();
+    const scoped = scopeAdapter(adapter(), stateScope);
+    createSyncEngine(backend, scoped, { keys: ["todos"] });
+    // @ts-expect-error "count" is a key of the store, not of the slice.
+    createSyncEngine(backend, scoped, { keys: ["count"] });
+  });
+
+  it("rejects an array slice, and takes one wrapped in an object", () => {
+    const listScope = {
+      get: (root: Root) => root.list,
+      set: (root: Root, list: string[]) => ({ ...root, list }),
+    };
+    // @ts-expect-error an array is not an object the engine can sync.
+    scopeAdapter(adapter(), listScope);
+    scopeAdapter(adapter(), {
+      get: (root) => ({ list: root.list }),
+      set: (root, { list }) => ({ ...root, list }),
+    });
+  });
+
+  it("rejects a slice that may be absent, and takes one with a fallback", () => {
+    const optionalScope = {
+      get: (root: Root) => root.optional,
+      set: (root: Root, optional?: TodoState) => ({ ...root, optional }),
+    };
+    // @ts-expect-error `undefined` is not an object the engine can sync.
+    scopeAdapter(adapter(), optionalScope);
+    scopeAdapter(adapter(), {
+      get: (root) => root.optional ?? todoState(),
+      set: (root, optional) => ({ ...root, optional }),
+    });
   });
 });

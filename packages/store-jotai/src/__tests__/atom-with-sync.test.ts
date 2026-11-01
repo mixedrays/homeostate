@@ -500,4 +500,41 @@ describe("atomWithSync", () => {
       atomWithSync(counterAtom, { backend, connect: "manual" });
     });
   });
+
+  describe("with a derived atom focused on a slice", () => {
+    it("syncs the slice alone, leaving the rest of the base atom untouched", () => {
+      const baseAtom = atom({
+        counter: { count: 0, label: "a" } as Counter,
+        ui: { open: false },
+      });
+      const counterAtom = atom(
+        (get) => get(baseAtom).counter,
+        (get, set, counter: Counter) =>
+          set(baseAtom, { ...get(baseAtom), counter }),
+      );
+      const backend = createMemoryBackend();
+      const syncedAtom = atomWithSync(counterAtom, { backend });
+      const store = createStore();
+      store.sub(syncedAtom, () => {});
+      const write = vi.spyOn(backend, "write");
+
+      store.set(baseAtom, (base) => ({ ...base, ui: { open: true } }));
+
+      expect(write).not.toHaveBeenCalled();
+
+      const { ui } = store.get(baseAtom);
+      backend.receive({ count: 7, label: "z" });
+
+      expect(store.get(baseAtom).counter).toEqual({ count: 7, label: "z" });
+      expect(store.get(baseAtom).ui).toBe(ui);
+      expect(write).not.toHaveBeenCalled();
+
+      store.set(baseAtom, (base) => ({
+        ...base,
+        counter: { count: 8, label: "z" },
+      }));
+
+      expect(backend.read()).toEqual({ count: 8, label: "z" });
+    });
+  });
 });

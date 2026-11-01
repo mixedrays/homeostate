@@ -135,7 +135,9 @@ createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
 `keys: ["todos"]` syncs the keys it lists instead, and ignores any other key the backend holds.
 Both take only the key names of the adapter's state, so a typo fails to compile. For a rule
 that depends on the value, `filter` decides per key: the default, `defaultSyncFilter`, excludes
-functions, and a custom filter replaces it. `keys` and `omit` apply on top of `filter`.
+functions, and a custom filter replaces it. `keys` and `omit` apply on top of `filter`. To sync
+a nested slice, or several slices to several rooms, wrap the adapter in
+[`scopeAdapter`](../../../packages/core/docs/sync-engine.md#scopeadapter).
 
 Excluded keys are never read from the backend or written to it, so they stay local to each
 peer.

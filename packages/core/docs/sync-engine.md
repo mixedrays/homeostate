@@ -1,5 +1,5 @@
 ---
-description: Signatures, options, lifecycle methods and adapter contracts for createSyncEngine and defaultSyncFilter.
+description: Signatures, options, lifecycle methods and adapter contracts for createSyncEngine, defaultSyncFilter and scopeAdapter.
 label: Sync engine API
 order: 1
 ---
@@ -307,6 +307,155 @@ Update the synced state immutably, with a new object for every container that ch
 engine diffs each write against the state it last wrote, and a container that is the same
 object in both is taken as unchanged, so an array or object changed in place is not written.
 Adapters whose `getState()` returns a fresh copy, such as the MobX adapter, meet this anyway.
+
+## scopeAdapter
+
+```ts
+declare function scopeAdapter<S extends object, T extends JsonObjectInput>(
+  adapter: StoreAdapter<S>,
+  scope: AdapterScope<S, T>,
+): StoreAdapter<T>;
+
+interface AdapterScope<S extends object, T extends JsonObjectInput> {
+  get: (state: S) => T;
+  set: (state: S, slice: T) => S;
+}
+```
+
+Turns a store adapter into one for a slice of the store, so that the engine treats the slice as
+the store's whole state. It is for a nested slice, which `keys` and `omit` cannot reach because
+they work on top-level keys, and for syncing several slices of one store to several rooms, with
+one engine and one backend each:
+
+```ts
+const adapter = createZustandAdapter(store);
+
+createSyncEngine(
+  createYjsBackend(doc, "editor"),
+  scopeAdapter(adapter, {
+    get: (state) => state.shared.editor,
+    set: (state, editor) => ({
+      ...state,
+      shared: { ...state.shared, editor },
+    }),
+  }),
+).connect();
+
+createSyncEngine(
+  createYjsBackend(doc, "comments"),
+  scopeAdapter(adapter, {
+    get: (state) => state.shared.comments,
+    set: (state, comments) => ({
+      ...state,
+      shared: { ...state.shared, comments },
+    }),
+  }),
+).connect();
+```
+
+For a top-level key synced to one room, `keys` or `omit` is enough. A store change outside the
+synced keys still makes the engine call `backend.write`, but with the Yjs, Loro and Automerge
+backends that call produces no update to the document, since nothing differs. `scopeAdapter`
+skips the call as well.
+
+| Member              | Contract                                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get(state)`        | Returns the slice as an object that is not an array, as a function of `state` alone. It may build a new object on every call.                                   |
+| `set(state, slice)` | Returns the store's next state with `slice` in place of the slice, whole. `slice` lacks any key a peer removed. `state` is what the store holds at that moment. |
+
+The engine's `keys`, `omit` and `filter` apply to the slice's keys, and are typed by the slice,
+and `connect()` reconciles and seeds those keys. The backend holds them at the root of its
+synced subtree.
+
+A store change reaches the engine only when the slice differs as JSON: by identity first, then
+with [`jsonEqual`](./diffing.md#jsonequal). So a change elsewhere in the store causes no
+`backend.write` and no `'local'` sync event, also with a `get` that builds a new object and with an
+adapter whose `getState` returns a fresh copy, such as the MobX adapter's.
+
+### Array slices
+
+The engine syncs objects, so an array needs a wrapper. A slice typed as an array fails to compile:
+
+```ts
+scopeAdapter(adapter, {
+  get: (state) => ({ todos: state.todos }),
+  set: (state, { todos }) => ({ ...state, todos: todos ?? [] }),
+});
+```
+
+The fallback is for a peer removing the `todos` key, after which `set` receives an object without
+it.
+
+### An absent slice
+
+A slice typed as possibly absent fails to compile. If `get` returns `undefined` or `null` all the
+same, `connect()` throws a `TypeError` and leaves the room alone.
+
+If the store removes the slice while connected, the engine writes nothing, so the room keeps its
+state. The `TypeError` goes to `onError`, or without it to whoever changed the store, and each
+remote change that arrives meanwhile fails the same way and is not applied to the store. When the
+slice returns, it is written as a local change, so it overwrites the room, including the remote
+changes made meanwhile.
+
+To treat an absent slice as empty, say so in `get`:
+
+```ts
+scopeAdapter(adapter, {
+  get: (state) => state.doc ?? ({} as Doc),
+  set: (state, doc) => ({ ...state, doc }),
+});
+```
+
+The engine then connects to an absent slice, and creates it through `set` if the room holds keys.
+But removing the slice is now a local change to an empty state: it writes `{}` and wipes the room
+for every peer.
+
+### A store that changes the slice
+
+What the store normalises or derives in the slice while a remote change is applied is written
+back once, as with any adapter, and the store's change to another scoped slice reaches that
+slice's engine as a local change.
+
+When `get` returns the same object after `setState` as before it, the engine takes the store to
+have ignored the change and writes nothing. That also holds for a reducer that rejects a remote
+change by keeping the old slice's object in a new root state: the room holds the rejected value
+and the store its old one, and they disagree until the store's next change to the slice. An
+unscoped adapter differs here: the root state is a new object, so the engine writes the store's
+values back over the room. So does a scoped adapter when the rejection makes a new object for the
+slice, as `{ ...state.doc }` does.
+
+### Rooms and keys
+
+Each slice needs a synced subtree of its own, such as a `name` of its own on `createYjsBackend`.
+Every write replaces the subtree, so two slices on one subtree overwrite each other.
+
+Every peer sharing a room should sync the same keys, scoped the same way. A peer syncing fewer
+keys removes the others from the room with its next local change, and from every peer's store, and
+a peer syncing a slice removes the keys of one syncing the whole store on the same subtree.
+
+A key the room holds reaches the slice even if `T` does not declare it, and stays in the room as
+long as the slice keeps it. Under `keys`, it is ignored and removed from the room by the next
+local change. A `set` that drops it removes it at once, as what the store changed in response.
+
+### Setup helpers
+
+The Zustand and Redux `homeostate` helpers build their own adapter and cannot take a scoped one,
+so `scopeAdapter` means creating the adapter and the engine by hand. For Redux, that includes
+wrapping the root reducer in `withHomeostate`.
+
+Zustand's `homeostate` also waits for `persist` to hydrate the store, and by hand that wait is the
+app's. It matters when hydration is async: connecting first lets the persisted state overwrite
+the room when it arrives. With synchronous storage the store is hydrated before `connect()` runs.
+
+```ts
+if (store.persist.hasHydrated()) engine.connect();
+else store.persist.onFinishHydration(() => engine.connect());
+```
+
+Other state managers reach a nested slice without `scopeAdapter`: `atomWithSync` takes a derived
+writable atom, `syncMobxStore` a nested observable, `createValtioAdapter` a nested proxy and
+`syncStateTree` a subtree. The MobX and Valtio forms are bound to that one object, so sync stops
+if the app replaces it, while a scoped adapter reads the slice from the store every time.
 
 ## CrdtBackend
 
