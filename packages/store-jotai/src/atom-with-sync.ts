@@ -70,11 +70,12 @@ const SECOND_STORE_MESSAGE =
  *
  * Each mount is a reconnect: it adopts the backend, so edits made while unmounted are dropped
  * for every key the backend holds. If connecting throws, the error reaches whoever mounted the
- * atom, and that store stays unsynced until it is discarded.
+ * atom, and that store stays unsynced until it is discarded. A rejected `ready` comes after the
+ * mount, so it goes to `onError`, and the next mount tries again.
  *
  * @param target - Writable atom holding the synced state
  * @param options - The `backend`, any `CrdtBackend` such as `@homeostate/crdt-yjs`, and the sync
- * engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`, `onError`)
+ * engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`, `onError`, `ready`)
  * @returns An atom that reads and writes `target` and syncs while it is mounted
  *
  * @example

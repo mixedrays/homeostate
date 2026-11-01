@@ -287,3 +287,51 @@ describe("homeostate enhancer", () => {
     >();
   });
 });
+
+describe("homeostate enhancer with ready", () => {
+  const settled = (): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve));
+
+  const createCounter = (options: Parameters<typeof homeostate>[0]) =>
+    configureStore({
+      reducer: { ui: ui.reducer },
+      enhancers: (getDefaultEnhancers) =>
+        getDefaultEnhancers().prepend(homeostate(options)),
+    });
+
+  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
+    const backend = createMemoryBackend();
+    let resolve!: () => void;
+    const ready = new Promise<void>((r) => {
+      resolve = r;
+    });
+
+    const store = createCounter({ backend, ready });
+
+    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.isReady()).toBe(false);
+    expect(backend.read()).toEqual({});
+
+    backend.receive({ ui: { dark: true } });
+    expect(store.getState().ui.dark).toBe(true);
+
+    resolve();
+    await settled();
+    expect(store.homeostate.isReady()).toBe(true);
+  });
+
+  it("does nothing when ready settles after a disconnect", async () => {
+    const backend = createMemoryBackend();
+    let resolve!: () => void;
+    const ready = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const store = createCounter({ backend, ready });
+
+    store.homeostate.disconnect();
+    resolve();
+    await settled();
+
+    expect(backend.read()).toEqual({});
+  });
+});

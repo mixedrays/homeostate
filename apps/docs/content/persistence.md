@@ -36,10 +36,10 @@ npm install @homeostate/persist-indexeddb
 
 ## Usage
 
-Create the persistence next to the document, then connect the sync engine once it has
-loaded:
+Create the persistence next to the document, and pass `whenLoaded` to the sync engine as
+`ready`, so it writes nothing until the stored document is restored:
 
-```ts {9-13,17}
+```ts {9-13,17-20}
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { createPersistence, createSyncEngine } from "@homeostate/core";
@@ -56,30 +56,56 @@ const persistence = createPersistence(
 
 new WebsocketProvider("wss://sync.example.com", "todos", doc);
 
-await persistence.whenLoaded;
-createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
+const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+  ready: persistence.whenLoaded,
+});
+engine.connect();
 ```
 
 The whole document is stored, including shared types outside the synced map. Every update is
 stored, local edits and those from peers alike.
 
 > [!IMPORTANT]
-> Connect the engine after `whenLoaded`. Before it resolves the document is still empty, so
-> `connect()` would seed the store's defaults as new operations, and they could win over the
-> restored values. The provider may connect at any time.
+> Do not seed before `whenLoaded`. Until it resolves the document may still be empty, so the
+> engine would write the store's defaults as new operations, and they could win over the restored
+> values. With `ready`, the engine adopts what arrives and writes nothing until then. Connecting
+> after `await persistence.whenLoaded` is safe too. The provider may connect at any time.
 
-With the Zustand middleware, pass `connect: "manual"` and connect the store the same way:
+Every setup helper takes the same option, so the store connects when it is created. With the
+Zustand middleware:
 
 ```ts
 const useTodos = create<TodoState>()(
   homeostate(creator, {
     backend: createYjsBackend(doc, "shared"),
-    connect: "manual",
+    ready: persistence.whenLoaded,
   }),
 );
+```
 
-await persistence.whenLoaded;
-useTodos.homeostate.connect();
+### Waiting for the provider too
+
+`whenLoaded` tells the engine that the stored document is back, not that the room's state has
+arrived. On a first visit nothing is stored, so a peer that seeds then competes with a populated
+room. To wait for both, combine them, with the `synced` helper from
+[Waiting for the room](../../../packages/core/docs/sync-engine.md#waiting-for-the-room):
+
+```ts
+const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+  ready: () => Promise.all([persistence.whenLoaded, synced(provider)]),
+});
+```
+
+This never settles while the provider cannot reach the server. An app that must start offline
+can race the provider against a timeout, which trades safety for an offline start: if the room's
+state arrives after the timeout, its values compete with what this peer seeded.
+
+```ts
+ready: () =>
+  Promise.all([
+    persistence.whenLoaded,
+    Promise.race([synced(provider), timeout(3000)]),
+  ]),
 ```
 
 ## Checking what was restored
@@ -105,7 +131,18 @@ if (loaded.status === "empty" || loaded.status === "loaded") {
 
 Connecting after `"partial"` or `"failed"` can seed the store's defaults for what was not
 restored, as on a first visit; a log that could not be applied stays in storage either way, see
-[Unreadable stored updates](#unreadable-stored-updates). The errors are the ones `onError`
+[Unreadable stored updates](#unreadable-stored-updates). So does passing `whenLoaded` as `ready`
+as it is, since it never rejects. To hold writes back instead, reject from `ready`, which
+disconnects the engine and reports to its `onError`:
+
+```ts
+ready: persistence.whenLoaded.then((loaded) => {
+  if (loaded.status === "partial" || loaded.status === "failed")
+    throw new Error(`The stored document was not restored: ${loaded.status}`);
+}),
+```
+
+The errors are the ones `onError`
 received while loading, not those of later writes. The result only describes restoring the
 document: `"loaded"` does not mean the initial snapshot is written or that peers have synced.
 Await `flush()` for storage writes.

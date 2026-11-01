@@ -111,12 +111,12 @@ _Avoid_: Structural sharing, referential equality
 ## Sync lifecycle
 
 **Connect**:
-The `SyncEngine.connect()` call that runs reconciliation and then subscribes the sync engine to the store and the CRDT backend; `disconnect()` removes both subscriptions.
+The `SyncEngine.connect()` call that runs reconciliation and then subscribes the sync engine to the store and the CRDT backend; `disconnect()` removes both subscriptions. With `ready`, it adopts what the backend holds, subscribes, and leaves writing to the reconciliation after the wait.
 A connected engine says nothing about the network. Providers and simulated links have their own `connect`, which does.
 _Avoid_: Start, attach
 
 **Reconciliation**:
-The per-key merge `connect()` performs before subscribing: a synced key the CRDT backend holds wins over the store's value, and a synced key only the store holds stays in the store.
+The per-key merge `connect()` performs before subscribing, or once `ready` resolves when given: a synced key the CRDT backend holds wins over the store's value, and a synced key only the store holds stays in the store.
 _Avoid_: Initial sync, hydration
 
 **Seeding**:
@@ -126,6 +126,10 @@ _Avoid_: Initializing, bootstrapping
 
 **Seed strategy**:
 The `seed` option in `SyncEngineConfig`: `"if-empty"`, the default, seeds during connect, and `"never"` leaves those keys for the next local change. Despite its name, `"if-empty"` works per key.
+
+**Ready**:
+The `ready` option in `SyncEngineConfig`: a promise, or a function returning one, that the sync engine waits for before it writes to the CRDT backend, so that a peer does not seed before the document holds what it should adopt. While waiting, the engine is connected but not ready: it applies remote changes per key and writes nothing, and local changes are provisional. `isReady()` tells the two apart.
+_Avoid_: Initialized, synced
 
 **Local change**:
 A change made to the store on this peer, which the sync engine writes to the CRDT backend as the whole synced state.
@@ -142,7 +146,7 @@ A store notification raised while the sync engine applies a remote change. The e
 _Avoid_: Feedback loop
 
 **Sync event**:
-A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, naming which of the four it was.
+A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, or has ended a wait for `ready`, naming which of the five it was.
 A local change that first runs a pending apply is reported as a remote change, because the remote changes replace what it did to synced keys.
 _Avoid_: Engine event, sync notification
 

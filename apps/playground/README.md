@@ -67,6 +67,12 @@ does not produce the same CRDT history, so joining tabs would lose edits. If the
 encoding changes in [`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there; that
 starts a fresh room.
 
+The playgrounds keep this seed instead of passing the sync engine's `ready` option. It shows the
+todos at once, also with the server down and without a timeout to wait for. `ready` would also
+need more than the provider's sync: the provider syncs a second document, which the devtools
+network link relays to the room's, so with latency the provider has synced before the room's
+document holds the state.
+
 Todo titles are collaborative text and every other string a plain value. Every todo backend
 must pass the shared policy, `createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle })`, so
 that tabs agree on how each string is stored.

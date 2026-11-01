@@ -25,14 +25,15 @@ export type SyncMobxStoreOptions<
  * Syncs a MobX store with a CRDT backend in one call. It takes the store, already made observable,
  * and its options: the `backend`, any `CrdtBackend` such as `@homeostate/crdt-yjs`,
  * `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the `connect` mode, the store adapter's
- * `keys` or `omit`, and the sync engine's config (`filter`, `seed`, `schedule`, `onError`). It
- * creates the store adapter and the sync engine and returns the engine, so `engine.disconnect()`
+ * `keys` or `omit`, and the sync engine's config (`filter`, `seed`, `schedule`, `onError`,
+ * `ready`). It creates the store adapter and the sync engine and returns the engine, so `engine.disconnect()`
  * stops syncing and `engine.connect()` syncs again.
  *
  * The store connects before the helper returns. With `connect: "manual"`, the helper lists the
  * store's fields when it is called unless `keys` names them, but reads and writes no state until
- * the app calls `engine.connect()`, for example once its provider has synced. A field added
- * afterwards to an `observable({...})` store is not synced unless `keys` names it.
+ * the app calls `engine.connect()`, for example once its provider has synced. With `ready`, the
+ * store connects as usual, adopts remote changes, and writes nothing until `ready` resolves. A
+ * field added afterwards to an `observable({...})` store is not synced unless `keys` names it.
  *
  * `keys` and `omit` choose the synced fields as in {@link createMobxAdapter}, and without them the
  * helper syncs every observable data field. A key the room holds outside the store's synced fields,

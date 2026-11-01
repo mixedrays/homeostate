@@ -437,3 +437,129 @@ describe("homeostate middleware with persist", () => {
     ).toThrow("homeostate(persist(creator, options), { backend })");
   });
 });
+
+describe("homeostate middleware with ready", () => {
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  };
+
+  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
+    const room = createMemoryBackend();
+    const ready = deferred();
+
+    const store = createStore<Count & { label: string }>()(
+      homeostate(() => ({ count: 0, label: "mine" }), {
+        backend: room,
+        ready: ready.promise,
+      }),
+    );
+
+    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.isReady()).toBe(false);
+    expect(room.read()).toEqual({});
+
+    room.receive({ count: 7 });
+    expect(store.getState()).toEqual({ count: 7, label: "mine" });
+
+    ready.resolve();
+    await tick();
+    expect(store.homeostate.isReady()).toBe(true);
+    expect(room.read()).toEqual({ count: 7, label: "mine" });
+  });
+
+  it("takes a function, called when the app connects", async () => {
+    const room = createMemoryBackend();
+    const ready = vi.fn(() => Promise.resolve());
+
+    const store = createStore<Count>()(
+      homeostate(() => ({ count: 0 }), {
+        backend: room,
+        connect: "manual",
+        ready,
+      }),
+    );
+    expect(ready).not.toHaveBeenCalled();
+
+    store.homeostate.connect();
+    await tick();
+
+    expect(ready).toHaveBeenCalledOnce();
+    expect(room.read()).toEqual({ count: 0 });
+  });
+
+  it("does nothing when ready settles after a disconnect", async () => {
+    const room = createMemoryBackend();
+    const ready = deferred();
+    const store = createStore<Count>()(
+      homeostate(() => ({ count: 0 }), { backend: room, ready: ready.promise }),
+    );
+
+    store.homeostate.disconnect();
+    ready.resolve();
+    await tick();
+
+    expect(room.read()).toEqual({});
+    expect(store.homeostate.isConnected()).toBe(false);
+  });
+
+  describe("with persist hydrating from async storage", () => {
+    const createHydrating = (room: MemoryBackend, ready: Promise<void>) => {
+      const { storage } = createStorage({ c: persisted(42) }, true);
+      return createStore<Count>()(
+        homeostate(
+          persist(() => ({ count: 0 }), {
+            name: "c",
+            storage: createJSONStorage(() => storage),
+          }),
+          { backend: room, ready },
+        ),
+      );
+    };
+
+    it("seeds hydrated state once both have finished, ready first", async () => {
+      const room = createMemoryBackend();
+      const store = createHydrating(room, Promise.resolve());
+      expect(store.homeostate.isConnected()).toBe(false);
+
+      await tick();
+
+      expect(store.getState().count).toBe(42);
+      expect(store.homeostate.isReady()).toBe(true);
+      expect(room.read()).toEqual({ count: 42 });
+    });
+
+    it("waits for ready after hydrating, and lets the room win", async () => {
+      const room = createMemoryBackend();
+      const ready = deferred();
+      const store = createHydrating(room, ready.promise);
+
+      await tick();
+      expect(store.homeostate.isConnected()).toBe(true);
+      expect(store.homeostate.isReady()).toBe(false);
+      expect(store.getState().count).toBe(42);
+      expect(room.read()).toEqual({});
+
+      room.receive({ count: 7 });
+      ready.resolve();
+      await tick();
+
+      expect(store.getState().count).toBe(7);
+      expect(room.read()).toEqual({ count: 7 });
+    });
+
+    it("stays disconnected when disconnected during hydration", async () => {
+      const room = createMemoryBackend();
+      const store = createHydrating(room, Promise.resolve());
+
+      store.homeostate.disconnect();
+      await tick();
+
+      expect(store.homeostate.isConnected()).toBe(false);
+      expect(room.read()).toEqual({});
+    });
+  });
+});

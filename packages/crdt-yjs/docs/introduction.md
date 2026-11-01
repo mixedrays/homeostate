@@ -75,7 +75,8 @@ const undoManager = new Y.UndoManager(backend.map, {
 undoManager.undo();
 ```
 
-Create the undo manager after `connect()`, so seeding is not a step to undo. It undoes only
+Create the undo manager after `connect()`, so seeding is not a step to undo. With `ready`,
+seeding comes later, so create it on the engine's `"ready"` event instead. It undoes only
 this peer's writes; changes from other peers stay. An undo runs with the undo manager as its
 origin, so the backend reports it as a remote change and the store follows. One step covers
 the writes made within `captureTimeout`, 500 ms by default; `undoManager.stopCapturing()`

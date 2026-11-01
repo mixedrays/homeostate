@@ -20,7 +20,8 @@ declare function createSyncEngine<S extends object>(
 ```
 
 Creates a disconnected engine. Call `connect()` to reconcile the current state and start
-watching both sides. Creation alone does not read, write or subscribe to either side.
+watching both sides. Creation alone does not read, write or subscribe to either side, and does
+not call a `ready` function.
 
 | Parameter | Required | Description                                               |
 | --------- | -------- | --------------------------------------------------------- |
@@ -28,11 +29,11 @@ watching both sides. Creation alone does not read, write or subscribe to either 
 | `adapter` | Yes      | The application store, exposed through `StoreAdapter<S>`. |
 | `config`  | No       | Sync options, typed by `S`. Defaults to `{}`.             |
 
-Returns a `SyncEngine`. The engine is synchronous and does not retry. `connect()` throws what
-it runs into. Once connected, adapter and backend errors go to `onError` when it is given;
-otherwise they, like filter errors, propagate to the caller of the operation that triggered them,
-which is whoever calls `flush` for an apply deferred by `schedule`. See
-[Reporting errors](#reporting-errors).
+Returns a `SyncEngine`. The engine is synchronous, except for the wait for `ready`, and does not
+retry. `connect()` throws what it runs into. Once connected, adapter and backend errors go to
+`onError` when it is given; otherwise they, like filter errors, propagate to the caller of the
+operation that triggered them, which is whoever calls `flush` for an apply deferred by `schedule`.
+See [Reporting errors](#reporting-errors).
 
 ### Example
 
@@ -73,13 +74,14 @@ type SyncEngineConfig<S extends object = JsonObject> = {
   seed?: SeedStrategy;
   schedule?: (flush: () => void) => void;
   onError?: (error: unknown, source: SyncErrorSource) => void;
+  ready?: PromiseLike<unknown> | (() => PromiseLike<unknown>);
 } & (
   | { keys: readonly (keyof S & string)[]; omit?: never }
   | { keys?: never; omit?: readonly (keyof S & string)[] }
 );
 
 type SeedStrategy = "if-empty" | "never";
-type SyncErrorSource = "store" | "backend";
+type SyncErrorSource = "store" | "backend" | "ready";
 ```
 
 | Option     | Default             | Behavior                                                                                                             |
@@ -90,6 +92,7 @@ type SyncErrorSource = "store" | "backend";
 | `seed`     | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
 | `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.    |
 | `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.     |
+| `ready`    | none                | Holds back every write to the backend until it resolves. A promise, or a function returning one. See below.          |
 
 `createSyncEngine` takes `S` from the adapter, so `keys` and `omit` accept only the state's key
 names, and a typo fails to compile. Readonly lists work too, such as an `as const` constant
@@ -141,7 +144,125 @@ code that changes the store in the same task as a remote update; a longer delay,
 `requestAnimationFrame`, lets user input fall in the window too. A remote change another
 listener hears of before the engine is applied the same way, with or without `schedule`; see
 [SyncEngine](#syncengine). `disconnect()` also runs a pending apply, and a flush called after
-it does nothing.
+it does nothing. So does the end of a wait for [`ready`](#waiting-for-the-room), unless the wait
+failed, when the apply is forgone.
+
+### Waiting for the room
+
+A provider delivers the room's state some time after `connect()`, so a new document starts
+empty, and the engine seeds it. Those writes compete with the room's. Each CRDT library keeps
+one value per key, so a peer joining a populated room can replace its state on every peer,
+depending on replica IDs. `seed: "never"` does not prevent it: the next local change writes the
+whole synced state.
+
+`ready` holds back every write until the document holds what this peer should adopt:
+
+```ts
+const engine = createSyncEngine(backend, adapter, {
+  ready: () => Promise.all([persistence.whenLoaded, synced(provider)]),
+});
+engine.connect();
+```
+
+`connect()` still adopts what the backend holds and subscribes to both sides, and still throws
+for a bad `read()` or `getState()`. Until `ready` settles:
+
+- A remote change is applied per key, as `connect()` does: a key the backend holds wins, and a
+  key only the store holds stays. A key the backend held and a peer deleted is removed.
+- Nothing is written: no seed, no local change, and nothing the store changes during an apply.
+- `schedule`, `keys`, `omit` and `filter` work as usual, and `isConnected()` is `true`.
+
+Once it resolves, the engine runs a pending apply, reconciles as `connect()` does without
+`ready`, and sends `"ready"`. So with `ready` resolving after the room's state reached the document, a joining
+peer keeps the room whichever replica ID is higher. Two peers starting an empty room seed
+concurrently and end with one consistent state. What each keeps of the other's values depends
+on the library; see [How backends differ](#how-backends-differ).
+
+Local changes made before then are provisional. A key the backend holds keeps the backend's
+value, so the change is dropped. A key it lacks is written with the rest, also with
+`seed: "never"`, where a local change while waiting counts as the next local change. To keep
+users from losing edits, disable editing until [`isReady()`](#syncengine).
+
+| `ready`                              | What the engine does                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Rejects                              | Disconnects, writes nothing, sends `"disconnect"`, then reports to `onError`.                  |
+| Resolves, but reconciling then fails | The same, with the source `"store"` or `"backend"`; see [Reporting errors](#reporting-errors). |
+| Never settles                        | Keeps waiting, adopting remote changes and writing nothing, until `disconnect()`.              |
+| Settles after `disconnect()`         | Nothing, also when the engine has reconnected since and waits for another promise.             |
+| Settles after `connect()` threw      | Nothing: the throw abandoned that wait.                                                        |
+
+The engine has no timer. To start offline, race `ready` against a timeout:
+
+```ts
+const timeout = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+createSyncEngine(backend, adapter, {
+  ready: () => Promise.race([synced(provider), timeout(3000)]),
+});
+```
+
+A timeout trades safety for an offline start. The engine seeds when it expires and works
+locally, and if the room's state arrives later, its values compete with what this peer wrote, as
+they do without `ready`. A rejection means the opposite: the engine stops and writes nothing, as
+in [Checking what was restored](/docs/persistence#checking-what-was-restored).
+
+#### A promise or a function
+
+A promise is simplest when one wait covers the engine's whole life. A function is called by every
+`connect()`, so:
+
+- A timer starts when the engine connects. A promise made at setup starts it then, and with a
+  Jotai atom mounted later it may run out before the provider has had its chance.
+- `connect()` can try again after a rejection. A promise stays rejected.
+- A reconnect waits again. A promise is already settled, so the engine reconciles one microtask
+  later, with a document that may be out of date if the provider was disconnected too. The
+  function must then return a promise that resolves for a provider that has already synced.
+
+With a function, local changes become provisional again during a reconnect's wait. With either,
+`connect()` reconciles at least a microtask after it returns, so a change made in the same tick
+is provisional too. A promise that rejects before `connect()` is not an unhandled rejection: the
+engine takes it up when it connects.
+
+#### What a provider's sync tells
+
+`ready` means only what its promise means. For y-websocket, resolve it from the provider's
+`sync` event and `synced` flag, checking both: `sync` does not fire again for a provider that has
+synced, so a promise waiting for it would hang on a reconnect, and it fires with `false` when the
+provider disconnects, which must not resolve it:
+
+```ts
+const synced = (provider: WebsocketProvider) =>
+  new Promise<void>((resolve) => {
+    if (provider.synced) {
+      resolve();
+      return;
+    }
+    const onSync = (isSynced: boolean) => {
+      if (!isSynced) return;
+      provider.off("sync", onSync);
+      resolve();
+    };
+    provider.on("sync", onSync);
+  });
+```
+
+A provider's sync says its own document holds the room's state. If something relays between that
+document and the one the backend reads, as the devtools
+[network link](../../tool-devtools/docs/introduction.md#network-conditions) does with latency, the
+promise can resolve before the state arrives. The engine then seeds, and its values compete
+with the room's as they do without `ready`.
+
+#### How backends differ
+
+All three backends take the same steps, and peers end up with one consistent state. How two
+concurrent writes merge is up to the library, so `ready` does not make these outcomes equal:
+
+- Which value of a key survives depends on the library. Do not rely on either peer's.
+- In a document that does not hold the synced map yet, Automerge creates it, and two peers that
+  each do so keep one map whole. The other peer's keys are lost, even those no other peer wrote,
+  so a peer whose timeout expires can remove keys only the room held. Yjs and Loro merge the two
+  per key, and a document that already holds the map merges per key on all three.
 
 ### Reporting errors
 
@@ -165,6 +286,12 @@ createSyncEngine(backend, adapter, {
 
 The next change is synced as usual. `connect()` still throws, since a failed connect leaves the
 engine disconnected, and errors from `filter`, `schedule` and `onError` itself propagate.
+
+With [`ready`](#waiting-for-the-room), part of connecting comes after `connect()` has returned, so
+there is no caller left to throw to. A rejected `ready`, or an adapter or backend error while
+reconciling after it, also leaves the engine disconnected: it forgoes a pending apply, sends
+`"disconnect"`, then calls `onError` with the source `"ready"`, or the error's own source. Without `onError`, the error
+surfaces as an unhandled rejection. Call `connect()` to try again.
 
 A `read()` or `getState()` that returns something other than an object breaks its contract. The
 engine throws a `TypeError` naming the method and what it returned, such as
@@ -207,18 +334,20 @@ interface SyncEngine {
   connect: () => void;
   disconnect: () => void;
   isConnected: () => boolean;
+  isReady: () => boolean;
   getSyncedState: () => Record<string, unknown>;
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
 
-type SyncEvent = "local" | "remote" | "connect" | "disconnect";
+type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
 ```
 
 | Method                | Returns                   | Behavior                                                                                                                                                                        |
 | --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `connect()`           | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
 | `disconnect()`        | `void`                    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `isConnected()`       | `boolean`                 | Whether the engine is subscribed. This does not report network connectivity or whether a provider has received the room's state.                                                |
+| `isConnected()`       | `boolean`                 | Whether the engine is subscribed, so also while it waits for `ready`. This does not report network connectivity or whether a provider has received the room's state.            |
+| `isReady()`           | `boolean`                 | Whether the engine is connected and done reconciling, so that local changes are written. See below.                                                                             |
 | `getSyncedState()`    | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                   |
 | `subscribe(listener)` | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                 |
 
@@ -232,6 +361,11 @@ engine does. Each backend notification, or each
 flush with `schedule`, applies the backend's full filtered state to the store, including
 deletions. Unchanged subtrees keep their identity. Store notifications raised synchronously
 while the engine applies remote state are ignored to avoid echoing that state back.
+
+`isReady()` is `false` while disconnected. With `ready`, it stays `false` from `connect()` until
+`ready` has resolved and reconciliation is done, also on a reconnect. Without `ready`, it equals
+`isConnected()`. Use it to disable editing during the wait; it says what the engine has done, not
+what the network has.
 
 Reconnecting runs reconciliation again: backend values replace disconnected local edits
 for matching keys. For offline editing, leave the engine connected and disconnect the
@@ -255,8 +389,13 @@ const unsubscribe = engine.subscribe((event) => {
 | -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `"local"`      | after the write to the backend                                         | store notification handled while connected, even one that changed only local keys. An echo raised while a remote change is applied sends none.                             |
 | `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                |
-| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own.                                  |
+| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.         |
 | `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply it runs sends its `"remote"` first; if that apply throws, `"disconnect"` is still sent, since the engine is disconnected. |
+| `"ready"`      | after reconciling once `ready` resolved; `isReady()` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                          |
+
+With `ready`, `"connect"` comes before the wait and covers only the values adopted then. Each
+remote change during the wait sends `"remote"`, a local change sends nothing, since it writes
+nothing, and `"ready"` ends the wait. A wait that fails sends `"disconnect"` instead.
 
 Events are sent synchronously, once the work is done. Nothing is sent when the work throws,
 whether the error goes to `onError` or to the caller, or when `connect()` or `disconnect()`
@@ -494,7 +633,7 @@ against it with `applyChanges` and `json: true` instead of reading its document,
 with [`createCrdtBackend`](#createcrdtbackend) does; unchanged subtrees of `next` are then the
 same objects and compare by identity. Like `next`, it may
 hold `undefined` and functions, which `json: true` treats as absent. The engine passes nothing
-for the seed write during `connect()`, after a write that threw, and for a write back after
+for the seed write during reconciliation, after a write that threw, and for a write back after
 `setState` during which the revision moved. A backend may ignore `previous`.
 
 A document can change before `subscribe` reports it: another listener may hear of a remote

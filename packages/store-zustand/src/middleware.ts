@@ -98,14 +98,12 @@ const homeostateImpl = <T extends object>(
       }
     };
     (api as unknown as { homeostate: SyncEngine }).homeostate = {
+      ...engine,
       connect: connectWhenHydrated,
       disconnect: () => {
         cancelWaiting();
         engine.disconnect();
       },
-      isConnected: engine.isConnected,
-      getSyncedState: engine.getSyncedState,
-      subscribe: engine.subscribe,
     };
 
     const persistApi = (api as { persist?: PersistApi }).persist;
@@ -127,17 +125,19 @@ const homeostateImpl = <T extends object>(
  * It takes the state creator and its options: the `backend`, any `CrdtBackend` such as
  * `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
  * `connect` mode, and the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
- * `onError`), whose key names are checked against the store's state.
+ * `onError`, `ready`), whose key names are checked against the store's state.
  * The engine is exposed as `store.homeostate`, so `store.homeostate.disconnect()` stops syncing.
  *
  * The store connects when it is created. With `connect: "manual"`, nothing reads or writes the
  * backend until the app calls `store.homeostate.connect()`, for example once its provider has
- * synced.
+ * synced. With `ready`, the store connects as usual, adopts remote changes, and writes nothing
+ * until `ready` resolves.
  *
  * Put Zustand's `persist` inside: `homeostate(persist(creator, options), { backend })`. The
  * store then connects once `persist` has hydrated it, and a `connect()` made before that waits
- * for it, so the room wins over the persisted state as on any `connect()`. With `persist`
- * outside, creating the store throws.
+ * for it, so the room wins over the persisted state as on any `connect()`. `ready` is waited
+ * for after that, so the store writes once both have finished. With `persist` outside, creating
+ * the store throws.
  *
  * Use the curried `create<T>()(...)` form: Zustand cannot infer the state type through a
  * middleware, so `create(homeostate(...))` types the state as `object`.

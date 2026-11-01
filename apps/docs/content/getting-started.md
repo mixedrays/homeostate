@@ -64,23 +64,36 @@ type CounterState = { count: number; increment: () => void };
 
 export const doc = new Y.Doc();
 
-export const useCounter = create<CounterState>()(
-  homeostate(
-    (set) => ({
-      count: 0,
-      increment: () => set((state) => ({ count: state.count + 1 })),
-    }),
-    { backend: createYjsBackend(doc, "shared"), connect: "manual" },
-  ),
-);
-
 export const provider = new WebsocketProvider(
   "ws://localhost:1234",
   "homeostate-counter",
   doc,
 );
 
-provider.once("sync", () => useCounter.homeostate.connect());
+/** Resolves once the provider has received the room's state. */
+const synced = (provider: WebsocketProvider) =>
+  new Promise<void>((resolve) => {
+    if (provider.synced) {
+      resolve();
+      return;
+    }
+    const onSync = (isSynced: boolean) => {
+      if (!isSynced) return;
+      provider.off("sync", onSync);
+      resolve();
+    };
+    provider.on("sync", onSync);
+  });
+
+export const useCounter = create<CounterState>()(
+  homeostate(
+    (set) => ({
+      count: 0,
+      increment: () => set((state) => ({ count: state.count + 1 })),
+    }),
+    { backend: createYjsBackend(doc, "shared"), ready: () => synced(provider) },
+  ),
+);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
@@ -94,11 +107,14 @@ if (import.meta.hot) {
 The `homeostate` middleware syncs the store with `doc.getMap("shared")`. The default
 filter excludes the `increment` function, so only `count` is shared.
 
-`connect: "manual"` creates the store without touching the document, and the
-`provider.once("sync", ...)` line connects it once the provider has received the room's
-state. A joining tab then adopts the count already in the room instead of writing its initial
-zero over it, and the first tab in an empty room writes its count into it. Clicks before then
-change only this tab, and the room's count replaces them when it connects.
+`ready` holds back every write to the document until `synced` resolves, once the provider has
+received the room's state. A joining tab then adopts the count already in the room instead of
+writing its initial zero over it, and the first tab in an empty room writes its count into it.
+Clicks before then are provisional: they change only this tab, and a count already in the room
+replaces them. `synced` checks `provider.synced` and the event's argument because `sync` does not
+fire again for a provider that has synced, and fires with `false` when it disconnects. Without a
+sync server the tab keeps waiting; [`ready`](../../../packages/core/docs/sync-engine.md#waiting-for-the-room)
+describes how to start offline.
 
 Every tab uses the same server URL, room name (`homeostate-counter`) and map name (`shared`).
 The final block cleans up the old store and connection when Vite reloads this module during
