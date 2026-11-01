@@ -22,7 +22,7 @@ export type HomeostateOptions<S extends object = JsonObject> = SetupOptions<S>;
  * synchronization. It takes one options object: the `backend`, any `CrdtBackend` such as
  * `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
  * `connect` mode, and the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
- * `onError`). Pass the root state type, `homeostate<RootState>(...)`, to check key names
+ * `onError`, `ready`). Pass the root state type, `homeostate<RootState>(...)`, to check key names
  * against it. The enhancer wraps the root reducer, and any reducer later given to
  * `replaceReducer`, in {@link withHomeostate}, creates the store adapter and the sync engine,
  * and exposes the engine as `store.homeostate`, so `store.homeostate.disconnect()` stops
@@ -30,7 +30,8 @@ export type HomeostateOptions<S extends object = JsonObject> = SetupOptions<S>;
  *
  * The store connects when it is created. With `connect: "manual"`, nothing reads or writes the
  * backend until the app calls `store.homeostate.connect()`, for example once its provider has
- * synced.
+ * synced. With `ready`, the store connects as usual, adopts remote changes, and writes nothing
+ * until `ready` resolves.
  *
  * Remote changes are applied by dispatching {@link replaceState} on the store the enhancer
  * wraps. Put the enhancer before the middleware, as Redux Toolkit's `prepend` does, so that

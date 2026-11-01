@@ -60,6 +60,72 @@ describeCrdtBackend("createAutomergeBackend", {
   isText: (handle, path) => typeof at(handle, path) === "string",
 });
 
+describe("two peers that each create the synced map", () => {
+  const exchange = (a: Handle, b: Handle): void => {
+    b.update((doc) => A.merge(doc, a.doc()));
+    a.update((doc) => A.merge(doc, b.doc()));
+  };
+
+  it("keep one map whole, the one by the higher actor, with no key of the other", () => {
+    const low = createHandle(1);
+    const high = createHandle(2);
+    createAutomergeBackend(low, NAME).write({ count: 1, onlyLow: true });
+    createAutomergeBackend(high, NAME).write({ count: 2, onlyHigh: true });
+
+    exchange(low, high);
+
+    const merged = { count: 2, onlyHigh: true };
+    expect(createAutomergeBackend(low, NAME).read()).toEqual(merged);
+    expect(createAutomergeBackend(high, NAME).read()).toEqual(merged);
+  });
+
+  it("lose the keys only the room holds when a peer seeds an empty document first", async () => {
+    const room = createHandle(1);
+    createAutomergeBackend(room, NAME).write({ count: 7, roomOnly: true });
+    const late = createHandle(2);
+    const store = createTestStore<Root>({ count: 0 });
+    const engine = createSyncEngine(
+      createAutomergeBackend(late, NAME),
+      store.adapter,
+      { ready: Promise.resolve() },
+    );
+    engine.connect();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    exchange(room, late);
+
+    expect(store.getState()).toEqual({ count: 0 });
+    expect(createAutomergeBackend(room, NAME).read()).toEqual({ count: 0 });
+    engine.disconnect();
+  });
+
+  it("keep every key when the document already holds the map", async () => {
+    const room = createHandle(1);
+    const roomBackend = createAutomergeBackend(room, NAME);
+    roomBackend.write({ count: 7 });
+    const late = createHandle(2);
+    exchange(room, late);
+    roomBackend.write({ count: 7, roomOnly: true });
+    const store = createTestStore<Root>({ count: 0, mine: true });
+    const engine = createSyncEngine(
+      createAutomergeBackend(late, NAME),
+      store.adapter,
+      { ready: Promise.resolve() },
+    );
+    engine.connect();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    exchange(room, late);
+
+    expect(roomBackend.read()).toEqual({
+      count: 7,
+      roomOnly: true,
+      mine: true,
+    });
+    engine.disconnect();
+  });
+});
+
 describe("createAutomergeBackend", () => {
   it("treats undefined the way JSON.stringify does", () => {
     const backend = createAutomergeBackend(createHandle(), NAME);

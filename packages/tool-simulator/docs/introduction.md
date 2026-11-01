@@ -208,3 +208,17 @@ const peer = network.addPeer({ ...setup, connect: false });
 await network.settle();
 peer.engine.connect();
 ```
+
+Or model [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), which connects the engine
+as the peer joins and holds back its writes, by passing a promise in its config:
+
+```ts
+network.addPeer({ ...setup, config: { ready } });
+await network.settle();
+resolveReady();
+await ready;
+await network.settle();
+```
+
+Until then `expectConverged()` throws if the store holds a key its document lacks: the peer has
+not written it, so it has not converged.

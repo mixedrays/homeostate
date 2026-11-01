@@ -153,6 +153,13 @@ peer.
 After that, the backend owns the synced document. Each local change replaces it with the
 store's filtered state, and a key removed from the backend is removed from the store.
 
+A provider delivers the room's state after the engine has connected, so a new document may
+still be empty on `connect()`, and a key this peer seeds then competes with the room's. Pass
+[`ready`](../../../packages/core/docs/sync-engine.md#waiting-for-the-room) to hold back every
+write until the document holds what the peer should adopt: the engine connects and applies
+remote changes at once, and reconciles as above once `ready` resolves. Local changes made before
+then are provisional: the room wins for every key it holds.
+
 > [!IMPORTANT]
 > A reconnect adopts the backend again, so edits made while the engine was disconnected are
 > dropped for every key the backend holds. To edit offline, disconnect the CRDT library's

@@ -20,7 +20,8 @@ declare function createPersistence(
 ```
 
 Subscribes to document updates immediately and queues the initial load. Await `whenLoaded`
-before connecting a sync engine that could seed initial state, and check its
+before connecting a sync engine that could seed initial state, or pass it as the engine's
+[`ready`](./sync-engine.md#waiting-for-the-room) option, and check its
 [`PersistenceLoadResult`](#persistenceloadresult) to tell a first start from a restored
 document or a stored log that could not be restored in full.
 

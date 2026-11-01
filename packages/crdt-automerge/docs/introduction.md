@@ -102,6 +102,18 @@ storage, received from peers, or made through `docHandle.change`.
 The `Repo` and the backend must share one copy of `@automerge/automerge`, so check that your
 package manager installs only one.
 
+## Peers that create the synced key
+
+The synced key holds one Automerge map, which a document creates with its first write. Two peers
+that each create it, each from a document without it, make two competing maps, and the merge
+keeps one of them whole: the other peer's keys are lost, even those no other peer wrote. Peers
+still end with one consistent state, and a document that already holds the map merges per key.
+
+So waiting for the provider matters more here. Without
+[`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), or when its timeout expires
+before the room's state arrives, a peer that seeds an empty document can remove keys only the
+room held. Yjs and Loro merge these two writes per key.
+
 ## Strings and text
 
 Strings are `ImmutableString` values by default, so two peers changing an id, a status or a

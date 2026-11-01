@@ -906,6 +906,157 @@ export const describeCrdtBackend = <D>(
         expect(before).toEqual(beforeSnapshot);
       });
 
+      /** Lets promise reactions, and what a library reports in a microtask, run. */
+      const settled = (): Promise<void> =>
+        new Promise((resolve) => setTimeout(resolve));
+
+      /** A peer whose engine waits for `ready` before it writes. */
+      const waitingPeer = <S extends object>(
+        doc: D,
+        initial: S,
+        ready: Promise<void>,
+      ) => {
+        const store = createTestStore(initial);
+        const peerBackend = backend(doc);
+        const engine = createSyncEngine(peerBackend, store.adapter, { ready });
+        engine.connect();
+        return { doc, store, backend: peerBackend, engine };
+      };
+
+      scenario(
+        "a peer waiting for ready keeps a populated room (replica ids %i and %i)",
+      ).each(replicaOrders, async (roomId, joinerId) => {
+        const room = peer(createDoc(roomId), { count: 7, title: "room" });
+        let resolve!: () => void;
+        const ready = new Promise<void>((r) => {
+          resolve = r;
+        });
+        const joiner = waitingPeer(
+          createDoc(joinerId),
+          { count: 0, title: "default", extra: "default" },
+          ready,
+        );
+        try {
+          joiner.store.update((state) => ({ ...state, extra: "edit" }));
+          await settled();
+
+          exchange(room.doc, joiner.doc);
+          await settled();
+          expect(joiner.store.getState()).toEqual({
+            count: 7,
+            title: "room",
+            extra: "edit",
+          });
+          expect(room.backend.read()).toEqual({ count: 7, title: "room" });
+
+          resolve();
+          await settled();
+          exchange(room.doc, joiner.doc);
+          await settled();
+          const merged = { count: 7, title: "room", extra: "edit" };
+          expect(room.store.getState()).toEqual(merged);
+          expect(joiner.store.getState()).toEqual(merged);
+        } finally {
+          room.engine.disconnect();
+          joiner.engine.disconnect();
+        }
+      });
+
+      scenario(
+        "two peers starting an empty room after ready end with one state (replica ids %i and %i)",
+      ).each(replicaOrders, async (idA, idB) => {
+        const ready = Promise.resolve();
+        const a = waitingPeer(
+          createDoc(idA),
+          { count: 1, title: "a", onlyA: true },
+          ready,
+        );
+        const b = waitingPeer(
+          createDoc(idB),
+          { count: 2, title: "b", onlyB: true },
+          ready,
+        );
+        try {
+          await settled();
+          exchange(a.doc, b.doc);
+          await settled();
+          exchange(a.doc, b.doc);
+          await settled();
+
+          expect(b.backend.read()).toEqual(a.backend.read());
+          expect(a.store.getState()).toEqual(a.backend.read());
+          expect(b.store.getState()).toEqual(a.backend.read());
+          const state = a.backend.read();
+          expect([1, 2]).toContain(state.count);
+          expect(["a", "b"]).toContain(state.title);
+        } finally {
+          a.engine.disconnect();
+          b.engine.disconnect();
+        }
+      });
+
+      scenario(
+        "a delete pending for its flush when ready resolves stays deleted (replica ids %i and %i)",
+      ).each(replicaOrders, async (roomId, joinerId) => {
+        const roomDoc = createDoc(roomId);
+        const joinerDoc = createDoc(joinerId);
+        const room = backend(roomDoc);
+        room.write({ a: 1, b: 2 });
+        exchange(roomDoc, joinerDoc);
+        const store = createTestStore<Record<string, unknown>>({ a: 0 });
+        const flushes: (() => void)[] = [];
+        let resolve!: () => void;
+        const ready = new Promise<void>((r) => {
+          resolve = r;
+        });
+        const engine = createSyncEngine(backend(joinerDoc), store.adapter, {
+          ready,
+          schedule: (flush) => flushes.push(flush),
+        });
+        engine.connect();
+        try {
+          room.write({ a: 1 });
+          exchange(roomDoc, joinerDoc);
+          await settled();
+
+          resolve();
+          await settled();
+          flushes.forEach((flush) => flush());
+          exchange(roomDoc, joinerDoc);
+          await settled();
+
+          expect(store.getState()).toEqual({ a: 1 });
+          expect(room.read()).toEqual({ a: 1 });
+        } finally {
+          engine.disconnect();
+        }
+      });
+
+      scenario(
+        "a peer seeding after a peer's state reached it adopts that state (replica ids %i and %i)",
+      ).each(replicaOrders, async (idA, idB) => {
+        const a = peer(createDoc(idA), { count: 1 });
+        let resolve!: () => void;
+        const ready = new Promise<void>((r) => {
+          resolve = r;
+        });
+        const b = waitingPeer(createDoc(idB), { count: 2, onlyB: true }, ready);
+        try {
+          exchange(a.doc, b.doc);
+          await settled();
+          resolve();
+          await settled();
+          exchange(a.doc, b.doc);
+          await settled();
+
+          expect(a.store.getState()).toEqual({ count: 1, onlyB: true });
+          expect(b.store.getState()).toEqual({ count: 1, onlyB: true });
+        } finally {
+          a.engine.disconnect();
+          b.engine.disconnect();
+        }
+      });
+
       scenario(
         "late joiner adopts existing todos without wiping them (replica ids %i and %i)",
       ).each(replicaOrders, (idA, idB) => {

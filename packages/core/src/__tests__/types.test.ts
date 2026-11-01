@@ -151,6 +151,26 @@ describe("SyncEngineConfig", () => {
     expectTypeOf<{ omit: string[] }>().toExtend<SyncEngineConfig>();
   });
 
+  it("takes a promise or a function returning one as ready", () => {
+    const backend = createMemoryBackend();
+    const loaded: Promise<{ status: string }> = Promise.resolve({
+      status: "loaded",
+    });
+    createSyncEngine(backend, adapter(), { ready: loaded });
+    createSyncEngine(backend, adapter(), { ready: () => loaded });
+    createSyncEngine(backend, adapter(), {
+      ready: Promise.all([loaded, loaded]),
+      keys: ["todos"],
+    });
+    expectTypeOf({ backend, ready: loaded }).toExtend<
+      SetupOptions<TodoState>
+    >();
+    // @ts-expect-error ready is a promise or a function returning one
+    createSyncEngine(backend, adapter(), { ready: true });
+    // @ts-expect-error a function must return a promise
+    createSyncEngine(backend, adapter(), { ready: () => true });
+  });
+
   it("types SetupOptions by the state the same way", () => {
     const backend = createMemoryBackend();
     expectTypeOf({ backend, omit: ["length"] as const }).toExtend<

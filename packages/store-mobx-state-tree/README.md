@@ -53,11 +53,11 @@ engine.connect(); // sync again
 The node connects before the helper returns: a key the room holds replaces the node's value, and
 the keys the room lacks are seeded from the node unless `seed` is `"never"`.
 
-| Option                                                  | Default  | Description                                                   |
-| ------------------------------------------------------- | -------- | ------------------------------------------------------------- |
-| `backend`                                               |          | The `CrdtBackend` the node syncs with                         |
-| `connect`                                               | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below    |
-| `filter`, `keys`, `omit`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the node's snapshot |
+| Option                                                           | Default  | Description                                                   |
+| ---------------------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `backend`                                                        |          | The `CrdtBackend` the node syncs with                         |
+| `connect`                                                        | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below    |
+| `filter`, `keys`, `omit`, `seed`, `schedule`, `onError`, `ready` |          | The engine's `SyncEngineConfig`, typed by the node's snapshot |
 
 The helper syncs the node's snapshot: local changes go to the backend once per action, and remote
 changes are applied with `applySnapshot`, so instances with an identifier are reconciled in place
@@ -103,6 +103,10 @@ provider.once("sync", () => engine.connect());
 ```
 
 A deferred `connect()` like this one throws from its callback if it fires after `destroy(node)`.
+
+To connect right away and only hold back writes, pass [`ready`](https://homeostate.pages.dev/docs/core/sync-engine#waiting-for-the-room) instead of
+`connect: "manual"`: the node adopts remote changes as they arrive, and nothing is written until
+`ready` resolves.
 
 ### Without the helper
 

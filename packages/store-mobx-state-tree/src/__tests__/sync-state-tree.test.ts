@@ -735,3 +735,48 @@ describe("syncStateTree", () => {
     });
   });
 });
+
+describe("syncStateTree with ready", () => {
+  const settled = (): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve));
+
+  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
+    const backend = createMemoryBackend();
+    const node = TodoStore.create();
+    let resolve!: () => void;
+    const ready = new Promise<void>((r) => {
+      resolve = r;
+    });
+
+    const engine = syncStateTree(node, { backend, ready });
+
+    expect(engine.isConnected()).toBe(true);
+    expect(engine.isReady()).toBe(false);
+    expect(backend.read()).toEqual({});
+
+    backend.receive({ filter: "done" });
+    expect(node.filter).toBe("done");
+
+    resolve();
+    await settled();
+    expect(engine.isReady()).toBe(true);
+    expect(backend.read()).toEqual({ todos: [], filter: "done" });
+  });
+
+  it("does nothing when ready settles after the node is destroyed", async () => {
+    const backend = createMemoryBackend();
+    const node = TodoStore.create();
+    let resolve!: () => void;
+    const ready = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const engine = syncStateTree(node, { backend, ready });
+
+    destroy(node);
+    resolve();
+    await settled();
+
+    expect(engine.isConnected()).toBe(false);
+    expect(backend.read()).toEqual({});
+  });
+});

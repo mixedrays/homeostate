@@ -8,23 +8,36 @@ type CounterState = { count: number; increment: () => void };
 
 export const doc = new Y.Doc();
 
-export const useCounter = create<CounterState>()(
-  homeostate(
-    (set) => ({
-      count: 0,
-      increment: () => set((state) => ({ count: state.count + 1 })),
-    }),
-    { backend: createYjsBackend(doc, "shared"), connect: "manual" },
-  ),
-);
-
 export const provider = new WebsocketProvider(
   "ws://localhost:1234",
   "homeostate-counter",
   doc,
 );
 
-provider.once("sync", () => useCounter.homeostate.connect());
+/** Resolves once the provider has received the room's state. */
+const synced = (provider: WebsocketProvider) =>
+  new Promise<void>((resolve) => {
+    if (provider.synced) {
+      resolve();
+      return;
+    }
+    const onSync = (isSynced: boolean) => {
+      if (!isSynced) return;
+      provider.off("sync", onSync);
+      resolve();
+    };
+    provider.on("sync", onSync);
+  });
+
+export const useCounter = create<CounterState>()(
+  homeostate(
+    (set) => ({
+      count: 0,
+      increment: () => set((state) => ({ count: state.count + 1 })),
+    }),
+    { backend: createYjsBackend(doc, "shared"), ready: () => synced(provider) },
+  ),
+);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

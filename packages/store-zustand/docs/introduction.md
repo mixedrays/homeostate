@@ -49,11 +49,11 @@ useCounter.homeostate.disconnect(); // stop syncing
 
 The second argument holds the options, as in Zustand's own middlewares:
 
-| Option                                                  | Default  | Description                                                                                                    |
-| ------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `backend`                                               |          | The `CrdtBackend` the store syncs with                                                                         |
-| `connect`                                               | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below                                           |
-| `omit`, `keys`, `filter`, `seed`, `schedule`, `onError` |          | The engine's [`SyncEngineConfig`](../../core/docs/sync-engine.md#syncengineconfig), typed by the store's state |
+| Option                                                           | Default  | Description                                                                                                    |
+| ---------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `backend`                                                        |          | The `CrdtBackend` the store syncs with                                                                         |
+| `connect`                                                        | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below                                           |
+| `omit`, `keys`, `filter`, `seed`, `schedule`, `onError`, `ready` |          | The engine's [`SyncEngineConfig`](../../core/docs/sync-engine.md#syncengineconfig), typed by the store's state |
 
 `omit` and `keys` take the state's key names, so `{ backend, omit: ["draft"] }` keeps a draft
 on each device, and a misspelled key fails to compile.
@@ -77,6 +77,10 @@ provider.once("sync", () => useCounter.homeostate.connect());
 Until then the store works locally. Connecting then works as on any `connect()`: the room's
 values replace the store's for every key the room holds, edits made meanwhile included, and
 keys the room lacks seed it.
+
+To connect right away and only hold back writes, pass [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room) instead of
+`connect: "manual"`: the store adopts remote changes as they arrive, and nothing is written until
+`ready` resolves.
 
 To sync a store you already have, create the engine yourself with `createZustandAdapter`:
 
@@ -144,6 +148,9 @@ is `false`. Calling `store.homeostate.disconnect()` cancels the pending connect,
 finished. If hydration fails, the store stays disconnected, and Zustand passes the error to
 the callback returned by `onRehydrateStorage`; `store.persist.rehydrate()` retries, and the
 store connects once it succeeds.
+
+With [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), the store connects after
+hydrating as usual, and writes once `ready` has resolved too, whichever finishes first.
 
 Connecting then works as on any [`connect()`](/docs/concepts#connecting): the room wins over
 the persisted state, and persisted keys the room lacks seed it. So edits persisted while

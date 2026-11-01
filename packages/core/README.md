@@ -37,6 +37,10 @@ adopts the backend again, so edits made while disconnected to keys it holds are 
 Remote changes are applied to the store as they arrive. Pass
 `schedule: (flush) => queueMicrotask(flush)` to apply a burst of them with one store update.
 
+A provider delivers the room's state after `connect()`. Pass `ready`, a promise or a function
+returning one, to write nothing until it resolves, so a joining peer does not seed over the room;
+see [Waiting for the room](https://homeostate.pages.dev/docs/core/sync-engine#waiting-for-the-room).
+
 `createPersistence` keeps the CRDT document in browser storage so it survives reloads; see
 the [persistence guide](https://homeostate.pages.dev/docs/persistence).
 `@homeostate/core/testing` exports in-memory doubles for tests.

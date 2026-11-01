@@ -128,6 +128,34 @@ describe("createInspector", () => {
     expect(log[1].origin).toBe("remote");
   });
 
+  it("logs what reconciling after ready adopts as remote, not local", async () => {
+    const store = createTestStore<State>(initial());
+    const backend = createMemoryBackend();
+    let resolve!: () => void;
+    const ready = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const engine = createSyncEngine(backend, store.adapter, { ready });
+    inspector = createInspector({
+      name: "todos",
+      adapter: store.adapter,
+      backend,
+      engine,
+    });
+    inspector.start();
+    engine.connect();
+    await tick();
+    // A write of its own tells no subscriber, so reconciling is what brings it to the store.
+    backend.write({ filter: "active" });
+
+    resolve();
+    await tick();
+
+    const { log, store: inspected } = inspector.getSnapshot();
+    expect(inspected.filter).toBe("active");
+    expect(log.at(-1)?.origin).toBe("remote");
+  });
+
   it("writes an edit through the adapter, so the engine syncs it", async () => {
     const { store, backend, inspector } = setup();
     inspector.setAt(["todos", 0, "done"], true, "Edited todos[0].done");
