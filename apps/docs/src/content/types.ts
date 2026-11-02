@@ -2,7 +2,7 @@
 // import from a `.server.ts` module.
 
 export type GroupId =
-  "guides" | "core" | "crdt" | "store" | "persist" | "tools";
+  "guides" | "core" | "crdt" | "store" | "persist" | "frameworks" | "tools";
 
 export type PageKind = "guide" | "package" | "changelog";
 

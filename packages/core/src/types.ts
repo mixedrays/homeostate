@@ -271,6 +271,56 @@ export type SyncErrorSource = "store" | "backend" | "ready";
 export type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
 
 /**
+ * What went wrong in the sync engine, as `SyncStatus.failure` holds it. It is kept with or without
+ * `onError`, which it does not replace: `onError` still receives the error or, without it, the
+ * error still propagates.
+ */
+export interface SyncFailure {
+  /** What was thrown or rejected. It may be anything, `undefined` included. */
+  readonly error: unknown;
+  /**
+   * What the error came from, as `onError` is told. Missing for what comes from none of those
+   * sources, such as an error thrown by `filter`, `schedule` or `onError` itself.
+   */
+  readonly source?: SyncErrorSource;
+}
+
+/**
+ * The sync engine's own state, as `SyncEngine.getStatus` returns it. It describes the engine and
+ * says nothing about the network, since the engine does not know the provider: a provider that is
+ * offline, or a sync server that is down, changes no field.
+ */
+export interface SyncStatus {
+  /**
+   * What `isConnected()` returns: the engine is subscribed to the store and the backend, also
+   * while it waits for `ready`.
+   */
+  readonly connected: boolean;
+  /**
+   * What `isReady()` returns: a local change is written. Without the `ready` option it equals
+   * `connected`, so it says nothing about the room either.
+   */
+  readonly ready: boolean;
+  /**
+   * The failure the engine has not recovered from, or `null`. It is set by:
+   * - a failed write, read or `setState` while the engine syncs. The engine stays connected.
+   * - a `connect()` that throws, which leaves it disconnected.
+   * - a failed wait for `ready`: a rejection, or a failure while reconciling after it, which
+   *   disconnects it.
+   * - a `WriteLoopError`, in every build and with or without `onError`. The engine stays connected.
+   *   Unlike `onError`, the status shows a loop each time it comes back.
+   *
+   * A later `'local'`, `'remote'`, `'connect'` or `'ready'` sync event sent while connected clears
+   * it, since the store and the backend agree again, unless the apply that sent it stopped a write
+   * loop. `disconnect()` keeps it, to say why the engine stopped.
+   *
+   * It holds only what the engine has seen. A provider's errors never reach it, and it cannot
+   * clear while the store sends no notification.
+   */
+  readonly failure: SyncFailure | null;
+}
+
+/**
  * The sync engine interface - manages bidirectional sync between a store and a backend
  */
 export interface SyncEngine {
@@ -287,6 +337,23 @@ export interface SyncEngine {
    * `isConnected()`. Whichever the options, it is false while disconnected.
    */
   isReady: () => boolean;
+  /**
+   * The engine's status, which agrees with `isConnected()` and `isReady()` whenever it is read. It
+   * returns one object until a field changes, frozen, and the same object whenever the fields are
+   * those of an earlier status without a failure, so comparing by identity tells whether it
+   * changed. See `SyncStatus`.
+   */
+  getStatus: () => SyncStatus;
+  /**
+   * Calls `listener` after every change of `getStatus()`, until unsubscribed and across
+   * reconnects, and after the listeners of the sync event that came with the change. A local or
+   * remote change that leaves the status as it was calls nothing. Unlike `subscribe`, it also
+   * hears of a failure, which sends no sync event. A listener that changes
+   * the status tells every listener of the new status, and those it was to tell of the old one
+   * are not called. Each listener runs on its own: what it throws goes to `console.error`, and the
+   * other listeners still run.
+   */
+  subscribeStatus: (listener: () => void) => Unsubscribe;
   /**
    * The store's synced keys with the values the store holds, connected or not: a new object
    * holding the keys `filter`, `keys` and `omit` keep, without `__proto__`. Its values are the

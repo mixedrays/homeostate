@@ -21,6 +21,7 @@
     "@homeostate/tool-devtools": "workspace:^",
     "@homeostate/core": "workspace:^",
     "@homeostate/crdt-yjs": "workspace:^",
+    "@homeostate/react": "workspace:^",
     "@reduxjs/toolkit": "^2.11.0",
     "@tanstack/react-store": "^0.11.1",
     "@tanstack/store": "^0.11.1",

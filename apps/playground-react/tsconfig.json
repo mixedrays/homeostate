@@ -12,6 +12,7 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/crdt-yjs" },
+    { "path": "../../packages/react" },
     { "path": "../../packages/store-zustand" },
     { "path": "../../packages/store-mobx" },
     { "path": "../../packages/store-redux" },

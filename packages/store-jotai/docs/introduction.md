@@ -168,8 +168,9 @@ until it is discarded.
 With [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), the atom connects on mount and
 writes nothing until `ready` resolves, and a function is called on every mount, so a timer it
 starts runs from then. A rejected `ready` disconnects the engine and goes to `onError`, and the next
-mount tries again. `atomWithSync` exposes no engine, so `isReady()` is out of reach here; use
-`createJotaiAdapter` with `createSyncEngine` to show that status.
+mount tries again. `atomWithSync` exposes no engine, so `isReady()` and
+[`useSyncStatus`](../../react/docs/introduction.md) are out of reach here; use
+`createSyncEngine(backend, createJotaiAdapter(atom, store))` to show that status.
 
 Every peer sharing a room should sync the same set of atoms, as with the record form of
 `createJotaiAdapter`.

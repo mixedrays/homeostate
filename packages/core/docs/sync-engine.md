@@ -303,6 +303,8 @@ writing back keys the store keeps changing while remote changes are applied; see
 [Store adapters](/docs/concepts#store-adapters). Its `keys` names them, and each set of keys is
 reported once, in every build. Without `onError`, the engine warns once in development instead.
 
+However an error is reported, [`getStatus()`](#sync-status) keeps it until the engine recovers.
+
 ## SetupOptions
 
 ```ts
@@ -335,21 +337,36 @@ interface SyncEngine {
   disconnect: () => void;
   isConnected: () => boolean;
   isReady: () => boolean;
+  getStatus: () => SyncStatus;
+  subscribeStatus: (listener: () => void) => Unsubscribe;
   getSyncedState: () => Record<string, unknown>;
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
 
 type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
+
+interface SyncStatus {
+  readonly connected: boolean;
+  readonly ready: boolean;
+  readonly failure: SyncFailure | null;
+}
+
+interface SyncFailure {
+  readonly error: unknown;
+  readonly source?: SyncErrorSource;
+}
 ```
 
-| Method                | Returns                   | Behavior                                                                                                                                                                        |
-| --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connect()`           | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
-| `disconnect()`        | `void`                    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `isConnected()`       | `boolean`                 | Whether the engine is subscribed, so also while it waits for `ready`. This does not report network connectivity or whether a provider has received the room's state.            |
-| `isReady()`           | `boolean`                 | Whether the engine is connected and done reconciling, so that local changes are written. See below.                                                                             |
-| `getSyncedState()`    | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                   |
-| `subscribe(listener)` | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                 |
+| Method                      | Returns                   | Behavior                                                                                                                                                                        |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`                 | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
+| `disconnect()`              | `void`                    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
+| `isConnected()`             | `boolean`                 | Whether the engine is subscribed, so also while it waits for `ready`. This does not report network connectivity or whether a provider has received the room's state.            |
+| `isReady()`                 | `boolean`                 | Whether the engine is connected and done reconciling, so that local changes are written. See below.                                                                             |
+| `getStatus()`               | `SyncStatus`              | The engine's status, with what went wrong. It says nothing about the network. See [Sync status](#sync-status).                                                                  |
+| `subscribeStatus(listener)` | `Unsubscribe`             | Calls `listener` after every change of `getStatus()`, also for a failure, until unsubscribed. See [Sync status](#sync-status).                                                  |
+| `getSyncedState()`          | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                   |
+| `subscribe(listener)`       | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                 |
 
 After connection, each local notification writes the full filtered store state to the
 backend, along with what the backend holds, so the backend can diff against it instead of
@@ -403,6 +420,66 @@ changes nothing. Listeners run inside a store's or a document's notification loo
 such as Zustand's, stop at the first throw, so each listener runs on its own: what it throws goes
 to `console.error`, and the other listeners and the store's subscribers still run. A listener
 unsubscribed by an earlier one during the same event is not called.
+
+### Sync status
+
+`getStatus()` says what the engine has done, and `subscribeStatus` says when that changes, so a
+component can disable editing during a wait or show that a change did not sync. For React, use
+[`useSyncStatus`](../../react/docs/introduction.md).
+
+```ts
+const unsubscribe = engine.subscribeStatus(() => {
+  const { ready, failure } = engine.getStatus();
+  saveButton.disabled = !ready;
+  if (failure) report(failure.error, failure.source);
+});
+```
+
+> [!WARNING]
+> The status describes the engine and says nothing about the network. `connected` means the engine
+> is subscribed to the store and the backend, and it stays `true` while the provider is offline or
+> the sync server is down. Without the [`ready`](#waiting-for-the-room) option, `ready` equals
+> `connected` and says no more. Read the provider's own state to show whether a peer is online.
+
+| Field       | Value                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `connected` | What `isConnected()` returns.                                                                                                                          |
+| `ready`     | What `isReady()` returns. With the `ready` option, `false` during every wait, and a `ready` that races a timeout makes it `true` with the server down. |
+| `failure`   | What went wrong and what it came from, or `null`. `error` may be anything, even `undefined` for a `ready` rejected with no reason, so test `failure`.  |
+
+`getStatus()` agrees with `isConnected()` and `isReady()` whenever it is read, also from a store
+subscriber or a listener during reconciliation. It returns a frozen object, the same one until a
+field changes, so comparing by identity tells whether it changed: `useSyncExternalStore` needs
+that. Local and remote changes alone do not call `subscribeStatus` listeners, which run after the
+listeners of the sync event that came with the change. A listener that changes the status tells
+every listener of the new status, and each listener runs on its own, as with `subscribe`.
+
+#### What sets and clears a failure
+
+The engine keeps a failure with or without `onError`, which works as it did: `onError` is still
+called, or the error still propagates. Unlike a sync event, a failure reaches `subscribeStatus`
+listeners, and a component mounted later can still read it.
+
+| Failure                                                                          | Status while it stands        | Cleared by                                                          |
+| -------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------- |
+| A failed write, or a failed read or `setState`, while syncing                    | Connected                     | The next `"local"` or `"remote"` event                              |
+| `connect()` throws, also a `ready` function that throws                          | Disconnected                  | The next `connect()` that connects                                  |
+| `ready` rejects, or reconciling or a pending apply then fails                    | Disconnected                  | The next `connect()` that connects, also while it waits             |
+| A pending apply fails in `disconnect()`                                          | Connected, then disconnected  | The next `connect()` that connects                                  |
+| [`WriteLoopError`](#reporting-errors), in every build, with or without `onError` | Connected                     | An apply that stops no loop, a written local change, or a reconnect |
+| `filter` or `schedule` throws                                                    | Connected, without a `source` | The next `"local"` or `"remote"` event                              |
+
+`"ready"` clears a failure too, and `disconnect()` keeps one, to say why the engine stopped. `onError`
+hears of a write loop once per set of keys, but the status shows it each time it comes back.
+
+The status holds only what reaches the engine:
+
+- A provider's errors never do.
+- A setup helper that throws before the engine runs, as `syncStateTree` does for a destroyed node,
+  records nothing.
+- A failure clears only once the engine hears of another change. With MobX-State-Tree and no
+  `onError`, a failed write can stop the node's notifications, so the failure stays and later
+  changes are not written. Pass `onError` there.
 
 ### Synced state
 
