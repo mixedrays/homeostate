@@ -29,6 +29,7 @@ export const groups: { id: GroupId; title: string; role?: string }[] = [
   { id: "crdt", title: "CRDT backends", role: "CRDT backend" },
   { id: "store", title: "Store adapters", role: "store adapter" },
   { id: "persist", title: "Persistence", role: "persistence adapter" },
+  { id: "frameworks", title: "UI frameworks", role: "bindings" },
   { id: "tools", title: "Tools" },
 ];
 
@@ -48,6 +49,7 @@ export const packageNav: Record<string, { label: string; order: number }> = {
   "store-ngrx-signals": { label: "NgRx Signals", order: 8 },
   "persist-indexeddb": { label: "IndexedDB", order: 1 },
   "persist-local-storage": { label: "localStorage", order: 2 },
+  react: { label: "React", order: 1 },
   "tool-devtools": { label: "Devtools", order: 1 },
   "tool-simulator": { label: "Simulator", order: 2 },
 };

@@ -763,6 +763,23 @@ describe("syncStateTree with ready", () => {
     expect(backend.read()).toEqual({ todos: [], filter: "done" });
   });
 
+  it("forwards the engine's status, which shows the node's destroy", () => {
+    const node = TodoStore.create();
+    const engine = syncStateTree(node, { backend: createMemoryBackend() });
+    const listener = vi.fn();
+    engine.subscribeStatus(listener);
+    expect(engine.getStatus()).toEqual({
+      connected: true,
+      ready: true,
+      failure: null,
+    });
+
+    destroy(node);
+
+    expect(engine.getStatus().connected).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it("does nothing when ready settles after the node is destroyed", async () => {
     const backend = createMemoryBackend();
     const node = TodoStore.create();

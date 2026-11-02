@@ -5,6 +5,8 @@ import type {
   SyncEngineConfig,
   SyncErrorSource,
   SyncEvent,
+  SyncFailure,
+  SyncStatus,
   Unsubscribe,
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
@@ -50,6 +52,23 @@ const expectRecord = (
     `${contract} must return ${expected}, got ${kindOf(value)}`,
   );
 };
+
+/** The statuses that hold no failure, shared so that equal fields mean the same object. */
+const DISCONNECTED: SyncStatus = Object.freeze({
+  connected: false,
+  ready: false,
+  failure: null,
+});
+const WAITING: SyncStatus = Object.freeze({
+  connected: true,
+  ready: false,
+  failure: null,
+});
+const READY: SyncStatus = Object.freeze({
+  connected: true,
+  ready: true,
+  failure: null,
+});
 
 /** Why the engine stopped writing back `keys`, and what the store must do instead. */
 const loopMessage = (keys: string[]): string =>
@@ -143,7 +162,8 @@ const syncPredicate = ({
  * that does not return an object. Once connected, what the adapter or the backend throws goes to
  * `onError` when it is given, and otherwise to whoever triggered the work, as before. A rejected
  * `ready`, or a failure while reconciling after it, disconnects the engine and goes to `onError`,
- * and without it surfaces as an unhandled rejection.
+ * and without it surfaces as an unhandled rejection. Whichever way an error goes, `getStatus()`
+ * keeps it until the engine recovers; see `SyncStatus`.
  *
  * @example
  * ```typescript
@@ -190,12 +210,63 @@ export function createSyncEngine<S extends object>(
    * wrote and the keys in which that differs from the remote state the store was given.
    */
   let lastWriteBack: { written: Plain; keys: string[] } | null = null;
-  /** The key lists of the loops already reported, so each is reported once. */
-  const reportedLoops = new Set<string>();
+  /** The loops already reported, by their key lists, so each is reported once. */
+  const reportedLoops = new Map<string, SyncFailure>();
   /** The side whose call threw the error now on its way out of the engine; see `call`. */
   let thrownBy: SyncErrorSource | undefined;
   /** What `subscribe` was given; kept across reconnects. */
   const listeners = new Set<(event: SyncEvent) => void>();
+  /** What `subscribeStatus` was given; kept across reconnects. */
+  const statusListeners = new Set<() => void>();
+
+  /** The last failure the engine has not recovered from. */
+  let failure: SyncFailure | null = null;
+  /** Whether the apply in progress stopped a write loop, which leaves `failure` standing. */
+  let stoppedLoop = false;
+  /** What `getStatus` returned last with a failure. */
+  let failedStatus: SyncStatus | null = null;
+
+  const getStatus = (): SyncStatus => {
+    const healthy = !connected ? DISCONNECTED : reconciled ? READY : WAITING;
+    if (failure === null) return healthy;
+    if (
+      failedStatus?.failure !== failure ||
+      failedStatus.connected !== healthy.connected ||
+      failedStatus.ready !== healthy.ready
+    ) {
+      failedStatus = Object.freeze({ ...healthy, failure });
+    }
+    return failedStatus;
+  };
+
+  /** The status `statusListeners` heard last. */
+  let published = getStatus();
+
+  /** Tells every status listener, if the status changed since they last heard. */
+  const publishStatus = (): void => {
+    const status = getStatus();
+    if (status === published) return;
+    published = status;
+    for (const listener of [...statusListeners]) {
+      // A listener changed the status again, and that change has told everyone.
+      if (published !== status) return;
+      if (!statusListeners.has(listener)) continue;
+      try {
+        listener();
+      } catch (error) {
+        console.error("[homeostate] a status listener threw:", error);
+      }
+    }
+  };
+
+  /** Keeps `error` as the status's failure, and tells the status listeners. */
+  const recordFailure = (
+    error: unknown,
+    source: SyncErrorSource | undefined,
+  ): void => {
+    failure = { error, source };
+    publishStatus();
+  };
 
   // `connect()` may come long after a promise rejects, and until then nothing else handles it.
   if (typeof ready === "object") ready.then(undefined, () => {});
@@ -206,7 +277,11 @@ export function createSyncEngine<S extends object>(
    * it throws is logged and the other listeners still run.
    */
   const emit = (event: SyncEvent): void => {
-    if (listeners.size === 0) return;
+    // What the event reports has completed, so the store and the backend agree again, unless the
+    // engine has just stopped writing back keys that differ. A disconnected engine keeps its
+    // failure, to say why it stopped.
+    if (connected && !stoppedLoop) failure = null;
+    stoppedLoop = false;
     for (const listener of [...listeners]) {
       // One unsubscribed by an earlier listener hears nothing more.
       if (!listeners.has(listener)) continue;
@@ -216,6 +291,7 @@ export function createSyncEngine<S extends object>(
         console.error("[homeostate] a sync event listener threw:", error);
       }
     }
+    publishStatus();
   };
 
   /** Runs `run`, a call into the store adapter or the backend, recording `source` if it throws. */
@@ -240,6 +316,7 @@ export function createSyncEngine<S extends object>(
     } catch (error) {
       const source = thrownBy;
       thrownBy = undefined;
+      recordFailure(error, source);
       if (onError === undefined || source === undefined) throw error;
       onError(error, source);
     }
@@ -378,19 +455,25 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Reports a stopped loop once per set of keys: to `onError` in every build, and otherwise
-   * with a warning in development.
+   * Keeps a stopped loop as the status's failure, each time it comes back, and reports it once per
+   * set of keys: to `onError` in every build, and otherwise with a warning in development. The
+   * `'remote'` event that ends the apply tells the status listeners.
    */
   const reportLoop = (keys: string[]): void => {
     const id = JSON.stringify([...keys].sort());
-    if (reportedLoops.has(id)) return;
-    if (onError !== undefined) {
-      reportedLoops.add(id);
-      onError(new WriteLoopError(keys), "store");
-    } else if (!isProduction()) {
-      reportedLoops.add(id);
-      console.warn(`[homeostate] ${loopMessage(keys)}`);
+    const reported = reportedLoops.get(id);
+    const loop = reported ?? {
+      error: new WriteLoopError(keys),
+      source: "store",
+    };
+    reportedLoops.set(id, loop);
+    failure = loop;
+    if (reported === undefined) {
+      if (onError !== undefined) onError(loop.error, "store");
+      else if (!isProduction())
+        console.warn(`[homeostate] ${loopMessage(keys)}`);
     }
+    stoppedLoop = true;
   };
 
   const syncToStore = (): void => {
@@ -549,6 +632,8 @@ export function createSyncEngine<S extends object>(
   ): void => {
     applyPending = false;
     scheduledFlush = null;
+    // Not published on its own: `'disconnect'` tells of both changes at once.
+    failure = { error, source };
     stopSyncing();
     if (onError === undefined || source === undefined) throw error;
     onError(error, source);
@@ -587,7 +672,14 @@ export function createSyncEngine<S extends object>(
     connect: (): void => {
       if (connected) return;
 
-      const settling = typeof ready === "function" ? ready() : ready;
+      thrownBy = undefined;
+      let settling: PromiseLike<unknown> | undefined;
+      try {
+        settling = typeof ready === "function" ? ready() : ready;
+      } catch (error) {
+        recordFailure(error, "ready");
+        throw error;
+      }
       const wait = settling === undefined ? null : {};
       waiting = wait;
       changedWhileWaiting = false;
@@ -600,13 +692,18 @@ export function createSyncEngine<S extends object>(
       }
       try {
         reconcile(wait === null && seed === "if-empty");
-        backendUnsubscribe = backend.subscribe(() => guarded(onRemoteChange));
-        storeUnsubscribe = adapter.subscribe(() => guarded(syncToBackend));
+        backendUnsubscribe = call("backend", () =>
+          backend.subscribe(() => guarded(onRemoteChange)),
+        );
+        storeUnsubscribe = call("store", () =>
+          adapter.subscribe(() => guarded(syncToBackend)),
+        );
       } catch (error) {
         // `disconnect()` cannot reach a subscription made before the throw, so drop it here.
         unsubscribeAll();
         lastSynced = undefined;
         waiting = null;
+        recordFailure(error, thrownBy);
         throw error;
       }
       connected = true;
@@ -630,6 +727,15 @@ export function createSyncEngine<S extends object>(
     isConnected: (): boolean => connected,
 
     isReady: (): boolean => reconciled,
+
+    getStatus,
+
+    subscribeStatus: (listener): Unsubscribe => {
+      statusListeners.add(listener);
+      return () => {
+        statusListeners.delete(listener);
+      };
+    },
 
     getSyncedState: (): Plain => filterState(readStore()),
 

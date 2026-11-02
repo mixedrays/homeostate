@@ -90,6 +90,7 @@ function includeDrafts() {
 
 function groupOf(slug: string): GroupId {
   if (slug === "core") return "core";
+  if (slug === "react") return "frameworks";
   if (slug.startsWith("crdt-")) return "crdt";
   if (slug.startsWith("store-")) return "store";
   if (slug.startsWith("persist-")) return "persist";

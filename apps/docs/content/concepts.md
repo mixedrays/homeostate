@@ -26,6 +26,10 @@ Besides `isConnected()`, the engine reports a sync event after each local change
 remote change it applies, connect and disconnect, and `getSyncedState()` returns the store's
 synced keys; see [Sync events](../../../packages/core/docs/sync-engine.md#sync-events).
 
+`getStatus()` gathers what the engine has done and what went wrong, and `subscribeStatus` says when
+that changes; see [Sync status](../../../packages/core/docs/sync-engine.md#sync-status). It says
+nothing about the network.
+
 ## Store adapters
 
 A `StoreAdapter` reads, replaces and watches the store:

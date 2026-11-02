@@ -150,6 +150,15 @@ A notification the sync engine sends once it has handled a local change, a remot
 A local change that first runs a pending apply is reported as a remote change, because the remote changes replace what it did to synced keys.
 _Avoid_: Engine event, sync notification
 
+**Sync status**:
+The `SyncStatus` that `getStatus()` returns: whether the sync engine is connected, whether it is ready, and its sync failure. It describes the engine, never the network: a provider that is offline changes no field.
+_Avoid_: Connection status, sync state
+
+**Sync failure**:
+The `SyncFailure` a sync status holds: what went wrong in the sync engine, and its source, until the engine recovers. The next completed write, apply or connect clears it, unless that apply stops a write loop, and `disconnect()` keeps it.
+A sync failure records an error; it does not replace `onError` or stop the error propagating.
+_Avoid_: Sync error, last error
+
 **Pending apply**:
 Remote changes the CRDT backend holds and the sync engine has not applied to the store yet: those its `schedule` option defers to the next flush, which applies them all with one read of the backend, and those another listener of the document hears of before the engine. A local change made meanwhile runs the apply first, which overrides what that change did to synced keys.
 _Avoid_: Queued update, batch
@@ -314,6 +323,10 @@ _Avoid_: Plugin, extension
 
 **Tool package**:
 A `tool-*` package for developing with Homeostate rather than shipping it: the devtools and the simulator.
+
+**Framework binding**:
+A package that lets one UI framework read Homeostate, so that core needs no knowledge of it: `@homeostate/react` is the only one, with the `useSyncStatus` hook.
+_Avoid_: Integration package, plugin
 
 **Setup helper**:
 The one call in a `store-*` package that creates the store adapter and the sync engine for one store, taking the store, or what builds it, and one options object with the CRDT backend. It connects the engine itself unless its `connect` option is `"manual"`, which leaves connect to the app.

@@ -37,5 +37,7 @@ export type {
   SyncEngineConfig,
   SyncErrorSource,
   SyncEvent,
+  SyncFailure,
+  SyncStatus,
   Unsubscribe,
 } from "./types.js";

@@ -100,6 +100,31 @@ describe("homeostate middleware", () => {
     expect(store.homeostate.isConnected()).toBe(false);
   });
 
+  it("forwards the engine's status", () => {
+    const store = createStore<CounterState>()(
+      homeostate(
+        (set) => ({
+          count: 0,
+          increment: () => set((s) => ({ count: s.count + 1 })),
+        }),
+        { backend: createMemoryBackend(), connect: "manual" },
+      ),
+    );
+    const listener = vi.fn();
+    const unsubscribe = store.homeostate.subscribeStatus(listener);
+    expect(store.homeostate.getStatus().connected).toBe(false);
+
+    store.homeostate.connect();
+
+    expect(store.homeostate.getStatus()).toEqual({
+      connected: true,
+      ready: true,
+      failure: null,
+    });
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
   it("forwards the engine's sync events and synced state", () => {
     const backend = createMemoryBackend();
     const store = createStore<CounterState>()(
