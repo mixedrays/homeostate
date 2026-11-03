@@ -441,7 +441,7 @@ export interface PersistenceConfig {
   key: string;
   /**
    * Number of appended updates after which the stored log is merged into one snapshot;
-   * defaults to 100. `Infinity` only compacts on load.
+   * defaults to 100. `Infinity` only compacts on load and to repair a failed write.
    */
   compactAfter?: number;
   /**
@@ -496,17 +496,19 @@ export interface Persistence {
   whenLoaded: Promise<PersistenceLoadResult>;
   /**
    * Resolves once the work queued so far is done and every update reported so far is stored.
-   * Otherwise rejects with the error of the earliest failed write not repaired since: an
-   * append, the initial load or the initial snapshot, also one that failed before this call.
-   * A later snapshot, from any compaction, or `clear()` repairs it. Updates reported after
-   * the call need another one.
+   * A failed write not repaired since, also one that failed before this call, makes it compact
+   * once first, to store the whole document again. When that fails too, which goes to
+   * `onError`, it rejects with the error of the earliest unrepaired write: an append, the
+   * initial load or the initial snapshot. Any later snapshot, or `clear()`, repairs it too.
+   * Updates reported after the call need another one.
    */
   flush: () => Promise<void>;
   /**
    * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
    * once it is written, and rejects with the storage error when it fails; does nothing once
    * storing has stopped. Keeps the log, after `onError`, when one of its updates cannot be
-   * applied, and still resolves.
+   * applied, and still resolves; it appends the snapshot then while a failed write is
+   * unrepaired.
    */
   compact: () => Promise<void>;
   /**
@@ -516,7 +518,8 @@ export interface Persistence {
   stats: () => Promise<PersistenceStats>;
   /**
    * Stop storing updates; stored data is kept. Settles once pending writes finish, as `flush()`
-   * does; storing stops even when it rejects.
+   * does, after the same repair of a failed write; storing stops even when it rejects, and
+   * later calls, or `flush()`, repair nothing more.
    */
   destroy: () => Promise<void>;
   /**

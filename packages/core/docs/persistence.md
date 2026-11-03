@@ -159,7 +159,9 @@ or pass `whenLoaded.then(() => {})` to keep `void`.
 Waits for storage work queued at the time of the call, including any compaction it
 triggers. Updates arriving later need another call.
 
-It resolves when every update reported so far is stored, and otherwise rejects; see
+While a failed write is unrepaired, it first compacts once to
+[repair it](#repairing-a-failed-write). It resolves when every update reported so far is
+stored, and otherwise rejects; see
 [which failures a barrier reports](#which-failures-a-barrier-reports).
 
 ### compact
@@ -167,7 +169,8 @@ It resolves when every update reported so far is stored, and otherwise rejects; 
 Queues a compaction now, as every `compactAfter` appends do, and resolves once it is written.
 It rejects with the storage error when loading the log or writing the snapshot fails. When a
 stored update cannot be applied, its error goes to `onError` and the log is not compacted,
-though the promise still resolves. After `destroy()` or `clear()` it does nothing.
+though the promise still resolves; while a failed write is unrepaired, the snapshot is
+appended to the log instead. After `destroy()` or `clear()` it does nothing.
 
 ### stats
 
@@ -180,7 +183,8 @@ the other methods, it rejects when storage cannot be read, rather than calling `
 ### destroy
 
 Stops storing updates immediately and waits for queued work; calling it again is safe. It
-settles as [`flush()`](#flush) does, and storing stops even when it rejects. The stored data
+settles as [`flush()`](#flush) does, after the same repair of a failed write, and storing stops
+even when it rejects: later calls, and `flush()` after it, repair nothing more. The stored data
 stays for a later `createPersistence` with the same adapter and key. It does not
 destroy the document, disconnect its provider or sync engine, or close the storage adapter.
 
@@ -216,18 +220,40 @@ already gone to `onError`. `whenLoaded` never rejects: it resolves with the
 [load result](#persistenceloadresult) instead. `stats()` rejects only when storage cannot be
 read.
 
+#### Repairing a failed write
+
+A CRDT update can depend on earlier ones, so the updates stored after a failed append may not
+restore without it: Yjs, Loro and Automerge keep such an update waiting for the change it
+depends on, and a reload misses every edit since the failure. Storing later updates does not
+fill the gap, so persistence repairs a failed write, or a failed initial load or snapshot, by
+storing a snapshot of the whole document again with a compaction, which keeps the updates other
+writers appended meanwhile. It compacts once:
+
+- after the next append that succeeds, since storage works again;
+- on each `flush()`, and on the `destroy()` call that stops storing, while the failure is
+  unrepaired.
+
+Like every compaction, a repair first merges the stored log into the document, so after a
+`'failed'` initial load it also restores what storage holds, once storage can be read again.
+When the log holds an update the document cannot apply, the compaction keeps the log, as it
+always does, and appends the snapshot to it instead. A repair that fails goes to `onError` like
+any other storage failure. Another one waits for the next failed append or barrier, so storage
+that keeps failing causes no retry loop, and `destroy()` waits for at most one.
+
 #### Which failures a barrier reports
 
-`flush()` and `destroy()` reject while storage may be missing an update the document
-reported: after a failed append, or a failed initial load or initial snapshot, which may leave
-what the document held before it was persisted unstored. This includes failures that happened
-before the call, and it rejects with the earliest such failure's error. Concurrent barriers
-reject alike, and `onError` is not called again.
+`flush()` and `destroy()` reject while storage may still be missing an update the document
+reported after their own [repair](#repairing-a-failed-write): after a failed append, or a
+failed initial load or initial snapshot, which may leave what the document held before it was
+persisted unstored. This includes failures that happened before the call, and it rejects with
+the earliest such failure's error, not the repair's, which only goes to `onError`. Concurrent
+barriers each try one repair and reject alike.
 
 A failure stops affecting barriers once storage holds its update again: when a compaction
-writes a snapshot of the document, whether initial, automatic or from `compact()`, or the
-initial load appends one, or `clear()` removes the stored document. A barrier whose own queued
-work includes such a snapshot resolves. The operation that failed keeps its rejection.
+writes a snapshot of the document, whether initial, automatic, a repair or from `compact()`, or
+a compaction that keeps the log appends one, or `clear()` removes the stored document. A
+barrier whose own queued work includes such a snapshot resolves. The operation that failed
+keeps its rejection.
 
 A failed automatic compaction leaves the log as it was, so it reports to `onError` without
 making barriers reject; neither does an update that cannot be applied.
@@ -242,7 +268,8 @@ so the document holds what could be restored, and the stored log is kept as it i
 - The initial load does not compact the log. It appends a snapshot of the document instead,
   so what the document held before it was persisted is still stored.
 - Automatic and explicit compactions load the log again, report the same error again, and
-  leave the log in place.
+  leave the log in place. While a failed write is unrepaired, they append a snapshot of the
+  document to it, as the initial load does.
 - Updates made after the load are appended as usual, and entries other writers stored remain.
 
 The unreadable bytes stay available through the adapter's `load(key)` until something deletes

@@ -545,7 +545,33 @@ describe("createPersistence", () => {
     expect((await restore(adapter)).doc.ops()).toEqual(["a"]);
   });
 
-  it("reports a failed append, rejects flush and keeps storing later updates", async () => {
+  it("appends a snapshot to store a failed append when it keeps a log it cannot apply", async () => {
+    const memory = createMemoryPersistenceAdapter();
+    const corrupt = encoder.encode("not json");
+    await memory.append("doc", corrupt);
+    const append = vi.fn(memory.append);
+    const doc = createToyDoc();
+    const persistence = createPersistence(
+      doc,
+      { ...memory, append },
+      { key: "doc", onError: vi.fn() },
+    );
+    await persistence.flush();
+    append.mockRejectedValueOnce(new Error("quota exceeded"));
+    doc.add("lost");
+
+    await expect(persistence.flush()).resolves.toBeUndefined();
+
+    expect(await storedPrefix(memory, 1)).toEqual([corrupt]);
+    const restored = createToyDoc();
+    await createPersistence(restored, memory, {
+      key: "doc",
+      onError: vi.fn(),
+    }).whenLoaded;
+    expect(restored.ops()).toEqual(["lost"]);
+  });
+
+  it("reports a failed append and stores it again with a compaction after the next append", async () => {
     const error = new Error("quota exceeded");
     const onError = vi.fn();
     const memory = createMemoryPersistenceAdapter();
@@ -562,47 +588,143 @@ describe("createPersistence", () => {
 
     doc.add("lost");
     doc.add("kept");
-    await expect(persistence.flush()).rejects.toBe(error);
+    await expect(persistence.flush()).resolves.toBeUndefined();
 
     expect(onError).toHaveBeenCalledOnce();
     expect(onError).toHaveBeenCalledWith(error);
-    expect((await restore(memory)).doc.ops()).toEqual(["kept"]);
+    expect(memory.size("doc")).toBe(1);
+    expect((await restore(memory)).doc.ops()).toEqual(["kept", "lost"]);
   });
 
-  it("keeps rejecting barriers for a failed append that settled before them", async () => {
-    const error = new Error("quota exceeded");
-    const onError = vi.fn();
+  it("compacts once after a failed append, not after every later one, when the compaction fails too", async () => {
     const memory = createMemoryPersistenceAdapter();
-    const append = vi.fn(memory.append).mockRejectedValueOnce(error);
+    const append = vi
+      .fn(memory.append)
+      .mockRejectedValueOnce(new Error("quota exceeded"));
+    const compact = vi.fn(memory.compact);
     const doc = createToyDoc();
     const persistence = createPersistence(
       doc,
-      { ...memory, append },
+      { ...memory, append, compact },
+      { key: "doc", onError: vi.fn() },
+    );
+    await persistence.flush();
+    compact.mockRejectedValue(new Error("quota exceeded"));
+
+    for (const op of ["lost", "a", "b", "c"]) doc.add(op);
+    await persistence.flush().catch(() => {});
+
+    // The initial snapshot, the one after "a", and the one of the flush.
+    expect(compact).toHaveBeenCalledTimes(3);
+    expect(append).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps edits and other writers' updates that arrive while a failed append is repaired", async () => {
+    const memory = createMemoryPersistenceAdapter();
+    const append = vi
+      .fn(memory.append)
+      .mockRejectedValueOnce(new Error("quota exceeded"));
+    let whileCompacting: (() => Promise<void>) | undefined;
+    const compact: PersistenceAdapter["compact"] = async (...args) => {
+      await whileCompacting?.();
+      return memory.compact(...args);
+    };
+    const doc = createToyDoc();
+    const persistence = createPersistence(
+      doc,
+      { ...memory, append, compact },
+      { key: "doc", onError: vi.fn() },
+    );
+    await persistence.flush();
+    whileCompacting = async () => {
+      whileCompacting = undefined;
+      doc.add("local");
+      doc.receive(createToyDoc(["peer"]).encode());
+      await memory.append("doc", createToyDoc(["other"]).encode());
+    };
+
+    doc.add("lost");
+    doc.add("kept");
+    await expect(persistence.flush()).resolves.toBeUndefined();
+    await persistence.destroy();
+
+    expect((await restore(memory)).doc.ops()).toEqual([
+      "kept",
+      "local",
+      "lost",
+      "other",
+      "peer",
+    ]);
+  });
+
+  it.each(["flush", "destroy"] as const)(
+    "stores a failed append no later append repaired with a compaction on %s",
+    async (barrier) => {
+      const onError = vi.fn();
+      const memory = createMemoryPersistenceAdapter();
+      const append = vi
+        .fn(memory.append)
+        .mockRejectedValueOnce(new Error("quota exceeded"));
+      const doc = createToyDoc();
+      const persistence = createPersistence(
+        doc,
+        { ...memory, append },
+        { key: "doc", onError },
+      );
+      doc.add("lost");
+
+      await expect(persistence[barrier]()).resolves.toBeUndefined();
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(memory.size("doc")).toBe(1);
+      expect((await restore(memory)).doc.ops()).toEqual(["lost"]);
+    },
+  );
+
+  it("keeps rejecting barriers with a failed append's error while compacting fails, trying once each", async () => {
+    const error = new Error("quota exceeded");
+    const compactError = new Error("still full");
+    const onError = vi.fn();
+    const memory = createMemoryPersistenceAdapter();
+    const append = vi.fn(memory.append).mockRejectedValueOnce(error);
+    const compact = vi.fn(memory.compact);
+    const doc = createToyDoc();
+    const persistence = createPersistence(
+      doc,
+      { ...memory, append, compact },
       { key: "doc", onError },
     );
-    await persistence.whenLoaded;
+    await persistence.flush();
+    compact.mockRejectedValue(compactError);
     doc.add("lost");
     await vi.waitFor(() => expect(onError).toHaveBeenCalled());
-    doc.add("kept");
 
     const barriers = [persistence.flush(), persistence.flush()];
     await expect(barriers[0]).rejects.toBe(error);
     await expect(barriers[1]).rejects.toBe(error);
     await expect(persistence.destroy()).rejects.toBe(error);
 
-    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls).toEqual([
+      [error],
+      [compactError],
+      [compactError],
+      [compactError],
+    ]);
   });
 
   it("resolves later barriers once a compaction stores the update that failed", async () => {
     const error = new Error("quota exceeded");
     const memory = createMemoryPersistenceAdapter();
     const append = vi.fn(memory.append).mockRejectedValueOnce(error);
+    const compact = vi.fn(memory.compact);
     const doc = createToyDoc();
     const persistence = createPersistence(
       doc,
-      { ...memory, append },
+      { ...memory, append, compact },
       { key: "doc", onError: vi.fn() },
     );
+    await persistence.flush();
+    compact.mockRejectedValueOnce(new Error("still full"));
     doc.add("lost");
     await expect(persistence.flush()).rejects.toBe(error);
 
@@ -629,7 +751,7 @@ describe("createPersistence", () => {
     expect((await restore(memory)).doc.ops()).toEqual(["a", "b", "c"]);
   });
 
-  it("rejects barriers when the initial load fails", async () => {
+  it("rejects barriers when the initial load fails and storage still cannot be read", async () => {
     const error = new Error("storage unavailable");
     const onError = vi.fn();
     const adapter: PersistenceAdapter = {
@@ -646,14 +768,15 @@ describe("createPersistence", () => {
       error,
     });
     await expect(persistence.flush()).rejects.toBe(error);
-    expect(onError).toHaveBeenCalledOnce();
+    // The initial load, then the compaction of the flush.
+    expect(onError).toHaveBeenCalledTimes(2);
   });
 
   it("rejects barriers when the initial snapshot cannot be written, which the load result leaves out", async () => {
     const error = new Error("quota exceeded");
     const memory = createMemoryPersistenceAdapter();
     await memory.append("doc", createToyDoc(["stored"]).encode());
-    const compact = vi.fn(memory.compact).mockRejectedValueOnce(error);
+    const compact = vi.fn(memory.compact).mockRejectedValue(error);
     const persistence = createPersistence(
       createToyDoc(["seed"]),
       { ...memory, compact },
@@ -690,14 +813,16 @@ describe("createPersistence", () => {
     const error = new Error("quota exceeded");
     const memory = createMemoryPersistenceAdapter();
     const append = vi.fn(memory.append);
+    const compact = vi.fn(memory.compact);
     const doc = createToyDoc();
     const persistence = createPersistence(
       doc,
-      { ...memory, append },
+      { ...memory, append, compact },
       { key: "doc", onError: vi.fn() },
     );
     await persistence.flush();
     append.mockRejectedValueOnce(error);
+    compact.mockRejectedValue(new Error("still full"));
 
     const earlier = persistence.flush();
     doc.add("lost");
@@ -706,24 +831,30 @@ describe("createPersistence", () => {
     await expect(persistence.flush()).rejects.toBe(error);
   });
 
-  it("stops storing on destroy even when pending writes failed", async () => {
+  it("stops storing on destroy even when pending writes failed, also through later barriers", async () => {
     const error = new Error("quota exceeded");
     const memory = createMemoryPersistenceAdapter();
     const append = vi.fn(memory.append).mockRejectedValueOnce(error);
+    const compact = vi.fn(memory.compact);
     const doc = createToyDoc();
     const persistence = createPersistence(
       doc,
-      { ...memory, append },
+      { ...memory, append, compact },
       { key: "doc", onError: vi.fn() },
     );
+    await persistence.flush();
+    compact.mockRejectedValueOnce(new Error("still full"));
     doc.add("lost");
 
     await expect(persistence.destroy()).rejects.toBe(error);
-    const calls = append.mock.calls.length;
+    const calls = [append.mock.calls.length, compact.mock.calls.length];
     doc.add("dropped");
-    await persistence.flush().catch(() => {});
+    await expect(persistence.flush()).rejects.toBe(error);
+    await expect(persistence.destroy()).rejects.toBe(error);
 
-    expect(append).toHaveBeenCalledTimes(calls);
+    expect([append.mock.calls.length, compact.mock.calls.length]).toEqual(
+      calls,
+    );
   });
 
   it("rejects barriers with the earliest unresolved failure", async () => {
@@ -734,12 +865,15 @@ describe("createPersistence", () => {
       .fn(memory.append)
       .mockRejectedValueOnce(first)
       .mockRejectedValueOnce(second);
+    const compact = vi.fn(memory.compact);
     const doc = createToyDoc();
     const persistence = createPersistence(
       doc,
-      { ...memory, append },
+      { ...memory, append, compact },
       { key: "doc", onError: vi.fn() },
     );
+    await persistence.flush();
+    compact.mockRejectedValue(new Error("still full"));
     doc.add("a");
     doc.add("b");
 
@@ -798,19 +932,20 @@ describe("createPersistence", () => {
       doc.add("lost");
       doc.add("kept");
 
-      await expect(persistence.flush()).rejects.toBe(error);
+      await expect(persistence.flush()).resolves.toBeUndefined();
       expect(consoleError).toHaveBeenCalledWith(
         "[homeostate] persistence onError threw:",
         thrown,
       );
-      // One for the unreadable update, one for the failed append.
-      expect(consoleError).toHaveBeenCalledTimes(2);
+      // The unreadable update, the failed append, and the unreadable update again when the
+      // next append compacts.
+      expect(consoleError).toHaveBeenCalledTimes(3);
       const restored = createToyDoc();
       await createPersistence(restored, memory, {
         key: "doc",
         onError: vi.fn(),
       }).whenLoaded;
-      expect(restored.ops()).toEqual(["kept", "stored"]);
+      expect(restored.ops()).toEqual(["kept", "lost", "stored"]);
     } finally {
       consoleError.mockRestore();
     }
