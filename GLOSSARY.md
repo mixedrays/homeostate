@@ -239,7 +239,7 @@ The `key` in `PersistenceConfig` that names a stored document, such as its room 
 _Avoid_: Document ID
 
 **Compaction**:
-Replacing the updates loaded from an update log with one compacted snapshot, while keeping updates appended after that load. It runs on load, every `compactAfter` appends, and on `compact()`.
+Replacing the updates loaded from an update log with one compacted snapshot, while keeping updates appended after that load. It runs on load, every `compactAfter` appends, on `compact()`, and to repair a failed write: after the next append that succeeds, and on `flush()` and `destroy()`.
 _Avoid_: Garbage collection, squashing
 
 **Compacted snapshot**:

@@ -154,6 +154,28 @@ export const describePersistableDoc = <D>(
       );
     });
 
+    it("restores edits stored after a failed append, which depend on it", async () => {
+      const memory = createMemoryPersistenceAdapter();
+      const append = vi.fn(memory.append);
+      const first = await open({ ...memory, append }, undefined, vi.fn());
+      await first.persistence.flush();
+      append.mockRejectedValueOnce(new Error("temporary storage failure"));
+      first.store.setState(addTodo(first.store.getState(), todo("4")));
+      first.store.setState(toggleTodo(first.store.getState(), "4"));
+
+      await expect(first.persistence.destroy()).resolves.toBeUndefined();
+      const reloaded = await open(memory, {
+        todos: [],
+        searchTerm: "",
+        filterStatus: "all",
+      });
+
+      expect(reloaded.loaded).toEqual({ status: "loaded" });
+      expect(reloaded.store.getState()).toEqual(
+        toggleTodo(addTodo(threeTodos(), todo("4")), "4"),
+      );
+    });
+
     it.each([
       ["corrupt bytes", () => new Uint8Array([255, 254, 253])],
       ["an update of another CRDT library", () => foreignUpdate],

@@ -41,9 +41,12 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  * When a stored update cannot be applied, the log is not compacted, so its bytes stay
  * available for recovery until `clear()`.
  *
- * Every failure goes to `onError` once, and the queue moves on. `compact()` and `clear()`
- * reject with their own storage error; `flush()` and `destroy()` reject while an update the
- * document reported may be missing from storage, until a snapshot or `clear()` succeeds.
+ * Every failure goes to `onError` once, and the queue moves on. Later updates may depend on
+ * one a failed write lost, so the next append that succeeds compacts once to store the whole
+ * document again, as `flush()` and `destroy()` do first while it is missing. `compact()` and
+ * `clear()` reject with their own storage error; `flush()` and `destroy()` reject while an
+ * update the document reported may still be missing from storage, until a snapshot or
+ * `clear()` succeeds.
  *
  * @example
  * ```typescript
@@ -86,9 +89,15 @@ export function createPersistence(
    * a full snapshot or `clear()` succeeds; barriers reject with its error until then.
    */
   let unresolved: { error: unknown } | undefined;
+  /**
+   * A write failed since the last compaction started. Later updates may depend on what it
+   * lost, so the next successful append compacts, once, to store the whole document again.
+   */
+  let repairDue = false;
 
   const unstored = (error: unknown): never => {
     unresolved ??= { error };
+    repairDue = true;
     throw error;
   };
 
@@ -127,6 +136,7 @@ export function createPersistence(
    * would not contain that update.
    */
   const compact = async (initial = false): Promise<void> => {
+    repairDue = false;
     const { updates, version } = await adapter.load(key);
     const errors = applyStored(updates);
     const complete = errors.length === 0;
@@ -139,10 +149,10 @@ export function createPersistence(
             : { status: "partial", errors },
       );
     appended = 0;
-    // The first snapshot also stores whatever the document held before it was persisted, so
-    // a first load that keeps the log appends it instead.
+    // The first snapshot also stores whatever the document held before it was persisted, and
+    // a later one what a failed write lost, so a compaction that keeps the log then appends it.
     if (complete) await adapter.compact(key, doc.encode(), version);
-    else if (initial) await adapter.append(key, doc.encode());
+    else if (initial || unresolved) await adapter.append(key, doc.encode());
     else return;
     // The snapshot holds everything the document reported before it, failed writes included.
     unresolved = undefined;
@@ -153,7 +163,7 @@ export function createPersistence(
     if (stopped) return;
     void enqueue(async () => {
       await adapter.append(key, update).catch(unstored);
-      if (++appended >= compactAfter) await compact();
+      if (++appended >= compactAfter || repairDue) await compact();
     });
   });
 
@@ -166,11 +176,19 @@ export function createPersistence(
     markLoaded({ status: "failed", error });
   });
 
-  /** Wait for the work queued so far, then reject while a write failure is unresolved. */
-  const barrier = (): Promise<void> =>
-    queue.then(() => {
+  /**
+   * Wait for the work queued so far. While a write failure is unresolved, compact once to
+   * store the whole document again, unless storing stopped before the call, and reject with
+   * the failure's error if it is still unresolved.
+   */
+  const barrier = (repair: boolean): Promise<void> => {
+    const run = queue.then(async () => {
+      if (repair && unresolved) await compact().catch(report);
       if (unresolved) throw unresolved.error;
     });
+    queue = run.catch(ignore);
+    return run;
+  };
 
   const stop = (): void => {
     if (stopped) return;
@@ -181,7 +199,7 @@ export function createPersistence(
   return {
     whenLoaded,
 
-    flush: () => handled(barrier()),
+    flush: () => handled(barrier(!stopped)),
 
     compact: () => (stopped ? queue : handled(enqueue(() => compact()))),
 
@@ -200,8 +218,10 @@ export function createPersistence(
       ),
 
     destroy: () => {
+      // The call that stops storing still repairs what storing left unresolved.
+      const repair = !stopped;
       stop();
-      return handled(barrier());
+      return handled(barrier(repair));
     },
 
     clear: () => {

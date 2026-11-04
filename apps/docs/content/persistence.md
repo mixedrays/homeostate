@@ -238,10 +238,12 @@ await persistence.clear(); // stop storing and delete the stored document, e.g. 
 [Checking what was restored](#checking-what-was-restored).
 
 The other methods reject when their storage work fails, with the error `onError` also
-received. `flush()` and `destroy()` reject while an update the document reported may be
-missing from storage, also after a failure before the call, until a later compaction or
-`clear()` stores or removes it; `compact()` and `clear()` reject with their own storage error.
-So a sign-out can tell whether local data was deleted:
+received. A failed write can leave later updates unrestorable, since they depend on it, so
+persistence stores the whole document again after the next write that succeeds, and on each
+`flush()` and `destroy()`. They reject only when that fails too, while an update the document
+reported may still be missing from storage, also after a failure before the call;
+`compact()` and `clear()` reject with their own storage error. So a sign-out can tell whether
+local data was deleted:
 
 ```ts
 try {
@@ -251,9 +253,9 @@ try {
 }
 ```
 
-A promise left unawaited never becomes an unhandled rejection. The
-[API reference](../../../packages/core/docs/persistence.md#which-failures-a-barrier-reports)
-says which failures each method reports.
+A promise left unawaited never becomes an unhandled rejection. The API reference says
+[how a failed write is repaired](../../../packages/core/docs/persistence.md#repairing-a-failed-write)
+and [which failures each method reports](../../../packages/core/docs/persistence.md#which-failures-a-barrier-reports).
 
 ## Unreadable stored updates
 
