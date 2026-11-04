@@ -473,6 +473,59 @@ export const describeCrdtBackend = <D>(
       expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
     });
 
+    // One backend throughout, so that a backend which keeps what it read between reads shows
+    // whether a caller's mutation reaches its later reads.
+    scenario("keeps its later reads when a read result is mutated").run(() => {
+      const doc = createDoc();
+      const written = backend(doc);
+      written.write({ obj: { a: [1], b: "x" } });
+
+      const first = written.read() as {
+        obj: { a: number[]; b?: string; c?: number };
+        top?: number;
+      };
+      first.obj.a.push(2);
+      first.obj.c = 3;
+      delete first.obj.b;
+      first.top = 4;
+
+      expect(written.read()).toEqual({ obj: { a: [1], b: "x" } });
+      (written.read() as { obj: { a: number[] } }).obj.a.length = 0;
+      expect(written.read()).toEqual({ obj: { a: [1], b: "x" } });
+      expect(backend(doc).read()).toEqual({ obj: { a: [1], b: "x" } });
+    });
+
+    scenario(
+      "writes %s after a read result is mutated, so that the document holds it",
+    ).each(
+      [
+        [
+          "the mutated result",
+          (read: { obj: { a: number[] } }) => read,
+          { obj: { a: [1, 2] } },
+        ],
+        ["the state before", () => ({ obj: { a: [1] } }), { obj: { a: [1] } }],
+        [
+          "a new state",
+          () => ({ obj: { a: [1, 2, 3] } }),
+          { obj: { a: [1, 2, 3] } },
+        ],
+      ] as [string, (read: { obj: { a: number[] } }) => object, object][],
+      (_, next, expected) => {
+        const doc = createDoc();
+        const written = backend(doc);
+        written.write({ obj: { a: [1] } });
+        const read = written.read() as { obj: { a: number[] } };
+        read.obj.a.push(2);
+
+        written.write(next(read));
+
+        // A new backend reads the document itself.
+        expect(backend(doc).read()).toEqual(expected);
+        expect(written.read()).toEqual(expected);
+      },
+    );
+
     scenario("keeps the document when a written value is mutated").run(() => {
       const doc = createDoc();
       const value = { obj: { a: [1] } };
