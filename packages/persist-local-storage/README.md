@@ -39,8 +39,18 @@ Connect the engine after `whenLoaded`, or pass it as the engine's `ready` option
 restored state instead of seeding the store's defaults over it. Its result tells whether a stored document was found and restored in
 full; see the [persistence guide](https://homeostate.pages.dev/docs/persistence#checking-what-was-restored).
 
-`createLocalStorageAdapter({ prefix, storage })` takes an optional key prefix (default
-`"homeostate:"`) and storage, such as `sessionStorage`.
+`createLocalStorageAdapter({ prefix, storage, coordination })` takes an optional key prefix
+(default `"homeostate:"`), storage, such as `sessionStorage`, and how writers in other tabs are
+coordinated.
+
+By default, `coordination: "locks"`, each append, compaction and clear holds a
+[Web Lock](https://developer.mozilla.org/docs/Web/API/Web_Locks_API) for its key while it
+rewrites the entry, so several tabs can persist the same key without overwriting each other's
+updates. Browsers provide Web Locks in secure contexts only, https and `localhost`: on a page
+opened over plain http from another address, such as a LAN IP, those calls reject with an error
+saying so. Serve the page over https, or pass `coordination: "single-writer"` when only one tab
+writes the storage, as with `sessionStorage`; then two tabs writing one key at once can lose
+updates.
 
 Browsers allow about 5 MB per origin, and each document is rewritten on every update. For
 larger documents use
