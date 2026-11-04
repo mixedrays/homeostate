@@ -217,6 +217,38 @@ describe("createAutomergeBackend", () => {
     expect(backend.read()).toBe(second);
   });
 
+  it("keeps its reads and the document apart from a mutated read result", () => {
+    const handle = createHandle();
+    const backend = createAutomergeBackend(handle, NAME);
+    backend.write({ obj: { a: [1] } });
+
+    const first = backend.read() as { obj: { a: number[] } };
+    first.obj.a.push(2);
+
+    expect(backend.read()).toEqual({ obj: { a: [1] } });
+    expect(handle.doc()[NAME]).toEqual({ obj: { a: [1] } });
+
+    backend.write({ obj: { a: [1, 3] } });
+    expect(handle.doc()[NAME]).toEqual({ obj: { a: [1, 3] } });
+    expect(backend.read()).toEqual({ obj: { a: [1, 3] } });
+  });
+
+  it("copies afresh only what a caller changed in a read result", () => {
+    const backend = createAutomergeBackend(createHandle(), NAME);
+    backend.write(threeTodos());
+    const first = backend.read() as unknown as TodoState;
+
+    first.todos[0].completed = !first.todos[0].completed;
+    const second = backend.read() as unknown as TodoState;
+
+    expect(second).toEqual(threeTodos());
+    expect(second.todos).not.toBe(first.todos);
+    expect(second.todos[0]).not.toBe(first.todos[0]);
+    expect(second.todos[1]).toBe(first.todos[1]);
+    expect(second.todos[2]).toBe(first.todos[2]);
+    expect(backend.read()).toBe(second);
+  });
+
   it("syncs a source with only doc, change and subscribe", () => {
     const handle = createHandle();
     const { doc, change, subscribe } = handle;

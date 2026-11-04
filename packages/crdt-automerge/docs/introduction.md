@@ -63,8 +63,12 @@ edits alike.
 `undefined` and functions are not JSON, so the backend leaves out object entries holding
 either and stores such array items as `null`, as `JSON.stringify` does.
 
-Snapshots from `read()` copy only what changed since the last read and are shared between
-reads, so treat them as immutable. A missing synced key reads as `{}`. If a peer stores
+A snapshot from `read()` is yours: changing it changes neither the document nor a later
+`read()`. The backend keeps its own copy, so a read copies only what changed in the document.
+Each read checks the objects the last read returned against that copy, and returns those that
+still match again, so unchanged subtrees keep their identity between reads. One you changed is
+copied afresh. A store still needs new objects for what changes, since the engine diffs against
+the state it last wrote. A missing synced key reads as `{}`. If a peer stores
 anything but a map there, such as a string or `null`, `read()` throws a `TypeError` naming
 what the key holds, which the sync engine reports; a `write` replaces it with a map.
 
