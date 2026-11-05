@@ -574,57 +574,13 @@ describe("syncStateTree", () => {
   });
 
   describe("a key the room holds outside the model", () => {
-    const local = { todos: [], filter: "all" };
-
-    it("is removed at connect when the model's keys differ from the room's", () => {
-      const backend = createMemoryBackend({
-        todos: [],
-        filter: "done",
-        extra: 1,
-      });
-
-      syncStateTree(TodoStore.create(), { backend });
-
-      expect(backend.read()).toEqual({ todos: [], filter: "done" });
-    });
-
-    it("stays at connect when the model's keys equal the room's, until a local change", () => {
-      const backend = createMemoryBackend({ ...local, extra: 1 });
-      const store = TodoStore.create();
-
-      syncStateTree(store, { backend });
-      expect(backend.read()).toEqual({ ...local, extra: 1 });
-
-      store.setFilter("done");
-      expect(backend.read()).toEqual({ todos: [], filter: "done" });
-    });
-
-    it("stays after a remote change that adds nothing else, until a local change", () => {
-      const backend = createMemoryBackend(local);
-      const store = TodoStore.create();
-      syncStateTree(store, { backend });
-
-      backend.receive({ ...local, extra: 1 });
-      expect(backend.read()).toEqual({ ...local, extra: 1 });
-
-      store.setFilter("done");
-      expect(backend.read()).toEqual({ todos: [], filter: "done" });
-    });
-
-    it("is removed by a remote change that also changes a key of the model", () => {
-      const backend = createMemoryBackend(local);
-      syncStateTree(TodoStore.create(), { backend });
-
-      backend.receive({ todos: [], filter: "done", extra: 1 });
-
-      expect(backend.read()).toEqual({ todos: [], filter: "done" });
-    });
-
     it.each([
+      ["no config", {}],
       ["keys", { keys: ["todos", "filter"] }],
       ["a filter that drops it", { filter: (key: string) => key !== "extra" }],
+      ["omit", { omit: ["filter"] }],
     ] as const)(
-      "stays through connect and remote changes with %s, until a local change",
+      "stays through connect, remote changes and local changes with %s",
       (_, config) => {
         const backend = createMemoryBackend({
           todos: [],
@@ -632,24 +588,23 @@ describe("syncStateTree", () => {
           extra: 1,
         });
         const store = TodoStore.create();
-        syncStateTree(store, { backend, ...config });
+        const onError = vi.fn();
+        syncStateTree(store, { backend, onError, ...config });
         expect(backend.read()).toHaveProperty("extra", 1);
 
-        backend.receive({ todos: [milk], filter: "done", extra: 1 });
-        expect(backend.read()).toHaveProperty("extra", 1);
+        backend.receive({ todos: [milk], filter: "done", extra: 2 });
+        expect(backend.read()).toHaveProperty("extra", 2);
 
         store.add("2", "Bread");
-        expect(backend.read()).not.toHaveProperty("extra");
+        store.setFilter("all");
+        expect(backend.read()).toHaveProperty("extra", 2);
+        expect(backend.read()).toHaveProperty("todos", [
+          milk,
+          { id: "2", title: "Bread", done: false },
+        ]);
+        expect(onError).not.toHaveBeenCalled();
       },
     );
-
-    it("is removed with omit as without it, since omit leaves it synced", () => {
-      const backend = createMemoryBackend({ todos: [milk], extra: 1 });
-
-      syncStateTree(TodoStore.create(), { backend, omit: ["filter"] });
-
-      expect(backend.read()).toEqual({ todos: [milk] });
-    });
   });
 
   describe("types", () => {

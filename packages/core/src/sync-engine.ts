@@ -146,9 +146,11 @@ const syncPredicate = ({
  *
  * On `connect()` the two sides are reconciled per key over the filtered view: a key the
  * backend holds wins over the store's value, and a synced key the backend lacks stays in
- * the store and is seeded into the backend unless `seed` is `'never'`. Afterwards the
- * backend owns the synced document: every write replaces it with the store's filtered
- * state, and a key removed from the backend is removed from the store. The store's own changes
+ * the store and is seeded into the backend unless `seed` is `'never'`. Afterwards every write
+ * gives the backend the store's synced keys and deletes those the store removed, and a key
+ * removed from the backend is removed from the store. Any other key the backend holds, such as
+ * one a newer peer added that this store cannot hold or one `keys` or `omit` leaves out, stays
+ * as it is, so a peer never deletes a key it does not sync. The store's own changes
  * while a remote change is applied, such as a key a reducer normalises or a subscriber derives,
  * are written once the apply ends. Once another peer changes the keys that write changed and the
  * store changes them again, they are no longer written, so the peers do not re-write each other's
@@ -199,10 +201,17 @@ export function createSyncEngine<S extends object>(
   let backendUnsubscribe: Unsubscribe | null = null;
   let applyingRemote = false;
   /**
-   * What the backend holds as far as the engine knows: the synced state it last wrote, or the
-   * whole state it last read. Passed to `backend.write` as `previous`; `undefined` when unknown.
+   * What the backend holds as far as the engine knows: the whole state it last wrote or read,
+   * keys this peer does not sync included. Passed to `backend.write` as `previous`; `undefined`
+   * when unknown.
    */
   let lastSynced: Plain | undefined;
+  /**
+   * The synced keys the store held when the engine last wrote it or applied a remote change to
+   * it. A key that leaves them is one the store removed, and the next write deletes it from the
+   * backend; any other key the backend holds and the store lacks is left as it is.
+   */
+  let heldKeys: ReadonlySet<string> = new Set();
   /** The backend's revision when `lastSynced` was recorded. */
   let lastRevision: unknown;
   /** Counts backend reads after remote changes, so a write can tell that one ran during it. */
@@ -375,11 +384,21 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Writes `next`, the store's synced state, passing what the backend holds as `previous`, or
-   * nothing when `stale`, so that the backend diffs against its document.
+   * Writes `synced`, the store's synced state, over what the backend holds and deletes the
+   * `removed` keys, which the store removed. Every other key the backend holds stays as it is,
+   * such as one a newer peer added that this store cannot hold. Passes what the backend holds as
+   * `previous`, or nothing when `stale`, so that the backend diffs against its document.
    */
-  const writeSynced = (next: Plain, stale = false): void => {
+  const writeSynced = (
+    synced: Plain,
+    removed: string[],
+    stale = false,
+  ): void => {
     const previous = stale ? undefined : lastSynced;
+    // `write` makes the backend equal to what it is given, so the keys this peer leaves alone
+    // must be given as the backend holds them.
+    const held = previous ?? readBackend();
+    const next = { ...withoutKeys(held, removed), ...synced };
     const reads = remoteReads;
     // Unknown should the write throw.
     lastSynced = undefined;
@@ -388,6 +407,7 @@ export function createSyncEngine<S extends object>(
     if (remoteReads !== reads) return;
     lastRevision = readRevision();
     lastSynced = next;
+    heldKeys = new Set(Object.keys(synced));
   };
 
   /**
@@ -403,16 +423,20 @@ export function createSyncEngine<S extends object>(
     removed: string[] = [],
   ): void => {
     let current: S;
+    let synced: Plain;
     let target: Plain;
     applyingRemote = true;
     try {
       current = readStore();
-      const synced = filterState(current);
+      synced = filterState(current);
       target = keepLocalOnly
         ? { ...withoutKeys(synced, removed), ...remote }
         : remote;
       const merged = mergeStates(current, synced, target);
-      if (merged === current) return;
+      if (merged === current) {
+        heldKeys = new Set(Object.keys(synced));
+        return;
+      }
       call("store", () => adapter.setState(merged));
     } finally {
       applyingRemote = false;
@@ -422,11 +446,20 @@ export function createSyncEngine<S extends object>(
     const after = readStore();
     // A store that ignored the change entirely, such as a Redux store without the replace case,
     // would otherwise write its old state back over every peer's.
-    if (after === current) return;
+    if (after === current) {
+      heldKeys = new Set(Object.keys(synced));
+      return;
+    }
     // The store's notifications were ignored meanwhile, so a key it normalised or derived from
     // `merged` reaches the backend only here. An echo of `merged` alone equals `target`.
     const applied = filterState(after);
-    const keys = changedKeys(target, applied);
+    heldKeys = new Set(Object.keys(applied));
+    // A key the store lacks after the apply and lacked before is one it cannot hold or does not
+    // sync, such as a key a MobX class does not declare, so it stays in the backend. One it held
+    // before, it removed.
+    const keys = changedKeys(target, applied).filter(
+      (key) => hasOwn(applied, key) || hasOwn(synced, key),
+    );
     if (keys.length === 0) return;
     if (rewritesLastWriteBack(target, keys)) {
       // Writing would only make the peer change these keys again, and so on forever. The store
@@ -439,7 +472,11 @@ export function createSyncEngine<S extends object>(
     // A backend without a revision was read just before.
     const stale =
       backend.revision !== undefined && !isUnchanged(readRevision());
-    writeSynced(applied, stale);
+    writeSynced(
+      applied,
+      keys.filter((key) => !hasOwn(applied, key)),
+      stale,
+    );
     lastWriteBack = { written: applied, keys };
   };
 
@@ -578,7 +615,11 @@ export function createSyncEngine<S extends object>(
     // its stale state out of the backend this way too.
     if (applyUnseenRemote()) return;
     lastWriteBack = null;
-    writeSynced(filterState(readStore()));
+    const synced = filterState(readStore());
+    writeSynced(
+      synced,
+      [...heldKeys].filter((key) => !hasOwn(synced, key)),
+    );
     emit("local");
   };
 
@@ -595,6 +636,7 @@ export function createSyncEngine<S extends object>(
     unsubscribeAll();
     // A disconnected engine hears no remote change, so it reads the backend again on connect.
     lastSynced = undefined;
+    heldKeys = new Set();
     lastWriteBack = null;
     connected = false;
     reconciled = false;
@@ -613,7 +655,8 @@ export function createSyncEngine<S extends object>(
     const missing = Object.keys(local).filter((key) => !remoteKeys.has(key));
 
     if (seedMissing && missing.length > 0) {
-      const seeded: Plain = { ...remote };
+      // Keys this peer does not sync stay as the backend holds them.
+      const seeded: Plain = { ...held };
       for (const key of missing) seeded[key] = local[key];
       const reads = remoteReads;
       call("backend", () => backend.write(seeded));

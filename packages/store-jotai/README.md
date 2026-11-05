@@ -49,8 +49,8 @@ createJotaiAdapter({ todos: todosAtom, filter: filterAtom }, store);
 ```
 
 A key a peer removes resets its atom to its initial value. A key the room holds that the record
-does not list is removed by the next write, even with the sync engine's `keys` option, so every
-peer sharing a room should sync the same set of atoms. See the
+does not list, such as one a peer running a newer version of the app adds, stays in the room as
+it is. See the
 [documentation](https://homeostate.pages.dev/docs/store-jotai/introduction) for how removed keys
 sync, for a custom root atom that fans a replacement out to several atoms, and for syncing one
 slice of an atom.

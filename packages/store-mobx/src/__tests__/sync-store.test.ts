@@ -190,14 +190,25 @@ describe("syncMobxStore", () => {
     logged.mockRestore();
   });
 
-  it("removes a key the room holds outside the store's synced fields", () => {
-    const backend = createMemoryBackend({ todos: [milk], newer: 1 });
-    const store = new TodoStore();
+  it.each([
+    ["every field", {}],
+    ["keys", { keys: ["todos"] }],
+  ] as const)(
+    "keeps a key the room holds outside the store's synced fields, syncing %s",
+    (_, options) => {
+      const backend = createMemoryBackend({ todos: [milk], newer: 1 });
+      const store = new TodoStore();
 
-    syncMobxStore(store, { backend, keys: ["todos"] });
+      syncMobxStore(store, { backend, ...options });
+      expect(backend.read()).toMatchObject({ todos: [milk], newer: 1 });
 
-    expect(backend.read()).toEqual({ todos: [milk] });
-  });
+      store.add("Bread");
+      expect(backend.read()).toMatchObject({
+        todos: [milk, { id: "2", title: "Bread" }],
+        newer: 1,
+      });
+    },
+  );
 
   it("lists the store's fields when it is called unless keys names them, with the manual connect mode too", () => {
     const backend = createMemoryBackend();

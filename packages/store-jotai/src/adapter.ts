@@ -88,9 +88,8 @@ export function createJotaiAdapter<S extends object>(
  * initial value to `undefined` resets it to that value on every peer, this one included.
  *
  * The record's keys are the whole synced state: a key the backend holds that the record does
- * not list is removed by the next write, as with any store adapter. Passing the sync engine's
- * `keys` option does not prevent this, so every peer sharing a room should sync the same set of
- * atoms.
+ * not list, such as one a newer version of the app adds, never reaches an atom and stays in the
+ * backend as it is.
  *
  * @param atoms - Record of writable atoms, keyed by the synced key each one holds
  * @param store - Jotai store the atoms live in; defaults to the global default store

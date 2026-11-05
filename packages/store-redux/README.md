@@ -83,6 +83,18 @@ misspelled key fails to compile.
 Immer-frozen state is fine: the engine never mutates store state in place. Local changes
 are sent only when a dispatch produces a new state object.
 
+### Keys the reducer does not know
+
+`replaceState` hands the store every key the room holds, including one a peer on a newer version
+of the app adds. `combineReducers` drops a key it has no reducer for on the next action, and warns
+about it in development. To the engine that is the store removing a key it held, so that action
+deletes the key from the room. List the root reducer's slices in `keys` to keep such a key out of
+the store and in the room for the peers that sync it:
+
+```ts
+homeostate<RootState>({ backend, keys: ["todos", "ui"] });
+```
+
 ### Connecting later
 
 With `connect: "manual"`, the store is created without touching the backend, and the app

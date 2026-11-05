@@ -46,9 +46,7 @@ export type SyncStateTreeOptions<S extends object = JsonObject> =
  * `connect()` that fires after `destroy` throws from its callback.
  *
  * A key the room holds outside the model, such as one a peer running a newer version of the app
- * adds, never reaches the node, and is removed from the room at the latest with this peer's next
- * local change. Passing `keys` does not prevent this, so every peer sharing a room should sync the
- * same keys.
+ * adds, never reaches the node and stays in the room as it is, with or without `keys`.
  *
  * @param node - The tree node to sync; a root instance or a subtree
  * @param options - The backend, the connect mode and the engine's config

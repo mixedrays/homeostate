@@ -87,8 +87,9 @@ make the store observable first: a store that is not observable throws. A field 
 later is not synced.
 
 A key the room holds outside the store's synced fields, such as one a peer running a newer version
-of the app adds, is removed from the room. Passing `keys` does not prevent this, so every peer
-sharing a room should sync the same fields.
+of the app adds, stays in the room as it is: this peer never reads or deletes it. A synced field
+this peer removes is deleted from the room. See
+[Keys this peer does not sync](../../core/docs/sync-engine.md#keys-this-peer-does-not-sync).
 
 A remote change is reconciled into the observable tree instead of being assigned over it:
 only the fields, array elements and keys that differ are written, inside one action. Items

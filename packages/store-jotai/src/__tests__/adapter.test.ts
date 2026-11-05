@@ -313,21 +313,34 @@ describe("JotaiAdapter of a record of atoms", () => {
     });
   });
 
-  it("removes a key a peer syncs outside the record on the next write without keys", () => {
-    const atoms = todoAtoms();
-    const store = createStore();
-    const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(atoms, store)).connect();
+  it.each([
+    ["no engine config", {}],
+    ["keys", { keys: ["todos"] }],
+  ] as const)(
+    "keeps a key a peer syncs outside the record, with %s",
+    (_, config) => {
+      // A newer peer has already written `tags`; this record only holds `todos`.
+      const todos = atom<string[]>([]);
+      const store = createStore();
+      const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
+      const onError = vi.fn();
+      createSyncEngine(backend, createJotaiAdapter({ todos }, store), {
+        ...config,
+        onError,
+      }).connect();
+      expect(backend.read()).toEqual({ todos: ["a"], tags: ["x"] });
 
-    backend.receive({ ...backend.read(), theme: "dark" });
-    store.set(atoms.filterStatus, "active");
+      backend.receive({ todos: ["a", "b"], tags: ["x", "y"] });
+      expect(backend.read()).toEqual({ todos: ["a", "b"], tags: ["x", "y"] });
 
-    expect(backend.read()).toEqual({
-      todos: [],
-      searchTerm: "",
-      filterStatus: "active",
-    });
-  });
+      store.set(todos, (list) => [...list, "local"]);
+      expect(backend.read()).toEqual({
+        todos: ["a", "b", "local"],
+        tags: ["x", "y"],
+      });
+      expect(onError).not.toHaveBeenCalled();
+    },
+  );
 
   it("resets an atomWithReset atom whose key a peer removes", () => {
     const draft = atomWithReset({ title: "" });

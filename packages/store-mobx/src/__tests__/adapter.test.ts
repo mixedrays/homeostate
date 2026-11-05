@@ -391,6 +391,34 @@ describe("MobxAdapter", () => {
     expect(held(backend).todos).toEqual([{ id: "9", title: "i", done: true }]);
   });
 
+  it.each([
+    ["no engine config", {}],
+    ["keys", { keys: ["todos"] }],
+  ] as const)(
+    "keeps a room key the store does not declare, with %s",
+    (_, config) => {
+      // A newer peer has already written `tags`; this store only declares `todos`.
+      const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
+      const store = makeAutoObservable({ todos: [] as string[] });
+      const onError = vi.fn();
+      createSyncEngine(backend, createMobxAdapter(store), {
+        ...config,
+        onError,
+      }).connect();
+      expect(backend.read()).toEqual({ todos: ["a"], tags: ["x"] });
+
+      backend.receive({ todos: ["a", "b"], tags: ["x", "y"] });
+      expect(backend.read()).toEqual({ todos: ["a", "b"], tags: ["x", "y"] });
+
+      runInAction(() => store.todos.push("local"));
+      expect(backend.read()).toEqual({
+        todos: ["a", "b", "local"],
+        tags: ["x", "y"],
+      });
+      expect(onError).not.toHaveBeenCalled();
+    },
+  );
+
   describe("a write that throws", () => {
     const failingWrite = (onError?: () => void) => {
       const store = new TodoStore();

@@ -41,10 +41,9 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  * backend and the store then disagree until the store's next change to the slice. An unscoped
  * adapter returns the new root state there, so the engine writes the store's values back.
  *
- * Every peer sharing a room should sync the same keys, scoped the same way, and each slice needs a
- * synced subtree of its own, since every write replaces the subtree. A key the backend holds
- * reaches the slice even if `T` does not declare it, unless `keys` leaves it out, in which case
- * the next local change removes it from the backend.
+ * Each slice needs a synced subtree of its own: on one subtree, each slice's engine would hand it
+ * the keys the other writes. A key the backend holds reaches the slice even if `T` does not
+ * declare it, unless `keys` leaves it out, in which case it stays in the backend as it is.
  *
  * @param adapter - The store adapter of the whole store
  * @param scope - How to read the slice from the store's state and put it back
