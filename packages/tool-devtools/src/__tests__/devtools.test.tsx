@@ -112,6 +112,24 @@ const statusToggle = (text: string): HTMLButtonElement => {
   return toggle as HTMLButtonElement;
 };
 
+/** The range input of the slider labelled `label`. */
+const sliderFor = (label: string): HTMLInputElement => {
+  const input = [
+    ...shadow().querySelectorAll<HTMLInputElement>('input[type="range"]'),
+  ].find((candidate) => {
+    const labelId = candidate.getAttribute("aria-labelledby");
+    return labelId && shadow().getElementById(labelId)?.textContent === label;
+  });
+  if (!input) throw new Error(`no slider labelled ${label}`);
+  return input;
+};
+
+const press = async (element: Element, key: string) => {
+  await act(async () => {
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  });
+};
+
 const click = async (element: Element) => {
   await act(async () => {
     (element as HTMLElement).click();
@@ -1246,9 +1264,46 @@ describe("HomeostateDevtools", () => {
     expect(network.getSnapshot().conditions.offline).toBe(true);
     expect(shadow().textContent).toContain("Network offline");
 
-    await click(byLabel("Latency 500 ms"));
-    expect(network.getSnapshot().conditions.latency).toBe(500);
+    await press(sliderFor("Latency"), "ArrowRight");
+    expect(network.getSnapshot().conditions.latency).toBe(50);
+    expect(byLabel<HTMLInputElement>("Latency in milliseconds").value).toBe(
+      "50",
+    );
     expect(byLabel("conditions on")).toBeTruthy();
+
+    await press(sliderFor("Jitter"), "End");
+    expect(network.getSnapshot().conditions.jitter).toBe(1000);
+
+    await click(byLabel("Reset latency"));
+    await click(byLabel("Reset jitter"));
+    expect(network.getSnapshot().conditions).toMatchObject({
+      latency: 0,
+      jitter: 0,
+    });
+    expect(byLabel<HTMLButtonElement>("Reset latency").disabled).toBe(true);
+    network.destroy();
+  });
+
+  it("takes typed delays past the slider's end", async () => {
+    const network = createNetworkLink(createTestDoc(), createTestDoc());
+    await renderSources([{ name: "Todos", adapter: store.adapter, network }]);
+    await click(buttonWithText("Network"));
+    const latency = byLabel<HTMLInputElement>("Latency in milliseconds");
+
+    await type(latency, "5000");
+    expect(network.getSnapshot().conditions.latency).toBe(5000);
+    expect(sliderFor("Latency").value).toBe("2000");
+
+    await type(latency, "");
+    expect(latency.getAttribute("aria-invalid")).toBe("true");
+    expect(network.getSnapshot().conditions.latency).toBe(5000);
+    await act(async () => {
+      latency.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(latency.value).toBe("5000");
+
+    await type(latency, "120000");
+    expect(network.getSnapshot().conditions.latency).toBe(60_000);
     network.destroy();
   });
 
