@@ -1,4 +1,5 @@
 import {
+  _getGlobalState,
   isComputedProp,
   isObservableProp,
   keys as observableKeys,
@@ -153,10 +154,25 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
     this.snapshot = applied as S;
   }
 
+  /**
+   * MobX logs what a reaction throws and carries on. With its error boundaries disabled, it
+   * rethrows instead, which skips its own cleanup: the batch never ends and every reaction in the
+   * process stops. So what `onStoreChange` throws is then logged here.
+   */
   subscribe(onStoreChange: () => void): Unsubscribe {
     return reaction(
       () => this.getState(),
-      () => onStoreChange(),
+      () => {
+        try {
+          onStoreChange();
+        } catch (error) {
+          if (!_getGlobalState().disableErrorBoundaries) throw error;
+          console.error(
+            "[homeostate] syncing a local change of a MobX store failed:",
+            error,
+          );
+        }
+      },
     );
   }
 }
