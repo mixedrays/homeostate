@@ -139,8 +139,10 @@ engine.connect();
 The engine writes a local change from inside the adapter's MobX `reaction`. MobX catches what a
 reaction throws, so without the engine's `onError` option a backend `write` that fails never
 reaches the code that changed the store: the action returns normally, MobX logs the error with
-`console.error`, and the backend keeps its old value until the next successful write. Pass
-`onError` to handle it yourself; MobX then logs nothing:
+`console.error`, and the backend keeps its old value until the next successful write. With
+MobX's `disableErrorBoundaries` configured, MobX would rethrow it and stop every reaction in the
+app, so the adapter catches it and logs it itself. Pass `onError` to handle it yourself; nothing is
+logged then:
 
 ```ts
 const engine = syncMobxStore(store, {

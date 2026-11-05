@@ -95,7 +95,9 @@ When a peer removes a synced key, a class field cannot be deleted, so it is set 
 `undefined`; type such fields as optional.
 
 MobX catches errors thrown inside reactions, where the engine writes local changes, so a failed
-backend write is only logged by MobX unless you pass the engine's `onError` option.
+backend write is only logged by MobX unless you pass the engine's `onError` option. With MobX's
+`disableErrorBoundaries` configured, the adapter catches and logs it instead, since MobX would stop
+every reaction in the app.
 
 ### Connecting later
 

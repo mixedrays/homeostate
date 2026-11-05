@@ -29,8 +29,22 @@ class MobxStateTreeAdapter<S extends object> implements StoreAdapter<S> {
     applySnapshot(this.node, state);
   }
 
+  /**
+   * MST runs snapshot listeners in a MobX reaction whose error handler rethrows, which skips
+   * MobX's own cleanup: the batch never ends and every reaction in the process stops. So what
+   * `onStoreChange` throws is logged here instead, as MobX logs what its reactions throw.
+   */
   subscribe(onStoreChange: () => void): Unsubscribe {
-    return onSnapshot(this.node, () => onStoreChange());
+    return onSnapshot(this.node, () => {
+      try {
+        onStoreChange();
+      } catch (error) {
+        console.error(
+          "[homeostate] syncing a local change of a MobX-State-Tree node failed:",
+          error,
+        );
+      }
+    });
   }
 }
 

@@ -124,6 +124,27 @@ addDisposer(store, () => engine.disconnect());
 engine.connect();
 ```
 
+## Errors
+
+The engine writes a local change from inside the snapshot listener, which MST runs in a MobX
+reaction. An error that escaped from there would leave MobX mid-batch and stop every reaction in
+the app, so the adapter catches it. Without the engine's `onError` option, a backend `write` that
+fails never reaches the code that changed the node: the action returns normally, the adapter logs
+the error with `console.error`, and the backend keeps its old value until the next successful
+write. [`getStatus()`](https://homeostate.pages.dev/docs/core/sync-engine#sync-status) keeps the error until then. Pass `onError` to handle it yourself;
+nothing is logged then:
+
+```ts
+const engine = syncStateTree(store, {
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+  onError: (error, source) => reportSyncError(error, source),
+});
+```
+
+A remote change is applied outside any reaction, so without `onError` an error from it
+propagates to the provider as with any other store. See
+[Reporting errors](https://homeostate.pages.dev/docs/core/sync-engine#reporting-errors).
+
 ## License
 
 MIT — see [LICENSE](https://github.com/mixedrays/homeostate/blob/main/LICENSE).
