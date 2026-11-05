@@ -101,8 +101,8 @@ export function atomWithSync<S extends object, Args extends unknown[], Result>(
  * Only mounting the returned atom, or an atom derived from it, starts sync. Reading a record's
  * atom does not, so mount the returned atom where components read the record's atoms directly.
  *
- * Every peer sharing a room should sync the same set of atoms: a key the backend holds that the
- * record does not list is removed by the next write, even with the `keys` option.
+ * Given a record of atoms, a key the backend holds that the record does not list stays in the
+ * backend as it is.
  *
  * If connecting throws, the error reaches whoever mounted the atom, and that store stays unsynced
  * until it is discarded.

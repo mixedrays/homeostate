@@ -258,7 +258,7 @@ describe("homeostate middleware", () => {
 
     expect(useStore.getState()).toMatchObject({ count: 3, draft: "" });
     useStore.getState().setDraft("local");
-    expect(backend.read()).toEqual({ count: 3 });
+    expect(backend.read()).toEqual({ count: 3, draft: "room" });
 
     create<DraftState>()(
       homeostate(

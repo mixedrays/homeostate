@@ -50,7 +50,10 @@ export interface StoreAdapter<S extends object> {
    * engine ignores store notifications raised while it runs, so the adapter needs no
    * echo suppression of its own. When it returns, the engine writes the store's synced
    * state once if it differs from what was applied, such as a key the store normalised or
-   * derived meanwhile, so the backend ends up equal to it. If `getState()` then returns the
+   * derived meanwhile, so the backend ends up equal to it. A key the store was given but
+   * holds neither before nor after the call, such as one a class does not declare, is taken as
+   * one it cannot hold and stays in the backend; one it held before and drops, it removed, and
+   * the engine deletes it from the backend. If `getState()` then returns the
    * same object as before the call, the store is taken to have ignored the change, and nothing
    * is written.
    *
@@ -90,11 +93,13 @@ export interface CrdtBackend {
   /**
    * Make the backend equal to `next` in one atomic transaction.
    * The backend decides the granularity of the operations; `getChanges` is exported for that.
+   * The sync engine passes the whole subtree as `next`: the store's synced keys, and every
+   * other key as the backend holds it, so that a write deletes only what the store removed.
    *
    * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
    * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing,
    * and `NaN` or infinite numbers where it holds `null`.
-   * The sync engine passes the synced state it last wrote or read, once `revision` or a read
+   * The sync engine passes the whole state it last wrote or read, once `revision` or a read
    * shows that the backend still holds it, so a backend can diff against it with `json: true`
    * instead of reading its document, and unchanged subtrees of `next` match it by identity.
    * A backend may ignore it.
@@ -141,6 +146,10 @@ export type SeedStrategy = "if-empty" | "never";
  * A key is synced, in both directions, when `filter` keeps it and, by name, `keys` lists it or
  * `omit` does not name it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is
  * synced.
+ *
+ * A peer deletes a key from the backend only when its store removes a key it syncs: drops it,
+ * or gives it a value `filter` rejects. A key the backend holds that the store does not sync,
+ * or cannot hold, stays as it is, so peers on different app versions can share a room.
  */
 export type SyncEngineConfig<S extends object = JsonObject> = {
   /**
@@ -206,7 +215,7 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
   | {
       /**
        * The only keys to sync, if `filter` keeps them. A key the backend holds that it does not
-       * list is ignored, like one the store holds.
+       * list is ignored, like one the store holds: it stays in the backend as it is.
        */
       keys: readonly (keyof S & string)[];
       omit?: never;
@@ -215,7 +224,8 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
       keys?: never;
       /**
        * Keys to keep local; every other key `filter` keeps is synced, including one the
-       * backend holds that `S` does not declare.
+       * backend holds that `S` does not declare. One it names that the backend holds, such as
+       * a key another peer syncs, stays in the backend as it is.
        */
       omit?: readonly (keyof S & string)[];
     }

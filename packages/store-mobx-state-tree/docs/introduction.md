@@ -68,9 +68,9 @@ snapshot must be an object, as a model's or a map's is: an array node makes `con
 `TypeError`.
 
 A key the room holds outside the model, such as one a peer running a newer version of the app adds,
-never reaches the node, and is removed from the room at the latest with this peer's next local
-change. Passing `keys` does not prevent this, so every peer sharing a room should sync the same
-keys.
+never reaches the node and stays in the room as it is, with or without `keys`: this peer deletes
+only the keys of its snapshot that it removes. See
+[Keys this peer does not sync](../../core/docs/sync-engine.md#keys-this-peer-does-not-sync).
 
 ### The node's lifetime
 

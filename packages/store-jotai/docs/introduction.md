@@ -72,9 +72,10 @@ atom with another initial value to `undefined` resets it to that value on every 
 included.
 
 The record's keys are the whole synced state: a key the backend holds that the record does not
-list, such as one a peer running a newer version of the app adds, is removed by the next write.
-Passing the sync engine's `keys` option does not prevent this, so every peer sharing a room should
-sync the same set of atoms.
+list, such as one a peer running a newer version of the app adds, never reaches an atom and stays
+in the room as it is, with or without the sync engine's `keys` option. A custom root that reads
+only its atoms behaves the same way. See
+[Keys this peer does not sync](../../core/docs/sync-engine.md#keys-this-peer-does-not-sync).
 
 Write a custom root when the synced state is not one key per atom, or a removed key needs another
 fallback than the atom's initial value. Pass a derived writable atom that reads the atoms and fans
@@ -172,8 +173,8 @@ mount tries again. `atomWithSync` exposes no engine, so `isReady()` and
 [`useSyncStatus`](../../react/docs/introduction.md) are out of reach here; use
 `createSyncEngine(backend, createJotaiAdapter(atom, store))` to show that status.
 
-Every peer sharing a room should sync the same set of atoms, as with the record form of
-`createJotaiAdapter`.
+Given a record of atoms, a key the room holds that the record does not list stays in the room, as
+with the record form of `createJotaiAdapter`.
 
 One `atomWithSync` atom syncs one store at a time. Stores mounted one after another each sync,
 with one engine per store, but mounting the atom in a second store while the first is mounted

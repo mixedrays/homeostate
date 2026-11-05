@@ -85,8 +85,8 @@ make the store observable first: a store that is not observable throws. A field 
 later is not synced.
 
 A key the room holds outside the store's synced fields, such as one a peer running a newer version
-of the app adds, is removed from the room. Passing `keys` does not prevent this, so every peer
-sharing a room should sync the same fields.
+of the app adds, stays in the room as it is: this peer never reads or deletes it. A synced field
+this peer removes is deleted from the room.
 
 Remote changes write only what differs, inside one action, so unchanged items keep their
 identity and `observer` components that read them do not re-render.

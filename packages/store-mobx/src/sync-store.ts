@@ -37,8 +37,7 @@ export type SyncMobxStoreOptions<
  *
  * `keys` and `omit` choose the synced fields as in {@link createMobxAdapter}, and without them the
  * helper syncs every observable data field. A key the room holds outside the store's synced fields,
- * such as one a peer running a newer version of the app adds, is removed from the room. Passing
- * `keys` does not prevent this, so every peer sharing a room should sync the same fields.
+ * such as one a peer running a newer version of the app adds, stays in the room as it is.
  *
  * @param store - The MobX store instance, already made observable
  * @param options - The backend, the connect mode, the adapter's options and the engine's config

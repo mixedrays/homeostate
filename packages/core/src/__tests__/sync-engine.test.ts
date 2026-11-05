@@ -127,7 +127,7 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: [todo("remote")] });
     });
 
-    it("seeds a backend that holds only keys the filter excludes", () => {
+    it("seeds a backend that holds only keys the filter excludes, and keeps them", () => {
       const backend = createMemoryBackend({ secret: "remote" });
       const store = createTestStore(threeTodos());
 
@@ -136,7 +136,7 @@ describe("createSyncEngine", () => {
       }).connect();
 
       expect(store.getState()).toEqual(threeTodos());
-      expect(backend.read()).toEqual(threeTodos());
+      expect(backend.read()).toEqual({ ...threeTodos(), secret: "remote" });
     });
 
     it("leaves the store object untouched when every backend key already matches", () => {
@@ -854,7 +854,7 @@ describe("createSyncEngine", () => {
       expect(last.todos[1]).toBe(store.getState().todos[1]);
     });
 
-    it("keeps local keys the backend holds, so the next write still deletes them", () => {
+    it("keeps local keys the backend holds, and the next write leaves them", () => {
       const { backend, previous } = checkedBackend({
         ...threeTodos(),
         secret: "remote",
@@ -869,7 +869,10 @@ describe("createSyncEngine", () => {
       store.update((s) => toggleTodo(s as ReturnType<typeof threeTodos>, "1"));
 
       expect(previous).toEqual([{ ...threeTodos(), secret: "remote" }]);
-      expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
+      expect(backend.read()).toEqual({
+        ...toggleTodo(threeTodos(), "1"),
+        secret: "remote",
+      });
     });
 
     it("passes nothing to the seed write, and what it seeded to the next one", () => {
@@ -881,7 +884,11 @@ describe("createSyncEngine", () => {
       createSyncEngine(backend, store.adapter, {
         filter: (key: string) => key !== "secret",
       }).connect();
-      const seeded = { ...threeTodos(), todos: [todo("remote")] };
+      const seeded = {
+        ...threeTodos(),
+        todos: [todo("remote")],
+        secret: "remote",
+      };
       expect(backend.read()).toEqual(seeded);
 
       store.update((s) => setSearchTerm(s, "x"));
@@ -901,9 +908,10 @@ describe("createSyncEngine", () => {
       store.update((s) => ({ ...s, searchTerm: "x" }));
 
       expect(previous.at(-1)).toEqual(remote);
-      expect(backend.read()).toEqual(
-        setSearchTerm(toggleTodo(threeTodos(), "2"), "x"),
-      );
+      expect(backend.read()).toEqual({
+        ...setSearchTerm(toggleTodo(threeTodos(), "2"), "x"),
+        secret: "remote",
+      });
     });
 
     it("passes what it read when the store rejects a remote change", () => {
@@ -1143,12 +1151,14 @@ describe("createSyncEngine", () => {
       });
       expect(backend.read()).toEqual({
         todos: [todo("9")],
+        searchTerm: "room",
         filterStatus: "all",
       });
 
       store.update((s) => setSearchTerm(s, "local"));
       expect(backend.read()).toEqual({
         todos: [todo("9")],
+        searchTerm: "room",
         filterStatus: "all",
       });
 
@@ -1160,7 +1170,7 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("syncs only the keys listed, ignoring backend keys the store lacks", () => {
+    it("syncs only the keys listed, leaving the backend's other keys alone", () => {
       const backend = createMemoryBackend({
         todos: [todo("9")],
         filterStatus: "completed",
@@ -1175,7 +1185,11 @@ describe("createSyncEngine", () => {
       });
 
       store.update((s) => setSearchTerm(s, "local"));
-      expect(backend.read()).toEqual({ todos: [todo("9")] });
+      expect(backend.read()).toEqual({
+        todos: [todo("9")],
+        filterStatus: "completed",
+        theme: "dark",
+      });
 
       backend.receive({ todos: [], filterStatus: "active", theme: "light" });
       expect(store.getState()).toEqual({
@@ -1222,6 +1236,109 @@ describe("createSyncEngine", () => {
       ).connect();
 
       expect(backend.read()).toEqual({ todos: threeTodos().todos });
+    });
+  });
+
+  describe("room keys this peer does not sync", () => {
+    /** A store that holds only `todos`, as a MobX class or a record of atoms does. */
+    const fixedKeyStore = (todos: string[] = []) =>
+      createTestStore<{ todos: string[] }>({ todos }, ({ todos }) => ({
+        todos,
+      }));
+
+    it.each([
+      ["no config", {}],
+      ["keys", { keys: ["todos"] }],
+    ] as [string, SyncEngineConfig<{ todos: string[] }>][])(
+      "keeps a key a fixed-key store cannot hold, with %s",
+      (_, config) => {
+        const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
+        const store = fixedKeyStore();
+        const onError = vi.fn();
+        createSyncEngine(backend, store.adapter, {
+          ...config,
+          onError,
+        }).connect();
+        expect(backend.read()).toEqual({ todos: ["a"], tags: ["x"] });
+
+        backend.receive({ todos: ["a", "b"], tags: ["x", "y"] });
+        expect(backend.read()).toEqual({
+          todos: ["a", "b"],
+          tags: ["x", "y"],
+        });
+
+        store.update(({ todos }) => ({ todos: [...todos, "local"] }));
+        expect(backend.read()).toEqual({
+          todos: ["a", "b", "local"],
+          tags: ["x", "y"],
+        });
+        expect(onError).not.toHaveBeenCalled();
+      },
+    );
+
+    it("deletes a key the store removes, also one it took from the room", () => {
+      const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
+      const store = createTestStore<{ todos: string[]; tags?: string[] }>({
+        todos: [],
+      });
+      createSyncEngine(backend, store.adapter).connect();
+      expect(store.getState()).toEqual({ todos: ["a"], tags: ["x"] });
+
+      store.update(({ todos }) => ({ todos }));
+
+      expect(backend.read()).toEqual({ todos: ["a"] });
+    });
+
+    it("deletes a key the store held and drops while a remote change is applied", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore<{ todos: string[]; legacy?: string }>(
+        { todos: [], legacy: "kept" },
+        ({ legacy, ...rest }) =>
+          legacy === "retired" ? rest : { ...rest, legacy },
+      );
+      createSyncEngine(backend, store.adapter).connect();
+
+      expect(backend.read()).toEqual({ todos: [], legacy: "kept" });
+
+      backend.receive({ todos: ["a"], legacy: "retired" });
+
+      expect(store.getState()).toEqual({ todos: ["a"] });
+      expect(backend.read()).toEqual({ todos: ["a"] });
+    });
+
+    it("deletes a key whose value the filter stops keeping", () => {
+      const backend = createMemoryBackend({ tags: ["x"] });
+      const store = createTestStore<{ todos: string[]; view: unknown }>({
+        todos: [],
+        view: "list",
+      });
+      createSyncEngine(backend, store.adapter).connect();
+      expect(backend.read()).toEqual({ todos: [], view: "list", tags: ["x"] });
+
+      store.update((state) => ({ ...state, view: () => "list" }));
+
+      expect(backend.read()).toEqual({ todos: [], tags: ["x"] });
+    });
+
+    it("keeps what the backend holds now when a write back follows a change it has not heard of", () => {
+      const backend = createMemoryBackend({ todos: [], count: 0, tags: ["x"] });
+      let changeBackend = true;
+      const store = createTestStore<{ todos: string[]; count: number }>(
+        { todos: [], count: 0 },
+        ({ todos }) => {
+          // Code the store notifies changes the document, which the engine hears of later.
+          if (changeBackend && todos.length > 0) {
+            changeBackend = false;
+            backend.write({ ...backend.read(), tags: ["y"] });
+          }
+          return { todos, count: todos.length };
+        },
+      );
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive({ todos: ["a"], count: 0, tags: ["x"] });
+
+      expect(backend.read()).toEqual({ todos: ["a"], count: 1, tags: ["y"] });
     });
   });
 
@@ -3465,7 +3582,11 @@ describe("createSyncEngine", () => {
             label: "mine",
             draft: "edit",
           });
-          expect(backend.read()).toEqual({ count: 8, label: "mine" });
+          expect(backend.read()).toEqual({
+            count: 8,
+            label: "mine",
+            draft: "room",
+          });
         }
       });
 

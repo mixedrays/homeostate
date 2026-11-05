@@ -463,7 +463,7 @@ describe("scopeAdapter", () => {
       expect(backend.read()).toEqual({ title: "local", extra: 1 });
     });
 
-    it("removes them from the room with the next local change under keys", () => {
+    it("leaves them in the room under keys", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend({ title: "room", extra: 1 });
       createSyncEngine(backend, scopeAdapter(store.adapter, docScope), {
@@ -474,10 +474,10 @@ describe("scopeAdapter", () => {
 
       store.update((state) => ({ ...state, doc: { title: "local" } }));
 
-      expect(backend.read()).toEqual({ title: "local" });
+      expect(backend.read()).toEqual({ title: "local", extra: 1 });
     });
 
-    it("removes them at once when set drops them", () => {
+    it("leaves them in the room when set drops them", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend({ title: "room", extra: 1 });
       createSyncEngine(
@@ -487,8 +487,11 @@ describe("scopeAdapter", () => {
           set: (state, { title }) => ({ ...state, doc: { title } }),
         }),
       ).connect();
+      expect(backend.read()).toEqual({ title: "room", extra: 1 });
 
-      expect(backend.read()).toEqual({ title: "room" });
+      store.update((state) => ({ ...state, doc: { title: "local" } }));
+
+      expect(backend.read()).toEqual({ title: "local", extra: 1 });
     });
   });
 

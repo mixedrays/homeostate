@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   combineReducers,
   configureStore,
@@ -297,6 +297,44 @@ describe("withHomeostate and replaceState", () => {
       todos: { filter: "done", todos: [{ ...bread, done: true }] },
       ui: { dark: false },
     });
+  });
+  it("removes a room key combineReducers drops on the next action, unless keys leaves it out", () => {
+    // combineReducers warns of the unexpected key in development.
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      for (const [config, kept] of [
+        [{}, false],
+        [{ keys: ["todos", "ui"] }, true],
+      ] as const) {
+        const store = configureStore({
+          reducer: withHomeostate(
+            combineReducers({ todos: todos.reducer, ui: ui.reducer }),
+          ),
+        });
+        const room = {
+          todos: { filter: "all", todos: [] },
+          ui: { dark: false },
+        };
+        // A newer peer has already written `tags`.
+        const backend = createMemoryBackend({ ...room, tags: ["x"] });
+        createSyncEngine(backend, createReduxAdapter(store), config).connect();
+        expect(backend.read()).toEqual({ ...room, tags: ["x"] });
+
+        // The replace action hands the store `tags`, and the next action drops it.
+        store.dispatch(added(milk));
+
+        expect(store.getState()).not.toHaveProperty("tags");
+        expect(backend.read()).toEqual({
+          ...room,
+          todos: { filter: "all", todos: [milk] },
+          ...(kept ? { tags: ["x"] } : {}),
+        });
+      }
+    } finally {
+      consoleError.mockRestore();
+    }
   });
   it("syncs a slice that handles replaceState in its extra reducers", () => {
     const counter = createSlice({

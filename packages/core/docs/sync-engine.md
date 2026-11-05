@@ -105,8 +105,8 @@ createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
 ```
 
 `keys` lists the synced keys instead. A key the backend holds that it does not list is ignored,
-as if it were a local key, while under `omit` a backend key the state's type does not declare is
-synced like any other.
+as if it were a local key, and stays in the backend as it is, while under `omit` a backend key the
+state's type does not declare is synced like any other.
 
 A key is synced when `filter` keeps it and, by name, `keys` lists it or `omit` does not name
 it, so `filter` still runs with either: a function under a key `keys` lists stays local by
@@ -120,6 +120,28 @@ Despite its name, `"if-empty"` works per key, even when the backend already hold
 keys. With either strategy, a backend key wins over the corresponding store value, and a
 store-only key remains in the store during connection. With `"never"`, the next local
 change still writes the store's entire filtered state, including those store-only keys.
+
+### Keys this peer does not sync
+
+A peer deletes a key from the room only when its store removes a key it syncs: the store drops
+it, or gives it a value `filter` rejects, such as a function. Every other key the room holds stays
+as it is, through connecting, remote changes and local changes:
+
+- a key `keys` does not list, `omit` names or `filter` excludes;
+- a key the store cannot hold, such as a field a MobX class or an MST model does not declare, or
+  an atom a Jotai record does not list. The engine hands it to `setState`, the store leaves it
+  out, and as the store never held it, the engine does not take that as a removal.
+
+So peers on different versions of an app can share a room: a client still on the old version
+keeps the fields a newer one adds, and peers can `omit` or list different keys of one document. The
+cost is that a key no peer syncs any more stays in the room until a peer whose store holds it
+removes it. Deleting another peer's data is worse than keeping a stale key.
+
+A store that takes any key holds a newer peer's key once a remote change brings it. If it then
+drops the key, that is a removal like any other, written with the next local change. Redux's
+`combineReducers` does this on the next action; pass `keys` with the reducer's slices to keep such
+a key out of the store and in the room. See
+[Redux](../../store-redux/docs/introduction.md#keys-the-reducer-does-not-know).
 
 ### Coalescing remote changes
 
@@ -643,15 +665,12 @@ slice, as `{ ...state.doc }` does.
 ### Rooms and keys
 
 Each slice needs a synced subtree of its own, such as a `name` of its own on `createYjsBackend`.
-Every write replaces the subtree, so two slices on one subtree overwrite each other.
-
-Every peer sharing a room should sync the same keys, scoped the same way. A peer syncing fewer
-keys removes the others from the room with its next local change, and from every peer's store, and
-a peer syncing a slice removes the keys of one syncing the whole store on the same subtree.
+On one subtree, each slice's engine hands it the keys the other slice writes.
 
 A key the room holds reaches the slice even if `T` does not declare it, and stays in the room as
-long as the slice keeps it. Under `keys`, it is ignored and removed from the room by the next
-local change. A `set` that drops it removes it at once, as what the store changed in response.
+long as the slice keeps it. Under `keys`, it is ignored and stays in the room. A `set` that drops
+it leaves it in the room too, as the slice never held it; a key the slice held and drops is
+removed. See [Keys this peer does not sync](#keys-this-peer-does-not-sync).
 
 ### Setup helpers
 
@@ -704,8 +723,9 @@ has no index signature, so `read()` converts to one through `unknown`:
 | `revision()`             | Optional. A value equal (`===`) to an earlier one only if the synced subtree has not changed since, reported or not; `undefined` while it cannot tell.           |
 | `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
 
-`previous`, when given, is what the synced subtree holds now: the synced state the engine last
-wrote, or the whole state it last read after a remote change. A backend can diff `next`
+`previous`, when given, is what the synced subtree holds now: the whole state the engine last
+wrote or read. `next` is the whole subtree too: the store's synced keys, and every other key as
+the backend holds it, so that a write deletes only the keys the store removed. A backend can diff `next`
 against it with `applyChanges` and `json: true` instead of reading its document, as one built
 with [`createCrdtBackend`](#createcrdtbackend) does; unchanged subtrees of `next` are then the
 same objects and compare by identity. Like `next`, it may
