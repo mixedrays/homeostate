@@ -155,6 +155,13 @@ finished. If hydration fails, the store stays disconnected, and Zustand passes t
 the callback returned by `onRehydrateStorage`; `store.persist.rehydrate()` retries, and the
 store connects once it succeeds.
 
+Calling `store.persist.rehydrate()` on a connected store, for example on the window `storage`
+event or after switching the storage key, disconnects it while `persist` reads storage and
+reconnects it once the store is hydrated, so the room wins over the rehydrated state as on the
+first hydration. If the rehydrate fails, the store reconnects once `rehydrate()` settles, so a
+store that was syncing keeps syncing; with several rehydrates in flight, it waits for the
+latest. A store the app disconnected, before or during the rehydrate, stays disconnected.
+
 With [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), the store connects after
 hydrating as usual, and writes once `ready` has resolved too, whichever finishes first.
 
