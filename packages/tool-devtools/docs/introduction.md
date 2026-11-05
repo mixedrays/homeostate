@@ -216,6 +216,10 @@ Automerge through their `create*Persistable`. The panel sets four conditions:
   as over a WebSocket.
 - **Flaky** drops the link for 1 to 3 seconds every 3 to 10 seconds, at random.
 
+Latency and jitter have sliders that step by 50 ms up to 2 seconds and by 25 ms up to 1
+second. To go finer or further, type the delay in milliseconds, up to a minute. The button
+beside each resets it to 0.
+
 The tab also counts the updates on their way in each direction, and the tab and the status bar
 say so while the link is down. Pass starting conditions as a third argument, such as `{ latency: 200 }`, or
 change them from code with `network.setConditions`.
