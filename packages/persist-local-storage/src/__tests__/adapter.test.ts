@@ -1,13 +1,31 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { createPersistence, type PersistableDoc } from "@homeostate/core";
 import { describePersistenceAdapter } from "@homeostate/core/conformance";
 import { createLocalStorageAdapter } from "../index.js";
 import { fromBase64, toBase64 } from "../base64.js";
+import { stubNodeLocks } from "./node-locks.js";
+
+beforeAll(stubNodeLocks);
+afterAll(() => vi.unstubAllGlobals());
 
 describePersistenceAdapter(
   "createLocalStorageAdapter",
   () => createLocalStorageAdapter(),
+  () => localStorage.clear(),
+);
+
+describePersistenceAdapter(
+  'createLocalStorageAdapter with coordination: "single-writer"',
+  () => createLocalStorageAdapter({ coordination: "single-writer" }),
   () => localStorage.clear(),
 );
 

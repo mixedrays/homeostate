@@ -1,2 +1,5 @@
 export { createLocalStorageAdapter } from "./adapter.js";
-export type { LocalStorageAdapterOptions } from "./adapter.js";
+export type {
+  LocalStorageAdapterOptions,
+  LocalStorageCoordination,
+} from "./adapter.js";

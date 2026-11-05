@@ -46,8 +46,38 @@ full; see [checking what was restored](/docs/persistence#checking-what-was-resto
 createLocalStorageAdapter({
   prefix: "homeostate:", // prepended to every key
   storage: sessionStorage, // defaults to localStorage
+  coordination: "single-writer", // defaults to "locks"; see Several tabs
 });
 ```
+
+## Several tabs
+
+localStorage has no transactions: every append, compaction and clear reads the document's
+entry and writes it back. So that two tabs persisting the same key do not overwrite each
+other's updates, each of those calls holds a
+[Web Lock](https://developer.mozilla.org/docs/Web/API/Web_Locks_API) named
+`@homeostate/persist-local-storage:<prefix><key>` meanwhile, and the tabs take turns. Different
+keys and prefixes use different locks. `load` reads the entry once and takes no lock.
+
+| `coordination`      | Writers of one key                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"locks"` (default) | Any number of tabs and windows of the origin. Appends and compactions keep what the others stored, as the `PersistenceAdapter` contract requires. |
+| `"single-writer"`   | One tab at a time. Two tabs writing the key at once can lose updates, or a compaction's snapshot.                                                 |
+
+Browsers provide Web Locks in secure contexts only: pages served over https, or from
+`localhost`. On a page opened over plain http from another address, such as a LAN IP, with
+`"locks"` every append, compaction and clear rejects with an error naming the missing
+`navigator.locks` and leaves storage as it was; `createPersistence` reports it through
+`onError`, and `flush()` rejects. Serve the page over https, or pass `"single-writer"` when only
+one tab writes the storage. A lock request the browser rejects fails the call the same way.
+
+`sessionStorage` belongs to one tab, so `"single-writer"` is safe for it. With the default it
+still works, and only waits for tabs using the same prefix and key. The same holds for a storage
+you pass in: the lock is named after the prefix and key, not the storage, so give each storage
+its own prefix to keep its writers from waiting for another's.
+
+`clear()` removes the entry once the writes before it are done. Another tab that still persists
+the key writes it again with its next update, starting a new log.
 
 ## Limits
 

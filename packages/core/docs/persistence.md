@@ -324,6 +324,11 @@ interface PersistenceAdapter {
 | `compact(key, snapshot, version)` | Atomically removes updates through the supplied version and stores the snapshot, retaining later appends and snapshots from concurrent compactions. |
 | `clear(key)`                      | Removes all stored data for that key. Other keys are unaffected.                                                                                    |
 
+Several tabs, or other processes, may write the same key at once, so `append`, `compact` and
+`clear` must not lose what another writer stored meanwhile: the IndexedDB adapter runs each in
+one transaction, and the localStorage adapter holds a Web Lock, unless it is told that only one
+tab writes; see [several tabs](/docs/persistence#several-tabs).
+
 `version` is a storage-log position, not an application schema version. Store the bytes in
 the supplied `Uint8Array` view, which may cover only part of its backing buffer. Reject
 failed storage operations so `createPersistence` can report them through `onError` and the

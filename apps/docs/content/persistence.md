@@ -153,7 +153,8 @@ Await `flush()` for storage writes.
   Use it by default.
 - **localStorage** keeps each document as one JSON entry, rewritten on every update and
   limited to about 5 MB per origin. It suits small documents and environments without
-  IndexedDB. Pass `sessionStorage` to keep a document only for the tab's session.
+  IndexedDB. Pass `sessionStorage` to keep a document only for the tab's session. Tabs take
+  turns writing through Web Locks, which need https or localhost; see [Several tabs](#several-tabs).
 
 ## The CRDT library's own storage
 
@@ -273,13 +274,28 @@ describes what happens on load and on each compaction.
 Tabs of one origin may persist the same key at once. Each update is appended to a log, and
 every `compactAfter` updates (100 by default) a tab merges the log into its document and
 replaces the part it merged with one snapshot. Updates another tab appended meanwhile are
-kept, so no tab loses another's edits.
+kept, so no tab loses another's edits:
+
+- **IndexedDB** writes each append and compaction in one transaction.
+- **localStorage** has no transactions, so the adapter holds a
+  [Web Lock](https://developer.mozilla.org/docs/Web/API/Web_Locks_API) for the key while it
+  reads and rewrites the document's entry. Browsers provide Web Locks in secure contexts only,
+  https and `localhost`. On a page opened over plain http from another address, such as a LAN
+  IP, every write rejects with an error saying so, through `onError` and `flush()`. Serve the
+  page over https, or pass `coordination: "single-writer"` when only one tab writes the
+  storage, as with `sessionStorage`; two tabs writing one key in that mode can lose each
+  other's updates. The
+  [adapter's documentation](../../../packages/persist-local-storage/docs/introduction.md#several-tabs)
+  has the details.
+
+`clear()` deletes the stored document for every tab, but another tab that still persists the
+key writes it again with its next update.
 
 ## Custom storage
 
 A [`PersistenceAdapter`](../../../packages/core/docs/persistence.md#persistenceadapter-and-storedupdates)
 is an append-only log of binary updates per key, with `load`, `append`, `compact` and `clear`.
 `compact` must atomically replace the updates up to the version `load` returned with one
-snapshot, keeping anything appended since.
+snapshot, keeping anything appended since, also by another tab writing the same key.
 [`createMemoryPersistenceAdapter()`](../../../packages/core/docs/testing.md#creatememorypersistenceadapter)
 from `@homeostate/core/testing` is an in-memory one for tests.
