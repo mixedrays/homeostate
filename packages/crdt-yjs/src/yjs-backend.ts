@@ -2,11 +2,15 @@ import * as Y from "yjs";
 import {
   createCrdtBackend,
   type CrdtBackend,
+  type JsonObject,
+  type JsonObjectInput,
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
 import { toPlainMap } from "./mapping.js";
 import { createYjsOps } from "./patching.js";
+import { rebase } from "./merge.js";
+import { copyJson, createHold, hasGap } from "./pending.js";
 
 /** Options for `createYjsBackend` */
 export interface YjsBackendOptions {
@@ -44,6 +48,8 @@ export interface YjsBackend extends CrdtBackend {
 
 // Declared here so that this package needs no Node types; the ES libs have no `console`.
 declare const console: { error: (...data: unknown[]) => void };
+
+const noText: TextPolicy = () => false;
 
 const reportRemoved = (error: Error): void => {
   console.error("[homeostate] Yjs backend lost its map:", error);
@@ -101,6 +107,15 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * Writes run in a transaction tagged with `origin`, and `subscribe`
  * skips events from that origin, so the engine only hears about remote changes.
  *
+ * While subscribed, it shows only states its document passed through. When an update arrives
+ * before an earlier one it depends on, Yjs applies the update's deletes and keeps the rest
+ * waiting, which would hide a value the update replaces. Until the earlier update arrives,
+ * `read` returns what the map held before, `revision` keeps its value, and `subscribe` reports
+ * nothing; then it reports the changes at once. Writes meanwhile merge what the store changed
+ * into what the document holds, leaving the hidden values alone. The wait covers every change, such as a peer's change to
+ * another key, and a gap anywhere in the document, since Yjs tracks waiting updates per
+ * document.
+ *
  * @example
  * ```typescript
  * const doc = new Y.Doc();
@@ -142,19 +157,57 @@ export function createYjsBackend(
     origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`),
     onRemoved = reportRemoved,
   } = options;
+  const text = options.text ?? noText;
   const transactions = countTransactions(doc);
+  const hold = createHold(map, doc, () => transactions.done);
   let reported = false;
 
   const backend = createCrdtBackend((text) => {
     const ops = createYjsOps(text);
     return {
-      read: () => toPlainMap(map),
+      read: () => {
+        const held = hold.held();
+        if (held !== undefined) return copyJson(held.value);
+        const value = toPlainMap(map);
+        hold.remember(value);
+        return value;
+      },
 
       transact: (edit) => doc.transact(() => edit(map, ops), origin),
 
       watch: (onChange): Unsubscribe => {
-        const handler = (_events: unknown, transaction: Y.Transaction): void =>
-          onChange(transaction.origin === origin);
+        const untrack = hold.track();
+        /**
+         * Whether a change other than this backend's own may wait for the gap to close: one made
+         * while it was open, or before this watch began, when one is open already.
+         */
+        let missed = hasGap(doc);
+        /** The transaction that closed the gap, while its missed changes are unreported. */
+        let closing: Y.Transaction | null = null;
+        const handler = (
+          _events: unknown,
+          transaction: Y.Transaction,
+        ): void => {
+          const own = transaction.origin === origin;
+          if (hasGap(doc)) {
+            if (!own) missed = true;
+            return;
+          }
+          const closed = closing === transaction;
+          closing = null;
+          onChange(own && !closed);
+        };
+        const watchGap = (transaction: Y.Transaction): void => {
+          if (!missed || hasGap(doc)) return;
+          missed = false;
+          closing = transaction;
+        };
+        // For a gap that closes in a transaction that leaves the map alone.
+        const reportClosed = (transaction: Y.Transaction): void => {
+          if (closing !== transaction) return;
+          closing = null;
+          onChange(false);
+        };
         // Yjs sends a deleted map no event, so look for the removal after every transaction.
         const watchRemoval = (): void => {
           if (reported || !isRemoved(map)) return;
@@ -162,18 +215,45 @@ export function createYjsBackend(
           onRemoved(removedError());
         };
         map.observeDeep(handler);
+        doc.on("beforeObserverCalls", watchGap);
+        doc.on("afterTransaction", reportClosed);
         const nested = map._item !== null;
         if (nested) doc.on("afterTransaction", watchRemoval);
         return () => {
           map.unobserveDeep(handler);
+          doc.off("beforeObserverCalls", watchGap);
+          doc.off("afterTransaction", reportClosed);
           if (nested) doc.off("afterTransaction", watchRemoval);
+          untrack();
         };
       },
 
-      // Every change in the document, since telling which ones changed the map takes more.
-      revision: () => (transactions.open > 0 ? undefined : transactions.done),
+      // Every change in the document, since telling which ones changed the map takes more, but
+      // while a gap is open, only the changes `read` shows.
+      revision: () => {
+        if (transactions.open > 0) return undefined;
+        return hold.held()?.revision ?? transactions.done;
+      },
     };
   }, options);
 
-  return { ...backend, map, origin };
+  const write = (next: JsonObjectInput, previous?: JsonObjectInput): void => {
+    const held = hold.held();
+    if (held === undefined) {
+      backend.write(next, previous);
+      hold.remember(next);
+      return;
+    }
+    // The store changed what it was shown, which the document no longer holds: an edit script
+    // made from it could address items that are gone. So merge what the store changed into what
+    // the document holds, leaving alone what it did not change, the values the gap hides too.
+    const seen = previous ?? held.value;
+    const real = toPlainMap(map);
+    backend.write(rebase(real, seen, next, text) as JsonObject, real);
+    held.value = rebase(held.value, seen, next, text) as JsonObjectInput;
+    // Equal to no revision before it, whether or not the write ran inside a transaction.
+    held.revision = {};
+  };
+
+  return { ...backend, write, map, origin };
 }

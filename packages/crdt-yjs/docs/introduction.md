@@ -100,6 +100,40 @@ A string held as the other kind, such as a `Y.Text` written by an earlier releas
 usual and is stored as the configured kind when it next changes. See
 [Strings and text](/docs/concepts#strings-and-text).
 
+## Updates out of order
+
+A provider can deliver a peer's update before an earlier one it depends on, as y-websocket
+can for about one round trip after a reconnect, or a relay that reorders or drops messages.
+Yjs then applies the update's deletes at once and keeps the rest waiting, so a value the
+update replaces would vanish until the earlier update arrives.
+
+While its document holds such a waiting update, a subscribed backend shows the state from
+before it: `read()` returns what the map held then, `revision()` keeps its value, and
+`subscribe` reports nothing. Once the earlier update arrives, the backend reports one change
+and the store catches up. The store only ever shows states the document passed through.
+
+Local changes still reach the document meanwhile. A write merges what the store changed into
+what the document holds, with what the store was shown as the base, so it never puts back a
+value the waiting update replaced, and keeps the changes other peers made in the meantime:
+
+- Objects merge key by key, and a key the store left alone keeps the document's value.
+- Arrays and `Y.Text` strings merge position by position: the store's inserts and deletes
+  land among the items the document holds, and an item either side deleted stays deleted.
+  A change inside an array item merges key by key.
+- Where the store and the document both changed one value, as when both replaced a list item
+  or a plain string, the store's value wins, as a later write would. A value the document
+  lost stays lost if the store only changed what was inside it, as Yjs drops an edit inside a
+  deleted map; if the store replaced it, the store's value is written.
+
+The wait has two costs:
+
+- Every other change waits too, such as a peer's change to another key or an undo, for as
+  long as the earlier update is missing. A provider that never re-sends a lost update leaves
+  the store behind until it resyncs, as y-websocket does on reconnect or with
+  `resyncInterval`.
+- Yjs tracks waiting updates per document, so one waiting in another shared type of the
+  document holds the backend back as well.
+
 ## Persistence
 
 Pass `createYjsPersistable(doc)` to `createPersistence`. It stores Yjs updates, so every
