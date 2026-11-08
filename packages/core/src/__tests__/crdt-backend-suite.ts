@@ -622,6 +622,37 @@ export const describeCrdtBackend = <D>(
         expect(isText(doc, ["tags", 0])).toBe(true);
         expect(isText(doc, ["todos", 0, "title"])).toBe(false);
       });
+
+      scenario(
+        "edits text under an empty key, a key with a slash, and the nested path the slash spells",
+      ).run(() => {
+        const doc = createDoc();
+        const written = backend(doc, { text: () => true });
+        let state: object = {
+          notes: { "": "hello" },
+          files: { "src/app.ts": "let a" },
+          "a/b": "slash",
+          a: { b: "nested" },
+        };
+        written.write(state);
+
+        const edits: [string, object][] = [
+          ["empty key", { notes: { "": "hello!" } }],
+          ["file path key", { files: { "src/app.ts": "let ab" } }],
+          ["slash key", { "a/b": "slash!" }],
+          ["nested path", { a: { b: "nested?" } }],
+        ];
+        for (const [edit, change] of edits) {
+          state = { ...state, ...change };
+          written.write(state);
+          expect(written.read(), edit).toEqual(state);
+        }
+
+        expect(isText(doc, ["notes", ""])).toBe(true);
+        expect(isText(doc, ["files", "src/app.ts"])).toBe(true);
+        expect(isText(doc, ["a/b"])).toBe(true);
+        expect(isText(doc, ["a", "b"])).toBe(true);
+      });
     }
 
     if (storeForeignContainers)

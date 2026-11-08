@@ -291,3 +291,54 @@ describe("createAutomergeBackend", () => {
     expect(store.getState()).toEqual({ count: 1 });
   });
 });
+
+describe("text under keys that hold a slash", () => {
+  const exchange = (a: Handle, b: Handle): void => {
+    b.update((doc) => A.merge(doc, a.doc()));
+    a.update((doc) => A.merge(doc, b.doc()));
+  };
+
+  it("edits text under a synced key name with a slash", () => {
+    const backend = createAutomergeBackend(createHandle(), "app/state", {
+      text: () => true,
+    });
+    backend.write({ title: "abc" });
+
+    backend.write({ title: "abcd" });
+
+    expect(backend.read()).toEqual({ title: "abcd" });
+  });
+
+  it("leaves the nested path a synced key name with a slash spells to other code", () => {
+    const handle = createHandle();
+    handle.change((doc) => {
+      doc.app = { state: { title: "other" } };
+    });
+    const backend = createAutomergeBackend(handle, "app/state", {
+      text: () => true,
+    });
+    backend.write({ title: "abc" });
+
+    backend.write({ title: "abcd" });
+
+    expect(backend.read()).toEqual({ title: "abcd" });
+    expect(handle.doc().app).toEqual({ state: { title: "other" } });
+  });
+
+  it("keeps both peers' characters when they edit the same text at once", () => {
+    const options = { text: () => true };
+    const docA = createHandle(1);
+    const docB = createHandle(2);
+    const a = createAutomergeBackend(docA, NAME, options);
+    const b = createAutomergeBackend(docB, NAME, options);
+    a.write({ "a/b": "slash" });
+    exchange(docA, docB);
+
+    a.write({ "a/b": "slash!" });
+    b.write({ "a/b": "Xslash" });
+    exchange(docA, docB);
+
+    expect(a.read()).toEqual({ "a/b": "Xslash!" });
+    expect(b.read()).toEqual({ "a/b": "Xslash!" });
+  });
+});

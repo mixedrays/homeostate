@@ -34,7 +34,7 @@ export const toAutomerge = (
 /**
  * How `applyChanges` writes into `doc[root]` inside `A.change`. Every value it writes is
  * converted by `toAutomerge`. Text reads as a string and is edited character by character
- * through its path, since Automerge splices text by path; an `ImmutableString`, held by a peer
+ * through its object ID, found from its path; an `ImmutableString`, held by a peer
  * with another policy or an older version, is a plain value and is replaced whole. Paths given to
  * the policy start below `root`.
  */
@@ -75,8 +75,46 @@ export const createAutomergeOps = (
   },
 
   editText: (_text, index, deleteCount, inserted, path) => {
-    if (inserted.length > 0)
-      A.splice(doc, [root, ...path], index, deleteCount, inserted);
-    else A.splice(doc, [root, ...path], index, deleteCount);
+    const backend = A.getBackend(doc);
+    const { parent, id } = findText(backend, doc, root, path);
+    if (inserted.length > 0) backend.splice(id, index, deleteCount, inserted);
+    else backend.splice(id, index, deleteCount);
+    // As `A.splice` does, or the parent proxy reads the text as it was until the change ends.
+    Reflect.set(parent, CLEAR_CACHE, true);
   },
 });
+
+/** Tells an Automerge map proxy to drop the values it read; a list proxy keeps none. */
+const CLEAR_CACHE = Symbol.for("_am_clearCache");
+
+/**
+ * The text at `path` below `doc[root]`: the proxy of its parent, reached by walking the proxies,
+ * which take any key, and its object ID, which the parent's entry holds.
+ *
+ * Automerge's own functions miss some keys, which is why the ID comes from the document's
+ * backend, although `A.getBackend` is marked hidden. `A.splice` joins its path with "/" for the
+ * Wasm side to split again, so a key that is empty or holds "/", the synced key name among
+ * them, addresses another object or none. `A.getObjectId(parent, key)` returns the parent's own
+ * ID for a falsy key, `""` or index `0`.
+ */
+const findText = (
+  backend: ReturnType<typeof A.getBackend>,
+  doc: Container,
+  root: string,
+  path: Path,
+): { parent: object; id: A.ObjID } => {
+  const parent = path
+    .slice(0, -1)
+    .reduce<unknown>(
+      (container, key) => (container as Record<A.Prop, unknown>)[key],
+      doc[root],
+    ) as object;
+  const parentId = A.getObjectId(parent);
+  const entry =
+    parentId === null ? null : backend.getWithType(parentId, path.at(-1)!);
+  if (entry?.[0] !== "text")
+    throw new RangeError(
+      `No Automerge text at ${JSON.stringify([root, ...path])}`,
+    );
+  return { parent, id: entry[1] };
+};
