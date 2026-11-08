@@ -66,8 +66,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/crdt-yjs
       loro-crdt:
-        specifier: ^1.16.1
-        version: 1.16.1
+        specifier: ^1.17.1
+        version: 1.17.1
       tinybench:
         specifier: ^6.1.4
         version: 6.1.4
@@ -794,8 +794,8 @@ importers:
         version: link:../core
     devDependencies:
       loro-crdt:
-        specifier: ^1.16.1
-        version: 1.16.1
+        specifier: ^1.17.1
+        version: 1.17.1
 
   packages/crdt-yjs:
     dependencies:
@@ -1011,8 +1011,8 @@ importers:
         specifier: workspace:^
         version: link:../store-zustand
       loro-crdt:
-        specifier: ^1.16.1
-        version: 1.16.1
+        specifier: ^1.17.1
+        version: 1.17.1
       yjs:
         specifier: ^13.6.23
         version: 13.6.27
@@ -4811,8 +4811,8 @@ packages:
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
 
-  loro-crdt@1.16.1:
-    resolution: {integrity: sha512-olUkbQEjeeE78Kx6BknYrpbaX43wxRAycoiLZUSLVcMFKMSZ8RxPfp244kNVQEM8MQfgkbnwrNOaHU/yUb5Ncg==}
+  loro-crdt@1.17.1:
+    resolution: {integrity: sha512-83hWRYG6eMMpPezm+yXWlOqCuUsC0BYY1MVCPW9x2zlikgkHhL7GC7Q6JFH+Hjvauyn287Q1MiwTuRW0lUOUag==}
 
   lru-cache@11.5.2:
     resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
@@ -10247,7 +10247,7 @@ snapshots:
 
   longest-streak@3.1.0: {}
 
-  loro-crdt@1.16.1: {}
+  loro-crdt@1.17.1: {}
 
   lru-cache@11.5.2: {}
 

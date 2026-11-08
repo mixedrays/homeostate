@@ -17,6 +17,9 @@ small update.
 npm install @homeostate/core @homeostate/crdt-loro loro-crdt
 ```
 
+`loro-crdt` 1.16.4 or later is a peer dependency. Earlier versions can panic when a text
+policy deletes a range of a `LoroText`, after which the document throws on every call.
+
 ## Usage
 
 ```ts
