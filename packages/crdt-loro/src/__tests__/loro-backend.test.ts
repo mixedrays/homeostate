@@ -1,7 +1,12 @@
 import { LoroDoc, LoroList, LoroMap, LoroText } from "loro-crdt";
 import { describe, expect, it } from "vitest";
-import { describeCrdtBackend } from "@homeostate/core/conformance";
-import { createLoroBackend } from "../index.js";
+import { createSyncEngine } from "@homeostate/core";
+import {
+  createTestStore,
+  describeCrdtBackend,
+} from "@homeostate/core/conformance";
+import { createLoroBackend, createLoroPersistable } from "../index.js";
+import { textDeletePanicSnapshot } from "./fixtures/text-delete-panic.js";
 
 const NAME = "shared";
 
@@ -85,5 +90,29 @@ describe("createLoroBackend", () => {
     doc.checkoutToLatest();
 
     expect(backend.revision?.()).toBe(latest);
+  });
+
+  // loro-crdt before 1.16.4 panics at commit on this delete when the document has a subscriber,
+  // which the engine always adds, and every later call on the document throws.
+  it("deletes a text in a restored document while the engine is connected", () => {
+    const doc = new LoroDoc();
+    createLoroPersistable(doc).apply(textDeletePanicSnapshot());
+    const errors: unknown[] = [];
+    const store = createTestStore<Record<string, unknown>>({});
+    createSyncEngine(
+      createLoroBackend(doc, NAME, { text: () => true }),
+      store.adapter,
+      { onError: (error, source) => errors.push([source, error]) },
+    ).connect();
+    expect(store.getState().chaos).toBe("🙂y");
+
+    store.update((state) => ({ ...state, chaos: "" }));
+    store.update((state) => ({ ...state, log: "after" }));
+
+    expect(errors).toEqual([]);
+    expect(doc.getMap(NAME).toJSON()).toMatchObject({
+      chaos: "",
+      log: "after",
+    });
   });
 });
