@@ -136,6 +136,36 @@ the document the same policy. A string held as the other kind, such as text writ
 earlier release, reads as usual and is stored as the configured kind when it next changes. See
 [Strings and text](/docs/concepts#strings-and-text).
 
+## Known issue: list order after some merges
+
+Automerge 3.4.1 and 3.5.0 patch a document's view wrongly after some merges. Each document
+keeps a materialized view, the object tree `handle.doc()` returns, and updates it from patches.
+When one merge brings a delete of a list item together with an insert after that item, while
+another peer's concurrent update of the item is in the same merge or already in the document,
+the insert's patch lands one index too low. The view then holds another order than the document
+itself, which `A.save`, `A.load` and `A.toJS` read. Other 3.x releases were not tested.
+
+Such a merge happens when two users edit one list at once, one removing an item while the other
+edits it and adds one after it, and a third peer receives the delete and the insert together:
+through `A.loadIncremental`, `A.merge`, the sync protocol, as automerge-repo uses it, or a stored
+update that persistence restores. A single change can carry both, too, when a peer adds an item
+after another and then removes that one while a concurrent update of it is already in the
+receiving document. A peer that receives the delete and the insert in separate merges is fine.
+
+The backend reads the view, so on the affected peer:
+
+- `read()` and the store show another order than every other peer, with no error, and peers
+  that compare heads consider themselves in sync;
+- the next write diffs against that order and edits list items by index, so it changes another
+  item than the store did, and every peer receives that change.
+
+The backend does not work around it yet. Materializing the synced key afresh on every read after
+a merge would cost about 8 ms per remote change at 1000 todos. Other code that reads
+`handle.doc()` or a `DocHandle`'s document sees the same wrong view. Loading the document again,
+from storage or the room as a page reload does, shows the right list, but edits made in the
+meantime stay. The upstream issue (link to follow) tracks the fix. Once a release ships
+it, this package raises its `@automerge/automerge` peer range to that release.
+
 ## Persistence
 
 Pass `createAutomergePersistable(handle)` to `createPersistence`. It stores `A.save` of the

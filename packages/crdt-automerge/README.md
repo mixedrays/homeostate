@@ -71,6 +71,18 @@ To persist the document, pass `createAutomergePersistable(handle)` to `createPer
 use a `Repo`'s storage adapter; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).
 
+## Known issue: list order after some merges
+
+Automerge 3.4.1 and 3.5.0, the releases tested, can patch a document's view wrongly when one merge brings a delete of a list item together with an insert after that item,
+while another peer's concurrent update of the item is in the same merge or already in the
+document. The inserted item then sits one index too low in the view, while the document itself
+is right. The backend reads the view, so the store shows another order than the other peers,
+with no error, and its next edit by index changes another item for every peer. Any other code
+reading `handle.doc()` sees the same wrong view. Loading the document again, as a page reload
+does, shows the right list, but edits made in the meantime stay. The backend has no workaround
+yet; see the [documentation](https://homeostate.pages.dev/docs/crdt-automerge/introduction#known-issue-list-order-after-some-merges)
+and the upstream issue (link to follow).
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). Includes code derived from

@@ -11,6 +11,7 @@ import {
 import {
   createAutomergeBackend,
   createAutomergeHandle,
+  createAutomergePersistable,
   type AutomergeDocSource,
   type AutomergeHandle,
 } from "../index.js";
@@ -341,4 +342,100 @@ describe("text under keys that hold a slash", () => {
     expect(a.read()).toEqual({ "a/b": "Xslash!" });
     expect(b.read()).toEqual({ "a/b": "Xslash!" });
   });
+});
+
+// Automerge 3.4.1 and 3.5.0 patch a document's view wrongly when one merge brings both a delete
+// of a list item and a concurrent change that updates that item and inserts after it: the insert
+// lands one index too low in the view, while the document itself, as `A.save` keeps it, is right.
+// The backend reads the view, so its reads and the writes that diff against them are wrong too.
+// The first two tests describe the right behavior and fail until a fixed Automerge is installed.
+// Upstream issue: TODO(upstream issue URL).
+describe("a delete and a concurrent update with an insert after it, merged at once", () => {
+  /**
+   * Two peers change `[1, 2]` at once: one sets index 1 to 5 and inserts 6 after it, the other
+   * deletes index 1.
+   */
+  const concurrentEdits = () => {
+    const base = A.change(A.init<Root>(actor(1)), (doc) => {
+      doc[NAME] = { list: [1, 2] };
+    });
+    const fork = (id: number) => A.load<Root>(A.save(base), actor(id));
+    const left = A.change(fork(2), (doc) => {
+      const list = (doc[NAME] as Root).list as number[];
+      list[1] = 5;
+      A.insertAt(list, 2, 6);
+    });
+    const right = A.change(fork(3), (doc) => {
+      A.deleteAt((doc[NAME] as Root).list as number[], 1);
+    });
+    const since = A.getHeads(base);
+    return {
+      fork,
+      left,
+      right,
+      /** Both peers' changes, as one update. */
+      update: new Uint8Array([
+        ...A.saveSince(left, since),
+        ...A.saveSince(right, since),
+      ]),
+    };
+  };
+
+  /** A third peer, synced to a store, that receives both changes in one update. */
+  const thirdPeer = () => {
+    const edits = concurrentEdits();
+    const handle = createAutomergeHandle<Root>(edits.fork(4));
+    const backend = createAutomergeBackend(handle, NAME);
+    const store = createTestStore<Root>({});
+    const engine = createSyncEngine(backend, store.adapter);
+    engine.connect();
+    createAutomergePersistable(handle).apply(edits.update);
+    return { ...edits, handle, backend, store, engine };
+  };
+
+  /** What the document holds, read afresh from its saved bytes rather than from its view. */
+  const saved = (doc: A.Doc<Root>): unknown => A.load<Root>(A.save(doc))[NAME];
+
+  it.fails("reads the list the document holds", () => {
+    const { handle, backend, store, engine } = thirdPeer();
+
+    expect(saved(handle.doc())).toEqual({ list: [1, 5, 6] });
+    expect(backend.read()).toEqual({ list: [1, 5, 6] });
+    expect(store.getState()).toEqual({ list: [1, 5, 6] });
+    engine.disconnect();
+  });
+
+  it.fails("edits the item the store changed, for every peer", () => {
+    const { handle, store, engine, left, right } = thirdPeer();
+
+    // The user edits the 6, wherever the store shows it.
+    const { list } = store.getState() as { list: number[] };
+    store.setState({ list: list.map((item) => (item === 6 ? 60 : item)) });
+
+    expect(saved(handle.doc())).toEqual({ list: [1, 5, 60] });
+    // A peer that received both changes one at a time, so its own view is right.
+    const peer = createAutomergeHandle<Root>(A.merge(A.clone(right), left));
+    peer.update((doc) =>
+      A.loadIncremental(doc, A.saveSince(handle.doc(), A.getHeads(doc))),
+    );
+    expect(createAutomergeBackend(peer, NAME).read()).toEqual({
+      list: [1, 5, 60],
+    });
+    engine.disconnect();
+  });
+
+  // A canary for the upstream fix, in plain Automerge, without homeostate. The view is wrong on
+  // the installed Automerge, so the assertion fails and `it.fails` passes. Once this test starts
+  // failing, a fixed Automerge is installed: raise the `@automerge/automerge` peer floor to it,
+  // make the tests above a plain `it`, update the docs note, and drop this test.
+  it.fails(
+    "canary: Automerge's own view of the merged document is right",
+    () => {
+      const { fork, update } = concurrentEdits();
+
+      const merged = A.loadIncremental(fork(4), update);
+
+      expect(merged[NAME]).toEqual({ list: [1, 5, 6] });
+    },
+  );
 });
