@@ -52,10 +52,12 @@ network.expectConverged();
 
 Each peer's `doc` is its backend's document as binary updates, from the CRDT package's
 `create*Persistable`: that is what the network carries. `settle()` delivers every message on
-its way, and `expectConverged()` throws unless every peer's store and document agree.
+its way, and rejects if a peer's store and document both lose a synced key that no peer
+deleted. `expectConverged()` throws unless every peer's store and document agree.
 
-`runRandomized` drives random edits, link cuts and reconnections across a fresh network, then
-checks convergence and names the seed of a run that fails:
+`runRandomized` drives random edits, link cuts and reconnections across a fresh network, checks
+after every delivery that no peer's store loses a synced key, then checks convergence, and names
+the seed of a run that fails:
 
 ```ts
 await runRandomized({

@@ -4,10 +4,17 @@ import { createMemoryBackend } from "@homeostate/core/testing";
 import {
   ConvergenceError,
   createNetwork,
+  LostKeyError,
   type Network,
   type NetworkOptions,
 } from "../index";
-import { backends, todoPeer, type TodoState } from "./helpers";
+import {
+  backends,
+  createStandIn,
+  standInPeer,
+  todoPeer,
+  type TodoState,
+} from "./helpers";
 
 let network: Network | undefined;
 
@@ -390,3 +397,116 @@ describe("createNetwork", () => {
     expect(stores[1].getState().title).toBe("later");
   });
 });
+
+describe("the lost key check", () => {
+  /** Two stand-in peers, settled, whose first sends its next update early. */
+  const createEarlyUpdate = async (options: NetworkOptions = {}) => {
+    network = createNetwork({ seed: 15, latency: 10, ...options });
+    const [first, second] = [0, 1].map((index) => standInPeer(index));
+    network.addPeer(first.setup);
+    network.addPeer(second.setup);
+    await network.settle();
+
+    // The second update reaches peer-1 first, so its document drops the title until the
+    // first one arrives.
+    first.doc.holdBack();
+    first.store.setState({ title: "draft" });
+    first.store.setState({ title: "final" });
+    return { network, first, second };
+  };
+
+  it("rejects when a peer's store and document lose a synced key", async () => {
+    const { network } = await createEarlyUpdate();
+
+    const error: unknown = await network.settle().catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(LostKeyError);
+    expect(error).toMatchObject({
+      seed: 15,
+      peer: "peer-1",
+      key: "title",
+      at: 20,
+      message:
+        "peer-1 lost the synced key title at 20 ms (seed 15), on an update from peer-0: its store and document both lack it, and no peer deleted it.",
+    });
+  });
+
+  it("lets the peer lose the key until the update arrives with checkLostKeys: false", async () => {
+    const { network, first, second } = await createEarlyUpdate({
+      checkLostKeys: false,
+    });
+
+    await network.settle();
+    expect(second.store.getState()).not.toHaveProperty("title");
+
+    first.doc.release();
+    await network.settle();
+    network.expectConverged();
+    expect(second.store.getState().title).toBe("final");
+  });
+
+  it("leaves out a peer whose engine is disconnected, as its store keeps the key", async () => {
+    const { network, second } = await createEarlyUpdate();
+    const peer = network.peers[1];
+    peer.engine.disconnect();
+
+    await network.settle();
+
+    expect(peer.backend.read()).not.toHaveProperty("title");
+    expect(second.store.getState().title).toBe("");
+  });
+});
+
+describe.each([["a stand-in", createStandIn] as const, ...backends])(
+  "the lost key check on %s",
+  (_name, docs) => {
+    it("leaves out a top-level key a peer deleted, on its way to the others", async () => {
+      const { network, stores } = createTodoNetwork(docs, 3, {
+        seed: 16,
+        latency: [1, 20],
+      });
+      await network.settle();
+
+      const state: Partial<TodoState> = { ...stores[0].getState() };
+      delete state.meta;
+      stores[0].setState(state as TodoState, true);
+      await network.settle();
+
+      network.expectConverged();
+      expect(stores[2].getState()).not.toHaveProperty("meta");
+    });
+
+    it("leaves out a key whose value a peer's filter rejects", async () => {
+      network = createNetwork({ seed: 17, latency: 5 });
+      const writer = todoPeer(docs, 0);
+      const reader = todoPeer(docs, 1, {
+        config: {
+          filter: (key, value) => key !== "title" || value !== "secret",
+        },
+      });
+      network.addPeer(writer.setup);
+      const peer = network.addPeer(reader.setup);
+      await network.settle();
+
+      writer.store.setState({ title: "secret" });
+      await network.settle();
+
+      expect(reader.store.getState()).not.toHaveProperty("title");
+      expect(peer.backend.read()).toHaveProperty("title", "secret");
+    });
+
+    it("leaves out a key the store had before joining but its document never held", async () => {
+      network = createNetwork({ seed: 18, latency: 5 });
+      const room = todoPeer(docs, 0);
+      network.addPeer(room.setup);
+      await network.settle();
+
+      const joiner = todoPeer(docs, 1, { config: { seed: "never" } });
+      joiner.store.setState({ extra: "mine" } as Partial<TodoState>);
+      network.addPeer(joiner.setup);
+      await network.settle();
+
+      expect(joiner.store.getState()).not.toHaveProperty("extra");
+    });
+  },
+);

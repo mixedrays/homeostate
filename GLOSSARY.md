@@ -289,8 +289,13 @@ Convergence does not mean nothing was lost: a peer that seeds before receiving t
 _Avoid_: Consistency
 
 **Randomized run**:
-A `runRandomized` test that applies random actions to random peers' stores and cuts or restores random links, then heals, settles and checks convergence.
+A `runRandomized` test that applies random actions to random peers' stores and cuts or restores random links, checking after every delivery that no peer lost a key, then heals, settles and checks convergence.
 _Avoid_: Fuzz test, chaos test
+
+**Lost key**:
+A synced top-level key that a peer's store and document both held, and both lack after a delivery, though no peer deleted it. `advance` and `settle` reject with a `LostKeyError` unless the network's `checkLostKeys` is `false`.
+A key is deleted once it leaves any peer's store or document outside a delivery; a key a peer's filter rejects stays in its document, so it is not lost.
+_Avoid_: Missing key, dropped key
 
 **Random seed**:
 The `seed` of a simulated network or randomized run, which fixes every random choice so that a failing run can be replayed.
