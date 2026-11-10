@@ -26,7 +26,7 @@ export interface RandomizedOptions<S extends object = any> {
   steps?: number;
   /** What a step may do to a random peer's store, one picked at random. Defaults to `[randomEdit]`. */
   actions?: readonly RandomAction<S>[];
-  /** Latency, drops and reordering, as for `createNetwork`. */
+  /** Latency, drops, reordering and the lost key check, as for `createNetwork`. */
   network?: Omit<NetworkOptions, "seed">;
   /** Chance that a step cuts or restores a random link instead of changing a store. Defaults to 0.1. */
   linkChangeRate?: number;
@@ -38,11 +38,12 @@ export interface RandomizedOptions<S extends object = any> {
  * Runs random steps against a fresh network, then heals it, settles it and checks that every
  * peer converged. Each step changes a random peer's store with a random action, or cuts or
  * restores a random link, and lets some virtual time pass, so changes cross each other on
- * their way.
+ * their way. Throughout, the network checks that no peer's store and document both lose a
+ * synced key that no peer deleted, unless `network.checkLostKeys` is `false`.
  *
- * Rejects with an error that names the seed and step when a step throws or the peers do not
- * converge; pass that `seed` to replay the same run. Give each document a fixed ID for runs
- * that replay exactly, such as `doc.clientID = index + 1` for Yjs.
+ * Rejects with an error that names the seed and step when a step throws, a peer loses a synced
+ * key or the peers do not converge; pass that `seed` to replay the same run. Give each document
+ * a fixed ID for runs that replay exactly, such as `doc.clientID = index + 1` for Yjs.
  */
 export async function runRandomized<S extends object>(
   options: RandomizedOptions<S>,

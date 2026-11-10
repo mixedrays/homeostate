@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createNetwork,
   createRandom,
+  LostKeyError,
   randomEdit,
   runRandomized,
   type RandomAction,
@@ -9,6 +10,7 @@ import {
 import { firstDifference, formatPath } from "../compare";
 import {
   backends,
+  createStandIn,
   textPolicies,
   todoPeer,
   withText,
@@ -64,6 +66,39 @@ describe("runRandomized", () => {
     ).rejects.toThrow(
       "Randomized run failed at step 5 of 20; pass `seed: 13` to replay it.\nbroken action",
     );
+  });
+
+  it("names the step and seed of a run in which a peer lost a synced key", async () => {
+    const run = async () => {
+      const steps: string[] = [];
+      const recordEdit: RandomAction<TodoState> = (peer, random) => {
+        steps.push(peer.name);
+        randomEdit(peer, random);
+      };
+      const error: unknown = await runRandomized({
+        seed: 19,
+        steps: 150,
+        actions: [recordEdit],
+        createPeer: (index) => todoPeer(createStandIn, index).setup,
+        network: { latency: [0, 20], dropRate: 0.05 },
+      }).catch((caught) => caught);
+      return { error, steps };
+    };
+
+    const first = await run();
+    const replay = await run();
+
+    expect((first.error as Error).message).toBe(
+      [
+        "Randomized run failed at step 14 of 150; pass `seed: 19` to replay it.",
+        "peer-2 lost the synced key todos at 52.46 ms (seed 19), on an update from peer-1: its store and document both lack it, and no peer deleted it.",
+      ].join("\n"),
+    );
+    expect(first.error).toMatchObject({ cause: expect.any(LostKeyError) });
+    expect((replay.error as Error).message).toBe(
+      (first.error as Error).message,
+    );
+    expect(replay.steps).toEqual(first.steps);
   });
 });
 

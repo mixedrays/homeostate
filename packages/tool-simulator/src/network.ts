@@ -8,6 +8,7 @@ import {
   type Unsubscribe,
 } from "@homeostate/core";
 import { asJson, firstDifference, formatPath, formatValue } from "./compare.js";
+import { createLostKeyCheck } from "./lost-keys.js";
 import { createRandom, randomSeed } from "./random.js";
 
 /**
@@ -70,6 +71,17 @@ export interface NetworkOptions {
    * as two peers writing in a loop. Defaults to 100 000.
    */
   maxDeliveries?: number;
+  /**
+   * Whether `advance` and `settle` reject with a `LostKeyError` when a peer's store and
+   * document both lose a synced top-level key that no peer deleted. Defaults to `true`.
+   *
+   * A peer holds a key once a checkpoint sees it in both its store's synced state and its
+   * document. A key is deleted for good once it leaves a store or document outside a delivery:
+   * in a step, or in a test's own change, between `advance` and `settle` calls. Checkpoints
+   * come after each delivery and when `advance` or `settle` returns. A key deleted during a
+   * delivery, such as by a store subscriber or a timer, is reported as lost: pass `false`.
+   */
+  checkLostKeys?: boolean;
 }
 
 export interface NetworkStats {
@@ -89,6 +101,9 @@ export interface NetworkStats {
  * document goes to every peer it is linked to, after the latency, unless it is dropped or its
  * link is cut first. Linking two peers, as `connect` and `heal` do, makes them exchange their
  * whole documents, as providers do on reconnecting, so what was lost on the way arrives.
+ *
+ * Unless `checkLostKeys` is `false`, `advance` and `settle` also check after each delivery
+ * that no peer's store and document both lost a synced key that no peer deleted.
  */
 export interface Network {
   /** The seed of this network's random choices. */
@@ -120,9 +135,15 @@ export interface Network {
    * so that updates lost to drops and cut links arrive too.
    */
   heal: () => void;
-  /** Deliver the messages due within the next `ms` of virtual time, and move time on. */
+  /**
+   * Deliver the messages due within the next `ms` of virtual time, and move time on. Rejects
+   * with a `LostKeyError` when a peer lost a synced key; see `checkLostKeys`.
+   */
   advance: (ms: number) => Promise<void>;
-  /** Deliver every message on its way, and those they lead to, until none are left. */
+  /**
+   * Deliver every message on its way, and those they lead to, until none are left. Rejects
+   * with a `LostKeyError` when a peer lost a synced key; see `checkLostKeys`.
+   */
   settle: () => Promise<void>;
   stats: () => NetworkStats;
   /**
@@ -199,8 +220,12 @@ export function createNetwork(options: NetworkOptions = {}): Network {
     dropRate = 0,
     reorder = false,
     maxDeliveries = 100_000,
+    checkLostKeys = true,
   } = options;
   const random = createRandom(seed);
+  const lostKeys = checkLostKeys ? createLostKeyCheck(seed) : undefined;
+  /** Whether `advance` or `settle` is delivering, so a document's change is not the test's. */
+  let delivering = false;
   const peers: Peer[] = [];
   const unsubscribers: Unsubscribe[] = [];
   /** Pairs of peers whose link is cut; every other pair is linked. */
@@ -275,11 +300,12 @@ export function createNetwork(options: NetworkOptions = {}): Network {
   const deliver = (message: Message): void => {
     now = Math.max(now, message.at);
     stats.delivered++;
+    lostKeys?.changed(message.to, false);
     message.to.doc.apply(message.update);
   };
 
   /** Deliver messages due by `until`, letting each delivery's work finish before the next. */
-  const run = async (until: number): Promise<void> => {
+  const deliverUntil = async (until: number): Promise<void> => {
     let deliveries = 0;
     for (;;) {
       const next = queue[0];
@@ -291,6 +317,7 @@ export function createNetwork(options: NetworkOptions = {}): Network {
         queue.shift();
         deliver(next);
         await Promise.resolve();
+        lostKeys?.afterDelivery(next.to, now, next.from);
         continue;
       }
       // Asynchronous stores may still send; only stop once a full turn sends nothing.
@@ -298,6 +325,18 @@ export function createNetwork(options: NetworkOptions = {}): Network {
       const due = queue[0];
       if (!due || due.at > until) return;
     }
+  };
+
+  /** `deliverUntil`, with the lost key check's checkpoints before and after. */
+  const run = async (until: number): Promise<void> => {
+    lostKeys?.beforeDeliveries(peers);
+    delivering = true;
+    try {
+      await deliverUntil(until);
+    } finally {
+      delivering = false;
+    }
+    for (const peer of peers) lostKeys?.afterDelivery(peer, now);
   };
 
   const view = (peer: Peer) => ({
@@ -362,8 +401,12 @@ export function createNetwork(options: NetworkOptions = {}): Network {
         syncedState: () => asJson(engine.getSyncedState()),
       };
       peers.push(peer);
+      lostKeys?.addPeer(peer);
       unsubscribers.push(
-        setup.doc.subscribe((update) => broadcast(peer, update)),
+        setup.doc.subscribe((update) => {
+          lostKeys?.changed(peer, !delivering);
+          broadcast(peer, update);
+        }),
       );
       for (const other of peers) link(peer, other);
       if (setup.connect !== false) engine.connect();
