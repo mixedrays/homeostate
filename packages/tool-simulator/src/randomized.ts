@@ -14,6 +14,9 @@ export type RandomAction<S extends object = any> = (
   random: Random,
 ) => void;
 
+/** Most rounds of `heal()` and `settle()` at the end of a run. */
+const HEAL_ROUNDS = 10;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface RandomizedOptions<S extends object = any> {
   /** Makes peer `index`; called once per peer as the run starts. */
@@ -41,9 +44,14 @@ export interface RandomizedOptions<S extends object = any> {
  * their way. Throughout, the network checks that no peer's store and document both lose a
  * synced key that no peer deleted, unless `network.checkLostKeys` is `false`.
  *
+ * With a `dropRate`, the updates stores write in answer to the healing exchange can be dropped
+ * too, so the run heals and settles again until a round drops nothing, at most 10 rounds, as a
+ * provider that resyncs would.
+ *
  * Rejects with an error that names the seed and step when a step throws, a peer loses a synced
- * key or the peers do not converge; pass that `seed` to replay the same run. Give each document
- * a fixed ID for runs that replay exactly, such as `doc.clientID = index + 1` for Yjs.
+ * key or the peers do not converge; pass that `seed` to replay the same run. When the last of
+ * those rounds still dropped updates, the error says so. Give each document a fixed ID for runs
+ * that replay exactly, such as `doc.clientID = index + 1` for Yjs.
  */
 export async function runRandomized<S extends object>(
   options: RandomizedOptions<S>,
@@ -62,6 +70,8 @@ export async function runRandomized<S extends object>(
   const random = createRandom(seed ^ 0x5bd1e995);
   const network = createNetwork({ ...networkOptions, seed });
   let step = 0;
+  /** Whether every round of healing dropped updates, the last included. */
+  let stillDropping = false;
 
   try {
     const peers = Array.from({ length: peerCount }, (_, index) =>
@@ -80,16 +90,27 @@ export async function runRandomized<S extends object>(
       await network.advance(random.int(stepInterval + 1));
     }
 
-    network.heal();
-    await network.settle();
+    // Stores may write in answer to the documents a heal exchanges, and those updates can be
+    // dropped too: heal again until a round drops nothing, as a provider that resyncs would.
+    let dropping = true;
+    for (let round = 0; dropping && round < HEAL_ROUNDS; round++) {
+      const dropped = network.stats().dropped;
+      network.heal();
+      await network.settle();
+      dropping = network.stats().dropped !== dropped;
+    }
+    stillDropping = dropping;
     network.expectConverged();
   } catch (error) {
     const when =
       step < steps ? `at step ${step + 1} of ${steps}` : `after ${steps} steps`;
     const message = error instanceof Error ? error.message : String(error);
+    const dropping = stillDropping
+      ? `\nUpdates were still being dropped after ${HEAL_ROUNDS} rounds of heal() and settle(): does a store write in answer to every exchange?`
+      : "";
     throw Object.assign(
       new Error(
-        `Randomized run failed ${when}; pass \`seed: ${seed}\` to replay it.\n${message}`,
+        `Randomized run failed ${when}; pass \`seed: ${seed}\` to replay it.\n${message}${dropping}`,
       ),
       { cause: error },
     );

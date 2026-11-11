@@ -351,6 +351,63 @@ describe("createNetwork", () => {
     expect((error as ConvergenceError).seed).toBe(9);
   });
 
+  it("says how many updates were dropped since the last heal", async () => {
+    const [, yjs] = backends[0];
+    network = createNetwork({ seed: 10, dropRate: 1 });
+    const first = todoPeer(yjs, 0);
+    const second = todoPeer(yjs, 1, { connect: false });
+    network.addPeer(first.setup);
+    network.addPeer(second.setup);
+    await network.settle();
+    network.peers[1].engine.connect();
+    const differences = (left: string, right: string) => [
+      "2 peers did not converge (seed 10):",
+      `- peer-1's document differs from peer-0's at title: "${left}" vs "${right}"`,
+      `- peer-1's store differs from peer-0's at title: "${left}" vs "${right}"`,
+    ];
+
+    first.store.setState({ title: "dropped" });
+    await network.settle();
+    expect(() => network?.expectConverged()).toThrow(
+      [
+        ...differences("", "dropped"),
+        "1 update was dropped: heal() and settle() until stats().dropped stops growing.",
+      ].join("\n"),
+    );
+
+    network.heal();
+    await network.settle();
+    network.expectConverged();
+    first.store.setState({ title: "again" });
+    first.store.setState({ title: "and again" });
+    await network.settle();
+    expect(() => network?.expectConverged()).toThrow(
+      [
+        ...differences("dropped", "and again"),
+        "2 updates were dropped since the last heal(): heal() and settle() until stats().dropped stops growing.",
+      ].join("\n"),
+    );
+  });
+
+  it("says how many messages are still on their way", async () => {
+    const [, yjs] = backends[0];
+    const { network, stores } = createTodoNetwork(yjs, 2, {
+      seed: 12,
+      latency: 10,
+    });
+    await network.settle();
+
+    stores[0].setState({ title: "on its way" });
+    expect(() => network.expectConverged()).toThrow(
+      [
+        "2 peers did not converge (seed 12):",
+        `- peer-1's document differs from peer-0's at title: "" vs "on its way"`,
+        `- peer-1's store differs from peer-0's at title: "" vs "on its way"`,
+        "1 message is still on its way: settle() delivers it.",
+      ].join("\n"),
+    );
+  });
+
   it("leaves the keys a peer's config omits out of what converges", async () => {
     const [, yjs] = backends[0];
     network = createNetwork({ seed: 11 });

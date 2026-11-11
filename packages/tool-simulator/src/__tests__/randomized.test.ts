@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { createStore } from "zustand/vanilla";
+import { createZustandAdapter } from "@homeostate/store-zustand";
 import {
   createNetwork,
   createRandom,
   LostKeyError,
   randomEdit,
   runRandomized,
+  type PeerSetup,
   type RandomAction,
 } from "../index";
 import { firstDifference, formatPath } from "../compare";
@@ -16,6 +19,35 @@ import {
   withText,
   type TodoState,
 } from "./helpers";
+
+type CountedState = { items: number[] } & Record<string, unknown>;
+
+/** A store whose subscriber keeps `seen_p<index>`, a key no other peer writes, at the item count. */
+const countingPeer = (
+  docs: (typeof backends)[number][1],
+  index: number,
+): PeerSetup<CountedState> => {
+  const own = `seen_p${index}`;
+  const store = createStore<CountedState>(() => ({
+    items: [],
+    seen_p0: 0,
+    seen_p1: 0,
+    seen_p2: 0,
+  }));
+  store.subscribe((state) => {
+    if (state[own] !== state.items.length)
+      store.setState({ [own]: state.items.length });
+  });
+  return { adapter: createZustandAdapter(store), ...docs(index) };
+};
+
+const addItem: RandomAction<CountedState> = (peer, random) => {
+  const state = peer.adapter.getState();
+  peer.adapter.setState({
+    ...state,
+    items: [...state.items, random.int(100)],
+  });
+};
 
 describe.each(backends)("randomized runs on %s", (_name, docs) => {
   it.each(textPolicies)(
@@ -30,6 +62,20 @@ describe.each(backends)("randomized runs on %s", (_name, docs) => {
       });
     },
   );
+
+  it("converge when a store writes in answer to the final heal and drops are frequent", async () => {
+    // Applying the documents the heal exchanges makes each store update its count, and those
+    // updates can be dropped too; one heal would leave the peers apart.
+    await runRandomized<CountedState>({
+      seed: 1,
+      peers: 3,
+      steps: 60,
+      actions: [addItem],
+      linkChangeRate: 0,
+      network: { latency: [0, 20], dropRate: 0.3 },
+      createPeer: (index) => countingPeer(docs, index),
+    });
+  });
 });
 
 describe("runRandomized", () => {
@@ -46,6 +92,37 @@ describe("runRandomized", () => {
 
     await expect(run).rejects.toThrow(
       /^Randomized run failed after 40 steps; pass `seed: 12` to replay it\.\n3 peers did not converge \(seed 12\):\n- peer-1's store differs from peer-0's/,
+    );
+  });
+
+  it("says when updates were still being dropped after the last round of healing", async () => {
+    // Each peer keeps its own count one above the other's: every count a peer receives makes it
+    // write a new one, until an update is dropped, and every heal brings that update back.
+    const leapfrog = (index: number): PeerSetup<Record<string, number>> => {
+      const [own, other] = index === 0 ? ["n0", "n1"] : ["n1", "n0"];
+      const store = createStore<Record<string, number>>(() => ({ [own]: 0 }));
+      store.subscribe((state) => {
+        if (state[other] !== undefined && state[other] >= state[own])
+          store.setState({ [own]: state[other] + 1 });
+      });
+      return { adapter: createZustandAdapter(store), ...yjs(index) };
+    };
+
+    const error: unknown = await runRandomized({
+      seed: 15,
+      peers: 2,
+      steps: 1,
+      linkChangeRate: 0,
+      actions: [() => {}],
+      network: { dropRate: 0.5 },
+      createPeer: leapfrog,
+    }).catch((caught) => caught);
+
+    expect((error as Error).message).toMatch(
+      /^Randomized run failed after 1 steps; pass `seed: 15` to replay it\.\n2 peers did not converge \(seed 15\):\n- peer-1's document differs from peer-0's at n\d: /,
+    );
+    expect((error as Error).message).toMatch(
+      /\nUpdates were still being dropped after 10 rounds of heal\(\) and settle\(\): does a store write in answer to every exchange\?$/,
     );
   });
 

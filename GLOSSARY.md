@@ -289,7 +289,7 @@ Convergence does not mean nothing was lost: a peer that seeds before receiving t
 _Avoid_: Consistency
 
 **Randomized run**:
-A `runRandomized` test that applies random actions to random peers' stores and cuts or restores random links, checking after every delivery that no peer lost a key, then heals, settles and checks convergence.
+A `runRandomized` test that applies random actions to random peers' stores and cuts or restores random links, checking after every delivery that no peer lost a key, then heals, settles and checks convergence. It heals and settles again until a round drops no update, at most 10 rounds, since with a `dropRate` the updates stores write in answer to the healing exchange can be dropped too.
 _Avoid_: Fuzz test, chaos test
 
 **Lost key**:

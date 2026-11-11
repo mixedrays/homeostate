@@ -55,9 +55,13 @@ Each peer's `doc` is its backend's document as binary updates, from the CRDT pac
 its way, and rejects if a peer's store and document both lose a synced key that no peer
 deleted. `expectConverged()` throws unless every peer's store and document agree.
 
+With a `dropRate`, the updates stores write in answer to the exchange `heal()` starts, such as a
+key derived from synced state, can be dropped too. Repeat `heal()` and `settle()` until
+`stats().dropped` stops growing before you check convergence.
+
 `runRandomized` drives random edits, link cuts and reconnections across a fresh network, checks
-after every delivery that no peer's store loses a synced key, then checks convergence, and names
-the seed of a run that fails:
+after every delivery that no peer's store loses a synced key, then heals and settles until
+nothing more is dropped and checks convergence, and names the seed of a run that fails:
 
 ```ts
 await runRandomized({
