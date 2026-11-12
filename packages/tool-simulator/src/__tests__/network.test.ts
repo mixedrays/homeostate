@@ -533,7 +533,7 @@ describe.each([["a stand-in", createStandIn] as const, ...backends])(
       expect(stores[2].getState()).not.toHaveProperty("meta");
     });
 
-    it("leaves out a key whose value a peer's filter rejects", async () => {
+    it("leaves out a key whose value a peer's filter rejects, as its store keeps its own", async () => {
       network = createNetwork({ seed: 17, latency: 5 });
       const writer = todoPeer(docs, 0);
       const reader = todoPeer(docs, 1, {
@@ -548,7 +548,7 @@ describe.each([["a stand-in", createStandIn] as const, ...backends])(
       writer.store.setState({ title: "secret" });
       await network.settle();
 
-      expect(reader.store.getState()).not.toHaveProperty("title");
+      expect(reader.store.getState()).toHaveProperty("title", "");
       expect(peer.backend.read()).toHaveProperty("title", "secret");
     });
 

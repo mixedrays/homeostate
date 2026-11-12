@@ -34,6 +34,13 @@ const changedKeys = (a: Plain, b: Plain): string[] => {
   );
 };
 
+/**
+ * Whether `state` holds `key`: `undefined` reads as absent, as in JSON, while a function, which
+ * JSON drops too, is held, so that `filter` can judge it.
+ */
+const holds = (state: object, key: string): boolean =>
+  hasOwn(state, key) && (state as Plain)[key] !== undefined;
+
 /** A copy of `state` without `keys`. */
 const withoutKeys = (state: Plain, keys: string[]): Plain => {
   const rest = { ...state };
@@ -142,7 +149,9 @@ const syncPredicate = ({
  *
  * `config` is typed by the adapter's state, so `keys` and `omit` take only its key names:
  * `{ omit: ['draft'] }` keeps one key local, `{ keys: ['todos'] }` syncs one alone. A key is
- * synced when `filter`, by default `defaultSyncFilter`, keeps it too.
+ * synced when `filter`, by default `defaultSyncFilter`, keeps it too. The store's value decides
+ * what is written, and a backend value is read only when `filter` keeps it and the store's value
+ * of the key, if the store holds one, so that a peer's value never replaces an action.
  *
  * On `connect()` the two sides are reconciled per key over the filtered view: a key the
  * backend holds wins over the store's value, and a synced key the backend lacks stays in
@@ -345,6 +354,24 @@ export function createSyncEngine<S extends object>(
     return filtered;
   };
 
+  /**
+   * The synced state the store takes from `held`, the backend's whole state, given the store's
+   * state `current` and its synced part `synced`. A key the store holds is read only when `filter`
+   * keeps both its value and the backend's: one whose store value it rejects, such as an action,
+   * is left alone, and one the store syncs keeps the store's value when `filter` rejects the
+   * backend's. A key the store does not hold is judged by the backend's value alone.
+   */
+  const readRemote = (held: Plain, current: S, synced: Plain): Plain => {
+    const remote: Plain = {};
+    for (const [key, value] of Object.entries(held)) {
+      if (key === PROTO_KEY) continue;
+      const kept = filter(key, value);
+      if (hasOwn(synced, key)) remote[key] = kept ? value : synced[key];
+      else if (kept && !holds(current, key)) remote[key] = value;
+    }
+    return remote;
+  };
+
   /** The backend's whole state, local keys included. */
   const readBackend = (): Plain =>
     call("backend", () =>
@@ -411,14 +438,15 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Makes the store's synced state `remote`, then writes what the store changed in response.
-   * With `keepLocalOnly`, a synced key the backend does not hold is left in place instead of
-   * being deleted, except the `removed` keys; that is the connect-time reconciliation, and every
-   * apply while waiting for `ready`. Otherwise `remote` is the whole synced state. `lastSynced`
-   * must already be what the backend holds.
+   * Makes the store's synced state what it reads from `held`, the backend's whole state, then
+   * writes what the store changed in response; see `readRemote`. With `keepLocalOnly`, a synced
+   * key the backend does not hold is left in place instead of being deleted, except the `removed`
+   * keys; that is the connect-time reconciliation, and every apply while waiting for `ready`.
+   * Otherwise what it reads is the whole synced state. `lastSynced` must already be what the
+   * backend holds.
    */
   const applyRemote = (
-    remote: Plain,
+    held: Plain,
     keepLocalOnly: boolean,
     removed: string[] = [],
   ): void => {
@@ -429,6 +457,7 @@ export function createSyncEngine<S extends object>(
     try {
       current = readStore();
       synced = filterState(current);
+      const remote = readRemote(held, current, synced);
       target = keepLocalOnly
         ? { ...withoutKeys(synced, removed), ...remote }
         : remote;
@@ -526,13 +555,13 @@ export function createSyncEngine<S extends object>(
     lastSynced = undefined;
     lastRevision = readRevision();
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
-    lastSynced = readBackend();
-    const remote = filterState(lastSynced);
-    if (waiting === null) applyRemote(remote, false);
+    const held = readBackend();
+    lastSynced = held;
+    if (waiting === null) applyRemote(held, false);
     else {
       // A key only the store holds waits to be seeded; one the backend held, a peer deleted.
-      const removed = Object.keys(known).filter((key) => !hasOwn(remote, key));
-      applyRemote(remote, true, removed);
+      const removed = Object.keys(known).filter((key) => !hasOwn(held, key));
+      applyRemote(held, true, removed);
     }
     emit("remote");
   };
@@ -598,7 +627,7 @@ export function createSyncEngine<S extends object>(
     }
     remoteReads++;
     lastSynced = held;
-    applyRemote(filterState(held), false);
+    applyRemote(held, false);
     emit("remote");
     return true;
   };
@@ -667,7 +696,7 @@ export function createSyncEngine<S extends object>(
 
     lastRevision = readRevision();
     lastSynced = held;
-    applyRemote(remote, true);
+    applyRemote(held, true);
   };
 
   /**

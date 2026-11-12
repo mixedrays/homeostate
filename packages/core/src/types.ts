@@ -145,7 +145,12 @@ export type SeedStrategy = "if-empty" | "never";
  *
  * A key is synced, in both directions, when `filter` keeps it and, by name, `keys` lists it or
  * `omit` does not name it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is
- * synced.
+ * synced. `filter` judges each side's value: the store's value decides what this peer writes,
+ * and a backend value is read into the store only when `filter` keeps it and, if the store holds
+ * the key, the store's value too. So a remote value never replaces a key the store keeps local,
+ * such as an action, and a remote value `filter` rejects never replaces a synced one: the store
+ * keeps its value, and writes it with its next write. A key the store does not hold, or holds as
+ * `undefined`, is judged by the backend's value alone.
  *
  * A peer deletes a key from the backend only when its store removes a key it syncs: drops it,
  * or gives it a value `filter` rejects. A key the backend holds that the store does not sync,
@@ -157,7 +162,7 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    * `defaultSyncFilter`, which excludes functions; a custom filter replaces it. It is called only
    * for the keys `keys` and `omit` leave. Its types follow `S`, but it is also called with the
    * keys and values of a backend holding keys that `S` does not declare, such as those an older
-   * or newer peer writes.
+   * or newer peer writes, and with the backend's value of a key the store holds too.
    */
   filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
   /** Seeding strategy used by `connect()`; defaults to `'if-empty'` */

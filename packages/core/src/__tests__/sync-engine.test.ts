@@ -1132,6 +1132,154 @@ describe("createSyncEngine", () => {
         searchTerm: "local",
       });
     });
+
+    it("keeps a store's function when a remote value arrives under its key", () => {
+      const addTodo = () => {};
+      const backend = createMemoryBackend();
+      const store = createTestStore({ todos: [] as string[], addTodo });
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive({ todos: ["a"], addTodo: "oops" });
+
+      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
+      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
+    });
+
+    /** Keeps every value but a string starting with `local:`, whatever the key. */
+    const notLocal = (_key: string, value: unknown) =>
+      !(typeof value === "string" && value.startsWith("local:"));
+
+    it("keeps a store value a custom filter rejects when a value it keeps arrives", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore({
+        todos: [] as string[],
+        view: "local:list",
+      });
+      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
+      expect(backend.read()).toEqual({ todos: [] });
+
+      backend.receive({ todos: ["a"], view: "grid" });
+
+      expect(store.getState()).toEqual({ todos: ["a"], view: "local:list" });
+      expect(backend.read()).toEqual({ todos: ["a"], view: "grid" });
+    });
+
+    it("leaves a key the store does not sync in the room through later local writes", () => {
+      const addTodo = () => {};
+      const backend = createMemoryBackend();
+      const store = createTestStore({ todos: [] as string[], addTodo });
+      createSyncEngine(backend, store.adapter).connect();
+      backend.receive({ todos: [], addTodo: "oops" });
+      const write = vi.spyOn(backend, "write");
+
+      backend.receive({ todos: [], addTodo: "again" });
+      expect(write).not.toHaveBeenCalled();
+
+      store.update((s) => ({ ...s, todos: ["local"] }));
+      expect(store.getState()).toEqual({ todos: ["local"], addTodo });
+      expect(backend.read()).toEqual({ todos: ["local"], addTodo: "again" });
+    });
+
+    it.each([
+      ["seed 'if-empty'", {}],
+      ["seed 'never'", { seed: "never" }],
+    ] as [
+      string,
+      SyncEngineConfig<{ todos: string[]; addTodo: () => void }>,
+    ][])(
+      "keeps a store's function on connect when the backend holds a value under its key, with %s",
+      (_, config) => {
+        const addTodo = () => {};
+        const backend = createMemoryBackend({ addTodo: "oops" });
+        const store = createTestStore({ todos: ["a"], addTodo });
+
+        createSyncEngine(backend, store.adapter, config).connect();
+
+        expect(store.getState()).toEqual({ todos: ["a"], addTodo });
+        expect(backend.read()).toEqual(
+          config.seed === "never"
+            ? { addTodo: "oops" }
+            : { todos: ["a"], addTodo: "oops" },
+        );
+      },
+    );
+
+    it("keeps a store's function while waiting for ready and once it resolves", async () => {
+      const addTodo = () => {};
+      const backend = createMemoryBackend({ addTodo: "oops" });
+      const store = createTestStore({ todos: [] as string[], addTodo });
+      let resolve = (): void => {};
+      const ready = new Promise<void>((done) => (resolve = done));
+      createSyncEngine(backend, store.adapter, { ready }).connect();
+      expect(store.getState()).toEqual({ todos: [], addTodo });
+
+      backend.receive({ todos: ["a"], addTodo: "again" });
+      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
+
+      resolve();
+      await ready;
+      await Promise.resolve();
+      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
+      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "again" });
+    });
+
+    it("keeps a store's function when a local change applies a scheduled remote change first", () => {
+      const addTodo = () => {};
+      const backend = createMemoryBackend();
+      const store = createTestStore({ todos: [] as string[], addTodo });
+      createSyncEngine(backend, store.adapter, {
+        schedule: () => {},
+      }).connect();
+      backend.receive({ todos: ["a"], addTodo: "oops" });
+
+      store.update((s) => ({ ...s, todos: ["local"] }));
+
+      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
+      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
+    });
+
+    it("reads a key the store does not hold by the backend's value alone", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore<{ todos: string[]; view?: string }>({
+        todos: [],
+        view: undefined,
+      });
+      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
+
+      backend.receive({ todos: [], view: "local:list" });
+      expect(store.getState()).toEqual({ todos: [], view: undefined });
+
+      backend.receive({ todos: [], view: "grid" });
+      expect(store.getState()).toEqual({ todos: [], view: "grid" });
+    });
+
+    it("keeps a store's synced value when the backend holds one the filter rejects", () => {
+      const backend = createMemoryBackend();
+      const store = createTestStore({ todos: [] as string[], view: "list" });
+      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
+
+      backend.receive({ todos: ["a"], view: "local:grid" });
+      expect(store.getState()).toEqual({ todos: ["a"], view: "list" });
+      expect(backend.read()).toEqual({ todos: ["a"], view: "local:grid" });
+
+      // The store's value decides what this peer writes, as for every key it syncs.
+      store.update((s) => ({ ...s, todos: ["local"] }));
+      expect(backend.read()).toEqual({ todos: ["local"], view: "list" });
+    });
+
+    it("keeps a store's synced value while waiting for ready when the backend's turns to one the filter rejects", () => {
+      const backend = createMemoryBackend({ view: "grid" });
+      const store = createTestStore({ todos: [] as string[], view: "list" });
+      createSyncEngine(backend, store.adapter, {
+        filter: notLocal,
+        ready: new Promise(() => {}),
+      }).connect();
+      expect(store.getState()).toEqual({ todos: [], view: "grid" });
+
+      backend.receive({ view: "local:grid" });
+
+      expect(store.getState()).toEqual({ todos: [], view: "grid" });
+    });
   });
 
   describe("keys and omit", () => {
@@ -1223,6 +1371,38 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: threeTodos().todos });
       expect(filter.mock.calls.map(([key]) => key)).not.toContain("searchTerm");
     });
+
+    it.each([
+      ["omit", { omit: ["searchTerm"] }],
+      ["keys", { keys: ["todos", "addTodo"] }],
+    ] as [
+      string,
+      SyncEngineConfig<{
+        todos: string[];
+        searchTerm: string;
+        addTodo: () => void;
+      }>,
+    ][])(
+      "keeps a store's function when a remote value arrives under its key, with %s",
+      (_, config) => {
+        const addTodo = () => {};
+        const backend = createMemoryBackend();
+        const store = createTestStore({
+          todos: [] as string[],
+          searchTerm: "",
+          addTodo,
+        });
+        createSyncEngine(backend, store.adapter, config).connect();
+
+        backend.receive({ todos: ["a"], addTodo: "oops" });
+
+        expect(store.getState()).toEqual({
+          todos: ["a"],
+          searchTerm: "",
+          addTodo,
+        });
+      },
+    );
 
     it("syncs the keys listed less those omitted when given both at runtime", () => {
       const backend = createMemoryBackend();
