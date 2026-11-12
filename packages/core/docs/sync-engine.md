@@ -177,14 +177,35 @@ createSyncEngine(backend, adapter, {
 once per frame. Until the flush, `getState()` does not show the pending remote changes.
 
 Local changes are still written synchronously. One made while an apply is pending runs that
-apply first, and the remote changes win: what the local change did to synced keys is lost,
-and only its changes to keys the filter excludes stay. With `queueMicrotask` that only affects
-code that changes the store in the same task as a remote update; a longer delay, such as
+apply first, merged with the local change, and writes the result, so the write neither reverts
+the remote changes nor loses the local one. With `queueMicrotask` that only happens for code
+that changes the store in the same task as a remote update; a longer delay, such as
 `requestAnimationFrame`, lets user input fall in the window too. A remote change another
 listener hears of before the engine is applied the same way, with or without `schedule`; see
 [SyncEngine](#syncengine). `disconnect()` also runs a pending apply, and a flush called after
 it does nothing. So does the end of a wait for [`ready`](#waiting-for-the-room), unless the wait
 failed, when the apply is forgone.
+
+The merge compares the store's synced state and the backend's with what the backend held
+before the pending changes, which both last agreed on, and keeps each side's changes from it:
+
+| What changed                                                     | Result                                                                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Different keys of a record                                       | Both. Records merge key by key, at any depth.                                                                                         |
+| Different items of an array                                      | Both. Items are matched as `getChanges` matches them, so a local edit lands on the item it targeted after remote inserts and deletes. |
+| Items inserted at the same place on both sides                   | Both, the remote ones first.                                                                                                          |
+| The same value, changed differently on both sides                | The local value, as its write would. A string is one value, replaced whole and never merged as text.                                  |
+| A record or array the store changed inside, which remote deleted | Deleted, as a CRDT loses an edit inside a deleted container. A value the store replaced whole, such as a string, is kept instead.     |
+| A value the store deleted                                        | Deleted, also where the remote side changed it.                                                                                       |
+
+Keys the filter keeps local take no part: the merge reads no backend value into them. A key whose
+backend value the filter rejects keeps the store's value, as on every apply. The merged state
+goes through `setState`, and what the store holds afterwards is written once, as a local change,
+with the backend's state as `previous`; the event it sends is `"remote"`, as for every local
+change that runs a pending apply. After a backend read or write threw, the engine no longer knows
+what the backend held, so it cannot tell which side changed what: the pending changes then
+replace what the local change did to synced keys, rather than the write reverting them for every
+peer.
 
 ### Waiting for the room
 
@@ -414,8 +435,9 @@ interface SyncFailure {
 After connection, each local notification writes the full filtered store state to the
 backend, along with what the backend holds, so the backend can diff against it instead of
 reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
-the store has not been given yet, the engine applies it first, and it wins as a pending apply
-does: what the local change did to synced keys is lost. That happens when a listener subscribed
+the store has not been given yet, the engine applies it first, merged with the local change, as
+it applies a pending one; see [Coalescing remote changes](#coalescing-remote-changes). That
+happens when a listener subscribed
 to the document before `connect()` changes the store as it hears of a remote change, before the
 engine does. Each backend notification, or each
 flush with `schedule`, applies the backend's full synced state to the store, as `filter` judges
