@@ -60,10 +60,18 @@ export interface StoreAdapter<S extends object> {
    * What the store changes meanwhile must not change again when the same state is applied a
    * second time, and every peer must agree on it. A store that breaks this, such as one that
    * stamps the time on every call, or two peers that enforce contradicting rules, would make
-   * the peers re-write each other's changes forever. Instead, when another peer changes the keys
-   * the engine's last write back changed and the store changes them again, the engine stops
-   * writing them back and the store keeps values for them that differ from the backend's. It
-   * reports them once as a `WriteLoopError` to `onError`, or without it warns once in development.
+   * the peers re-write each other's changes forever. The engine compares what the store changes
+   * by path: the record keys from the root, where a change inside an array or a string is a
+   * change of that array or string. An apply contradicts a path when the store changes it, and
+   * the remote state holds another value there than the store held after the apply before; if
+   * the store also changes some path that is not contradicted, such as a key it derives from an
+   * edit, the apply contradicts none. Once 6 applies in a row contradict a path, the engine stops
+   * writing it back, and the store keeps a value there that differs from the backend's. An apply
+   * that changes the path without contradicting it, one in which the store keeps another peer's
+   * new value there, or a written local change starts the count again, and an apply that changes
+   * neither side of the path leaves it as it is. A stopped path is written back again as soon as
+   * an apply no longer contradicts it. The engine reports a stop once per set of top-level keys,
+   * as a `WriteLoopError` to `onError`, or without it with a warning in development.
    */
   setState: (state: S) => void;
 

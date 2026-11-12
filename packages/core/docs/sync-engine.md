@@ -338,9 +338,13 @@ engine throws a `TypeError` naming the method and what it returned, such as
 or through `onError` once connected.
 
 `onError` also receives a `WriteLoopError`, with the source `"store"`, when the engine stops
-writing back keys the store keeps changing while remote changes are applied; see
-[Store adapters](/docs/concepts#store-adapters). Its `keys` names them, and each set of keys is
-reported once, in every build. Without `onError`, the engine warns once in development instead.
+writing back paths the store keeps changing while remote changes are applied: once 6 applies in a
+row find another peer's value at a path the store changed, and the store changes it again. See
+[Store adapters](/docs/concepts#store-adapters) for what counts and what starts the count again.
+Its `keys` names the top-level keys holding the stopped paths, and its message lists the paths,
+each as an array of record keys, such as `["seenBy","p2"]`. Each set of top-level keys is reported
+once, in every build. Without `onError`, the engine warns once in development instead. A stopped
+path is written back again, without a local change, once an apply no longer contradicts it.
 
 However an error is reported, [`getStatus()`](#sync-status) keeps it until the engine recovers.
 
@@ -506,11 +510,11 @@ listeners, and a component mounted later can still read it.
 | `connect()` throws, also a `ready` function that throws                          | Disconnected                  | The next `connect()` that connects                                  |
 | `ready` rejects, or reconciling or a pending apply then fails                    | Disconnected                  | The next `connect()` that connects, also while it waits             |
 | A pending apply fails in `disconnect()`                                          | Connected, then disconnected  | The next `connect()` that connects                                  |
-| [`WriteLoopError`](#reporting-errors), in every build, with or without `onError` | Connected                     | An apply that stops no loop, a written local change, or a reconnect |
+| [`WriteLoopError`](#reporting-errors), in every build, with or without `onError` | Connected                     | An apply that stops no path, a written local change, or a reconnect |
 | `filter` or `schedule` throws                                                    | Connected, without a `source` | The next `"local"` or `"remote"` event                              |
 
 `"ready"` clears a failure too, and `disconnect()` keeps one, to say why the engine stopped. `onError`
-hears of a write loop once per set of keys, but the status shows it each time it comes back.
+hears of a write loop once per set of top-level keys, but the status shows it each time it comes back.
 
 The status holds only what reaches the engine:
 

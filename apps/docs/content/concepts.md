@@ -52,11 +52,28 @@ returns the same object as before `setState`, the backend keeps the remote state
 What the store changes while a remote change is applied must not change again when the same
 state is applied a second time, and every peer must agree on it. A store that breaks this, such
 as one that stamps the time on every `setState`, or two app versions that normalise a key in
-contradicting ways, would make the peers re-write each other's changes forever. Instead, when
-another peer changes the keys the engine's last write back changed and the store changes them
-again, the engine stops writing them back and reports them once: to `onError` as a
-`WriteLoopError`, or without `onError` with a warning in development. The store then keeps values
-for those keys that differ from the backend's.
+contradicting ways, would make the peers re-write each other's changes forever. The engine
+stops such a loop by watching the paths the store changes: the record keys from the root, such as
+`seenBy.p2`, where a change inside an array or a string counts as a change of that array or
+string.
+
+- An apply contradicts a path when the store changes it, and the remote state holds another value
+  there than the store held after the apply before. If the store also changes a path that is not
+  contradicted, such as a key it derives from a new edit, the apply contradicts none of them.
+- Once 6 applies in a row contradict the same path, the engine stops writing that path back. The
+  store keeps its value there, which differs from the backend's, and the engine still writes every
+  other path the store changes.
+- The count starts again with an apply that changes the path without contradicting it, an apply
+  in which the store keeps another peer's new value there, or a written local change. An apply
+  that changes the path on neither side leaves the count as it is.
+- A stopped path is written back again, without a local change, as soon as an apply no longer
+  contradicts it, such as when another peer writes the value this store holds.
+
+So a concurrent write that wins over a write back, as when two peers append to a list a third
+counts, is written over again and not reported, while a loop contradicts the path on every apply
+and stops after a few round trips. The engine reports a stop once per set of top-level keys: to
+`onError` as a `WriteLoopError`, whose `keys` names the top-level keys and whose message lists
+the paths, or without `onError` with a warning in development.
 
 Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and `null`.
 Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are
