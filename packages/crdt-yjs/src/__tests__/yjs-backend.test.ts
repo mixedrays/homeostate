@@ -621,6 +621,43 @@ describe("an update that waits for an earlier one", () => {
     expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
   });
 
+  it("writes an item the store and a peer both inserted at one place once", () => {
+    const initial = { list: [1], log: 0 };
+    const { writerDoc, readerDoc, store, write, deliver, peer } = gap(initial);
+    const other = peer();
+    const u0 = write({ ...initial, log: 1 });
+    const u1 = write({ ...initial, log: 2 });
+
+    deliver(u1);
+    deliver(other.write({ ...initial, list: [1, 2] }));
+    store.update((state) => ({ ...state, list: [1, 2] }));
+    deliver(u0);
+    syncAll(writerDoc, readerDoc, other.doc);
+
+    const synced = { list: [1, 2], log: 2 };
+    expect(store.getState()).toEqual(synced);
+    expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
+  });
+
+  it("merges a function or undefined entry an earlier write left as JSON would store it", () => {
+    const initial = { todo: { done: false }, list: [{ x: 1 }], log: 0 };
+    const { backend, write, deliver } = gap(initial);
+    const u0 = write({ ...initial, log: 1 });
+    const u1 = write({ ...initial, log: 2 });
+
+    deliver(u1);
+    // Two writes from one state, as from two stores on one backend: the first replaces the
+    // object with a function and the list item with `undefined`, which JSON leaves out and
+    // stores as `null`; the second changes both in place.
+    backend.write({ todo: () => true, list: [undefined], log: 0 }, initial);
+    backend.write({ todo: { done: true }, list: [{ x: 2 }], log: 0 }, initial);
+
+    // The removed object loses the change made inside it; the replaced item takes the new one.
+    expect(backend.read()).toEqual({ list: [{ x: 2 }], log: 0 });
+    deliver(u0);
+    expect(backend.read()).toEqual({ list: [{ x: 2 }], log: 2 });
+  });
+
   describe("with text", () => {
     const options: YjsBackendOptions = { text: () => true };
 
