@@ -146,7 +146,16 @@ a nested slice, or several slices to several rooms, wrap the adapter in
 [`scopeAdapter`](../../../packages/core/docs/sync-engine.md#scopeadapter).
 
 Excluded keys are never read from the backend or written to it, so they stay local to each
-peer. A peer deletes a key from the backend only when its store removes a key it syncs: a key it
+peer. `filter` judges the value on each side:
+
+- The store's value decides what this peer writes.
+- A backend value is read into the store only when `filter` keeps it and, if the store holds the
+  key, the store's value too. A value an older or buggy peer writes under the key of an action
+  never replaces the action, and a value `filter` rejects never replaces a synced one: the
+  store keeps its value, and its next write replaces the backend's.
+- A key the store does not hold, or holds as `undefined`, is judged by the backend's value alone.
+
+A peer deletes a key from the backend only when its store removes a key it syncs: a key it
 excludes, or one its store cannot hold, such as a field a newer version of the app adds, stays
 in the room for the peers that sync it.
 

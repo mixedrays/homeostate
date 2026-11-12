@@ -93,7 +93,7 @@ The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which
 _Avoid_: State dump
 
 **Filter**:
-The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. `defaultSyncFilter` excludes functions. The `keys` and `omit` options narrow what it keeps by key name.
+The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. It judges the store's value for what the sync engine writes, and both the backend's and the store's for what it reads. `defaultSyncFilter` excludes functions. The `keys` and `omit` options narrow what it keeps by key name.
 _Avoid_: Sync filter, allowlist, selector
 
 **Synced key**:

@@ -147,8 +147,8 @@ the `key`, and the virtual time `at` which it was found:
 peer-1 lost the synced key title at 412.5 ms (seed 11), on an update from peer-0: its store and document both lack it, and no peer deleted it.
 ```
 
-A key a peer's `filter` rejects for the value another peer wrote leaves the store but stays in
-the document, and a key that a store has but its document never held is not held, so neither is
+A key keeps the store's own value when the peer's `filter` rejects the value another peer wrote,
+and a key that a store has but its document never held is not held, so neither is
 reported. A peer whose engine is disconnected keeps its store as it is, so it loses nothing. A
 store that notifies asynchronously, or an engine with `schedule`, can apply a change after its
 delivery's check: a loss is then found at a later check, or missed if your test changes the

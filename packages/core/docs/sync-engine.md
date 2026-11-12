@@ -88,7 +88,7 @@ type SyncErrorSource = "store" | "backend" | "ready";
 | ---------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `omit`     | none                | Top-level keys to keep local, by name. Every other key `filter` keeps is synced.                                     |
 | `keys`     | none                | The only top-level keys to sync, by name, if `filter` keeps them. Give `keys` or `omit`, not both.                   |
-| `filter`   | `defaultSyncFilter` | Selects top-level keys independently in the store and backend, in both directions. Excluded keys stay local.         |
+| `filter`   | `defaultSyncFilter` | Selects top-level keys by value, judging the store's and the backend's. Excluded keys stay local.                    |
 | `seed`     | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
 | `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.    |
 | `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.     |
@@ -115,6 +115,23 @@ default. A custom filter replaces the default, and `keys` or `omit` narrow what 
 by `S`, but it is also called with keys the backend holds that `S` does not declare; type its
 `key` as `string` to compare it with such a key. Filtering is top-level; it does not remove
 nested functions or turn non-JSON values into JSON. Use plain JSON for the synced data.
+
+`filter` judges the value on each side. The store's value decides what this peer writes. A
+backend value is read into the store only when `filter` keeps it and, if the store holds the key,
+the store's value too:
+
+| The store holds          | The backend holds        | The store gets         | This peer writes                         |
+| ------------------------ | ------------------------ | ---------------------- | ---------------------------------------- |
+| a value `filter` rejects | any value                | nothing, keeps its own | nothing, the backend's value stays       |
+| a value `filter` keeps   | a value `filter` keeps   | the backend's value    | its value, on its next write             |
+| a value `filter` keeps   | a value `filter` rejects | nothing, keeps its own | its value, on its next write or the seed |
+| no value, or `undefined` | a value `filter` keeps   | the backend's value    | nothing                                  |
+| no value, or `undefined` | a value `filter` rejects | nothing                | nothing, the backend's value stays       |
+
+So a value an older or buggy peer writes under the key of an action never replaces the action.
+A store that gives a synced key a value `filter` rejects still deletes the key from the room
+with its next write; see [Keys this peer does not sync](#keys-this-peer-does-not-sync). `keys`
+and `omit` judge a key by name, the same on both sides.
 
 Despite its name, `"if-empty"` works per key, even when the backend already holds other
 keys. With either strategy, a backend key wins over the corresponding store value, and a
@@ -397,9 +414,10 @@ the store has not been given yet, the engine applies it first, and it wins as a 
 does: what the local change did to synced keys is lost. That happens when a listener subscribed
 to the document before `connect()` changes the store as it hears of a remote change, before the
 engine does. Each backend notification, or each
-flush with `schedule`, applies the backend's full filtered state to the store, including
-deletions. Unchanged subtrees keep their identity. Store notifications raised synchronously
-while the engine applies remote state are ignored to avoid echoing that state back.
+flush with `schedule`, applies the backend's full synced state to the store, as `filter` judges
+it on both sides, including deletions. Unchanged subtrees keep their identity. Store
+notifications raised synchronously while the engine applies remote state are ignored to avoid
+echoing that state back.
 
 `isReady()` is `false` while disconnected. With `ready`, it stays `false` from `connect()` until
 `ready` has resolved and reconciliation is done, also on a reconnect. Without `ready`, it equals
