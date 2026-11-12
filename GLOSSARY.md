@@ -133,7 +133,7 @@ _Avoid_: Initialized, synced
 
 **Local change**:
 A change made to the store on this peer, which the sync engine writes to the CRDT backend as the whole synced state.
-When a pending apply waits, it runs first, so a local change never writes over a remote change the store has not been given.
+When a pending apply waits, it runs first, merged with the local change, so a local change never writes over a remote change the store has not been given.
 _Avoid_: Outgoing change, store change
 
 **Remote change**:
@@ -147,7 +147,7 @@ _Avoid_: Feedback loop
 
 **Sync event**:
 A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, or has ended a wait for `ready`, naming which of the five it was.
-A local change that first runs a pending apply is reported as a remote change, because the remote changes replace what it did to synced keys.
+A local change that first runs a pending apply is reported as a remote change, whose apply merges the local change in and writes it.
 _Avoid_: Engine event, sync notification
 
 **Sync status**:
@@ -160,7 +160,7 @@ A sync failure records an error; it does not replace `onError` or stop the error
 _Avoid_: Sync error, last error
 
 **Pending apply**:
-Remote changes the CRDT backend holds and the sync engine has not applied to the store yet: those its `schedule` option defers to the next flush, which applies them all with one read of the backend, and those another listener of the document hears of before the engine. A local change made meanwhile runs the apply first, which overrides what that change did to synced keys.
+Remote changes the CRDT backend holds and the sync engine has not applied to the store yet: those its `schedule` option defers to the next flush, which applies them all with one read of the backend, and those another listener of the document hears of before the engine. A local change made meanwhile runs the apply first, which merges that change with the remote changes against what the backend held before them, and writes the result.
 _Avoid_: Queued update, batch
 
 **Revision**:

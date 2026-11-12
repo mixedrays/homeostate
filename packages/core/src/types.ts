@@ -182,9 +182,17 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    * synchronously, so `getState()` sees it at once.
    *
    * Local changes are still written synchronously. One made while an apply is pending runs that
-   * apply first, and the remote changes replace the store's synced state: the local change keeps
-   * only what it did to keys the engine does not sync. `disconnect()` runs a pending apply too,
-   * and so does the end of a wait for `ready`, unless that wait failed.
+   * apply first, merged with the local change against what the backend held before the pending
+   * changes, and writes the result, so neither side's change is lost. Records merge key by key
+   * and arrays item by item, matched as `getChanges` matches them; items both sides inserted at
+   * one place keep the remote ones first. Where both sides changed a value differently, the
+   * local value wins, and a string is one value, never merged as text. A record or array the
+   * store changed inside and the remote side deleted stays deleted, while a value the store
+   * replaced whole is kept. After a backend read or write threw, nothing tells which side changed
+   * what, so the remote changes replace what the local change did to synced keys.
+   *
+   * `disconnect()` runs a pending apply too, and so does the end of a wait for `ready`, unless
+   * that wait failed.
    */
   schedule?: (flush: () => void) => void;
   /**
@@ -279,7 +287,8 @@ export type SyncErrorSource = "store" | "backend" | "ready";
  *   none, and neither does a local change while waiting for `ready`, which writes nothing.
  * - `'remote'`: an apply of the backend's state, once `setState` and the write of what the store
  *   changed meanwhile returned; once per flush with `schedule`, even when the store is unchanged.
- *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`.
+ *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`, once
+ *   the write of the merged state returned.
  * - `'connect'`: a `connect()` that connected, once reconciliation and both subscriptions are
  *   done. It covers seeding and the values adopted from the backend, which send nothing else.
  *   With `ready` it comes before the wait, so it covers only the values adopted, and `'ready'`

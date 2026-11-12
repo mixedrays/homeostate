@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 import { defaultSyncFilter } from "./types.js";
 import { keepIdentity } from "./patching.js";
+import { mergeConcurrent } from "./merge.js";
 import {
   hasOwn,
   isAbsent,
@@ -232,11 +233,11 @@ const syncPredicate = ({
  * not re-write each other's changes forever; see `StoreAdapter.setState`.
  *
  * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
- * A local change made before the flush applies them first, and they replace the store's synced
- * state, so the local change keeps only what it did to keys the engine does not sync. The same
- * goes for a remote change the backend holds before the engine hears of it, as when a listener
- * subscribed to the document first changes the store as it hears of it; see
- * `CrdtBackend.revision`.
+ * A local change made before the flush applies them first, merged with the local change against
+ * what the backend held before them, and writes the result, so neither side's change is lost; see
+ * `SyncEngineConfig.schedule`. The same goes for a remote change the backend holds before the
+ * engine hears of it, as when a listener subscribed to the document first changes the store as it
+ * hears of it; see `CrdtBackend.revision`.
  *
  * With `ready`, `connect()` adopts what the backend holds and subscribes, and nothing is written
  * until `ready` resolves, when the engine reconciles; see `SyncEngineConfig.ready`.
@@ -509,35 +510,71 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
+   * Merges `synced`, the store's synced state, which holds a change the engine has not written,
+   * with `remote`, what the store reads from the backend's whole state, against `base`, the
+   * backend's whole state when the two last agreed, read as `remote` was. So a key the store keeps
+   * local is merged on neither side, and one whose backend value `filter` rejects keeps the
+   * store's value. A key the store lacks and did not hold then, such as one it cannot hold, is
+   * unchanged on the store's side rather than removed. See `mergeConcurrent` for the rules.
+   */
+  const mergeLocalChange = (
+    base: Plain,
+    current: S,
+    synced: Plain,
+    remote: Plain,
+  ): Plain => {
+    const seen = readRemote(base, current, synced);
+    const local = { ...synced };
+    for (const key of Object.keys(seen))
+      if (!hasOwn(synced, key) && !heldKeys.has(key)) local[key] = seen[key];
+    return mergeConcurrent(seen, local, remote) as Plain;
+  };
+
+  /**
    * Makes the store's synced state what it reads from `held`, the backend's whole state, then
    * writes what the store changed in response; see `readRemote`. With `keepLocalOnly`, a synced
    * key the backend does not hold is left in place instead of being deleted, except the `removed`
    * keys; that is the connect-time reconciliation, and every apply while waiting for `ready`.
    * Otherwise what it reads is the whole synced state. `lastSynced` must already be what the
    * backend holds.
+   *
+   * With `base`, the store may hold a local change the engine has not written, made since the
+   * backend held `base`, its whole state then. The store's synced state is then merged with what
+   * it reads, against `base`, instead of being replaced, and when the merge keeps some of the
+   * local change, the store's state after the apply is written as a local change.
    */
   const applyRemote = (
     held: Plain,
     keepLocalOnly: boolean,
     removed: string[] = [],
+    base?: Plain,
   ): void => {
     let current: S;
     let synced: Plain;
     let target: Plain;
+    let next: S;
+    /** Whether `target` holds a local change the backend lacks. */
+    let local = false;
+    const keysBefore = heldKeys;
     applyingRemote = true;
     try {
       current = readStore();
       synced = filterState(current);
       const remote = readRemote(held, current, synced);
-      target = keepLocalOnly
-        ? { ...withoutKeys(synced, removed), ...remote }
-        : remote;
-      const merged = mergeStates(current, synced, target);
-      if (merged === current) {
+      if (keepLocalOnly)
+        target = { ...withoutKeys(synced, removed), ...remote };
+      else if (base === undefined) target = remote;
+      else {
+        const merged = mergeLocalChange(base, current, synced, remote);
+        local = !jsonEqual(merged, remote);
+        target = local ? merged : remote;
+      }
+      next = mergeStates(current, synced, target);
+      if (next !== current) call("store", () => adapter.setState(next));
+      else if (!local) {
         heldKeys = new Set(Object.keys(synced));
         return;
       }
-      call("store", () => adapter.setState(merged));
     } finally {
       applyingRemote = false;
     }
@@ -546,13 +583,17 @@ export function createSyncEngine<S extends object>(
     const after = readStore();
     // A store that ignored the change entirely, such as a Redux store without the replace case,
     // would otherwise write its old state back over every peer's.
-    if (after === current) {
+    if (after === current && next !== current) {
       heldKeys = new Set(Object.keys(synced));
       return;
     }
-    // The store's notifications were ignored meanwhile, so a key it normalised or derived from
-    // `merged` reaches the backend only here. An echo of `merged` alone equals `target`.
     const applied = filterState(after);
+    if (local) {
+      writeLocalChange(applied, [...keysBefore, ...Object.keys(synced)]);
+      return;
+    }
+    // The store's notifications were ignored meanwhile, so a key it normalised or derived from
+    // `next` reaches the backend only here. An echo of `next` alone equals `target`.
     heldKeys = new Set(Object.keys(applied));
     // A key the store lacks after the apply and lacked before is one it cannot hold or does not
     // sync, such as a key a MobX class does not declare, so it stays in the backend. One it held
@@ -572,18 +613,34 @@ export function createSyncEngine<S extends object>(
     if (stopped.length === paths.length) return;
     const written =
       stopped.length === 0 ? applied : withValuesAt(applied, target, stopped);
-    // Code the store notified may have changed the backend before the engine hears of it, as
-    // with an uncommitted Loro edit, or a Yjs transaction whose observers run after the engine's.
-    // A backend without a revision was read just before.
-    const stale =
-      backend.revision !== undefined && !isUnchanged(readRevision());
     writeSynced(
       written,
       paths
         .filter((path) => path.length === 1 && !hasOwn(written, path[0]))
         .map(([key]) => key),
-      stale,
+      isStale(),
     );
+  };
+
+  /**
+   * Whether the backend may have changed since an apply read it: code the store notified may
+   * have changed it before the engine hears of it, as with an uncommitted Loro edit, or a Yjs
+   * transaction whose observers run after the engine's. A backend without a revision was read
+   * just before.
+   */
+  const isStale = (): boolean =>
+    backend.revision !== undefined && !isUnchanged(readRevision());
+
+  /**
+   * Writes `applied`, the store's synced state after an apply that merged a local change into
+   * it, and deletes each of the `held` keys it lacks, which the store removed. It is a local
+   * change, so the loop counts start again, as for any written local change.
+   */
+  const writeLocalChange = (applied: Plain, held: Iterable<string>): void => {
+    lastApplied = null;
+    contradictions.clear();
+    const removed = [...new Set(held)].filter((key) => !hasOwn(applied, key));
+    writeSynced(applied, removed, isStale());
   };
 
   /**
@@ -700,13 +757,17 @@ export function createSyncEngine<S extends object>(
    * before the engine's own listener hears of them, as when another listener of the backend
    * changes the store first. Reads the backend unless its revision shows it unchanged, and applies
    * only what differs from what the engine last synced, so a notification for a change already
-   * applied does not discard the local change.
+   * applied does not touch the local change. The local change is merged into the apply against
+   * what the engine last synced, and written with it; see `applyRemote`.
    */
   const applyUnseenRemote = (): boolean => {
     const pending = applyPending;
     applyPending = false;
     const synced = lastSynced;
-    // Without a base, nothing tells a remote change apart, so only a pending apply runs.
+    // Without a base, after a read or a write that threw, nothing tells a remote change apart,
+    // nor which side changed what, so only a pending apply runs, and the remote changes replace
+    // the store's synced state, local change included. Writing the store's state instead would
+    // revert them for every peer.
     if (synced === undefined) {
       if (pending) syncToStore();
       return pending;
@@ -724,7 +785,7 @@ export function createSyncEngine<S extends object>(
     }
     remoteReads++;
     lastSynced = held;
-    applyRemote(held, false);
+    applyRemote(held, false, [], synced);
     emit("remote");
     return true;
   };
@@ -735,10 +796,9 @@ export function createSyncEngine<S extends object>(
       changedWhileWaiting = true;
       return;
     }
-    // Otherwise the write would revert those remote changes. They win: applying them replaces
-    // the store's synced state, local change included, and leaves the backend holding what the
-    // store then holds, so there is nothing left to write. A store that ignored the apply keeps
-    // its stale state out of the backend this way too.
+    // Otherwise the write would revert those remote changes. Applying them merges the local
+    // change in and writes what it kept, so there is nothing left to write. A store that ignored
+    // the apply keeps its stale state out of the backend this way too.
     if (applyUnseenRemote()) return;
     lastApplied = null;
     contradictions.clear();

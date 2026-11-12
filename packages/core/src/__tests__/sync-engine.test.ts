@@ -23,6 +23,7 @@ import {
   deleteTodo,
   prototypeHijacks,
   prototypeMemberKeys,
+  renameTodo,
   setSearchTerm,
   snapshot,
   threeTodos,
@@ -434,7 +435,7 @@ describe("createSyncEngine", () => {
         expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
       });
 
-      it("writes once when a local change runs the pending apply", () => {
+      it("writes the local change and what the store derives once when a local change runs the pending apply", () => {
         const { backend, previous } = checkedBackend();
         const { store } = connectScheduled(backend, normalisingStore());
         const write = vi.spyOn(backend, "write");
@@ -442,19 +443,20 @@ describe("createSyncEngine", () => {
         backend.receive({ todos: ["a", "b"], count: 0 });
         store.update((s) => ({ ...s, todos: [...s.todos, "local"] }));
 
-        expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
-        expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
+        const merged = { todos: ["a", "b", "local"], count: 3 };
+        expect(store.getState()).toEqual(merged);
+        expect(backend.read()).toEqual(merged);
         expect(write).toHaveBeenCalledTimes(1);
         expect(previous.at(-1)).toEqual({ todos: ["a", "b"], count: 0 });
       });
 
-      it("writes nothing when a local change runs a pending apply that needs no derived write", () => {
+      it("writes nothing when a local change that matches the pending apply needs no derived write", () => {
         const backend = createMemoryBackend();
         const { store } = connectScheduled(backend, normalisingStore());
         const write = vi.spyOn(backend, "write");
 
         backend.receive({ todos: ["a", "b"], count: 2 });
-        store.update((s) => ({ ...s, todos: [...s.todos, "local"] }));
+        store.update((s) => ({ ...s, todos: ["a", "b"] }));
 
         expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
         expect(write).not.toHaveBeenCalled();
@@ -596,6 +598,34 @@ describe("createSyncEngine", () => {
         // The store keeps its own stamp, and the backend the peer's.
         expect(store.getState().updatedAt).toBeGreaterThan(stamped);
         expect(backend.read()).toEqual({ count: 1, updatedAt: -6 });
+      });
+
+      it("starts the count again when a local change is merged into a pending apply", () => {
+        rulesOn = true;
+        const backend = createMemoryBackend();
+        const store = stampingStore();
+        const flushes: (() => void)[] = [];
+        createSyncEngine(backend, store.adapter, {
+          schedule: (flush) => flushes.push(flush),
+        }).connect();
+        const receive = (state: Stamped) => {
+          backend.receive(state);
+          flushes.splice(0).forEach((flush) => flush());
+        };
+        receive({ count: 1, updatedAt: 0 });
+        // Five re-stamps in a row: one short of the threshold.
+        for (let i = 1; i <= 5; i++) receive({ count: 1, updatedAt: -i });
+
+        // A re-stamp, and a local change merged into its apply and written.
+        backend.receive({ count: 1, updatedAt: -6 });
+        store.update((s) => ({ ...s, count: 2 }));
+        expect(backend.read()).toMatchObject({ count: 2 });
+
+        // A written local change starts the count again, so six more re-stamps do not stop it.
+        for (let i = 7; i <= 12; i++) receive({ count: 2, updatedAt: -i });
+        expect(warn).not.toHaveBeenCalled();
+        receive({ count: 2, updatedAt: -13 });
+        expect(warn).toHaveBeenCalledTimes(1);
       });
 
       it("stops a loop without a warning in production", () => {
@@ -972,6 +1002,29 @@ describe("createSyncEngine", () => {
       expect(store.getState()).toEqual(remote);
       expect(backend.read()).toEqual(remote);
     });
+
+    it.each([
+      ["without schedule", {}],
+      ["with schedule", { schedule: () => {} }],
+    ] as [string, SyncEngineConfig<TodoState>][])(
+      "merges the store's change with the remote change, %s",
+      (_, config) => {
+        const { backend, previous } = checkedBackend(threeTodos());
+        const store = createTestStore(threeTodos());
+        listenFirst(backend, () => store.update((s) => toggleTodo(s, "1")));
+        createSyncEngine(backend, store.adapter, config).connect();
+        const write = vi.spyOn(backend, "write");
+        const remote = deleteTodo(threeTodos(), "3");
+
+        backend.receive(remote);
+
+        const both = toggleTodo(remote, "1");
+        expect(store.getState()).toEqual(both);
+        expect(backend.read()).toEqual(both);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(previous.at(-1)).toEqual(remote);
+      },
+    );
 
     it("keeps what the store's change did to a key it does not sync", () => {
       const backend = createMemoryBackend();
@@ -1433,7 +1486,7 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a"], addTodo: "again" });
     });
 
-    it("keeps a store's function when a local change applies a scheduled remote change first", () => {
+    it("keeps a store's function out of the merge when a local change applies a scheduled remote change first", () => {
       const addTodo = () => {};
       const backend = createMemoryBackend();
       const store = createTestStore({ todos: [] as string[], addTodo });
@@ -1444,8 +1497,36 @@ describe("createSyncEngine", () => {
 
       store.update((s) => ({ ...s, todos: ["local"] }));
 
-      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
-      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
+      expect(store.getState()).toEqual({ todos: ["a", "local"], addTodo });
+      expect(backend.read()).toEqual({
+        todos: ["a", "local"],
+        addTodo: "oops",
+      });
+    });
+
+    it("merges no backend value the filter rejects into a key the store syncs", () => {
+      const { backend } = checkedBackend();
+      const store = createTestStore({
+        todos: [] as string[],
+        view: "list",
+        layout: "grid",
+      });
+      createSyncEngine(backend, store.adapter, {
+        filter: notLocal,
+        schedule: () => {},
+      }).connect();
+      backend.receive({
+        todos: ["a"],
+        view: "local:grid",
+        layout: "local:rows",
+      });
+
+      store.update((s) => ({ ...s, todos: [...s.todos, "b"], layout: "rows" }));
+
+      const merged = { todos: ["a", "b"], view: "list", layout: "rows" };
+      expect(store.getState()).toEqual(merged);
+      // The store's value decides what this peer writes, as for every key it syncs.
+      expect(backend.read()).toEqual(merged);
     });
 
     it("reads a key the store does not hold by the backend's value alone", () => {
@@ -1810,23 +1891,27 @@ describe("createSyncEngine", () => {
       expect(setState).toHaveBeenCalledTimes(1);
     });
 
-    it("applies pending remote changes before a local change, which they override", () => {
+    it("keeps both a local change and the pending remote changes it follows", () => {
       // Also checks that the write's `previous` is what the backend holds.
-      const { backend } = checkedBackend();
+      const { backend, previous } = checkedBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
       createSyncEngine(backend, store.adapter, {
         schedule: scheduler.schedule,
       }).connect();
+      const write = vi.spyOn(backend, "write");
 
       const remote = addTodo(toggleTodo(threeTodos(), "1"), todo("4"));
       backend.receive(remote);
       store.update((s) => toggleTodo(s, "2"));
 
-      expect(store.getState()).toEqual(remote);
-      expect(backend.read()).toEqual(remote);
+      const both = toggleTodo(remote, "2");
+      expect(store.getState()).toEqual(both);
+      expect(backend.read()).toEqual(both);
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(previous.at(-1)).toEqual(remote);
       scheduler.run();
-      expect(store.getState()).toEqual(remote);
+      expect(store.getState()).toEqual(both);
     });
 
     it("keeps a local change to a key it does not sync while remote changes are pending", () => {
@@ -1922,6 +2007,259 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(toggleTodo(remote, "1"));
       scheduler.run();
       expect(store.getState()).toEqual(toggleTodo(remote, "1"));
+    });
+
+    describe("a local change merged into the pending apply", () => {
+      /**
+       * Connects a store holding `initial`, lets the backend receive `remote` of it, and makes
+       * `local` of the store's state before the flush. Checks that the write passed what the
+       * backend held as `previous`, that the backend and the store agree, and that the flush
+       * changes nothing, then returns the store's state.
+       */
+      const concurrent = <S extends object>(
+        initial: S,
+        remote: (s: S) => S,
+        local: (s: S) => S,
+      ): S => {
+        const { backend, previous } = checkedBackend(initial);
+        const store = createTestStore(initial);
+        const scheduler = manualScheduler();
+        createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        }).connect();
+
+        const received = remote(initial);
+        backend.receive(received);
+        store.update(local);
+
+        expect(previous.at(-1)).toEqual(received);
+        expect(backend.read()).toEqual(store.getState());
+        const merged = store.getState();
+        scheduler.run();
+        expect(store.getState()).toBe(merged);
+        return merged;
+      };
+
+      it("lands a local edit on the item it targeted after remote inserts and deletes", () => {
+        const state = concurrent(
+          threeTodos(),
+          (s) => deleteTodo({ ...s, todos: [todo("0"), ...s.todos] }, "1"),
+          (s) => renameTodo(toggleTodo(s, "3"), "2", "Local"),
+        );
+
+        expect(state.todos).toEqual([
+          todo("0"),
+          todo("2", "Local"),
+          { ...todo("3"), completed: true },
+        ]);
+      });
+
+      it("keeps the items both sides inserted at one place, the remote ones first", () => {
+        const state = concurrent(
+          threeTodos(),
+          (s) => addTodo(s, todo("remote")),
+          (s) => addTodo(s, todo("local")),
+        );
+
+        expect(state.todos.map((t) => t.id)).toEqual([
+          "1",
+          "2",
+          "3",
+          "remote",
+          "local",
+        ]);
+      });
+
+      it("merges a record key by key, and keeps the local value where both changed it", () => {
+        const state = concurrent(
+          threeTodos(),
+          (s): TodoState => ({
+            ...renameTodo(setSearchTerm(s, "remote"), "1", "Remote"),
+            filterStatus: "active",
+          }),
+          (s) =>
+            toggleTodo(
+              renameTodo(setSearchTerm(s, "local"), "1", "Local"),
+              "1",
+            ),
+        );
+
+        expect(state).toEqual({
+          todos: [
+            { ...todo("1", "Local"), completed: true },
+            todo("2"),
+            todo("3"),
+          ],
+          searchTerm: "local",
+          filterStatus: "active",
+        });
+      });
+
+      it("writes a local change that already holds the remote changes", () => {
+        const state = concurrent(
+          threeTodos(),
+          (s) => toggleTodo(s, "1"),
+          (s) => toggleTodo(toggleTodo(s, "1"), "2"),
+        );
+
+        expect(state).toEqual(toggleTodo(toggleTodo(threeTodos(), "1"), "2"));
+      });
+
+      it("replaces a string whole rather than merging its text", () => {
+        const state = concurrent(
+          setSearchTerm(threeTodos(), "draft"),
+          (s) => setSearchTerm(s, "drafts"),
+          (s) => setSearchTerm(s, "a draft"),
+        );
+
+        expect(state.searchTerm).toBe("a draft");
+      });
+
+      it("drops a local edit to an item the remote side deleted", () => {
+        const state = concurrent(
+          threeTodos(),
+          (s) => deleteTodo(s, "2"),
+          (s) => renameTodo(toggleTodo(s, "1"), "2", "Local"),
+        );
+
+        expect(state.todos).toEqual([
+          { ...todo("1"), completed: true },
+          todo("3"),
+        ]);
+      });
+
+      it("keeps a local edit to a key the remote side deleted only when it replaced the value", () => {
+        interface Settings {
+          theme?: { color: string; size: number } | string;
+          layout?: { columns: number };
+          other: number;
+        }
+        const state = concurrent<Settings>(
+          {
+            theme: { color: "red", size: 1 },
+            layout: { columns: 2 },
+            other: 0,
+          },
+          ({ other }) => ({ other }),
+          (s) => ({ ...s, theme: "dark", layout: { columns: 3 }, other: 1 }),
+        );
+
+        expect(state).toEqual({ theme: "dark", other: 1 });
+      });
+
+      it("keeps a local replacement of an item the remote side deleted", () => {
+        const state = concurrent(
+          { tags: ["a", "b", "c"] },
+          (s) => ({ tags: s.tags.filter((tag) => tag !== "b") }),
+          (s) => ({ tags: s.tags.map((tag) => (tag === "b" ? "B" : tag)) }),
+        );
+
+        expect(state.tags).toEqual(["a", "B", "c"]);
+      });
+
+      it("deletes what the store deleted, also where the remote side changed it", () => {
+        const state = concurrent<{
+          todos: string[];
+          tags?: string[];
+          note?: string;
+        }>(
+          { todos: ["a", "b"], tags: ["x"], note: "n" },
+          (s) => ({ ...s, todos: [...s.todos, "c"], tags: ["x", "y"] }),
+          ({ todos }) => ({ todos: todos.filter((item) => item !== "a") }),
+        );
+
+        expect(state).toEqual({ todos: ["b", "c"] });
+      });
+
+      it("keeps a key a fixed-key store cannot hold", () => {
+        const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
+        const store = createTestStore<{ todos: string[] }>(
+          { todos: [] },
+          ({ todos }) => ({ todos }),
+        );
+        const scheduler = manualScheduler();
+        createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        }).connect();
+
+        backend.receive({ todos: ["a", "b"], tags: ["x", "y"] });
+        store.update(({ todos }) => ({ todos: [...todos, "local"] }));
+
+        expect(store.getState()).toEqual({ todos: ["a", "b", "local"] });
+        expect(backend.read()).toEqual({
+          todos: ["a", "b", "local"],
+          tags: ["x", "y"],
+        });
+      });
+
+      it("offers the store a remote value for a key it did not hold, as an apply does", () => {
+        const backend = createMemoryBackend({ todos: [], legacy: "old" });
+        // Holds `legacy` only once it is "ok".
+        const store = createTestStore<{ todos: string[]; legacy?: string }>(
+          { todos: [] },
+          ({ legacy, ...rest }) =>
+            legacy === "ok" ? { ...rest, legacy } : rest,
+        );
+        const scheduler = manualScheduler();
+        createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        }).connect();
+        expect(store.getState()).toEqual({ todos: [] });
+
+        backend.receive({ todos: ["a"], legacy: "ok" });
+        store.update(({ todos }) => ({ todos: [...todos, "b"] }));
+
+        const merged = { todos: ["a", "b"], legacy: "ok" };
+        expect(store.getState()).toEqual(merged);
+        expect(backend.read()).toEqual(merged);
+      });
+
+      it("sends one remote event for the apply and the write of the local change", () => {
+        const backend = createMemoryBackend();
+        const store = createTestStore(threeTodos());
+        const scheduler = manualScheduler();
+        const engine = createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+        });
+        engine.connect();
+        const events: SyncEvent[] = [];
+        engine.subscribe((event) => events.push(event));
+
+        backend.receive(toggleTodo(threeTodos(), "1"));
+        store.update((s) => toggleTodo(s, "2"));
+        scheduler.run();
+
+        expect(events).toEqual(["remote"]);
+      });
+
+      it("lets the pending changes replace the local change after a write threw, without a base", () => {
+        const backend = createMemoryBackend(threeTodos());
+        const write = backend.write;
+        let fail = true;
+        backend.write = (next, previous) => {
+          if (fail) {
+            fail = false;
+            throw new Error("offline");
+          }
+          write(next, previous);
+        };
+        const store = createTestStore(threeTodos());
+        const scheduler = manualScheduler();
+        const onError = vi.fn();
+        createSyncEngine(backend, store.adapter, {
+          schedule: scheduler.schedule,
+          onError,
+        }).connect();
+        store.update((s) => toggleTodo(s, "3"));
+        expect(onError).toHaveBeenCalledTimes(1);
+
+        const remote = deleteTodo(threeTodos(), "1");
+        backend.receive(remote);
+        store.update((s) => toggleTodo(s, "2"));
+
+        expect(store.getState()).toEqual(remote);
+        expect(backend.read()).toEqual(remote);
+      });
     });
 
     it("applies a pending remote change on disconnect", () => {
