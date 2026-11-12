@@ -35,6 +35,9 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  * With a `get` that falls back to an empty object, such as `(state) => state.doc ?? {}`, nothing
  * throws, but the store removing the slice is then a local change that empties the backend.
  *
+ * It keeps the adapter's `batchNotifications`, so the engine batches the slice's notifications
+ * when it would batch the store's.
+ *
  * When `get` returns the same object after `setState` as before it, the engine takes the store to
  * have ignored the change, as `StoreAdapter.setState` describes, and writes nothing. That holds
  * for a store that keeps the slice's object in a new root state to reject a remote change: the
@@ -101,5 +104,8 @@ export function scopeAdapter<S extends object, T extends JsonObjectInput>(
         if (!unchanged) onStoreChange();
       });
     },
+
+    // The slice notifies as often as the store does.
+    batchNotifications: adapter.batchNotifications,
   };
 }

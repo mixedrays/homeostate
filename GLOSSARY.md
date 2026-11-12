@@ -133,7 +133,7 @@ _Avoid_: Initialized, synced
 
 **Local change**:
 A change made to the store on this peer, which the sync engine writes to the CRDT backend as the whole synced state.
-When a pending apply waits, it runs first, merged with the local change, so a local change never writes over a remote change the store has not been given.
+When a pending apply waits, it runs first, merged with the local change, so a local change never writes over a remote change the store has not been given. With a batched write, local changes are written a microtask later.
 _Avoid_: Outgoing change, store change
 
 **Remote change**:
@@ -162,6 +162,10 @@ _Avoid_: Sync error, last error
 **Pending apply**:
 Remote changes the CRDT backend holds and the sync engine has not applied to the store yet: those its `schedule` option defers to the next flush, which applies them all with one read of the backend, and those another listener of the document hears of before the engine. A local change made meanwhile runs the apply first, which merges that change with the remote changes against what the backend held before them, and writes the result.
 _Avoid_: Queued update, batch
+
+**Batched write**:
+The one write the sync engine makes a microtask after a store adapter that sets `batchNotifications` first notifies, holding every local change made until then, so that one array method on a store that notifies per property set, such as a Valtio proxy, is written as one change. A remote change applied while it waits is merged with the waiting local change, as with a pending apply, and `disconnect()` writes it first.
+_Avoid_: Pending write, deferred write
 
 **Revision**:
 What a CRDT backend reports to tell whether its synced subtree may have changed: equal to an earlier revision only if nothing changed since, even when the change is not reported yet. The sync engine compares it with the revision it recorded when it last synced.

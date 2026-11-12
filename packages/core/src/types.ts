@@ -80,6 +80,25 @@ export interface StoreAdapter<S extends object> {
    * @returns Unsubscribe function
    */
   subscribe: (onStoreChange: () => void) => Unsubscribe;
+
+  /**
+   * Set to `true` for a store that notifies once per property set rather than once per change,
+   * such as a Valtio proxy, on which one array method like `splice`, `unshift`, `shift`, `sort` or
+   * `reverse` notifies several times, with an intermediate state each time. Written one by one,
+   * those states make every shifted item look replaced, so a peer's concurrent edit lands on the
+   * wrong item and its concurrent insert duplicates items.
+   *
+   * The engine then writes local changes after a microtask instead of synchronously: the first
+   * notification queues one write, later ones add nothing until it runs, and it writes the store's
+   * synced state as it is then, with one `'local'` sync event. `subscribe` must still notify
+   * synchronously, so that the engine ignores the echoes of `setState` as it does without it. A
+   * remote change applied while the write waits is merged with the waiting local change, as a
+   * local change is merged into a pending apply (see `SyncEngineConfig.schedule`), and the merged
+   * state is written at once, in place of the queued write. `disconnect()` writes a waiting local
+   * change before it unsubscribes. Without it, every notification is written synchronously. The
+   * engine reads it once, when it is created.
+   */
+  batchNotifications?: boolean;
 }
 
 /**

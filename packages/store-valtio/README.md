@@ -43,6 +43,17 @@ state.todos.push({ id: crypto.randomUUID(), title: "Write docs", done: false });
 Mutate the proxy as usual. Remote changes mutate only the paths that differ, so components
 reading unchanged subtrees through `useSnapshot` do not re-render.
 
+A mutation reaches the backend after a microtask, together with every other mutation made before
+it, so one array method such as `splice`, `unshift`, `sort` or `reverse` is written once, as one
+change. A remote change that arrives meanwhile is merged with the waiting mutations, and
+`engine.disconnect()` writes them first. Code and tests that read the backend right after a
+mutation wait for the write first:
+
+```ts
+state.todos.splice(0, 1);
+await Promise.resolve(); // the backend now holds the removal
+```
+
 ## License
 
 MIT — see [LICENSE](https://github.com/mixedrays/homeostate/blob/main/LICENSE).
