@@ -901,8 +901,11 @@ describe("sync status", () => {
       };
     };
 
-    /** Remote changes that make the store rewrite what it just rewrote. */
-    const loop = (backend: MemoryBackend, times = 2): void => {
+    /**
+     * Remote changes that make the store rewrite what it just rewrote, enough for the engine to
+     * stop writing it back.
+     */
+    const loop = (backend: MemoryBackend, times = 7): void => {
       for (let i = 1; i <= times; i++) backend.receive({ count: i * 7 });
     };
 
@@ -911,7 +914,7 @@ describe("sync status", () => {
       const listener = vi.fn();
       engine.subscribeStatus(listener);
 
-      loop(backend, 4);
+      loop(backend);
 
       const { failure, connected, ready } = engine.getStatus();
       expect(failure?.error).toBeInstanceOf(WriteLoopError);
@@ -936,11 +939,11 @@ describe("sync status", () => {
       const events: SyncEvent[] = [];
       engine.subscribe((event) => events.push(event));
 
-      loop(backend, 4);
+      loop(backend);
 
       expect(reported).toHaveLength(withOnError ? 1 : 0);
       expect(warn).toHaveBeenCalledTimes(withOnError || production ? 0 : 1);
-      expect(events).toEqual(["remote", "remote", "remote", "remote"]);
+      expect(events).toEqual(Array(7).fill("remote"));
     });
 
     it("clears once an apply leaves no loop", () => {

@@ -542,7 +542,7 @@ describe("createSyncEngine", () => {
         a.update((s) => ({ ...s, count: 1 }));
         await ticks(40);
 
-        expect(writes.count).toBeLessThan(5);
+        expect(writes.count).toBeLessThan(14);
         expect(a.getState().count).toBe(1);
         expect(b.getState().count).toBe(1);
       });
@@ -563,12 +563,12 @@ describe("createSyncEngine", () => {
         atLeastTen.update((s) => ({ ...s, todos: ["a"] }));
         await ticks(40);
 
-        expect(writes.count).toBeLessThan(5);
+        expect(writes.count).toBeLessThan(14);
         expect(atLeastTen.getState().todos).toEqual(["a"]);
         expect(atMostFive.getState().todos).toEqual(["a"]);
       });
 
-      /** One stamping peer whose write back another peer re-stamps twice. */
+      /** One stamping peer whose write back another peer re-stamps six times in a row. */
       const restampWriteBack = (config?: SyncEngineConfig<Stamped>) => {
         rulesOn = true;
         const backend = createMemoryBackend();
@@ -580,21 +580,22 @@ describe("createSyncEngine", () => {
         expect(write).toHaveBeenCalledTimes(1);
         const stamped = (backend.read() as unknown as Stamped).updatedAt!;
 
-        backend.receive({ count: 1, updatedAt: -1 });
-        backend.receive({ count: 1, updatedAt: -2 });
+        for (let i = 1; i <= 6; i++)
+          backend.receive({ count: 1, updatedAt: -i });
         return { backend, store, write, stamped };
       };
 
       it("stops writing back and reports the keys once when a peer re-writes them", () => {
         const { backend, store, write, stamped } = restampWriteBack();
 
-        expect(write).toHaveBeenCalledTimes(1);
+        // The write back, then one for each re-stamp before the sixth in a row.
+        expect(write).toHaveBeenCalledTimes(6);
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn.mock.calls[0]![0]).toContain('"updatedAt"');
         expect(warn.mock.calls[0]![0]).not.toContain('"count"');
         // The store keeps its own stamp, and the backend the peer's.
         expect(store.getState().updatedAt).toBeGreaterThan(stamped);
-        expect(backend.read()).toEqual({ count: 1, updatedAt: -2 });
+        expect(backend.read()).toEqual({ count: 1, updatedAt: -6 });
       });
 
       it("stops a loop without a warning in production", () => {
@@ -602,7 +603,7 @@ describe("createSyncEngine", () => {
         try {
           const { write } = restampWriteBack();
 
-          expect(write).toHaveBeenCalledTimes(1);
+          expect(write).toHaveBeenCalledTimes(6);
           expect(warn).not.toHaveBeenCalled();
         } finally {
           vi.unstubAllEnvs();
@@ -612,7 +613,7 @@ describe("createSyncEngine", () => {
       it("reports a stopped loop to onError once, naming its keys, instead of warning", () => {
         const onError = vi.fn();
         const { backend } = restampWriteBack({ onError });
-        backend.receive({ count: 1, updatedAt: -3 });
+        backend.receive({ count: 1, updatedAt: -7 });
 
         expect(onError).toHaveBeenCalledTimes(1);
         const [error, source] = onError.mock.calls[0]!;
@@ -680,7 +681,7 @@ describe("createSyncEngine", () => {
         stores[0]!.update((s) => ({ ...s, count: 1 }));
         await ticks(40);
 
-        expect(writes.count).toBeLessThan(7);
+        expect(writes.count).toBeLessThan(21);
         for (const store of stores) expect(store.getState().count).toBe(1);
       });
 
@@ -711,7 +712,7 @@ describe("createSyncEngine", () => {
         stores[0]!.update((s) => ({ ...s, z: 1 }));
         await ticks(40);
 
-        expect(writes.count).toBeLessThan(7);
+        expect(writes.count).toBeLessThan(23);
         for (const store of stores) expect(store.getState().z).toBe(1);
       });
 
@@ -725,11 +726,220 @@ describe("createSyncEngine", () => {
           a.update((s) => ({ ...s, count }));
           await ticks(20);
 
-          expect(writes.count).toBeLessThan(5);
+          expect(writes.count).toBeLessThan(14);
           expect(b.getState().count).toBe(count);
           expect(backends[0]!.read()).toMatchObject({ count });
           expect(backends[1]!.read()).toMatchObject({ count });
         }
+      });
+
+      describe("while other peers write concurrently", () => {
+        interface Seen {
+          items: number[];
+          seenBy: Record<string, number>;
+        }
+
+        /** A store whose subscriber records, under `name`'s own entry, how many items it has seen. */
+        const seeingStore = (name: string, initial: Seen) => {
+          const store = createTestStore<Seen>(initial);
+          store.adapter.subscribe(() => {
+            const s = store.getState();
+            if (s.seenBy[name] !== s.items.length)
+              store.setState({
+                ...s,
+                seenBy: { ...s.seenBy, [name]: s.items.length },
+              });
+          });
+          return store;
+        };
+
+        interface Logged {
+          log: string[];
+          logSize: number;
+        }
+
+        /** A store whose subscriber derives `logSize` from `log`. */
+        const loggingStore = (initial: Logged) => {
+          const store = createTestStore<Logged>(initial);
+          store.adapter.subscribe(() => {
+            const s = store.getState();
+            if (s.logSize !== s.log.length)
+              store.setState({ ...s, logSize: s.log.length });
+          });
+          return store;
+        };
+
+        it("keeps writing back a peer's own entry while other peers change theirs", () => {
+          const backend = createMemoryBackend();
+          const store = seeingStore("p2", { items: [], seenBy: { p2: 0 } });
+          const onError = vi.fn();
+          createSyncEngine(backend, store.adapter, { onError }).connect();
+
+          backend.receive({ items: [1], seenBy: { p0: 1, p2: 0 } }); // p2 writes back p2: 1
+          // p0 has received that write back, appends, and updates its own entry.
+          backend.receive({ items: [1, 2], seenBy: { p0: 2, p2: 1 } });
+          backend.receive({ items: [1, 2, 3], seenBy: { p0: 3, p2: 1 } });
+
+          expect(onError).not.toHaveBeenCalled();
+          expect(store.getState().seenBy.p2).toBe(3);
+          expect(backend.read()).toEqual(store.getState());
+        });
+
+        it("reports no loop when a concurrent write wins over a derived key", () => {
+          const backend = createMemoryBackend();
+          const store = loggingStore({ log: ["a"], logSize: 1 });
+          const onError = vi.fn();
+          const engine = createSyncEngine(backend, store.adapter, { onError });
+          engine.connect();
+          const failures: unknown[] = [];
+          engine.subscribeStatus(() =>
+            failures.push(engine.getStatus().failure),
+          );
+
+          backend.receive({ log: ["a", "b"], logSize: 1 }); // B's append; A writes back logSize: 2
+          // C appended concurrently and wrote logSize: 1, which wins over A's 2.
+          backend.receive({ log: ["a", "b", "c"], logSize: 1 });
+
+          expect(onError).not.toHaveBeenCalled();
+          expect(engine.getStatus().failure).toBeNull();
+          expect(failures.every((failure) => failure === null)).toBe(true);
+          expect(backend.read()).toEqual({ log: ["a", "b", "c"], logSize: 3 });
+        });
+
+        it("writes back a stopped key again once the remote state stops contradicting it", () => {
+          const backend = createMemoryBackend();
+          const store = loggingStore({ log: [], logSize: 0 });
+          const onError = vi.fn();
+          const engine = createSyncEngine(backend, store.adapter, { onError });
+          engine.connect();
+
+          // Another peer keeps appending and putting back logSize: 0, as a stuck peer would.
+          const log: string[] = [];
+          for (const item of ["a", "b", "c", "d", "e", "f", "g", "h"]) {
+            log.push(item);
+            backend.receive({ log: [...log], logSize: 0 });
+          }
+          expect(onError).toHaveBeenCalledWith(
+            expect.any(WriteLoopError),
+            "store",
+          );
+          expect(backend.read()).toEqual({ log, logSize: 0 });
+          expect(store.getState().logSize).toBe(8);
+
+          // The other peer now writes what this store derived, and appends again.
+          backend.receive({ log: [...log, "i"], logSize: 8 });
+
+          expect(backend.read()).toEqual({ log: [...log, "i"], logSize: 9 });
+          expect(engine.getStatus().failure).toBeNull();
+        });
+
+        it("keeps writing back a peer's own entry however long other peers change theirs", () => {
+          // Paths are compared under a key: another peer's entry is no contradiction.
+          const backend = createMemoryBackend();
+          const store = seeingStore("p1", { items: [], seenBy: {} });
+          const onError = vi.fn();
+          createSyncEngine(backend, store.adapter, { onError }).connect();
+
+          for (let i = 1; i <= 6; i++) {
+            const items = Array.from({ length: i }, (_, j) => j);
+            backend.receive({ items, seenBy: { p0: i * 10, p1: i - 1 } });
+          }
+
+          expect(onError).not.toHaveBeenCalled();
+          expect(backend.read()).toEqual({
+            items: [0, 1, 2, 3, 4, 5],
+            seenBy: { p0: 60, p1: 6 },
+          });
+        });
+
+        /**
+         * Memory backends whose writes reach every other one asynchronously and merge there as a
+         * CRDT map would: each value the write changed is set at its path, and an array grows to
+         * the sorted union of both, so concurrent appends of distinct numbers converge.
+         */
+        const mergingBackends = (count: number) => {
+          const backends = Array.from({ length: count }, () =>
+            createMemoryBackend(),
+          );
+          type Entries = [string[], unknown][];
+          const changes = (a: unknown, b: unknown, at: string[]): Entries => {
+            if (JSON.stringify(a) === JSON.stringify(b)) return [];
+            const record = (value: unknown) =>
+              typeof value === "object" &&
+              value !== null &&
+              !Array.isArray(value);
+            if (!record(a) || !record(b)) return [[at, b]];
+            const x = a as Record<string, unknown>;
+            const y = b as Record<string, unknown>;
+            return Object.keys(y).flatMap((key) =>
+              changes(x[key], y[key], [...at, key]),
+            );
+          };
+          const merge = (state: unknown, path: string[], value: unknown) => {
+            const [key, ...rest] = path;
+            const target = state as Record<string, unknown>;
+            if (rest.length > 0) {
+              target[key!] ??= {};
+              merge(target[key!], rest, value);
+            } else if (Array.isArray(value) && Array.isArray(target[key!]))
+              target[key!] = [
+                ...new Set([...(target[key!] as number[]), ...value]),
+              ].sort((m, n) => m - n);
+            else target[key!] = value;
+          };
+          for (const from of backends) {
+            const write = from.write;
+            from.write = (next, previous) => {
+              const sent = changes(from.read(), snapshot(next), []);
+              write(next, previous);
+              for (const to of backends)
+                if (to !== from)
+                  setTimeout(() => {
+                    const state = to.read();
+                    for (const [path, value] of sent) merge(state, path, value);
+                    to.receive(state);
+                  }, 0);
+            };
+          }
+          return backends;
+        };
+
+        it("syncs three peers that each append concurrently and write their own entry", async () => {
+          const backends = mergingBackends(3);
+          const names = ["p0", "p1", "p2"];
+          const stores = names.map((name) =>
+            seeingStore(name, { items: [], seenBy: {} }),
+          );
+          const onError = vi.fn();
+          backends.forEach((backend, i) =>
+            createSyncEngine(backend, stores[i]!.adapter, {
+              onError,
+            }).connect(),
+          );
+          await ticks(10);
+
+          for (let round = 0; round < 5; round++) {
+            stores.forEach((store, i) =>
+              store.update((s) => ({
+                ...s,
+                items: [...s.items, round * 10 + i],
+              })),
+            );
+            await ticks(2);
+          }
+          await ticks(40);
+
+          expect(onError).not.toHaveBeenCalled();
+          const state = backends[0]!.read();
+          for (const [i, store] of stores.entries()) {
+            expect(store.getState()).toEqual(state);
+            expect(backends[i]!.read()).toEqual(state);
+          }
+          for (const name of names)
+            expect((state as unknown as Seen).seenBy[name]).toBe(
+              (state as unknown as Seen).items.length,
+            );
+        });
       });
     });
   });
@@ -3940,8 +4150,8 @@ describe("createSyncEngine", () => {
 
         ready.resolve();
         await settled();
-        backend.receive({ ...backend.read(), stamp: 100 });
-        backend.receive({ ...backend.read(), stamp: 200 });
+        for (let i = 1; i <= 7; i++)
+          backend.receive({ ...backend.read(), stamp: i * 100 });
 
         expect(onError).toHaveBeenCalledWith(
           expect.any(WriteLoopError),

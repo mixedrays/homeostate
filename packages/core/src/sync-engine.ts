@@ -26,13 +26,64 @@ type Plain = Record<string, unknown>;
 const jsonEntry = (state: Plain, key: string): unknown =>
   hasOwn(state, key) && !isAbsent(state[key]) ? state[key] : undefined;
 
-/** The top-level keys whose values differ between `a` and `b`, as JSON would store them. */
-const changedKeys = (a: Plain, b: Plain): string[] => {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  return [...keys].filter(
-    (key) => !jsonEqual(jsonEntry(a, key), jsonEntry(b, key)),
-  );
+/**
+ * The paths of record keys, from the root, at which `a` and `b` differ as JSON would store them.
+ * A difference inside an array or a string is at the path of that array or string, since their
+ * items are keyed by position.
+ */
+const changedPaths = (
+  a: Plain,
+  b: Plain,
+  at: string[] = [],
+  paths: string[][] = [],
+): string[][] => {
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key === PROTO_KEY) continue;
+    const x = jsonEntry(a, key);
+    const y = jsonEntry(b, key);
+    if (x === y) continue;
+    if (isRecord(x) && isRecord(y)) changedPaths(x, y, [...at, key], paths);
+    else if (!jsonEqual(x, y)) paths.push([...at, key]);
+  }
+  return paths;
 };
+
+/** The value at `path` in `state` as JSON would store it; `undefined` when it would be left out. */
+const valueAt = (state: Plain, path: string[]): unknown => {
+  let value: unknown = state;
+  for (const key of path) {
+    if (!isRecord(value)) return undefined;
+    value = jsonEntry(value, key);
+  }
+  return value;
+};
+
+/**
+ * A copy of `state` holding at each of `paths` what `source` holds there, or nothing where
+ * `source` holds nothing. Every container above a path must be a record in both.
+ */
+const withValuesAt = (
+  state: Plain,
+  source: Plain,
+  paths: string[][],
+): Plain => {
+  const copy = { ...state };
+  for (const path of paths) {
+    let to = copy;
+    let from = source;
+    for (const key of path.slice(0, -1)) {
+      to = to[key] = { ...(to[key] as Plain) };
+      from = from[key] as Plain;
+    }
+    const key = path[path.length - 1]!;
+    if (jsonEntry(from, key) === undefined) delete to[key];
+    else to[key] = from[key];
+  }
+  return copy;
+};
+
+/** Identifies a path in a set. */
+const pathId = (path: string[]): string => JSON.stringify(path);
 
 /**
  * Whether `state` holds `key`: `undefined` reads as absent, as in JSON, while a function, which
@@ -77,27 +128,42 @@ const READY: SyncStatus = Object.freeze({
   failure: null,
 });
 
-/** Why the engine stopped writing back `keys`, and what the store must do instead. */
-const loopMessage = (keys: string[]): string =>
-  `stopped writing back ${keys.map((key) => JSON.stringify(key)).join(", ")}: another peer ` +
-  "changed what this store changed while a remote change was applied, and this store changed " +
-  "it again, so the peers would keep re-writing each other's changes. The store keeps its " +
-  "values for these keys, which differ from the backend's. What a store changes while a " +
-  "remote change is applied must not change again when the same state is applied twice, and " +
-  "every peer must agree on it.";
+/**
+ * How many applies in a row must contradict what the store changed at a path before the engine
+ * stops writing it back. Concurrent writes by other peers contradict it now and then, until the
+ * other peers' own writes back end the contradiction; a loop contradicts it on every apply. Peers
+ * that kept appending concurrently to a log a subscriber counts contradicted the count up to 5
+ * times in a row, so a loop costs a few more round trips to stop. The docs and the contract on
+ * `StoreAdapter.setState` name the number.
+ */
+const LOOP_THRESHOLD = 6;
+
+/** Why the engine stopped writing back `paths`, and what the store must do instead. */
+const loopMessage = (paths: string[][]): string =>
+  `stopped writing back ${paths.map(pathId).join(", ")}: on ${LOOP_THRESHOLD} remote changes in a ` +
+  "row, another peer changed what this store had changed there while a remote change was " +
+  "applied, and this store changed it again, so the peers would keep re-writing each other's " +
+  "changes. The store keeps its values there, which differ from the backend's. What a store " +
+  "changes while a remote change is applied must not change again when the same state is " +
+  "applied twice, and every peer must agree on it.";
 
 /**
  * Reported to `SyncEngineConfig.onError`, with the source `'store'`, when the engine stops
- * writing back keys the store keeps changing while remote changes are applied, so that the
- * peers do not re-write each other's changes forever; see `StoreAdapter.setState`. Reported
- * once per set of keys. The engine stays connected.
+ * writing back paths the store keeps changing while remote changes are applied, so that the
+ * peers do not re-write each other's changes forever; see `StoreAdapter.setState`. Its message
+ * lists the paths, from the root of the synced state, each as an array of keys. Reported once
+ * per set of top-level keys holding them. The engine stays connected.
  */
 export class WriteLoopError extends Error {
-  /** The synced keys no longer written back; the store and the backend hold different values. */
+  /**
+   * The top-level synced keys holding the paths no longer written back; the store and the
+   * backend hold different values there.
+   */
   readonly keys: string[];
 
-  constructor(keys: string[]) {
-    super(loopMessage(keys));
+  /** `paths` defaults to the `keys` themselves. */
+  constructor(keys: string[], paths: string[][] = keys.map((key) => [key])) {
+    super(loopMessage(paths));
     this.name = "WriteLoopError";
     this.keys = keys;
   }
@@ -161,9 +227,9 @@ const syncPredicate = ({
  * one a newer peer added that this store cannot hold or one `keys` or `omit` leaves out, stays
  * as it is, so a peer never deletes a key it does not sync. The store's own changes
  * while a remote change is applied, such as a key a reducer normalises or a subscriber derives,
- * are written once the apply ends. Once another peer changes the keys that write changed and the
- * store changes them again, they are no longer written, so the peers do not re-write each other's
- * changes forever; see `StoreAdapter.setState`.
+ * are written once the apply ends. Once 6 applies in a row find another peer's value at a path the
+ * store changed, and the store changes it again, that path is no longer written, so the peers do
+ * not re-write each other's changes forever; see `StoreAdapter.setState`.
  *
  * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
  * A local change made before the flush applies them first, and they replace the store's synced
@@ -230,10 +296,15 @@ export function createSyncEngine<S extends object>(
   /** The flush handed to `schedule` and not run yet; a flush that is no longer it does nothing. */
   let scheduledFlush: (() => void) | null = null;
   /**
-   * The engine's last write back, unless a local change was written since: the synced state it
-   * wrote and the keys in which that differs from the remote state the store was given.
+   * The store's synced state after the last apply that it did not ignore, unless a local change
+   * was written since; `null` when unknown.
    */
-  let lastWriteBack: { written: Plain; keys: string[] } | null = null;
+  let lastApplied: Plain | null = null;
+  /**
+   * By path id, on how many applies in a row that changed the path the remote state held another
+   * value there than the store had, and the store changed it again; see `countContradictions`.
+   */
+  const contradictions = new Map<string, number>();
   /** The loops already reported, by their key lists, so each is reported once. */
   const reportedLoops = new Map<string, SyncFailure>();
   /** The side whose call threw the error now on its way out of the engine; see `call`. */
@@ -486,56 +557,82 @@ export function createSyncEngine<S extends object>(
     // A key the store lacks after the apply and lacked before is one it cannot hold or does not
     // sync, such as a key a MobX class does not declare, so it stays in the backend. One it held
     // before, it removed.
-    const keys = changedKeys(target, applied).filter(
-      (key) => hasOwn(applied, key) || hasOwn(synced, key),
+    const paths = changedPaths(target, applied).filter(
+      ([key]) => hasOwn(applied, key) || hasOwn(synced, key),
     );
-    if (keys.length === 0) return;
-    if (rewritesLastWriteBack(target, keys)) {
-      // Writing would only make the peer change these keys again, and so on forever. The store
-      // keeps its values for them, which differ from the backend's.
-      reportLoop(keys);
-      return;
-    }
+    countContradictions(target, paths);
+    lastApplied = applied;
+    if (paths.length === 0) return;
+    const stopped = paths.filter(
+      (path) => (contradictions.get(pathId(path)) ?? 0) >= LOOP_THRESHOLD,
+    );
+    // Writing these would only make the peer change them again, and so on forever. The store
+    // keeps its values for them, which differ from the backend's.
+    if (stopped.length > 0) reportLoop(stopped);
+    if (stopped.length === paths.length) return;
+    const written =
+      stopped.length === 0 ? applied : withValuesAt(applied, target, stopped);
     // Code the store notified may have changed the backend before the engine hears of it, as
     // with an uncommitted Loro edit, or a Yjs transaction whose observers run after the engine's.
     // A backend without a revision was read just before.
     const stale =
       backend.revision !== undefined && !isUnchanged(readRevision());
     writeSynced(
-      applied,
-      keys.filter((key) => !hasOwn(applied, key)),
+      written,
+      paths
+        .filter((path) => path.length === 1 && !hasOwn(written, path[0]))
+        .map(([key]) => key),
       stale,
     );
-    lastWriteBack = { written: applied, keys };
   };
 
   /**
-   * Whether every key the store changed in `remote` is one the last write back changed, and
-   * `remote` holds another value for it than the one written: another peer changed what this
-   * store changed, and this store changed it again. Peers in that state only re-write each
-   * other's changes to those keys; a key the store changes anew, such as one it derives from
-   * an edit, is written back.
+   * Counts, for each of the `paths` at which the store changed `remote`, whether `remote` holds
+   * another value there than the store held after the apply before: another peer changed what
+   * this store had there, and this store changed it again. Peers that keep doing so only re-write
+   * each other's changes. When the store changed some path anew, such as a key it derives from an
+   * edit, the apply contradicts none of them, and their counts restart. A path the store left as
+   * `remote` holds it restarts too when `remote` changed it, since the store kept another peer's
+   * value; one that neither changed keeps its count, so a loop over one path still counts while
+   * remote changes to other paths come in between.
    */
-  const rewritesLastWriteBack = (remote: Plain, keys: string[]): boolean => {
-    if (lastWriteBack === null) return false;
-    const { written, keys: wroteBack } = lastWriteBack;
-    return keys.every(
-      (key) =>
-        wroteBack.includes(key) &&
-        !jsonEqual(jsonEntry(written, key), jsonEntry(remote, key)),
+  const countContradictions = (remote: Plain, paths: string[][]): void => {
+    const previous = lastApplied;
+    if (previous === null) {
+      contradictions.clear();
+      return;
+    }
+    const changed = new Set(paths.map(pathId));
+    for (const id of [...contradictions.keys()]) {
+      const path = JSON.parse(id) as string[];
+      if (
+        !changed.has(id) &&
+        !jsonEqual(valueAt(previous, path), valueAt(remote, path))
+      )
+        contradictions.delete(id);
+    }
+    const contradicted = paths.every(
+      (path) => !jsonEqual(valueAt(previous, path), valueAt(remote, path)),
     );
+    for (const path of paths) {
+      const id = pathId(path);
+      if (contradicted)
+        contradictions.set(id, (contradictions.get(id) ?? 0) + 1);
+      else contradictions.delete(id);
+    }
   };
 
   /**
    * Keeps a stopped loop as the status's failure, each time it comes back, and reports it once per
-   * set of keys: to `onError` in every build, and otherwise with a warning in development. The
-   * `'remote'` event that ends the apply tells the status listeners.
+   * set of top-level keys: to `onError` in every build, and otherwise with a warning in
+   * development. The `'remote'` event that ends the apply tells the status listeners.
    */
-  const reportLoop = (keys: string[]): void => {
+  const reportLoop = (paths: string[][]): void => {
+    const keys = [...new Set(paths.map(([key]) => key))];
     const id = JSON.stringify([...keys].sort());
     const reported = reportedLoops.get(id);
     const loop = reported ?? {
-      error: new WriteLoopError(keys),
+      error: new WriteLoopError(keys, paths),
       source: "store",
     };
     reportedLoops.set(id, loop);
@@ -543,7 +640,7 @@ export function createSyncEngine<S extends object>(
     if (reported === undefined) {
       if (onError !== undefined) onError(loop.error, "store");
       else if (!isProduction())
-        console.warn(`[homeostate] ${loopMessage(keys)}`);
+        console.warn(`[homeostate] ${loopMessage(paths)}`);
     }
     stoppedLoop = true;
   };
@@ -643,7 +740,8 @@ export function createSyncEngine<S extends object>(
     // store then holds, so there is nothing left to write. A store that ignored the apply keeps
     // its stale state out of the backend this way too.
     if (applyUnseenRemote()) return;
-    lastWriteBack = null;
+    lastApplied = null;
+    contradictions.clear();
     const synced = filterState(readStore());
     writeSynced(
       synced,
@@ -666,7 +764,8 @@ export function createSyncEngine<S extends object>(
     // A disconnected engine hears no remote change, so it reads the backend again on connect.
     lastSynced = undefined;
     heldKeys = new Set();
-    lastWriteBack = null;
+    lastApplied = null;
+    contradictions.clear();
     connected = false;
     reconciled = false;
     emit("disconnect");
