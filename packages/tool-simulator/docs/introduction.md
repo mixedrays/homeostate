@@ -89,6 +89,24 @@ Linking two peers makes them exchange their whole documents, as providers do whe
 reconnect. That exchange is never dropped, so once peers are linked again, whatever was lost on
 the way reaches them.
 
+The updates the exchange leads to are not so safe. A store that writes in answer to remote
+changes, such as a subscriber that keeps a derived key in synced state or a model that fills
+defaults, writes new updates as the exchanged documents arrive, and with a `dropRate` those can
+be dropped too. Nothing links the peers again, so they stay lost, where a provider would resync.
+Before checking convergence, repeat `heal()` and `settle()` until `stats().dropped` stops
+growing. Cap the rounds, as [`runRandomized`](#randomized-runs) does, since a store that writes
+on every exchange never stops:
+
+```ts
+for (let round = 0; round < 10; round++) {
+  const dropped = network.stats().dropped;
+  network.heal();
+  await network.settle();
+  if (network.stats().dropped === dropped) break;
+}
+network.expectConverged();
+```
+
 | Method                 | Does                                                                             |
 | ---------------------- | -------------------------------------------------------------------------------- |
 | `disconnect(a, b)`     | Cuts the link between two peers; messages on their way between them are lost     |
@@ -157,7 +175,8 @@ The error lists one line per difference, with the first path where the two diffe
 ```
 
 `differences()` returns the same lines, empty once the peers have converged. When messages are
-still on their way, the error says so: `settle()` first.
+still on their way, the error says so: `settle()` first. When updates were dropped since the
+last `heal()`, it says how many: `heal()` and `settle()` again, as in [the network](#the-network).
 
 ## Randomized runs
 
@@ -165,6 +184,11 @@ still on their way, the error says so: `settle()` first.
 a random action, or cuts or restores a random link, then lets a random amount of virtual time
 pass. At the end it heals the network, settles it and checks convergence. Throughout, the
 network checks that no peer [loses a synced key](#lost-keys).
+
+With a `dropRate`, the updates stores write in answer to the healing exchange can be dropped
+too, as [the network](#the-network) explains. So the run heals and settles again until a round
+drops nothing, at most 10 rounds, as a provider that resyncs would. Only that final phase
+repeats: the steps make the same random choices, so a seed replays the same steps.
 
 ```ts title="todos.random.test.ts"
 import { runRandomized } from "@homeostate/tool-simulator";
@@ -211,6 +235,14 @@ or by the key a peer lost, with the step in which it happened:
 ```text
 Randomized run failed at step 67 of 150; pass `seed: 11` to replay it.
 peer-1 lost the synced key title at 412.5 ms (seed 11), on an update from peer-0: its store and document both lack it, and no peer deleted it.
+```
+
+When peers do not converge and the tenth round of healing still dropped updates, the error ends
+with a line that says so. A store probably writes in answer to every exchange, so the updates
+never stop:
+
+```text
+Updates were still being dropped after 10 rounds of heal() and settle(): does a store write in answer to every exchange?
 ```
 
 Pass that `seed` to replay the run. For runs that replay exactly, give each document a fixed

@@ -133,6 +133,10 @@ export interface Network {
   /**
    * Link every pair of peers and have each exchange documents, as if every peer reconnected,
    * so that updates lost to drops and cut links arrive too.
+   *
+   * With a `dropRate`, the updates stores write in answer to that exchange, such as a key one
+   * derives from synced state, can be dropped too. Repeat `heal()` and `settle()` until
+   * `stats().dropped` stops growing before checking convergence.
    */
   heal: () => void;
   /**
@@ -152,7 +156,10 @@ export interface Network {
    * document. Empty once the peers have converged.
    */
   differences: () => string[];
-  /** Throws a `ConvergenceError` unless `differences()` is empty. */
+  /**
+   * Throws a `ConvergenceError` unless `differences()` is empty. Its message also says how many
+   * messages are still on their way, and how many updates were dropped since the last `heal()`.
+   */
   expectConverged: () => void;
   /** Disconnect every engine, stop listening to every document and drop what is on its way. */
   destroy: () => void;
@@ -236,6 +243,8 @@ export function createNetwork(options: NetworkOptions = {}): Network {
   let now = 0;
   let order = 0;
   const stats = { sent: 0, delivered: 0, dropped: 0, cut: 0 };
+  /** `stats.dropped` at the last `heal()`, or `undefined` before the first. */
+  let droppedAtHeal: number | undefined;
 
   const delay = (): number => {
     if (typeof latency === "number") return latency;
@@ -436,6 +445,7 @@ export function createNetwork(options: NetworkOptions = {}): Network {
     },
 
     heal: () => {
+      droppedAtHeal = stats.dropped;
       for (const a of peers)
         for (const b of peers) if (a.index < b.index) link(a, b);
     },
@@ -456,13 +466,22 @@ export function createNetwork(options: NetworkOptions = {}): Network {
       const lines = differences();
       if (lines.length === 0) return;
       const inFlight =
-        queue.length > 0
-          ? `\n${queue.length} messages are still on their way: settle() delivers them.`
+        queue.length === 1
+          ? "\n1 message is still on its way: settle() delivers it."
+          : queue.length > 1
+            ? `\n${queue.length} messages are still on their way: settle() delivers them.`
+            : "";
+      const dropped = stats.dropped - (droppedAtHeal ?? 0);
+      const droppedHint =
+        dropped > 0
+          ? `\n${dropped === 1 ? "1 update was" : `${dropped} updates were`} dropped${
+              droppedAtHeal === undefined ? "" : " since the last heal()"
+            }: heal() and settle() until stats().dropped stops growing.`
           : "";
       throw new ConvergenceError(
         `${peers.length} peers did not converge (seed ${seed}):\n${lines
           .map((line) => `- ${line}`)
-          .join("\n")}${inFlight}`,
+          .join("\n")}${inFlight}${droppedHint}`,
         lines,
         seed,
       );
