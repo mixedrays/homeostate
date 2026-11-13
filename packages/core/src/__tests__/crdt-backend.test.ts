@@ -82,6 +82,7 @@ const partsOver = (
       doc.listeners.delete(onChange);
     };
   },
+  revision: () => undefined,
   ...extra,
 });
 
@@ -221,15 +222,14 @@ describe("createCrdtBackend", () => {
     expect(doc.listeners.size).toBe(0);
   });
 
-  it("has the revision its parts give, and none without one", () => {
+  it("has the revision its parts give", () => {
     const doc = createDoc({});
     const backend = createCrdtBackend(
       partsOver(doc, { revision: () => doc.changes }),
     );
 
-    expect(backend.revision?.()).toBe(0);
+    expect(backend.revision()).toBe(0);
     backend.write({ count: 1 });
-    expect(backend.revision?.()).toBe(1);
-    expect("revision" in createCrdtBackend(partsOver(doc))).toBe(false);
+    expect(backend.revision()).toBe(1);
   });
 });

@@ -147,10 +147,9 @@ export interface CrdtBackend {
    *
    * Before writing a local change, the sync engine reads the backend unless the revision is the
    * one it recorded with what it last wrote or read, so that a remote change another listener
-   * heard first is applied before the local change instead of being written over. Without
-   * `revision`, the engine reads the backend before every local change.
+   * heard first is applied before the local change instead of being written over.
    */
-  revision?: () => unknown;
+  revision: () => unknown;
 
   /**
    * Notify about changes that did not come through this backend's own `write`.

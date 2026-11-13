@@ -685,13 +685,14 @@ export const describeCrdtBackend = <D>(
         }
       });
 
-    // `revision` is optional in the contract, but every backend in this repository has one.
+    // `revision` may return `undefined` while a backend cannot tell; each backend here can tell
+    // in this scenario.
     scenario(
       "changes its revision with every change, and keeps it across reads",
     ).run(() => {
       const doc = createDoc();
       const watched = backend(doc);
-      const revision = () => watched.revision?.();
+      const revision = () => watched.revision();
       const seen = [revision()];
       const expectChanged = (change: string): void => {
         const next = revision();

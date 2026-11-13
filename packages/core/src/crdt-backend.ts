@@ -27,8 +27,11 @@ export interface CrdtBackendParts {
    * carries this backend's tag, as `transact` gives it. Returns the cleanup.
    */
   watch: (onChange: (own: boolean) => void) => Unsubscribe;
-  /** `CrdtBackend.revision`, which the backend gets as it is; leave it out when there is none. */
-  revision?: () => unknown;
+  /**
+   * `CrdtBackend.revision`, which the backend gets as it is; return `undefined` when the library
+   * cannot tell.
+   */
+  revision: () => unknown;
   /**
    * Which strings the library stores as its text type, by their path from the synced root; a
    * write edits those in place and replaces every other changed string whole. Defaults to none.
@@ -44,7 +47,7 @@ export interface CrdtBackendParts {
  *   gives it, from `{}` when `transact` created the root, and otherwise from `read()`, with
  *   `applyChanges`, `json: true` and the parts' `text`;
  * - reports through `subscribe` only the changes `watch` does not call its own;
- * - reads with `read`, and has `revision` when the parts do.
+ * - reads with `read`, and has the parts' `revision`.
  *
  * @example
  * ```typescript
@@ -70,7 +73,7 @@ export const createCrdtBackend = ({
 }: CrdtBackendParts): CrdtBackend => {
   const diff = { text, json: true };
 
-  const backend: CrdtBackend = {
+  return {
     read,
 
     write: (next, previous) =>
@@ -84,11 +87,11 @@ export const createCrdtBackend = ({
         ),
       ),
 
+    revision,
+
     subscribe: (onRemoteChange) =>
       watch((own) => {
         if (!own) onRemoteChange();
       }),
   };
-  if (revision !== undefined) backend.revision = revision;
-  return backend;
 };

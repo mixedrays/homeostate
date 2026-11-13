@@ -97,7 +97,7 @@ type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
 interface CrdtBackend {
   read: () => JsonObject;
   write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
-  revision?: () => unknown;
+  revision: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
@@ -111,8 +111,9 @@ interface CrdtBackend {
   edits instead of replacing the document.
 - `revision` tells the engine whether the document may have changed since it last synced,
   even before `subscribe` reports the change. If it has, the engine applies that change to the
-  store before writing a local one, which loses what it did to synced keys. Without
-  `revision`, the engine reads the backend before every local change.
+  store before writing a local one, which loses what it did to synced keys. While the backend
+  cannot tell, `revision` returns `undefined`, and the engine reads the backend before the local
+  change.
 - `subscribe` reports changes that did not come through the backend's own `write`: imports
   from peers and local edits made directly on the document.
 

@@ -1165,11 +1165,12 @@ describe("createSyncEngine", () => {
       );
     });
 
-    it("reads a backend without a revision before every local change", () => {
+    it("reads a backend whose revision cannot tell before every local change", () => {
       const memory = createMemoryBackend(threeTodos());
       const backend: CrdtBackend = {
         read: () => memory.read(),
         write: (next, previous) => memory.write(next, previous),
+        revision: () => undefined,
         subscribe: (onRemoteChange) => memory.subscribe(onRemoteChange),
       };
       const store = createTestStore(threeTodos());
@@ -1503,6 +1504,23 @@ describe("createSyncEngine", () => {
       expect(previous.at(-1)).toBeUndefined();
       expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
       expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
+    });
+
+    it("passes nothing to the write-back when the backend's revision cannot tell", () => {
+      const { backend: checked, previous } = checkedBackend();
+      const backend: CrdtBackend = { ...checked, revision: () => undefined };
+      const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
+        ...s,
+        todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
+      });
+      const store = createTestStore(threeTodos(), trimTitles);
+      createSyncEngine(backend, store.adapter).connect();
+      const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
+
+      checked.receive(remote);
+
+      expect(previous.at(-1)).toBeUndefined();
+      expect(checked.read()).toEqual(addTodo(threeTodos(), todo("4")));
     });
 
     it("passes what it read when a remote change arrives during its own write", () => {

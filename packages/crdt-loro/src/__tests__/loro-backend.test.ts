@@ -69,12 +69,12 @@ describe("createLoroBackend", () => {
     const doc = new LoroDoc();
     const backend = createLoroBackend(doc, NAME);
     backend.write({ count: 1 });
-    const before = backend.revision?.();
+    const before = backend.revision();
 
     // Reported only once committed.
     doc.getMap(NAME).set("count", 2);
 
-    expect(backend.revision?.()).not.toBe(before);
+    expect(backend.revision()).not.toBe(before);
   });
 
   it("has no revision while checked out, and its latest one again after", () => {
@@ -83,13 +83,13 @@ describe("createLoroBackend", () => {
     backend.write({ count: 1 });
     const earlier = doc.frontiers();
     backend.write({ count: 2 });
-    const latest = backend.revision?.();
+    const latest = backend.revision();
 
     doc.checkout(earlier);
-    expect(backend.revision?.()).toBeUndefined();
+    expect(backend.revision()).toBeUndefined();
     doc.checkoutToLatest();
 
-    expect(backend.revision?.()).toBe(latest);
+    expect(backend.revision()).toBe(latest);
   });
 
   // loro-crdt before 1.16.4 panics at commit on this delete when the document has a subscriber,

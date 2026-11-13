@@ -818,7 +818,7 @@ type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
 interface CrdtBackend {
   read: () => JsonObject;
   write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
-  revision?: () => unknown;
+  revision: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 ```
@@ -837,7 +837,7 @@ has no index signature, so `read()` converts to one through `unknown`:
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read()`                 | Returns a plain JSON snapshot that does not alias mutable backend internals. For the sync engine, expose the synced top-level state as an object.                |
 | `write(next, previous?)` | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                          |
-| `revision()`             | Optional. A value equal (`===`) to an earlier one only if the synced subtree has not changed since, reported or not; `undefined` while it cannot tell.           |
+| `revision()`             | A value equal (`===`) to an earlier one only if the synced subtree has not changed since, reported or not; `undefined` while it cannot tell.                     |
 | `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
 
 `previous`, when given, is what the synced subtree holds now: the whole state the engine last
@@ -848,16 +848,18 @@ with [`createCrdtBackend`](#createcrdtbackend) does; unchanged subtrees of `next
 same objects and compare by identity. Like `next`, it may
 hold `undefined` and functions, which `json: true` treats as absent. The engine passes nothing
 for the seed write during reconciliation, after a write that threw, and for a write back after
-`setState` during which the revision moved. A backend may ignore `previous`.
+`setState` during which the revision moved, or when it cannot tell. A backend may ignore
+`previous`.
 
 A document can change before `subscribe` reports it: another listener may hear of a remote
 change first, and some libraries report changes only once a transaction ends or is committed.
 So before writing a local change, the engine checks that the backend still holds what it last
 synced. It reads the backend unless `revision()` returns the revision it recorded then, and
-applies what it finds first if that differs; see [SyncEngine](#syncengine). Without
-`revision`, it reads the backend before every local change. A revision may change without the
-subtree changing, which costs only that read: the Yjs backend counts the document's
-transactions, the Loro backend its ops, and the Automerge backend uses the document's heads.
+applies what it finds first if that differs; see [SyncEngine](#syncengine). A backend whose
+`revision()` always returns `undefined` is read before every local change. A revision may
+change without the subtree changing, which costs only that read: the Yjs backend counts the
+document's transactions, the Loro backend its ops, and the Automerge backend uses the
+document's heads.
 
 `read()` must return an object; the engine still checks, and throws a `TypeError` for anything
 else, such as what a peer stored in place of the synced map. Objects in the snapshot may carry
@@ -879,7 +881,7 @@ interface CrdtBackendParts {
     edit: (root: object, ops: ApplyOps, created?: boolean) => void,
   ) => void;
   watch: (onChange: (own: boolean) => void) => Unsubscribe;
-  revision?: () => unknown;
+  revision: () => unknown;
   text?: TextPolicy;
 }
 ```
@@ -892,7 +894,7 @@ CRDT library.
 | `read`     | The backend's `read`: the synced subtree as a JSON snapshot that never aliases the document.                                                                                                                                   |
 | `transact` | Runs `edit` as one transaction tagged as this backend's own, with the synced root and the `ApplyOps` that write into it. When the document holds no map there, it puts an empty one in its place and passes `created` as true. |
 | `watch`    | Calls `onChange` after every change to the synced subtree, with `own` set when the change carries the tag `transact` gives. Returns the cleanup.                                                                               |
-| `revision` | Optional. The backend's `revision`, as it is; see [CrdtBackend](#crdtbackend).                                                                                                                                                 |
+| `revision` | The backend's `revision`, as it is; it returns `undefined` when the library cannot tell. See [CrdtBackend](#crdtbackend).                                                                                                      |
 | `text`     | Optional. Which strings the library stores as its text type, by path from the synced root; by default none. Build the library's [`ApplyOps`](./diffing.md) from the same policy.                                               |
 
 The backend it returns:

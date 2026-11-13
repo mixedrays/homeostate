@@ -480,9 +480,8 @@ export function createSyncEngine<S extends object>(
       expectRecord(backend.read(), "CrdtBackend.read()", "a plain object"),
     );
 
-  /** The backend's revision; `undefined` without one, or while the backend cannot tell. */
-  const readRevision = (): unknown =>
-    call("backend", () => backend.revision?.());
+  /** The backend's revision; `undefined` while the backend cannot tell. */
+  const readRevision = (): unknown => call("backend", () => backend.revision());
 
   /** Whether the backend's revision shows that it still holds `lastSynced`. */
   const isUnchanged = (revision: unknown): boolean =>
@@ -691,11 +690,9 @@ export function createSyncEngine<S extends object>(
   /**
    * Whether the backend may have changed since an apply read it: code the store notified may
    * have changed it before the engine hears of it, as with an uncommitted Loro edit, or a Yjs
-   * transaction whose observers run after the engine's. A backend without a revision was read
-   * just before.
+   * transaction whose observers run after the engine's.
    */
-  const isStale = (): boolean =>
-    backend.revision !== undefined && !isUnchanged(readRevision());
+  const isStale = (): boolean => !isUnchanged(readRevision());
 
   /**
    * Writes `applied`, the store's synced state after an apply that merged a local change into

@@ -70,3 +70,10 @@
   `transact` hands over from the same `text`, which is `undefined` when no string is text: core
   no longer passes a policy with its default applied. `CrdtBackendParts` gains the optional
   `text`. The Yjs, Loro and Automerge backends take their `text` option as before.
+- `CrdtBackend.revision` and `CrdtBackendParts.revision` are required. A backend written by hand,
+  or parts passed to `createCrdtBackend`, must implement `revision`; return `undefined` when it
+  cannot tell, which keeps the read before every local change that a backend without `revision`
+  had. Such a backend now also gets no `previous` when the engine writes back what the store
+  changed during a remote apply, or a local change merged into one, since the engine cannot tell
+  whether the document changed during `setState`; the backend diffs against its document then.
+  The Yjs, Loro, Automerge and memory backends already implement it.

@@ -73,9 +73,9 @@ writes out of `subscribe`.
   your library's text type and every other string as a plain value; text is then edited through
   `editText`.
 - Implement `revision()` from something your library updates with every change, reported or
-  not, such as a version vector or an op count, and return `undefined` while it cannot tell.
-  Without it, the engine reads your document before every local change to check that
-  `previous` is still current.
+  not, such as a version vector or an op count, and return `undefined` while it cannot tell. A
+  library with nothing of the kind returns `undefined` always; the engine then reads your
+  document before every local change to check that `previous` is still current.
 - Delete in `splice` and `editText` with one library call for the whole `deleteCount`, such as
   `Y.Text.delete(index, length)`: clearing a list or deleting a paragraph arrives as one run.
 
