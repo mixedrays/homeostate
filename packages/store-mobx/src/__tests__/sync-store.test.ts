@@ -145,7 +145,7 @@ describe("syncMobxStore", () => {
 
     syncMobxStore(store, {
       backend,
-      seed: "never",
+      seed: false,
       filter: (key) => key !== "filter",
     });
     expect(backend.read()).toEqual({ todos: [milk] });

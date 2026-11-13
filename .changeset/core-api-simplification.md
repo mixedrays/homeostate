@@ -8,6 +8,7 @@
 "@homeostate/tool-devtools": patch
 "@homeostate/tool-simulator": patch
 "@homeostate/react": patch
+"@homeostate/store-ngrx-signals": patch
 ---
 
 **Breaking:** a smaller sync engine API, with one way to do each thing. Migrate as follows:
@@ -27,3 +28,10 @@
   `engine.subscribe(() => listener())`, and read `engine.getStatus()` in it as before; it returns
   the same object while the status is unchanged, so compare by identity to skip the events that
   change nothing. An object that implements `SyncEngine` by hand can drop the method.
+- `SyncEngineConfig.seed` is a boolean, `true` by default, and the `SeedStrategy` type is gone.
+  `"if-empty"` seeded each synced key the backend lacks, not only an empty backend. Replace
+  `seed: "if-empty"` with `seed: true`, or leave it out, and `seed: "never"` with `seed: false`.
+  This also applies to the options of Zustand's and Redux's `homeostate`, `syncMobxStore`,
+  `syncStateTree` and `atomWithSync`. Remove imports of `SeedStrategy`; type a variable that holds
+  the option as `boolean`. In plain JavaScript, a leftover `seed: "never"` is truthy and now
+  seeds, so replace it.

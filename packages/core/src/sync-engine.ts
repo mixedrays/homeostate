@@ -253,7 +253,7 @@ const syncPredicate = ({
  *
  * On `connect()` the two sides are reconciled per key over the filtered view: a key the
  * backend holds wins over the store's value, and a synced key the backend lacks stays in
- * the store and is seeded into the backend unless `seed` is `'never'`. Afterwards every write
+ * the store and is seeded into the backend unless `seed` is `false`. Afterwards every write
  * gives the backend the store's synced keys and deletes those the store removed, and a key
  * removed from the backend is removed from the store. Any other key the backend holds, such as
  * one a newer peer added that this store cannot hold or one `keys` or `omit` leaves out, stays
@@ -294,7 +294,7 @@ export function createSyncEngine<S extends object>(
   adapter: StoreAdapter<S>,
   config: NoInfer<SyncEngineConfig<S>> = {},
 ): SyncEngine {
-  const { seed = "if-empty", schedule, onError, ready } = config;
+  const { seed = true, schedule, onError, ready } = config;
   // Untyped: the engine also judges keys the backend holds that `S` does not declare.
   const filter = syncPredicate(config as SyncEngineConfig);
 
@@ -303,7 +303,7 @@ export function createSyncEngine<S extends object>(
   let waiting: object | null = null;
   /** Whether `connect()`, and the wait for `ready` if any, have reconciled the two sides. */
   let reconciled = false;
-  /** Whether a local change arrived during that wait; it writes what `seed: 'never'` holds back. */
+  /** Whether a local change arrived during that wait; it writes what `seed: false` holds back. */
   let changedWhileWaiting = false;
   let storeUnsubscribe: Unsubscribe | null = null;
   let backendUnsubscribe: Unsubscribe | null = null;
@@ -990,7 +990,7 @@ export function createSyncEngine<S extends object>(
       // Code it notified may have disconnected the engine.
       if (waiting !== wait) return;
       waiting = null;
-      reconcile(seed === "if-empty" || changedWhileWaiting);
+      reconcile(seed || changedWhileWaiting);
     } catch (error) {
       const source = thrownBy;
       thrownBy = undefined;
@@ -1031,7 +1031,7 @@ export function createSyncEngine<S extends object>(
         );
       }
       try {
-        reconcile(wait === null && seed === "if-empty");
+        reconcile(wait === null && seed);
         backendUnsubscribe = call("backend", () =>
           backend.subscribe(() => guarded(onRemoteChange)),
         );

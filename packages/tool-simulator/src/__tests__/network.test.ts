@@ -558,7 +558,7 @@ describe.each([["a stand-in", createStandIn] as const, ...backends])(
       network.addPeer(room.setup);
       await network.settle();
 
-      const joiner = todoPeer(docs, 1, { config: { seed: "never" } });
+      const joiner = todoPeer(docs, 1, { config: { seed: false } });
       joiner.store.setState({ extra: "mine" } as Partial<TodoState>);
       network.addPeer(joiner.setup);
       await network.settle();

@@ -23,15 +23,15 @@ import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
   omit: ["draft"],
-  seed: "if-empty",
+  seed: true,
 });
 engine.connect();
 ```
 
 `omit` keeps the keys it names on this device; functions stay local by default. On
 `connect()`, keys the backend already holds win over the store's values, so a peer joining
-a populated room adopts it. Keys only the store has are written to the backend (`seed:
-"if-empty"`, the default) or left for the next local change (`seed: "never"`). A reconnect
+a populated room adopts it. Keys only the store has are written to the backend (`seed: true`,
+the default) or left for the next local change (`seed: false`). A reconnect
 adopts the backend again, so edits made while disconnected to keys it holds are dropped.
 
 `scopeAdapter` turns a store adapter into one for a slice of the store, to sync a nested slice,

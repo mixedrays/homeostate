@@ -61,11 +61,11 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(threeTodos());
     });
 
-    it("leaves an empty backend alone with seed 'never'", () => {
+    it("leaves an empty backend alone with seed false", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
 
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+      createSyncEngine(backend, store.adapter, { seed: false }).connect();
 
       expect(backend.read()).toEqual({});
       expect(store.getState()).toEqual(threeTodos());
@@ -115,11 +115,11 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(expected);
     });
 
-    it("keeps synced keys the backend lacks without writing them with seed 'never'", () => {
+    it("keeps synced keys the backend lacks without writing them with seed false", () => {
       const backend = createMemoryBackend({ todos: [todo("remote")] });
       const store = createTestStore(threeTodos());
 
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+      createSyncEngine(backend, store.adapter, { seed: false }).connect();
 
       expect(store.getState()).toEqual({
         ...threeTodos(),
@@ -475,7 +475,7 @@ describe("createSyncEngine", () => {
       });
       const write = vi.spyOn(backend, "write");
 
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+      createSyncEngine(backend, store.adapter, { seed: false }).connect();
 
       expect(store.getState()).toEqual({
         todos: ["a", "b"],
@@ -1710,8 +1710,9 @@ describe("createSyncEngine", () => {
     });
 
     it.each([
-      ["seed 'if-empty'", {}],
-      ["seed 'never'", { seed: "never" }],
+      ["the default seed", {}],
+      ["seed true", { seed: true }],
+      ["seed false", { seed: false }],
     ] as [
       string,
       SyncEngineConfig<{ todos: string[]; addTodo: () => void }>,
@@ -1726,7 +1727,7 @@ describe("createSyncEngine", () => {
 
         expect(store.getState()).toEqual({ todos: ["a"], addTodo });
         expect(backend.read()).toEqual(
-          config.seed === "never"
+          config.seed === false
             ? { addTodo: "oops" }
             : { todos: ["a"], addTodo: "oops" },
         );
@@ -3699,13 +3700,13 @@ describe("createSyncEngine", () => {
         expect(backend.read()).toEqual({ held: "room" });
       });
 
-      it("writes the keys the backend lacks with seed 'never' after a local change", async () => {
+      it("writes the keys the backend lacks with seed false after a local change", async () => {
         const backend = createMemoryBackend({ held: "room" });
         const store = createTestStore({ held: "mine", lacked: "mine" });
         const ready = deferred();
         createSyncEngine(backend, store.adapter, {
           ready: ready.promise,
-          seed: "never",
+          seed: false,
         }).connect();
 
         store.update((state) => ({ ...state, lacked: "edit" }));
@@ -3715,14 +3716,14 @@ describe("createSyncEngine", () => {
         expect(backend.read()).toEqual({ held: "room", lacked: "edit" });
       });
 
-      it("writes nothing with seed 'never' and no local change", async () => {
+      it("writes nothing with seed false and no local change", async () => {
         const backend = createMemoryBackend({ held: "room" });
         const write = vi.spyOn(backend, "write");
         const store = createTestStore({ held: "mine", lacked: "mine" });
         const ready = deferred();
         createSyncEngine(backend, store.adapter, {
           ready: ready.promise,
-          seed: "never",
+          seed: false,
         }).connect();
 
         backend.receive({ held: "room 2" });
@@ -3739,7 +3740,7 @@ describe("createSyncEngine", () => {
         const store = createTestStore({ count: 0 });
         const engine = createSyncEngine(backend, store.adapter, {
           ready: Promise.resolve(),
-          seed: "never",
+          seed: false,
         });
 
         engine.connect();
@@ -3758,7 +3759,7 @@ describe("createSyncEngine", () => {
         const ready = deferred();
         createSyncEngine(backend, store.adapter, {
           ready: ready.promise,
-          seed: "never",
+          seed: false,
         }).connect();
 
         backend.receive({ count: 7 });
@@ -4040,7 +4041,7 @@ describe("createSyncEngine", () => {
         const ready = deferred();
         const engine = createSyncEngine(backend, store.adapter, {
           ready: ready.promise,
-          seed: "never",
+          seed: false,
           onError: () => {},
         });
         engine.connect();
@@ -4123,7 +4124,7 @@ describe("createSyncEngine", () => {
         const ready = deferred();
         createSyncEngine(backend, store.adapter, {
           ready: ready.promise,
-          seed: "never",
+          seed: false,
         }).connect();
 
         backend.write({ count: 2 });

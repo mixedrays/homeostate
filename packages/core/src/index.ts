@@ -31,7 +31,6 @@ export type {
   PersistenceConfig,
   PersistenceLoadResult,
   PersistenceStats,
-  SeedStrategy,
   SetupOptions,
   StoredUpdates,
   StoreAdapter,

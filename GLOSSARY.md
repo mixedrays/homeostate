@@ -124,8 +124,8 @@ Writing the synced keys only the store holds into the CRDT backend during reconc
 Seeding is unrelated to the random seed of the simulator.
 _Avoid_: Initializing, bootstrapping
 
-**Seed strategy**:
-The `seed` option in `SyncEngineConfig`: `"if-empty"`, the default, seeds during connect, and `"never"` leaves those keys for the next local change. Despite its name, `"if-empty"` works per key.
+**Seed option**:
+The `seed` option in `SyncEngineConfig`: `true`, the default, seeds during connect each synced key the backend lacks, even when it holds others, and `false` leaves those keys for the next local change.
 
 **Ready**:
 The `ready` option in `SyncEngineConfig`: a promise, or a function returning one, that the sync engine waits for before it writes to the CRDT backend, so that a peer does not seed before the document holds what it should adopt. While waiting, the engine is connected but not ready: it applies remote changes per key and writes nothing, and local changes are provisional. `getStatus().ready` tells the two apart.

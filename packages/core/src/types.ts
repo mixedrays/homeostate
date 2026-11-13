@@ -160,18 +160,6 @@ export interface CrdtBackend {
 }
 
 /**
- * Whether `connect()` may write the store's synced keys that the backend does not hold.
- * Reconciliation is per key over the filtered view: a key the backend holds always wins
- * over the store's value, a key only the store holds always stays in the store.
- * - `'if-empty'`: seed the keys the backend lacks, in one write (default)
- * - `'never'`: leave seeding to the caller; the keys are written on the next local change
- *
- * With `SyncEngineConfig.ready`, seeding happens once `ready` resolves, and a local change made
- * during the wait counts as the next local change for `'never'`.
- */
-export type SeedStrategy = "if-empty" | "never";
-
-/**
  * Configuration options for the sync engine, typed by the store's state `S`, which
  * `createSyncEngine` takes from the store adapter. Without `S`, as `SyncEngineConfig`, a key is
  * any string and a value `unknown`.
@@ -198,8 +186,17 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    * or newer peer writes, and with the backend's value of a key the store holds too.
    */
   filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
-  /** Seeding strategy used by `connect()`; defaults to `'if-empty'` */
-  seed?: SeedStrategy;
+  /**
+   * Whether `connect()` seeds the backend: writes, in one write, each synced key the store holds
+   * and the backend lacks, from the store's value. Defaults to `true`. With `false`, nothing is
+   * seeded, and those keys are written with the next local change. Reconciliation is per key
+   * either way: a key the backend holds wins over the store's value, and a key only the store
+   * holds stays in the store.
+   *
+   * With `ready`, seeding happens once `ready` resolves, and a local change made during the wait
+   * counts as the next local change for `false`.
+   */
+  seed?: boolean;
   /**
    * Coalesces remote changes: the first one hands `schedule` a `flush` to call later, such as
    * `(flush) => queueMicrotask(flush)`, and every remote change before that call is applied
@@ -242,7 +239,7 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    *
    * Once `ready` resolves, the engine runs a pending apply, then reconciles per key as `connect()`
    * does without it. Local changes made meanwhile are provisional: a key the backend holds keeps
-   * the backend's value, and a key it lacks is written then, also with `seed: 'never'`.
+   * the backend's value, and a key it lacks is written then, also with `seed: false`.
    *
    * A rejected `ready`, or a failure while reconciling, disconnects the engine: it forgoes a
    * pending apply, writes nothing more, hears neither side, and reports the error to `onError`. A

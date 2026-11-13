@@ -416,7 +416,7 @@ describe("atomWithSync", () => {
     it("passes seed to the engine", () => {
       const counterAtom = atom<Counter>({ count: 0, label: "a" });
       const backend = createMemoryBackend();
-      const syncedAtom = atomWithSync(counterAtom, { backend, seed: "never" });
+      const syncedAtom = atomWithSync(counterAtom, { backend, seed: false });
 
       createStore().sub(syncedAtom, () => {});
 

@@ -18,7 +18,7 @@ what the backend holds and subscribes to both sides. While waiting, remote chang
 per key and nothing is written: no seed, no local change, and nothing the store changes during an
 apply. Once it resolves, the engine reconciles as `connect()` does. Local changes made meanwhile
 are provisional: a key the backend holds keeps its value, and a key it lacks is written, also with
-`seed: "never"`.
+`seed: false`.
 
 A rejected `ready`, or a failure while reconciling after it, disconnects the engine, sends
 `"disconnect"`, and reports to `onError`, with the new source `"ready"` for a rejection. Without

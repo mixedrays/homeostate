@@ -158,7 +158,7 @@ describe("homeostate enhancer", () => {
       homeostate<RootState>({
         backend,
         keys: ["todos"],
-        seed: "never",
+        seed: false,
         onError: (_error, source) => errors.push(source),
       }),
     );

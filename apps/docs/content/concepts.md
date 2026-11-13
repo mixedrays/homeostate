@@ -15,7 +15,7 @@ a state manager, and `crdt-*` packages implement `CrdtBackend` for a CRDT librar
 ```ts
 import { createSyncEngine } from "@homeostate/core";
 
-const engine = createSyncEngine(backend, adapter, { seed: "if-empty" });
+const engine = createSyncEngine(backend, adapter, { seed: true });
 engine.subscribe((event) => console.log(event)); // "connect", then "disconnect"
 engine.connect();
 engine.getStatus().connected; // true
@@ -183,8 +183,8 @@ in the room for the peers that sync it.
 - A key the backend holds wins over the store's value, so a peer joining a room that already
   has state adopts it instead of overwriting it.
 - A synced key the backend does not hold stays in the store. With the default
-  `seed: "if-empty"` those keys are written into the backend in one write. With
-  `seed: "never"` they are left for the next local change.
+  `seed: true` those keys are written into the backend in one write. With
+  `seed: false` they are left for the next local change.
 
 After that, each local change writes the store's synced keys to the backend and deletes the
 synced keys the store removed, and a key removed from the backend is removed from the store.

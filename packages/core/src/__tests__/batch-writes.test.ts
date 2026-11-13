@@ -367,7 +367,7 @@ describe("an adapter with batchWrites", () => {
     const backend = createMemoryBackend({ todos: [] });
     const store = createPerSetStore();
     const engine = createSyncEngine(backend, store.adapter, {
-      seed: "never",
+      seed: false,
       ready,
     });
     engine.connect();

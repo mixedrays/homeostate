@@ -53,7 +53,7 @@ engine.connect(); // sync again
 ```
 
 The node connects before the helper returns: a key the room holds replaces the node's value, and
-the keys the room lacks are seeded from the node unless `seed` is `"never"`.
+the keys the room lacks are seeded from the node unless `seed` is `false`.
 
 | Option                                                           | Default  | Description                                                   |
 | ---------------------------------------------------------------- | -------- | ------------------------------------------------------------- |

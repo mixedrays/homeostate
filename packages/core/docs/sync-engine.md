@@ -52,7 +52,7 @@ const store = createStore(() => ({ count: 0, draft: "Only on this device" }));
 const backend = createMemoryBackend({ count: 7 });
 const engine = createSyncEngine(backend, createZustandAdapter(store), {
   omit: ["draft"],
-  seed: "if-empty",
+  seed: true,
 });
 
 engine.connect();
@@ -73,7 +73,7 @@ console.log(engine.getStatus().connected); // false
 ```ts
 type SyncEngineConfig<S extends object = JsonObject> = {
   filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
-  seed?: SeedStrategy;
+  seed?: boolean;
   schedule?: (flush: () => void) => void;
   onError?: (error: unknown, source: SyncErrorSource) => void;
   ready?: PromiseLike<unknown> | (() => PromiseLike<unknown>);
@@ -82,19 +82,18 @@ type SyncEngineConfig<S extends object = JsonObject> = {
   | { keys?: never; omit?: readonly (keyof S & string)[] }
 );
 
-type SeedStrategy = "if-empty" | "never";
 type SyncErrorSource = "store" | "backend" | "ready";
 ```
 
-| Option     | Default             | Behavior                                                                                                             |
-| ---------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `omit`     | none                | Top-level keys to keep local, by name. Every other key `filter` keeps is synced.                                     |
-| `keys`     | none                | The only top-level keys to sync, by name, if `filter` keeps them. Give `keys` or `omit`, not both.                   |
-| `filter`   | `defaultSyncFilter` | Selects top-level keys by value, judging the store's and the backend's. Excluded keys stay local.                    |
-| `seed`     | `"if-empty"`        | On connection, writes synced keys that exist only in the store into the backend. `"never"` skips this initial write. |
-| `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.    |
-| `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.     |
-| `ready`    | none                | Holds back every write to the backend until it resolves. A promise, or a function returning one. See below.          |
+| Option     | Default             | Behavior                                                                                                           |
+| ---------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `omit`     | none                | Top-level keys to keep local, by name. Every other key `filter` keeps is synced.                                   |
+| `keys`     | none                | The only top-level keys to sync, by name, if `filter` keeps them. Give `keys` or `omit`, not both.                 |
+| `filter`   | `defaultSyncFilter` | Selects top-level keys by value, judging the store's and the backend's. Excluded keys stay local.                  |
+| `seed`     | `true`              | On connection, writes each synced key the backend lacks from the store's value, in one write. `false` writes none. |
+| `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.  |
+| `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.   |
+| `ready`    | none                | Holds back every write to the backend until it resolves. A promise, or a function returning one. See below.        |
 
 `createSyncEngine` takes `S` from the adapter, so `keys` and `omit` accept only the state's key
 names, and a typo fails to compile. Readonly lists work too, such as an `as const` constant
@@ -135,10 +134,10 @@ A store that gives a synced key a value `filter` rejects still deletes the key f
 with its next write; see [Keys this peer does not sync](#keys-this-peer-does-not-sync). `keys`
 and `omit` judge a key by name, the same on both sides.
 
-Despite its name, `"if-empty"` works per key, even when the backend already holds other
-keys. With either strategy, a backend key wins over the corresponding store value, and a
-store-only key remains in the store during connection. With `"never"`, the next local
-change still writes the store's entire filtered state, including those store-only keys.
+Seeding works per key, even when the backend already holds other keys. With either value, a
+backend key wins over the corresponding store value, and a store-only key remains in the store
+during connection. With `seed: false`, the next local change still writes the store's entire
+filtered state, including those store-only keys.
 
 ### Keys this peer does not sync
 
@@ -265,7 +264,7 @@ Without it, the engine writes every intermediate state again, as if the store we
 A provider delivers the room's state some time after `connect()`, so a new document starts
 empty, and the engine seeds it. Those writes compete with the room's. Each CRDT library keeps
 one value per key, so a peer joining a populated room can replace its state on every peer,
-depending on replica IDs. `seed: "never"` does not prevent it: the next local change writes the
+depending on replica IDs. `seed: false` does not prevent it: the next local change writes the
 whole synced state.
 
 `ready` holds back every write until the document holds what this peer should adopt:
@@ -293,7 +292,7 @@ on the library; see [How backends differ](#how-backends-differ).
 
 Local changes made before then are provisional. A key the backend holds keeps the backend's
 value, so the change is dropped. A key it lacks is written with the rest, also with
-`seed: "never"`, where a local change while waiting counts as the next local change. To keep
+`seed: false`, where a local change while waiting counts as the next local change. To keep
 users from losing edits, disable editing until [`getStatus().ready`](#sync-status) is `true`.
 
 | `ready`                              | What the engine does                                                                           |

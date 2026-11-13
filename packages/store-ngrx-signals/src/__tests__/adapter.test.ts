@@ -14,10 +14,7 @@ afterEach(() =>
     .forEach((cleanup) => cleanup()),
 );
 
-function setup(
-  initialBackend?: object,
-  seed: "if-empty" | "never" = "if-empty",
-) {
+function setup(initialBackend?: object, seed = true) {
   const injector = Injector.create({ providers: [] });
   cleanups.push(() => injector.destroy());
   const store = signalState({
@@ -71,8 +68,8 @@ describe("NgRx Signals adapter", () => {
     expect(store.shared()).toEqual({});
   });
 
-  it("does not seed through the watcher's initial callback with seed: never", () => {
-    const { store, backend, write } = setup(undefined, "never");
+  it("does not seed through the watcher's initial callback with seed: false", () => {
+    const { store, backend, write } = setup(undefined, false);
     expect(backend.read()).toEqual({});
     expect(write).not.toHaveBeenCalled();
     patchState(store, { shared: { count: 4 } });
