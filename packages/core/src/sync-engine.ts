@@ -300,11 +300,11 @@ export function createSyncEngine<S extends object>(
   /** The flush handed to `schedule` and not run yet; a flush that is no longer it does nothing. */
   let scheduledFlush: (() => void) | null = null;
   /**
-   * Queues the write of a local change, when store notifications are batched; see
-   * `StoreAdapter.batchNotifications`. Without it, each notification is written at once.
+   * Queues the write of a local change, when the adapter batches its writes; see
+   * `StoreAdapter.batchWrites`. Without it, each notification is written at once.
    */
   const scheduleWrite: ((flush: () => void) => void) | undefined =
-    adapter.batchNotifications === true ? queueMicrotask : undefined;
+    adapter.batchWrites === true ? queueMicrotask : undefined;
   /**
    * The flush queued with `scheduleWrite` and not run yet, while the store holds a local change
    * the engine has not written; a flush that is no longer it does nothing.

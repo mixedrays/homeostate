@@ -30,8 +30,8 @@ not call a `ready` function.
 | `config`  | No       | Sync options, typed by `S`. Defaults to `{}`.             |
 
 Returns a `SyncEngine`. The engine is synchronous, except for the wait for `ready` and the writes
-of an adapter that batches its notifications (see [Batched writes](#batched-writes)), and does
-not retry. `connect()` throws what it runs into. Once connected, adapter and backend errors go to
+of an adapter that sets `batchWrites` (see [Batched writes](#batched-writes)), and does not
+retry. `connect()` throws what it runs into. Once connected, adapter and backend errors go to
 `onError` when it is given; otherwise they, like filter errors, propagate to the caller of the
 operation that triggered them, which is whoever calls `flush` for an apply deferred by `schedule`,
 and the microtask for a batched write.
@@ -214,7 +214,7 @@ peer.
 
 ### Batched writes
 
-A store adapter that sets `batchNotifications`, such as the Valtio adapter, notifies once per
+A store adapter that sets `batchWrites`, such as the Valtio adapter, notifies once per
 property set, so one array method like `splice`, `unshift`, `shift`, `sort` or `reverse` notifies
 once per item it shifts, with an intermediate state each time. Written one by one, those states
 make each shifted item look replaced, so a peer's concurrent edit lands on the wrong item and its
@@ -234,10 +234,27 @@ concurrent insert duplicates items. For such an adapter the engine batches local
   `disconnect()`, and the engine is disconnected all the same.
 - A write queued before `disconnect()` does nothing when it runs, also after a reconnect.
 - While waiting for [`ready`](#waiting-for-the-room) nothing is queued, since nothing is written.
+- A queued write that throws goes to `onError`. Without `onError` it is thrown from the
+  microtask, where nothing catches it: the browser logs it as an uncaught error, and Node exits
+  unless the process handles `uncaughtException`. Pass `onError` with such an adapter.
 
 So a local change reaches the backend a microtask after the store changed. Code and tests that
 read the backend right after changing the store wait for it first, such as with
 `await Promise.resolve()`. Adapters without the flag are written synchronously.
+
+An adapter that wraps one that sets `batchWrites` must keep the flag, as
+[`scopeAdapter`](#scopeadapter) does:
+
+```ts
+const wrapped: StoreAdapter<State> = {
+  getState: () => adapter.getState(),
+  setState: (state) => adapter.setState(state),
+  subscribe: (onStoreChange) => adapter.subscribe(onStoreChange),
+  batchWrites: adapter.batchWrites,
+};
+```
+
+Without it, the engine writes every intermediate state again, as if the store were not batched.
 
 ### Waiting for the room
 
@@ -359,9 +376,10 @@ concurrent writes merge is up to the library, so `ready` does not make these out
 ### Reporting errors
 
 Once the engine is connected, it calls the adapter and the backend from their notifications,
-from the `flush` and from `disconnect()`. Without `onError`, what they throw propagates there:
-a store validation error in `setState` reaches the provider's message handler, and a failed
-`write` reaches the code that changed the store. The engine stays connected either way, and the
+from the `flush`, from the microtask of a [batched write](#batched-writes) and from
+`disconnect()`. Without `onError`, what they throw propagates there: a store validation error in
+`setState` reaches the provider's message handler, and a failed `write` reaches the code that
+changed the store, or the runtime as an uncaught error for a batched write. The engine stays connected either way, and the
 store and backend differ until the next change succeeds.
 
 With `onError`, the engine catches those errors and reports them with their source, so neither
@@ -465,8 +483,8 @@ interface SyncFailure {
 | `subscribe(listener)`       | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                                                                             |
 
 After connection, each local notification writes the full filtered store state to the
-backend, a microtask later for an adapter that batches its notifications, along with what the backend holds, so the backend can diff against it instead of
-reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
+backend, a microtask later for an adapter that sets `batchWrites`, along with what the backend
+holds, so the backend can diff against it instead of reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
 the store has not been given yet, the engine applies it first, merged with the local change, as
 it applies a pending one; see [Coalescing remote changes](#coalescing-remote-changes). That
 happens when a listener subscribed
@@ -605,16 +623,16 @@ interface StoreAdapter<S extends object> {
   getState: () => S;
   setState: (state: S) => void;
   subscribe: (onStoreChange: () => void) => Unsubscribe;
-  batchNotifications?: boolean;
+  batchWrites?: boolean;
 }
 ```
 
-| Member                | Contract                                                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `getState()`          | Returns the current store state, as an object.                                                                                                                                       |
-| `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection.                                                               |
-| `subscribe(callback)` | Calls the callback synchronously when the store changes; returns a function that removes that subscription.                                                                          |
-| `batchNotifications`  | `true` for a store that notifies once per property set, so that one change notifies several times. The engine then writes once per microtask; see [Batched writes](#batched-writes). |
+| Member                | Contract                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getState()`          | Returns the current store state, as an object.                                                                                                                                                                            |
+| `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection.                                                                                                    |
+| `subscribe(callback)` | Calls the callback synchronously when the store changes; returns a function that removes that subscription.                                                                                                               |
+| `batchWrites`         | `true` for a store that notifies once per property set, so that one change notifies several times. The engine then writes once per microtask, and a wrapping adapter must keep it; see [Batched writes](#batched-writes). |
 
 Use a `store-*` package for your state manager, or implement this interface for your own
 store. `S` may include local actions, but the part selected for sync must be plain JSON.
@@ -687,7 +705,7 @@ A store change reaches the engine only when the slice differs as JSON: by identi
 with [`jsonEqual`](./diffing.md#jsonequal). So a change elsewhere in the store causes no
 `backend.write` and no `'local'` sync event, also with a `get` that builds a new object and with an
 adapter whose `getState` returns a fresh copy, such as the MobX adapter's. The scoped adapter
-keeps the adapter's `batchNotifications`, so a Valtio slice is written once per microtask too; see
+keeps the adapter's `batchWrites`, so a Valtio slice is written once per microtask too; see
 [Batched writes](#batched-writes).
 
 ### Array slices

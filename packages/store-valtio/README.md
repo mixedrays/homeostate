@@ -54,6 +54,10 @@ state.todos.splice(0, 1);
 await Promise.resolve(); // the backend now holds the removal
 ```
 
+Pass `onError` to `createSyncEngine`: a write that fails after the microtask has no caller to
+throw to, so without `onError` it is an uncaught error. An adapter you write around this one must
+keep its `batchWrites` flag, or every intermediate state is written again.
+
 ## License
 
 MIT — see [LICENSE](https://github.com/mixedrays/homeostate/blob/main/LICENSE).

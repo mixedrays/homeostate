@@ -9,7 +9,7 @@ class ValtioAdapter<S extends object> implements StoreAdapter<S> {
    * Valtio notifies on every property set, so one array method such as `splice` notifies once per
    * item it shifts; the engine writes them together after a microtask.
    */
-  readonly batchNotifications = true;
+  readonly batchWrites = true;
 
   /**
    * Create a Valtio adapter
@@ -40,7 +40,7 @@ class ValtioAdapter<S extends object> implements StoreAdapter<S> {
  *
  * A mutation reaches the backend after a microtask, together with the other mutations made
  * before it, so that one array method such as `splice` is written once, as one change; see
- * `StoreAdapter.batchNotifications`. `disconnect()` writes a mutation still waiting.
+ * `StoreAdapter.batchWrites`. `disconnect()` writes a mutation still waiting.
  *
  * @param state - The Valtio proxy object
  * @returns StoreAdapter instance for the proxy

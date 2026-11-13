@@ -527,12 +527,12 @@ describe("scopeAdapter", () => {
     expect(backend.revision()).toBe(revision);
   });
 
-  it("batches the notifications of an adapter that asks for it", async () => {
+  it("batches the writes of an adapter that asks for it", async () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
     createSyncEngine(
       backend,
-      scopeAdapter({ ...store.adapter, batchNotifications: true }, docScope),
+      scopeAdapter({ ...store.adapter, batchWrites: true }, docScope),
     ).connect();
     const write = vi.spyOn(backend, "write");
 

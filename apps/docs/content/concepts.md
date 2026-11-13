@@ -39,7 +39,7 @@ interface StoreAdapter<S extends object> {
   getState: () => S;
   setState: (state: S) => void;
   subscribe: (onStoreChange: () => void) => Unsubscribe;
-  batchNotifications?: boolean;
+  batchWrites?: boolean;
 }
 ```
 
@@ -192,7 +192,7 @@ synced keys the store removed, and a key removed from the backend is removed fro
 Every other key the backend holds stays as it is.
 
 A local change is written synchronously, as the store notifies, except for an adapter that sets
-`batchNotifications`, such as Valtio's, whose store notifies once per property set: one `splice`
+`batchWrites`, such as Valtio's, whose store notifies once per property set: one `splice`
 notifies once per item it shifts. The engine then writes the changes of one task once, a
 microtask later, and merges a remote change that arrives meanwhile with the waiting local change.
 `disconnect()` writes a waiting change first. See

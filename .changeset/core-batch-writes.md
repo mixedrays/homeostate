@@ -2,7 +2,7 @@
 "@homeostate/core": minor
 ---
 
-`StoreAdapter` gains an optional `batchNotifications` flag, for a store that notifies once per
+`StoreAdapter` gains an optional `batchWrites` flag, for a store that notifies once per
 property set, such as a Valtio proxy, on which one `splice`, `unshift`, `shift`, `sort` or
 `reverse` notifies once per item it shifts. Written one by one, those intermediate states made
 every shifted item look replaced, so a peer's concurrent insert duplicated items and its
@@ -14,5 +14,6 @@ event. The adapter still notifies synchronously, so echoes of `setState` write n
 change applied while the write waits is merged with the waiting local change, as a local change
 is merged into a pending apply, and the merged state is written at once. `disconnect()` writes a
 waiting local change before it unsubscribes, sending its event first, and still disconnects if
-that write throws. `scopeAdapter` keeps the flag. Adapters without it are written synchronously,
-as before.
+that write throws. A queued write that throws goes to `onError`, and without it is thrown from
+the microtask as an uncaught error. `scopeAdapter` keeps the flag, and an adapter that wraps one
+with it must keep it too. Adapters without it are written synchronously, as before.

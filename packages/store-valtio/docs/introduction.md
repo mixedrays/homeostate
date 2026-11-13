@@ -50,15 +50,23 @@ reading them through `useSnapshot` do not re-render.
 
 Valtio notifies once per property set, so one array method notifies several times: `splice(0, 0,
 x)` on a three-item list sets each item from the end down before it sets `x`. The adapter sets
-[`batchNotifications`](../../core/docs/sync-engine.md#batched-writes), so the engine writes once
+[`batchWrites`](../../core/docs/sync-engine.md#batched-writes), so the engine writes once
 per microtask instead of once per set. One `splice`, `unshift`, `shift`, `sort` or `reverse` is
 then one change, and a peer's concurrent edit stays on the item it targeted.
 
 - A mutation reaches the backend after a microtask, with every mutation made before it in the
   same task.
-- A remote change that arrives before that write is merged with the waiting mutations, so
-  neither side's change is lost.
+- A remote change that arrives before that write is merged with the waiting mutations: changes
+  to different values both stay, and where both sides changed the same value, the mutation wins.
+  A string counts as one value, also one the backend keeps as text, so a concurrent edit to the
+  same text keeps the mutation's text whole; see
+  [Coalescing remote changes](../../core/docs/sync-engine.md#coalescing-remote-changes).
 - `engine.disconnect()` writes waiting mutations before it disconnects.
+- A write that fails goes to `onError`. Without it, the write has no caller left to throw to, so
+  the error is uncaught: the browser logs it, and Node exits. Pass `onError` to
+  `createSyncEngine`.
+- An adapter you write around this one must keep `batchWrites: adapter.batchWrites`, as
+  `scopeAdapter` does, or every intermediate state is written again.
 
 Code and tests that read the backend right after a mutation wait for the write first:
 

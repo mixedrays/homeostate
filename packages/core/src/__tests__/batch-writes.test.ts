@@ -22,14 +22,14 @@ import {
 const microtask = (): Promise<void> => Promise.resolve();
 
 /**
- * A store whose adapter sets `batchNotifications`, and whose `mutate` notifies once per step, as
+ * A store whose adapter sets `batchWrites`, and whose `mutate` notifies once per step, as
  * a store that notifies on every property set does for one array method.
  */
 const createPerSetStore = (initial: TodoState = threeTodos()) => {
   const store = createTestStore(initial);
   const adapter: StoreAdapter<TodoState> = {
     ...store.adapter,
-    batchNotifications: true,
+    batchWrites: true,
   };
   return {
     ...store,
@@ -57,7 +57,7 @@ const setup = (
   return { backend, store, engine, events, write };
 };
 
-describe("an adapter with batchNotifications", () => {
+describe("an adapter with batchWrites", () => {
   it("writes the notifications of one task once, after a microtask, with the final state", async () => {
     const { backend, store, events, write } = setup();
     const removed = deleteTodo(threeTodos(), "1");
@@ -335,6 +335,32 @@ describe("an adapter with batchNotifications", () => {
     });
   });
 
+  it("throws a batched write's error from the microtask without onError, not from the change", () => {
+    // The flush is run by hand, to see what it throws: in a real microtask it would be uncaught.
+    const queued: (() => void)[] = [];
+    vi.stubGlobal("queueMicrotask", (flush: () => void) => {
+      queued.push(flush);
+    });
+    try {
+      const { store, engine, write } = setup();
+      const offline = new Error("offline");
+      write.mockImplementationOnce(() => {
+        throw offline;
+      });
+
+      expect(() => store.mutate((s) => toggleTodo(s, "1"))).not.toThrow();
+      expect(queued).toHaveLength(1);
+      expect(() => queued[0]()).toThrow(offline);
+      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().failure).toEqual({
+        error: offline,
+        source: "backend",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("writes a change made while waiting for ready once ready resolves", async () => {
     let resolve!: () => void;
     const ready = new Promise<void>((r) => (resolve = r));
@@ -364,7 +390,7 @@ describe("an adapter with batchNotifications", () => {
   });
 });
 
-describe("an adapter without batchNotifications", () => {
+describe("an adapter without batchWrites", () => {
   it("writes each notification synchronously", () => {
     const backend = createMemoryBackend(threeTodos());
     const store = createTestStore(threeTodos());

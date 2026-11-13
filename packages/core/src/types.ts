@@ -88,7 +88,7 @@ export interface StoreAdapter<S extends object> {
    * those states make every shifted item look replaced, so a peer's concurrent edit lands on the
    * wrong item and its concurrent insert duplicates items.
    *
-   * The engine then writes local changes after a microtask instead of synchronously: the first
+   * The engine then batches its writes of local changes into one per microtask: the first
    * notification queues one write, later ones add nothing until it runs, and it writes the store's
    * synced state as it is then, with one `'local'` sync event. `subscribe` must still notify
    * synchronously, so that the engine ignores the echoes of `setState` as it does without it. A
@@ -97,8 +97,14 @@ export interface StoreAdapter<S extends object> {
    * state is written at once, in place of the queued write. `disconnect()` writes a waiting local
    * change before it unsubscribes. Without it, every notification is written synchronously. The
    * engine reads it once, when it is created.
+   *
+   * A queued write that throws goes to `onError`. Without `onError` it is thrown from the
+   * microtask, where nothing catches it, so the runtime reports it as an uncaught error.
+   *
+   * An adapter that wraps one with this flag must keep it, as `scopeAdapter` does. Otherwise the
+   * engine writes every intermediate state again.
    */
-  batchNotifications?: boolean;
+  batchWrites?: boolean;
 }
 
 /**

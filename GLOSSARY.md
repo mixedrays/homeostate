@@ -164,7 +164,7 @@ Remote changes the CRDT backend holds and the sync engine has not applied to the
 _Avoid_: Queued update, batch
 
 **Batched write**:
-The one write the sync engine makes a microtask after a store adapter that sets `batchNotifications` first notifies, holding every local change made until then, so that one array method on a store that notifies per property set, such as a Valtio proxy, is written as one change. A remote change applied while it waits is merged with the waiting local change, as with a pending apply, and `disconnect()` writes it first.
+The one write the sync engine makes a microtask after a store adapter that sets `batchWrites` first notifies, holding every local change made until then, so that one array method on a store that notifies per property set, such as a Valtio proxy, is written as one change. A remote change applied while it waits is merged with the waiting local change, as with a pending apply, and `disconnect()` writes it first.
 _Avoid_: Pending write, deferred write
 
 **Revision**:
