@@ -1,4 +1,4 @@
-import { ChangeType, type ListChange, type RecordChange } from "./change.js";
+import type { ListChange, RecordChange } from "./change.js";
 import { getChanges, type DiffOptions } from "./diff.js";
 import { isRecord, PROTO_KEY } from "./json.js";
 
@@ -46,10 +46,10 @@ const copyOf = (value: object): Record<string, unknown> =>
  */
 const WHOLE_STRINGS: DiffOptions = { text: () => false };
 
-/** The value the pending step `change` leaves at its key, given the value there now. */
-const applyPending = (
+/** The value the edit step `change` leaves at its key, given the value there now. */
+const applyEdit = (
   current: unknown,
-  change: Extract<RecordChange | ListChange, { type: "pending" }>,
+  change: Extract<RecordChange | ListChange, { type: "edit" }>,
 ): unknown => {
   // The diff found a container of `change.kind` at its key; with `WHOLE_STRINGS`, never a text.
   if (change.kind === "list")
@@ -68,19 +68,19 @@ const applyChangesToArray = (
 
   for (const change of changes) {
     switch (change.type) {
-      case ChangeType.INSERT:
+      case "insert":
         revised.splice(change.key, 0, toPlain(change.value));
         break;
 
-      case ChangeType.UPDATE:
+      case "update":
         revised[change.key] = toPlain(change.value);
         break;
 
-      case ChangeType.PENDING:
-        revised[change.key] = applyPending(revised[change.key], change);
+      case "edit":
+        revised[change.key] = applyEdit(revised[change.key], change);
         break;
 
-      case ChangeType.DELETE:
+      case "delete":
         revised.splice(change.key, change.count ?? 1);
         break;
     }
@@ -97,16 +97,16 @@ const applyChangesToObject = (
 
   for (const change of changes) {
     switch (change.type) {
-      case ChangeType.INSERT:
-      case ChangeType.UPDATE:
+      case "insert":
+      case "update":
         revised[change.key] = toPlain(change.value);
         break;
 
-      case ChangeType.PENDING:
-        revised[change.key] = applyPending(object[change.key], change);
+      case "edit":
+        revised[change.key] = applyEdit(object[change.key], change);
         break;
 
-      case ChangeType.DELETE:
+      case "delete":
         delete revised[change.key];
         break;
     }

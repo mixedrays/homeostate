@@ -12,7 +12,6 @@ export { createCrdtBackend } from "./crdt-backend.js";
 export type { CrdtBackendOptions, CrdtBackendParts } from "./crdt-backend.js";
 export type { ApplyOps, ContainerKind } from "./apply.js";
 export type { Diffable, DiffOptions, TextPolicy } from "./diff.js";
-export { ChangeType } from "./change.js";
 export type {
   Change,
   EditScript,

@@ -55,7 +55,7 @@ both values must be of one of them: passing values of different kinds, or values
 Equal values produce `[]`. An edit script cannot replace its root, so values of different root
 kinds throw a `TypeError` naming both kinds, such as
 `getChanges needs two strings, two arrays or two records, got array and string`; so does
-anything else, such as a number. Nested values that change kind produce an `UPDATE`.
+anything else, such as a number. Nested values that change kind produce an `"update"` step.
 
 Steps are applied in order: each array index or string offset addresses the value as revised by
 the steps before it, and string offsets and counts are UTF-16 code units. See
@@ -86,38 +86,30 @@ console.log(getChanges({ value: [1] }, { value: "one" }));
 getChanges([1], "one"); // throws a TypeError
 ```
 
-## Change and ChangeType
+## Change
 
 ```ts
-const ChangeType = {
-  INSERT: "insert",
-  UPDATE: "update",
-  DELETE: "delete",
-  PENDING: "pending",
-} as const;
-type ChangeType = (typeof ChangeType)[keyof typeof ChangeType];
-
 type ContainerKind = "record" | "list" | "text";
 
 type RecordChange =
   | { type: "insert" | "update"; key: string; value: unknown }
   | { type: "delete"; key: string; count?: never }
-  | PendingChange<string>;
+  | EditChange<string>;
 
 type ListChange =
   | { type: "insert" | "update"; key: number; value: unknown }
   | { type: "delete"; key: number; count?: number }
-  | PendingChange<number>;
+  | EditChange<number>;
 
 type TextChange =
   | { type: "insert"; key: number; value: string }
   | { type: "delete"; key: number; count?: number };
 
-// Not exported: a pending step names the kind of its nested script.
-type PendingChange<K> =
-  | { type: "pending"; key: K; kind: "record"; changes: RecordChange[] }
-  | { type: "pending"; key: K; kind: "list"; changes: ListChange[] }
-  | { type: "pending"; key: K; kind: "text"; changes: TextChange[] };
+// Not exported: an edit step names the kind of its nested script.
+type EditChange<K> =
+  | { type: "edit"; key: K; kind: "record"; changes: RecordChange[] }
+  | { type: "edit"; key: K; kind: "list"; changes: ListChange[] }
+  | { type: "edit"; key: K; kind: "text"; changes: TextChange[] };
 
 type Change = RecordChange | ListChange | TextChange;
 type EditScript = RecordChange[] | ListChange[] | TextChange[];
@@ -125,15 +117,15 @@ type EditScript = RecordChange[] | ListChange[] | TextChange[];
 
 A script holds the steps of one kind of container: `RecordChange`s for a record, keyed by
 property name, and `ListChange`s or `TextChange`s for an array or a string, keyed by position.
-Narrow a step by `type`, and a pending step's nested script by `kind`; the payload then needs no
-cast.
+Narrow a step by `type`, and an edit step's nested script by `kind`; the payload then needs no
+cast. `Change["type"]` is the union of the four types.
 
-| Type      | Meaning                                                                   | Payload                                                                                      |
-| --------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `INSERT`  | Adds a record key, array item or run of text.                             | `value`: the inserted value, or a string of one or more characters.                          |
-| `UPDATE`  | Replaces an existing record property or array item.                       | `value`: the replacement value.                                                              |
-| `DELETE`  | Removes a record key, a run of array items or part of a string.           | `count`: how many items or UTF-16 units, on every array and string delete; none for records. |
-| `PENDING` | Applies a nested script to the existing object, array or string at `key`. | `kind`: the container the script edits; `changes`: its script.                               |
+| Type       | Meaning                                                                   | Payload                                                                                      |
+| ---------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `"insert"` | Adds a record key, array item or run of text.                             | `value`: the inserted value, or a string of one or more characters.                          |
+| `"update"` | Replaces an existing record property or array item.                       | `value`: the replacement value.                                                              |
+| `"delete"` | Removes a record key, a run of array items or part of a string.           | `count`: how many items or UTF-16 units, on every array and string delete; none for records. |
+| `"edit"`   | Applies a nested script to the existing object, array or string at `key`. | `kind`: the container the script edits; `changes`: its script.                               |
 
 `getChanges` sets `count` on every array and string delete, `1` included. An applier treats an
 absent `count` as `1`, so a script written by hand may leave it out.
@@ -176,7 +168,7 @@ counts.
 A `TextPolicy` receives the path of a nested string from the root of `a`: record keys and
 array indices, such as `["todos", 0, "title"]`. An index is the item's position in `b`. A
 string at a path where it returns `true` is diffed character by character. Any other changed
-string is replaced whole by one `UPDATE`. Two strings passed directly to `getChanges` are
+string is replaced whole by one `"update"` step. Two strings passed directly to `getChanges` are
 always diffed character by character.
 
 The supplied backends pass their `text` option here, so a string outside it reaches the CRDT
@@ -193,7 +185,7 @@ console.log(getChanges(before, after, { text: isTitle }));
 // [
 //   { type: "update", key: "status", value: "done" },
 //   {
-//     type: "pending",
+//     type: "edit",
 //     key: "title",
 //     kind: "text",
 //     changes: [{ type: "insert", key: 4, value: " it" }],
@@ -214,7 +206,7 @@ declare const applyStringChanges: (
 ```
 
 Returns `value` revised by a string edit script: what `getChanges` returns for two strings,
-or the script of a `PENDING` step whose `kind` is `"text"`.
+or the script of an `"edit"` step whose `kind` is `"text"`.
 
 ```ts title="apply-string-changes-example.ts"
 import { applyStringChanges, getChanges } from "@homeostate/core";
@@ -430,7 +422,7 @@ untouched containers keep their identity.
 | `ops`     | How to read and write your containers; see [ApplyOps](#applyops).                       |
 | `options` | Passed to `getChanges`. A CRDT backend passes its `text` policy and `json: true`.       |
 
-A `PENDING` step edits the child in place when `ops.kind` reports the step's `kind`: a record
+An `"edit"` step edits the child in place when `ops.kind` reports the step's `kind`: a record
 for a record, a list for an array, and text for a string. Any other
 child, such as a string held as a plain value or text written under another text policy, is
 replaced whole with its next value through `ops.set`, passed through

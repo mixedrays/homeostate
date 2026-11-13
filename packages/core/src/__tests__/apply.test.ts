@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
-import { ChangeType } from "../change.js";
 import { getChanges } from "../diff.js";
 import { snapshot } from "./helpers.js";
 
@@ -84,20 +83,16 @@ describe("applyStringChanges", () => {
 
   it("deletes a run of UTF-16 units in one step, one unit when the count is absent", () => {
     expect(
-      applyStringChanges("a😀bc", [
-        { type: ChangeType.DELETE, key: 1, count: 3 },
-      ]),
+      applyStringChanges("a😀bc", [{ type: "delete", key: 1, count: 3 }]),
     ).toBe("ac");
-    expect(
-      applyStringChanges("abc", [{ type: ChangeType.DELETE, key: 1 }]),
-    ).toBe("ac");
+    expect(applyStringChanges("abc", [{ type: "delete", key: 1 }])).toBe("ac");
   });
 
   it("takes only text steps", () => {
     expect(
       applyStringChanges("ab", [
         // @ts-expect-error A text script has no update.
-        { type: ChangeType.UPDATE, key: 0, value: "z" },
+        { type: "update", key: 0, value: "z" },
       ]),
     ).toBe("ab");
   });

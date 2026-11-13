@@ -1,18 +1,3 @@
-/**
- * The type of one step of an edit script.
- */
-export const ChangeType = {
-  /** A value was inserted. */
-  INSERT: "insert",
-  /** A value was replaced. */
-  UPDATE: "update",
-  /** A value was deleted. */
-  DELETE: "delete",
-  /** The value requires a recursive diff to identify further changes. */
-  PENDING: "pending",
-} as const;
-export type ChangeType = (typeof ChangeType)[keyof typeof ChangeType];
-
 /** How `applyChanges` edits a container: by key, by position, or by character. */
 export type ContainerKind = "record" | "list" | "text";
 
@@ -20,10 +5,10 @@ export type ContainerKind = "record" | "list" | "text";
  * Edits the existing container at `key` in place by the nested script `changes`, of the kind
  * `kind` names, rather than replacing it.
  */
-type PendingChange<K extends string | number> =
-  | { type: "pending"; key: K; kind: "record"; changes: RecordChange[] }
-  | { type: "pending"; key: K; kind: "list"; changes: ListChange[] }
-  | { type: "pending"; key: K; kind: "text"; changes: TextChange[] };
+type EditChange<K extends string | number> =
+  | { type: "edit"; key: K; kind: "record"; changes: RecordChange[] }
+  | { type: "edit"; key: K; kind: "list"; changes: ListChange[] }
+  | { type: "edit"; key: K; kind: "text"; changes: TextChange[] };
 
 /**
  * One step of a record's edit script. `key` is a property name. An insert or update carries
@@ -32,7 +17,7 @@ type PendingChange<K extends string | number> =
 export type RecordChange =
   | { type: "insert" | "update"; key: string; value: unknown }
   | { type: "delete"; key: string; count?: never }
-  | PendingChange<string>;
+  | EditChange<string>;
 
 /**
  * One step of an array's edit script. `key` is an index into the array as revised by the steps
@@ -42,7 +27,7 @@ export type RecordChange =
 export type ListChange =
   | { type: "insert" | "update"; key: number; value: unknown }
   | { type: "delete"; key: number; count?: number }
-  | PendingChange<number>;
+  | EditChange<number>;
 
 /**
  * One step of a string's edit script. `key` is an offset into the string as revised by the
@@ -58,7 +43,7 @@ export type TextChange =
   | { type: "delete"; key: number; count?: number };
 
 /**
- * One step in turning a container into another. Narrow it by `type`, and a pending step's
+ * One step in turning a container into another. Narrow it by `type`, and an edit step's
  * script by `kind`.
  *
  * `getChanges` sets `count` on every array and string delete, one included, and merges

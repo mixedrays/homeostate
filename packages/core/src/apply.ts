@@ -1,5 +1,4 @@
 import {
-  ChangeType,
   type ContainerKind,
   type ListChange,
   type RecordChange,
@@ -71,32 +70,32 @@ export const applyStringChanges = (
 ): string =>
   changes.reduce((revised, change) => {
     const at = change.key;
-    if (change.type === ChangeType.INSERT)
+    if (change.type === "insert")
       return revised.slice(0, at) + change.value + revised.slice(at);
-    if (change.type === ChangeType.DELETE)
+    if (change.type === "delete")
       return revised.slice(0, at) + revised.slice(at + (change.count ?? 1));
     return revised;
   }, value);
 
-/** A pending step of a record's or a list's script. */
-type Pending = Extract<RecordChange | ListChange, { type: "pending" }>;
+/** An edit step of a record's or a list's script. */
+type Edit = Extract<RecordChange | ListChange, { type: "edit" }>;
 
 /**
- * Applies the pending step `change` to the child at its key of `container`, whose next value is
+ * Applies the edit step `change` to the child at its key of `container`, whose next value is
  * `next`. The child is edited in place when it is the kind of container the step's script edits;
  * any other child, such as a string held as a plain value or a plain value other code stored, is
  * replaced whole by its next value.
  */
-const walkPending = (
+const walkEdit = (
   container: object,
-  change: Pending,
+  change: Edit,
   next: unknown,
   path: Path,
   ops: ApplyOps,
   options: DiffOptions,
 ): void => {
   const { key } = change;
-  // Steps before a pending one are final, so `key` is also its index in `next`.
+  // Steps before an edit step are final, so `key` is also its index in `next`.
   const nextChild = (next as Record<string | number, unknown>)[key];
   const child = ops.get(container, key);
   const at = [...path, key];
@@ -121,7 +120,7 @@ const walkPending = (
       );
     if (ops.editText !== undefined) {
       for (const step of change.changes)
-        if (step.type === ChangeType.INSERT)
+        if (step.type === "insert")
           ops.editText(child, step.key, 0, step.value, at);
         else ops.editText(child, step.key, step.count ?? 1, "", at);
       return;
@@ -145,10 +144,9 @@ const walkRecord = (
   options: DiffOptions,
 ): void => {
   for (const change of changes) {
-    if (change.type === ChangeType.PENDING)
-      walkPending(record, change, next, path, ops, options);
-    else if (change.type === ChangeType.DELETE)
-      ops.remove(record, change.key, path);
+    if (change.type === "edit")
+      walkEdit(record, change, next, path, ops, options);
+    else if (change.type === "delete") ops.remove(record, change.key, path);
     else ops.set(record, change.key, change.value, path);
   }
 };
@@ -164,16 +162,16 @@ const walkList = (
 ): void => {
   for (const change of changes) {
     switch (change.type) {
-      case ChangeType.PENDING:
-        walkPending(list, change, next, path, ops, options);
+      case "edit":
+        walkEdit(list, change, next, path, ops, options);
         break;
-      case ChangeType.DELETE:
+      case "delete":
         ops.splice(list, change.key, change.count ?? 1, [], path);
         break;
-      case ChangeType.INSERT:
+      case "insert":
         ops.splice(list, change.key, 0, [change.value], path);
         break;
-      case ChangeType.UPDATE:
+      case "update":
         ops.set(list, change.key, change.value, path);
         break;
     }

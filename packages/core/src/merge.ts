@@ -1,4 +1,4 @@
-import { ChangeType, type ListChange, type TextChange } from "./change.js";
+import type { ListChange, TextChange } from "./change.js";
 import { getChanges, type DiffOptions, type TextPolicy } from "./diff.js";
 import {
   hasOwn,
@@ -59,14 +59,14 @@ const align = (
   };
   for (const change of changes) {
     keepUntil(change.key);
-    if (change.type === ChangeType.INSERT) {
+    if (change.type === "insert") {
       const count = units ? (change.value as string).length : 1;
       for (let i = 0; i < count; i++) inserted[item].push(index++);
-    } else if (change.type === ChangeType.DELETE) {
+    } else if (change.type === "delete") {
       const end = item + (change.count ?? 1);
       while (item < end) fates[item++] = "deleted";
     } else {
-      fates[item] = change.type === ChangeType.UPDATE ? "replaced" : "edited";
+      fates[item] = change.type === "update" ? "replaced" : "edited";
       at[item++] = index++;
     }
   }

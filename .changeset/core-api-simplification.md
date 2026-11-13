@@ -35,3 +35,11 @@
   `syncStateTree` and `atomWithSync`. Remove imports of `SeedStrategy`; type a variable that holds
   the option as `boolean`. In plain JavaScript, a leftover `seed: "never"` is truthy and now
   seeds, so replace it.
+- The `ChangeType` object and type are removed; compare a step's `type` with its string literal.
+  Replace `ChangeType.INSERT`, `ChangeType.UPDATE` and `ChangeType.DELETE` with `"insert"`,
+  `"update"` and `"delete"`, and type a variable that holds a step type as `Change["type"]`.
+- The `"pending"` step type is renamed `"edit"`: a step that edits the container at its key in
+  place by its nested script `changes`, as before. `getChanges` returns `"edit"` steps where it
+  returned `"pending"` ones. Replace `ChangeType.PENDING` and `"pending"` with `"edit"` wherever
+  you build a script or switch on a step's `type`; a `switch` left on `"pending"` no longer
+  matches, and TypeScript reports the comparison.

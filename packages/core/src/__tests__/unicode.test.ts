@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
-import { ChangeType } from "../change.js";
 import { getChanges } from "../diff.js";
 import { keepIdentity } from "../index.js";
 import { unicodeEdits } from "./helpers.js";
@@ -83,13 +82,13 @@ describe("Unicode string edits", () => {
 
   it("uses UTF-16 offsets and a whole-pair deletion span", () => {
     expect(getChanges("😀a😃b", "😀ab")).toEqual([
-      { type: ChangeType.DELETE, key: 3, count: 2 },
+      { type: "delete", key: 3, count: 2 },
     ]);
     expect(getChanges("a😀😃b", "ab")).toEqual([
-      { type: ChangeType.DELETE, key: 1, count: 4 },
+      { type: "delete", key: 1, count: 4 },
     ]);
     expect(getChanges("😀ab", "😀aXb")).toEqual([
-      { type: ChangeType.INSERT, key: 3, value: "X" },
+      { type: "insert", key: 3, value: "X" },
     ]);
   });
 

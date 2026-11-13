@@ -1,5 +1,4 @@
 import {
-  ChangeType,
   type EditScript,
   type ListChange,
   type RecordChange,
@@ -38,7 +37,7 @@ export type TextPolicy = (path: readonly (string | number)[]) => boolean;
 export interface DiffOptions {
   /**
    * Which nested strings are diffed character by character. Any other string that changes is
-   * replaced whole by one `UPDATE`. Without it, every string is diffed character by character.
+   * replaced whole by one `"update"` step. Without it, every string is diffed character by character.
    */
   text?: TextPolicy;
   /**
@@ -126,7 +125,7 @@ const written = (value: unknown, options: DiffOptions): unknown =>
  *
  * `a` and `b` must be of one kind: two records, such as states typed with an interface, two
  * arrays or two strings. A script cannot replace its root, so values of different kinds throw a
- * `TypeError` naming both kinds. Nested values that change kind are replaced by one `UPDATE`.
+ * `TypeError` naming both kinds. Nested values that change kind are replaced by one `"update"` step.
  *
  * The steps are applied in order. Each array index or string offset addresses the array or
  * string as revised by the steps before it, so a backend applies them one by one without
@@ -214,10 +213,10 @@ const getStringChanges = (a: string, b: string): TextChange[] => {
   if (!sharesCharacter(from, to)) {
     const changes: TextChange[] = [];
     const count = a.length - end - start;
-    if (count > 0) changes.push({ type: ChangeType.DELETE, key: start, count });
+    if (count > 0) changes.push({ type: "delete", key: start, count });
     const inserted = to.join("");
     if (inserted.length > 0)
-      changes.push({ type: ChangeType.INSERT, key: start, value: inserted });
+      changes.push({ type: "insert", key: start, value: inserted });
     return changes;
   }
 
@@ -233,23 +232,20 @@ const getStringChanges = (a: string, b: string): TextChange[] => {
     if (step === "eq") index += from[source].length;
     else if (step === "del") {
       // A run of deletions at one offset is one step, counting whole characters.
-      if (last?.type === ChangeType.DELETE && last.key === index)
+      if (last?.type === "delete" && last.key === index)
         last.count = (last.count ?? 1) + from[source].length;
       else
         changes.push({
-          type: ChangeType.DELETE,
+          type: "delete",
           key: index,
           count: from[source].length,
         });
     } else {
-      if (
-        last?.type === ChangeType.INSERT &&
-        last.key + last.value.length === index
-      )
+      if (last?.type === "insert" && last.key + last.value.length === index)
         last.value += to[position];
       else
         changes.push({
-          type: ChangeType.INSERT,
+          type: "insert",
           key: index,
           value: to[position],
         });
@@ -292,25 +288,25 @@ const getArrayChanges = (
       );
       if (nested === null)
         changes.push({
-          type: ChangeType.UPDATE,
+          type: "update",
           key: index,
           value: written(next, options),
         });
       else if (nested.changes.length > 0)
-        changes.push({ type: ChangeType.PENDING, key: index, ...nested });
+        changes.push({ type: "edit", key: index, ...nested });
       index++;
     }
     // The unpaired deletions are adjacent, so they are one step.
     if (deleted.length > pairs)
       changes.push({
-        type: ChangeType.DELETE,
+        type: "delete",
         key: index,
         count: deleted.length - pairs,
       });
     for (let i = pairs; i < inserted.length; i++) {
       const next = itemOf(to[inserted[i]]);
       changes.push({
-        type: ChangeType.INSERT,
+        type: "insert",
         key: index,
         value: written(next, options),
       });
@@ -354,13 +350,13 @@ const getRecordChanges = (
       !absent(a[property]) &&
       (!hasOwn(b, property) || absent(b[property]))
     )
-      changes.push({ type: ChangeType.DELETE, key: property });
+      changes.push({ type: "delete", key: property });
 
   for (const [property, value] of Object.entries(b)) {
     if (property === PROTO_KEY || absent(value)) continue;
     if (!hasOwn(a, property) || absent(a[property]))
       changes.push({
-        type: ChangeType.INSERT,
+        type: "insert",
         key: property,
         value: written(value, options),
       });
@@ -372,12 +368,12 @@ const getRecordChanges = (
       if (nested === null) {
         if (!same(a[property], value))
           changes.push({
-            type: ChangeType.UPDATE,
+            type: "update",
             key: property,
             value: written(value, options),
           });
       } else if (nested.changes.length > 0)
-        changes.push({ type: ChangeType.PENDING, key: property, ...nested });
+        changes.push({ type: "edit", key: property, ...nested });
     }
   }
 

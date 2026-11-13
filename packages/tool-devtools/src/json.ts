@@ -1,5 +1,4 @@
 import {
-  ChangeType,
   getChanges,
   type ListChange,
   type RecordChange,
@@ -147,13 +146,13 @@ export interface DiffLine {
 export const diffJson = (before: JsonObject, after: JsonObject): DiffLine[] =>
   flattenRecord(before, after, getChanges(before, after), []);
 
-type Pending = Extract<RecordChange | ListChange, { type: "pending" }>;
+type Edit = Extract<RecordChange | ListChange, { type: "edit" }>;
 
-/** The lines of the pending step `change`, from the values at its key before and after. */
-const flattenPending = (
+/** The lines of the edit step `change`, from the values at its key before and after. */
+const flattenEdit = (
   before: unknown,
   after: unknown,
-  change: Pending,
+  change: Edit,
   path: JsonPath,
 ): DiffLine[] => {
   if (change.kind === "text")
@@ -176,17 +175,17 @@ const flattenRecord = (
     const keyPath = [...path, change.key];
     const previous = before[change.key] as Json | undefined;
     switch (change.type) {
-      case ChangeType.INSERT:
+      case "insert":
         lines.push({
           kind: "insert",
           path: keyPath,
           after: change.value as Json,
         });
         break;
-      case ChangeType.DELETE:
+      case "delete":
         lines.push({ kind: "delete", path: keyPath, before: previous });
         break;
-      case ChangeType.UPDATE:
+      case "update":
         lines.push({
           kind: "update",
           path: keyPath,
@@ -194,9 +193,9 @@ const flattenRecord = (
           after: change.value as Json,
         });
         break;
-      case ChangeType.PENDING:
+      case "edit":
         lines.push(
-          ...flattenPending(
+          ...flattenEdit(
             previous,
             (after as Plain)[change.key],
             change,
@@ -220,7 +219,7 @@ const flattenList = (
   for (const change of changes) {
     const keyPath = [...path, change.key];
     switch (change.type) {
-      case ChangeType.INSERT:
+      case "insert":
         lines.push({
           kind: "insert",
           path: keyPath,
@@ -228,12 +227,12 @@ const flattenList = (
         });
         work.splice(change.key, 0, change.value);
         break;
-      case ChangeType.DELETE:
+      case "delete":
         // One line per item, each at the index the line before it left.
         for (const item of work.splice(change.key, change.count ?? 1))
           lines.push({ kind: "delete", path: keyPath, before: item as Json });
         break;
-      case ChangeType.UPDATE:
+      case "update":
         lines.push({
           kind: "update",
           path: keyPath,
@@ -242,10 +241,10 @@ const flattenList = (
         });
         work[change.key] = change.value;
         break;
-      case ChangeType.PENDING:
+      case "edit":
         // Steps before this index are final, so it is also the index in `after`.
         lines.push(
-          ...flattenPending(
+          ...flattenEdit(
             work[change.key],
             (after as unknown[])[change.key],
             change,

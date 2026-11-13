@@ -196,16 +196,16 @@ Every backend writing to one document should use the same text policy.
 ## Diffing
 
 **Change**:
-One step of an edit script, an object whose `type` is `INSERT`, `UPDATE`, `DELETE` or `PENDING`: a `RecordChange` keyed by property name, or a `ListChange` or `TextChange` keyed by position. An array or string delete carries the `count` of adjacent items or UTF-16 units it removes.
+One step of an edit script, an object whose `type` is `"insert"`, `"update"`, `"delete"` or `"edit"`: a `RecordChange` keyed by property name, or a `ListChange` or `TextChange` keyed by position. An array or string delete carries the `count` of adjacent items or UTF-16 units it removes.
 In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the step is meant.
 
 **Edit script**:
 The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, two values of one container kind, all of that kind (`EditScript`); each numeric key addresses the array or string as revised by the steps before it.
 _Avoid_: Patch, delta, changeset
 
-**Pending change**:
-A `PENDING` change, whose `changes` are the nested edit script for the container or text at its key and whose `kind` names that container, so it is edited in place rather than replaced.
-_Avoid_: Recursive change, nested diff
+**Edit change**:
+An `"edit"` change, whose `changes` are the nested edit script for the container or text at its key and whose `kind` names that container, so it is edited in place rather than replaced.
+_Avoid_: Pending change, recursive change, nested diff
 
 **Fine-grained write**:
 A `write` that applies an edit script as small CRDT operations, so a toggle or a keystroke produces one small update instead of replacing the synced subtree.
@@ -223,7 +223,7 @@ _Avoid_: Caching, saving state
 
 **Update**:
 A binary encoding (`Uint8Array`) of document changes that a persistable document reports and accepts.
-An update is not the `UPDATE` change type, which replaces one value in an edit script.
+An update is not the `"update"` change type, which replaces one value in an edit script.
 _Avoid_: Patch, delta
 
 **Persistable document**:
@@ -313,7 +313,7 @@ One store the devtools inspect, given as a `DevtoolsSource`: a name and a store 
 
 **Key status**:
 How the devtools classify a top-level store key against the CRDT backend: `synced`, `diverged`, `pending`, `local` or `backend-only`.
-Here `pending` means "not in the backend yet", unrelated to a pending change.
+Here `pending` means "not in the backend yet", unrelated to a pending apply.
 
 **Log origin**:
 Where a devtools log entry came from: `local`, `remote`, `devtools` (an edit made in the panel) or `initial`.
