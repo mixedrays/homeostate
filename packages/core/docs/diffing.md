@@ -282,7 +282,8 @@ Returns `next`, reusing every subtree of `previous` it leaves unchanged. It appl
 script `getChanges` finds between them to copies of `previous`'s containers, so only the
 containers along a changed path are new, and an item that shifts in a list, such as after an
 insert at the top, keeps its identity. Neither input is mutated. When nothing changed, it
-returns `previous` itself; when the two are of different kinds, `next`.
+returns `previous` itself; when the two are of different kinds, `next`. A string that changed
+is taken from `next` whole, since a string has no identity to keep.
 
 Every value it takes from `next` is plain: own `__proto__` keys are left out at any depth, and
 an object whose prototype is neither `Object.prototype` nor `null` is replaced by a plain object

@@ -1,6 +1,5 @@
-import { applyStringChanges } from "./apply.js";
 import { ChangeType, type ListChange, type RecordChange } from "./change.js";
-import { getChanges } from "./diff.js";
+import { getChanges, type DiffOptions } from "./diff.js";
 import { isRecord, PROTO_KEY } from "./json.js";
 
 /** Whether `value`, an object, is plain: its prototype is `Object.prototype` or `null`. */
@@ -41,19 +40,23 @@ const toPlain = (value: unknown): unknown => {
 const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
+/**
+ * Diffs every string as a value: a string has no identity to keep, so a changed one is taken
+ * from `next` whole rather than rebuilt from a character-level script.
+ */
+const WHOLE_STRINGS: DiffOptions = { text: () => false };
+
 /** The value the pending step `change` leaves at its key, given the value there now. */
 const applyPending = (
   current: unknown,
   change: Extract<RecordChange | ListChange, { type: "pending" }>,
 ): unknown => {
-  // The diff found a container of `change.kind` at its key.
-  if (change.kind === "text")
-    return applyStringChanges(current as string, change.changes);
+  // The diff found a container of `change.kind` at its key; with `WHOLE_STRINGS`, never a text.
   if (change.kind === "list")
     return applyChangesToArray(current as unknown[], change.changes);
   return applyChangesToObject(
     current as Record<string, unknown>,
-    change.changes,
+    change.changes as RecordChange[],
   );
 };
 
@@ -119,9 +122,10 @@ const applyChangesToObject = (
  * after an insert at the top, keeps its identity. Neither input is mutated.
  *
  * When nothing changed, `previous` itself is returned; when the two are of different kinds,
- * `next` is. Every value taken from `next` is plain: own `__proto__` keys are left out at any
- * depth, and an object whose prototype is neither `Object.prototype` nor `null` is replaced by a
- * plain object of its own entries. Arrays and binary values (`ArrayBuffer` views) are kept.
+ * `next` is. A string that changed is taken from `next` whole. Every value taken from `next` is
+ * plain: own `__proto__` keys are left out at any depth, and an object whose prototype is
+ * neither `Object.prototype` nor `null` is replaced by a plain object of its own entries. Arrays
+ * and binary values (`ArrayBuffer` views) are kept.
  *
  * The sync engine builds the store's next state with it, so a store re-renders only what a
  * remote change touched. Use it to write a whole state, such as a restored one, the same way.
@@ -136,20 +140,16 @@ const applyChangesToObject = (
 export const keepIdentity = <T>(previous: T, next: T): T => {
   const a: unknown = previous;
   const b: unknown = next;
-  if (typeof a === "string" && typeof b === "string") {
-    const changes = getChanges(a, b);
-    return changes.length === 0
-      ? previous
-      : (applyStringChanges(a, changes) as T);
-  }
+  if (typeof a === "string" && typeof b === "string")
+    return a === b ? previous : next;
   if (Array.isArray(a) && Array.isArray(b)) {
-    const changes = getChanges(a, b);
+    const changes = getChanges(a, b, WHOLE_STRINGS);
     return changes.length === 0
       ? previous
       : (applyChangesToArray(a, changes) as T);
   }
   if (isRecord(a) && isRecord(b)) {
-    const changes = getChanges(a, b);
+    const changes = getChanges(a, b, WHOLE_STRINGS);
     return changes.length === 0
       ? previous
       : (applyChangesToObject(a, changes) as T);
