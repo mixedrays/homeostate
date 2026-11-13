@@ -553,6 +553,27 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
+   * Records `held`, the backend's whole state an apply read, as `lastSynced`, with the store's
+   * objects in place of the backend's, so that the next write skips what is unchanged by identity,
+   * as after a local write. `state`, the store's synced state, must equal `target` as JSON. Only a
+   * key whose value in `target` came from `held` is taken: one whose backend value `filter`
+   * rejected holds the store's value there, which the backend lacks. Does nothing when a newer
+   * read has been recorded meanwhile, by a remote change applied while the store took this one.
+   */
+  const recordStoreObjects = (
+    held: Plain,
+    target: Plain,
+    state: Plain,
+  ): void => {
+    if (lastSynced !== held) return;
+    const shared = { ...held };
+    for (const key of Object.keys(target))
+      if (hasOwn(held, key) && target[key] === held[key] && hasOwn(state, key))
+        shared[key] = state[key];
+    lastSynced = shared;
+  };
+
+  /**
    * Makes the store's synced state what it reads from `held`, the backend's whole state, then
    * writes what the store changed in response; see `readRemote`. With `keepLocalOnly`, a synced
    * key the backend does not hold is left in place instead of being deleted, except the `removed`
@@ -597,6 +618,8 @@ export function createSyncEngine<S extends object>(
       if (next !== current) call("store", () => adapter.setState(next));
       else if (!local) {
         heldKeys = new Set(Object.keys(synced));
+        // Nothing changed, so `synced` equals `target`.
+        recordStoreObjects(held, target, synced);
         return;
       }
     } finally {
@@ -628,7 +651,11 @@ export function createSyncEngine<S extends object>(
     );
     countContradictions(target, paths);
     lastApplied = applied;
-    if (paths.length === 0) return;
+    if (paths.length === 0) {
+      // The store took `target` as it is, so `applied` equals it but for keys it cannot hold.
+      recordStoreObjects(held, target, applied);
+      return;
+    }
     const stopped = paths.filter(
       (path) => (contradictions.get(pathId(path)) ?? 0) >= LOOP_THRESHOLD,
     );

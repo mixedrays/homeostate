@@ -1184,6 +1184,85 @@ describe("createSyncEngine", () => {
       expect(last.todos[1]).toBe(store.getState().todos[1]);
     });
 
+    it("passes the store's unchanged todos after a remote change, so they match by identity", () => {
+      const { backend, previous } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      const applied = store.getState();
+      store.update((s) => toggleTodo(s, "2"));
+
+      const last = previous.at(-1) as TodoState;
+      expect(last.todos[0]).toBe(applied.todos[0]);
+      expect(last.todos[2]).toBe(applied.todos[2]);
+      expect(last.todos[2]).toBe(store.getState().todos[2]);
+      expect(backend.read()).toEqual(
+        toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+      );
+    });
+
+    it("passes the store's todos after a remote change the store already held", () => {
+      const { backend, previous } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      const held = store.getState();
+
+      backend.receive(threeTodos());
+      store.update((s) => toggleTodo(s, "2"));
+
+      const last = previous.at(-1) as TodoState;
+      expect(last.todos[0]).toBe(held.todos[0]);
+      expect(last.todos[2]).toBe(store.getState().todos[2]);
+    });
+
+    it("passes what the backend holds for a key whose remote value the filter rejects", () => {
+      const notLocal = (_key: string, value: unknown) =>
+        !(typeof value === "string" && value.startsWith("local:"));
+      const { backend, previous } = checkedBackend({
+        todos: ["a"],
+        view: "list",
+      });
+      const store = createTestStore({ todos: ["a"], view: "list" });
+      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
+
+      backend.receive({ todos: ["b"], view: "local:grid" });
+      store.update((s) => ({ ...s, todos: ["c"] }));
+
+      expect(previous.at(-1)).toEqual({ todos: ["b"], view: "local:grid" });
+      expect(backend.read()).toEqual({ todos: ["c"], view: "list" });
+    });
+
+    it("passes what the backend holds after a remote change applied while the store took another", () => {
+      const { backend, previous } = checkedBackend({
+        ...threeTodos(),
+        secret: "a",
+      });
+      const store = createTestStore<object>(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        filter: (key: string) => key !== "secret",
+      }).connect();
+      // A peer changes `secret` as soon as the store takes the next remote change.
+      let peerChanged = false;
+      store.adapter.subscribe(() => {
+        if (peerChanged) return;
+        peerChanged = true;
+        backend.receive({ ...toggleTodo(threeTodos(), "1"), secret: "b" });
+      });
+
+      backend.receive({ ...toggleTodo(threeTodos(), "1"), secret: "a" });
+      store.update((s) => toggleTodo(s as TodoState, "2"));
+
+      expect(previous.at(-1)).toEqual({
+        ...toggleTodo(threeTodos(), "1"),
+        secret: "b",
+      });
+      expect(backend.read()).toEqual({
+        ...toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+        secret: "b",
+      });
+    });
+
     it("keeps local keys the backend holds, and the next write leaves them", () => {
       const { backend, previous } = checkedBackend({
         ...threeTodos(),
