@@ -115,4 +115,68 @@ describe("createLoroBackend", () => {
       log: "after",
     });
   });
+
+  describe("a store edit merged into a pending apply that moved and changed its row", () => {
+    type Row = { id: string; cells: Record<string, number> };
+    const row = (id: string, cells: Record<string, number> = {}): Row => ({
+      id,
+      cells,
+    });
+    const exchange = (a: LoroDoc, b: LoroDoc): void => {
+      b.import(a.export({ mode: "update", from: b.version() }));
+      a.import(b.export({ mode: "update", from: a.version() }));
+    };
+
+    it.each([
+      {
+        change: "an insert and an edit",
+        base: [row("r1")],
+        remote: [row("r0"), row("r1", { b: 1 })],
+        expected: [row("r0"), row("r1", { b: 1, a: 2 })],
+      },
+      {
+        change: "a delete and an edit",
+        base: [row("r0"), row("r1")],
+        remote: [row("r1", { b: 1 })],
+        expected: [row("r1", { b: 1, a: 2 })],
+      },
+      {
+        change: "an insert only",
+        base: [row("r1")],
+        remote: [row("r0"), row("r1")],
+        expected: [row("r0"), row("r1", { a: 2 })],
+      },
+    ])(
+      "lands on its row after $change from the other peer",
+      async ({ base, remote, expected }) => {
+        const a = new LoroDoc();
+        a.setPeerId(1);
+        const b = new LoroDoc();
+        b.setPeerId(2);
+        const backendB = createLoroBackend(b, NAME);
+        backendB.write({ rows: base });
+        exchange(b, a);
+        const store = createTestStore<{ rows: Row[] }>({ rows: [] });
+        createSyncEngine(createLoroBackend(a, NAME), store.adapter, {
+          schedule: queueMicrotask,
+        }).connect();
+
+        backendB.write({ rows: remote }, { rows: base });
+        exchange(b, a);
+        // The apply waits for its microtask, so the store edits r1 before it runs.
+        expect(store.getState().rows).toEqual(base);
+        store.update((s) => ({
+          rows: s.rows.map((r) =>
+            r.id === "r1" ? { ...r, cells: { ...r.cells, a: 2 } } : r,
+          ),
+        }));
+        await Promise.resolve();
+        exchange(a, b);
+
+        expect(store.getState().rows).toEqual(expected);
+        expect(a.getMap(NAME).toJSON()).toEqual({ rows: expected });
+        expect(b.getMap(NAME).toJSON()).toEqual({ rows: expected });
+      },
+    );
+  });
 });
