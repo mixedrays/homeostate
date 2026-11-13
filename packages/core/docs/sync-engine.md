@@ -871,10 +871,7 @@ instead of replacing the document, see the [Diff and apply API](./diffing.md).
 ## createCrdtBackend
 
 ```ts
-function createCrdtBackend(
-  build: (text: TextPolicy) => CrdtBackendParts,
-  options?: CrdtBackendOptions,
-): CrdtBackend;
+function createCrdtBackend(parts: CrdtBackendParts): CrdtBackend;
 
 interface CrdtBackendParts {
   read: () => JsonObject;
@@ -883,16 +880,12 @@ interface CrdtBackendParts {
   ) => void;
   watch: (onChange: (own: boolean) => void) => Unsubscribe;
   revision?: () => unknown;
-}
-
-interface CrdtBackendOptions {
   text?: TextPolicy;
 }
 ```
 
 Builds a `CrdtBackend` for a CRDT library from the parts that differ by library. It imports no
-CRDT library. `build` is called once with the text policy, `options.text` or, by default, one
-that marks no string as text, so build the library's [`ApplyOps`](./diffing.md) with it.
+CRDT library.
 
 | Part       | Supplies                                                                                                                                                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -900,12 +893,14 @@ that marks no string as text, so build the library's [`ApplyOps`](./diffing.md) 
 | `transact` | Runs `edit` as one transaction tagged as this backend's own, with the synced root and the `ApplyOps` that write into it. When the document holds no map there, it puts an empty one in its place and passes `created` as true. |
 | `watch`    | Calls `onChange` after every change to the synced subtree, with `own` set when the change carries the tag `transact` gives. Returns the cleanup.                                                                               |
 | `revision` | Optional. The backend's `revision`, as it is; see [CrdtBackend](#crdtbackend).                                                                                                                                                 |
+| `text`     | Optional. Which strings the library stores as its text type, by path from the synced root; by default none. Build the library's [`ApplyOps`](./diffing.md) from the same policy.                                               |
 
 The backend it returns:
 
-- `write(next, previous)` runs `transact` once and applies `next` with `applyChanges` and
-  `json: true`, diffing against `{}` when `transact` created the root, otherwise against
-  `previous` when the engine gives it, and otherwise against `read()`, inside the transaction.
+- `write(next, previous)` runs `transact` once and applies `next` with `applyChanges`,
+  `json: true` and `text`, diffing against `{}` when `transact` created the root, otherwise
+  against `previous` when the engine gives it, and otherwise against `read()`, inside the
+  transaction.
 - `subscribe` reports only the changes `watch` does not call its own.
 - `read` and `revision` are the parts' own functions, called directly.
 
@@ -921,19 +916,18 @@ export const createLoroBackend = (
 ): CrdtBackend => {
   const map = doc.getMap(name);
   const origin = `homeostate:${name}`;
-  return createCrdtBackend((text) => {
-    const ops = createLoroOps(text);
-    return {
-      read: () => map.toJSON(),
-      transact: (edit) => {
-        edit(map, ops);
-        doc.commit({ origin });
-      },
-      watch: (onChange) =>
-        map.subscribe((event) => onChange(event.origin === origin)),
-      revision: () => doc.opCount(),
-    };
-  }, options);
+  const ops = createLoroOps(options?.text);
+  return createCrdtBackend({
+    read: () => map.toJSON(),
+    transact: (edit) => {
+      edit(map, ops);
+      doc.commit({ origin });
+    },
+    watch: (onChange) =>
+      map.subscribe((event) => onChange(event.origin === origin)),
+    revision: () => doc.opCount(),
+    text: options?.text,
+  });
 };
 ```
 

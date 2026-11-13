@@ -46,12 +46,12 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `CrdtBackendOptions`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                                      |
-| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                                               |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                                      |
+| Page                            | APIs and types                                                                                                                                                                                                                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                |
+| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                         |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                |
 
 `createPersistence` keeps the document in browser storage through
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or
@@ -63,14 +63,15 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 Build it with [`createCrdtBackend`](./sync-engine.md#createcrdtbackend), from the parts that
 differ by CRDT library: `read` for the synced subtree as plain JSON, `transact` to run one edit
 tagged as the backend's own, `watch` to hear of every change and say whether it was its own,
-and `revision`. Core does the rest: it applies the default text policy, diffs each write against
-`previous` or the document with `applyChanges` and `json: true`, and leaves the backend's own
+`revision`, and the `text` policy. Core does the rest: it diffs each write against `previous` or
+the document with `applyChanges`, `json: true` and that policy, and leaves the backend's own
 writes out of `subscribe`.
 
 - `transact` hands its edit your [`ApplyOps`](./diffing.md), which read and write your
-  library's maps, lists and texts. `createCrdtBackend` gives `build` the text policy: in `set`
-  and `splice`, store the strings it marks in your library's text type and every other string
-  as a plain value; text is then edited through `editText`.
+  library's maps, lists and texts. Build them from the same `text` policy you pass in the
+  parts, which may be `undefined` for none: in `set` and `splice`, store the strings it marks in
+  your library's text type and every other string as a plain value; text is then edited through
+  `editText`.
 - Implement `revision()` from something your library updates with every change, reported or
   not, such as a version vector or an op count, and return `undefined` while it cannot tell.
   Without it, the engine reads your document before every local change to check that

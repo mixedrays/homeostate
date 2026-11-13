@@ -9,6 +9,9 @@
 "@homeostate/tool-simulator": patch
 "@homeostate/react": patch
 "@homeostate/store-ngrx-signals": patch
+"@homeostate/crdt-yjs": patch
+"@homeostate/crdt-loro": patch
+"@homeostate/crdt-automerge": patch
 ---
 
 **Breaking:** a smaller sync engine API, with one way to do each thing. Migrate as follows:
@@ -60,3 +63,10 @@
   so is what `applyChanges` writes. Two strings passed directly are still diffed character by
   character. Pass `text: () => true` to keep character-level scripts for every nested string, or
   a `TextPolicy` for some. The CRDT backends pass their `text` option, so they are unchanged.
+- `createCrdtBackend` takes the parts as one object, `text` among them, and
+  `CrdtBackendOptions` is removed. Replace
+  `createCrdtBackend((text) => ({ read, transact, watch, revision }), { text })` with
+  `createCrdtBackend({ read, transact, watch, revision, text })`, and build the `ApplyOps` that
+  `transact` hands over from the same `text`, which is `undefined` when no string is text: core
+  no longer passes a policy with its default applied. `CrdtBackendParts` gains the optional
+  `text`. The Yjs, Loro and Automerge backends take their `text` option as before.

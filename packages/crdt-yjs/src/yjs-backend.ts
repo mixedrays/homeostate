@@ -49,8 +49,6 @@ export interface YjsBackend extends CrdtBackend {
 // Declared here so that this package needs no Node types; the ES libs have no `console`.
 declare const console: { error: (...data: unknown[]) => void };
 
-const noText: TextPolicy = () => false;
-
 const reportRemoved = (error: Error): void => {
   console.error("[homeostate] Yjs backend lost its map:", error);
 };
@@ -156,86 +154,84 @@ export function createYjsBackend(
   const {
     origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`),
     onRemoved = reportRemoved,
+    text,
   } = options;
-  const text = options.text ?? noText;
   const transactions = countTransactions(doc);
   const hold = createHold(map, doc, () => transactions.done);
   let reported = false;
 
-  const backend = createCrdtBackend((text) => {
-    const ops = createYjsOps(text);
-    return {
-      read: () => {
-        const held = hold.held();
-        if (held !== undefined) return copyJson(held.value);
-        const value = toPlainMap(map);
-        hold.remember(value);
-        return value;
-      },
+  const ops = createYjsOps(text);
 
-      transact: (edit) => doc.transact(() => edit(map, ops), origin),
+  const backend = createCrdtBackend({
+    read: () => {
+      const held = hold.held();
+      if (held !== undefined) return copyJson(held.value);
+      const value = toPlainMap(map);
+      hold.remember(value);
+      return value;
+    },
 
-      watch: (onChange): Unsubscribe => {
-        const untrack = hold.track();
-        /**
-         * Whether a change other than this backend's own may wait for the gap to close: one made
-         * while it was open, or before this watch began, when one is open already.
-         */
-        let missed = hasGap(doc);
-        /** The transaction that closed the gap, while its missed changes are unreported. */
-        let closing: Y.Transaction | null = null;
-        const handler = (
-          _events: unknown,
-          transaction: Y.Transaction,
-        ): void => {
-          const own = transaction.origin === origin;
-          if (hasGap(doc)) {
-            if (!own) missed = true;
-            return;
-          }
-          const closed = closing === transaction;
-          closing = null;
-          onChange(own && !closed);
-        };
-        const watchGap = (transaction: Y.Transaction): void => {
-          if (!missed || hasGap(doc)) return;
-          missed = false;
-          closing = transaction;
-        };
-        // For a gap that closes in a transaction that leaves the map alone.
-        const reportClosed = (transaction: Y.Transaction): void => {
-          if (closing !== transaction) return;
-          closing = null;
-          onChange(false);
-        };
-        // Yjs sends a deleted map no event, so look for the removal after every transaction.
-        const watchRemoval = (): void => {
-          if (reported || !isRemoved(map)) return;
-          reported = true;
-          onRemoved(removedError());
-        };
-        map.observeDeep(handler);
-        doc.on("beforeObserverCalls", watchGap);
-        doc.on("afterTransaction", reportClosed);
-        const nested = map._item !== null;
-        if (nested) doc.on("afterTransaction", watchRemoval);
-        return () => {
-          map.unobserveDeep(handler);
-          doc.off("beforeObserverCalls", watchGap);
-          doc.off("afterTransaction", reportClosed);
-          if (nested) doc.off("afterTransaction", watchRemoval);
-          untrack();
-        };
-      },
+    transact: (edit) => doc.transact(() => edit(map, ops), origin),
 
-      // Every change in the document, since telling which ones changed the map takes more, but
-      // while a gap is open, only the changes `read` shows.
-      revision: () => {
-        if (transactions.open > 0) return undefined;
-        return hold.held()?.revision ?? transactions.done;
-      },
-    };
-  }, options);
+    watch: (onChange): Unsubscribe => {
+      const untrack = hold.track();
+      /**
+       * Whether a change other than this backend's own may wait for the gap to close: one made
+       * while it was open, or before this watch began, when one is open already.
+       */
+      let missed = hasGap(doc);
+      /** The transaction that closed the gap, while its missed changes are unreported. */
+      let closing: Y.Transaction | null = null;
+      const handler = (_events: unknown, transaction: Y.Transaction): void => {
+        const own = transaction.origin === origin;
+        if (hasGap(doc)) {
+          if (!own) missed = true;
+          return;
+        }
+        const closed = closing === transaction;
+        closing = null;
+        onChange(own && !closed);
+      };
+      const watchGap = (transaction: Y.Transaction): void => {
+        if (!missed || hasGap(doc)) return;
+        missed = false;
+        closing = transaction;
+      };
+      // For a gap that closes in a transaction that leaves the map alone.
+      const reportClosed = (transaction: Y.Transaction): void => {
+        if (closing !== transaction) return;
+        closing = null;
+        onChange(false);
+      };
+      // Yjs sends a deleted map no event, so look for the removal after every transaction.
+      const watchRemoval = (): void => {
+        if (reported || !isRemoved(map)) return;
+        reported = true;
+        onRemoved(removedError());
+      };
+      map.observeDeep(handler);
+      doc.on("beforeObserverCalls", watchGap);
+      doc.on("afterTransaction", reportClosed);
+      const nested = map._item !== null;
+      if (nested) doc.on("afterTransaction", watchRemoval);
+      return () => {
+        map.unobserveDeep(handler);
+        doc.off("beforeObserverCalls", watchGap);
+        doc.off("afterTransaction", reportClosed);
+        if (nested) doc.off("afterTransaction", watchRemoval);
+        untrack();
+      };
+    },
+
+    // Every change in the document, since telling which ones changed the map takes more, but
+    // while a gap is open, only the changes `read` shows.
+    revision: () => {
+      if (transactions.open > 0) return undefined;
+      return hold.held()?.revision ?? transactions.done;
+    },
+
+    text,
+  });
 
   const write = (next: JsonObjectInput, previous?: JsonObjectInput): void => {
     const held = hold.held();

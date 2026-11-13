@@ -9,7 +9,7 @@ export { mergeConcurrent } from "./merge.js";
 export type { MergeOptions } from "./merge.js";
 export { applyChanges } from "./apply.js";
 export { createCrdtBackend } from "./crdt-backend.js";
-export type { CrdtBackendOptions, CrdtBackendParts } from "./crdt-backend.js";
+export type { CrdtBackendParts } from "./crdt-backend.js";
 export type { ApplyOps, ContainerKind } from "./apply.js";
 export type { DiffOptions, TextPolicy } from "./diff.js";
 export type { Change, ListChange, RecordChange, TextChange } from "./change.js";

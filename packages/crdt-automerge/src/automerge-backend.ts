@@ -37,53 +37,52 @@ export const createAutomergeBackend = <T>(
   const heads = new WeakMap<object, string>();
   let writing = false;
 
-  return createCrdtBackend(
-    (text) => ({
-      // A missing key reads as an empty map, which the first write creates.
-      read: () => {
-        const value = snapshot((handle.doc() as Container)[name]);
-        if (value === undefined) return {};
-        if (isRecord(value)) return value;
-        throw new TypeError(
-          `The Automerge key ${JSON.stringify(name)} must hold a map, got ${kindOf(value)}`,
-        );
-      },
+  return createCrdtBackend({
+    // A missing key reads as an empty map, which the first write creates.
+    read: () => {
+      const value = snapshot((handle.doc() as Container)[name]);
+      if (value === undefined) return {};
+      if (isRecord(value)) return value;
+      throw new TypeError(
+        `The Automerge key ${JSON.stringify(name)} must hold a map, got ${kindOf(value)}`,
+      );
+    },
 
-      transact: (edit) => {
-        writing = true;
-        try {
-          handle.change((doc) => {
-            const root = doc as Container;
-            const ops = createAutomergeOps(root, name, text);
-            // The document's own key decides: a write that creates the map diffs against `{}`.
-            const created = ops.kind(root[name]) !== "record";
-            if (created) root[name] = {};
-            edit(root[name] as object, ops, created);
-          });
-        } finally {
-          writing = false;
-        }
-      },
+    transact: (edit) => {
+      writing = true;
+      try {
+        handle.change((doc) => {
+          const root = doc as Container;
+          const ops = createAutomergeOps(root, name, options.text);
+          // The document's own key decides: a write that creates the map diffs against `{}`.
+          const created = ops.kind(root[name]) !== "record";
+          if (created) root[name] = {};
+          edit(root[name] as object, ops, created);
+        });
+      } finally {
+        writing = false;
+      }
+    },
 
-      watch: (onChange): Unsubscribe =>
-        handle.subscribe(({ local }) => {
-          // A peer's update merged while the write notifies, as a synchronous relay does, is
-          // remote even though it arrives during the write.
-          onChange(writing && local);
-        }),
+    watch: (onChange): Unsubscribe =>
+      handle.subscribe(({ local }) => {
+        // A peer's update merged while the write notifies, as a synchronous relay does, is
+        // remote even though it arrives during the write.
+        onChange(writing && local);
+      }),
 
-      // Every change gives the handle a new document, and so does a merge that brings nothing
-      // new, which the heads tell apart. They are read once per document.
-      revision: () => {
-        const doc = handle.doc();
-        let known = heads.get(doc);
-        if (known === undefined) {
-          known = A.getHeads(doc).join();
-          heads.set(doc, known);
-        }
-        return known;
-      },
-    }),
-    options,
-  );
+    // Every change gives the handle a new document, and so does a merge that brings nothing
+    // new, which the heads tell apart. They are read once per document.
+    revision: () => {
+      const doc = handle.doc();
+      let known = heads.get(doc);
+      if (known === undefined) {
+        known = A.getHeads(doc).join();
+        heads.set(doc, known);
+      }
+      return known;
+    },
+
+    text: options.text,
+  });
 };

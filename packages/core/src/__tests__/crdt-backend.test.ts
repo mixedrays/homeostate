@@ -57,51 +57,65 @@ const createDoc = (root?: unknown) => {
 
 type Doc = ReturnType<typeof createDoc>;
 
-const partsOver =
-  (doc: Doc, extra: Partial<CrdtBackendParts> = {}) =>
-  (): CrdtBackendParts => ({
-    read: () => {
-      doc.reads++;
-      return structuredClone((doc.root as JsonObject | undefined) ?? {});
-    },
-    transact: (edit) => {
-      const created =
-        doc.root === null ||
-        typeof doc.root !== "object" ||
-        Array.isArray(doc.root);
-      if (created) doc.root = {};
-      edit(doc.root as object, plainOps, created);
-      doc.changes++;
-      doc.listeners.forEach((listener) => listener(true));
-    },
-    watch: (onChange) => {
-      doc.listeners.add(onChange);
-      return () => {
-        doc.listeners.delete(onChange);
-      };
-    },
-    ...extra,
-  });
+const partsOver = (
+  doc: Doc,
+  extra: Partial<CrdtBackendParts> = {},
+  ops: ApplyOps = plainOps,
+): CrdtBackendParts => ({
+  read: () => {
+    doc.reads++;
+    return structuredClone((doc.root as JsonObject | undefined) ?? {});
+  },
+  transact: (edit) => {
+    const created =
+      doc.root === null ||
+      typeof doc.root !== "object" ||
+      Array.isArray(doc.root);
+    if (created) doc.root = {};
+    edit(doc.root as object, ops, created);
+    doc.changes++;
+    doc.listeners.forEach((listener) => listener(true));
+  },
+  watch: (onChange) => {
+    doc.listeners.add(onChange);
+    return () => {
+      doc.listeners.delete(onChange);
+    };
+  },
+  ...extra,
+});
+
+/** `plainOps` with every string a text, whose edits `editText` records instead of making. */
+const textOps = () => ({
+  ...plainOps,
+  kind: (value: unknown) =>
+    typeof value === "string" ? ("text" as const) : plainOps.kind(value),
+  editText: vi.fn(),
+});
 
 describe("createCrdtBackend", () => {
-  it("builds its parts once, for a policy that marks no string as text by default", () => {
-    const build = vi.fn((text: TextPolicy) => {
-      expect(text(["title"])).toBe(false);
-      return partsOver(createDoc({}))();
-    });
+  it("replaces every changed string whole without a text policy", () => {
+    const doc = createDoc({ title: "a", note: "a" });
+    const ops = textOps();
+    const backend = createCrdtBackend(partsOver(doc, {}, ops));
 
-    createCrdtBackend(build);
+    backend.write({ title: "ab", note: "ab" }, { title: "a", note: "a" });
 
-    expect(build).toHaveBeenCalledTimes(1);
+    expect(ops.editText).not.toHaveBeenCalled();
+    expect(doc.root).toEqual({ title: "ab", note: "ab" });
   });
 
-  it("builds its parts for the text policy it is given", () => {
-    const policy: TextPolicy = (path) => path[0] === "title";
-    const build = vi.fn(partsOver(createDoc({})));
+  it("edits the strings its text policy marks in place, and replaces the others whole", () => {
+    const doc = createDoc({ title: "a", note: "a" });
+    const ops = textOps();
+    const text: TextPolicy = (path) => path[0] === "title";
+    const backend = createCrdtBackend({ ...partsOver(doc, {}, ops), text });
 
-    createCrdtBackend(build, { text: policy });
+    backend.write({ title: "ab", note: "ab" }, { title: "a", note: "a" });
 
-    expect(build).toHaveBeenCalledWith(policy);
+    expect(ops.editText).toHaveBeenCalledTimes(1);
+    expect(ops.editText).toHaveBeenCalledWith("a", 1, 0, "b", ["title"]);
+    expect(doc.root).toEqual({ title: "a", note: "ab" });
   });
 
   it("writes through transact, so that read() matches", () => {

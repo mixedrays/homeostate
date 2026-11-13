@@ -13,10 +13,11 @@ export type Path = readonly (string | number)[];
 export const toSharedType = (
   value: unknown,
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): unknown => {
   if (Array.isArray(value)) return arrayToYArray(value, path, text);
-  if (typeof value === "string") return text(path) ? new Y.Text(value) : value;
+  if (typeof value === "string")
+    return text?.(path) === true ? new Y.Text(value) : value;
   if (value !== null && typeof value === "object")
     return objectToYMap(value as Record<string, unknown>, path, text);
   return value;
@@ -25,7 +26,7 @@ export const toSharedType = (
 const arrayToYArray = (
   array: unknown[],
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): Y.Array<unknown> => {
   const yarray = new Y.Array<unknown>();
   yarray.push(array.map((item, i) => toSharedType(item, [...path, i], text)));
@@ -35,7 +36,7 @@ const arrayToYArray = (
 const objectToYMap = (
   object: Record<string, unknown>,
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): Y.Map<unknown> => {
   const ymap = new Y.Map<unknown>();
   for (const [property, value] of Object.entries(object))
