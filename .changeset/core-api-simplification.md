@@ -12,6 +12,10 @@
 "@homeostate/crdt-yjs": patch
 "@homeostate/crdt-loro": patch
 "@homeostate/crdt-automerge": patch
+"@homeostate/store-tanstack": patch
+"@homeostate/store-valtio": patch
+"@homeostate/persist-indexeddb": patch
+"@homeostate/persist-local-storage": patch
 ---
 
 **Breaking:** a smaller sync engine API, with one way to do each thing. Migrate as follows:
@@ -77,3 +81,11 @@
   changed during a remote apply, or a local change merged into one, since the engine cannot tell
   whether the document changed during `setState`; the backend diffs against its document then.
   The Yjs, Loro, Automerge and memory backends already implement it.
+- `createSyncEngine` takes one options object, as the setup helpers do: the `backend`, the
+  `adapter` and the `SyncEngineConfig` options, flat. Replace
+  `createSyncEngine(backend, adapter, config)` with
+  `createSyncEngine({ backend, adapter, ...config })`, or list the options inline, such as
+  `createSyncEngine({ backend, adapter, omit: ["draft"] })`, and
+  `createSyncEngine(backend, adapter)` with `createSyncEngine({ backend, adapter })`. The state
+  type is still taken from `adapter`. The new `SyncEngineOptions<S>` type names the object. The
+  setup helpers' options are unchanged.

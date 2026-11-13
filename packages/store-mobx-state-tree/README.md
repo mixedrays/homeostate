@@ -119,7 +119,10 @@ import { addDisposer } from "mobx-state-tree";
 import { createSyncEngine } from "@homeostate/core";
 import { createMobxStateTreeAdapter } from "@homeostate/store-mobx-state-tree";
 
-const engine = createSyncEngine(backend, createMobxStateTreeAdapter(store));
+const engine = createSyncEngine({
+  backend,
+  adapter: createMobxStateTreeAdapter(store),
+});
 addDisposer(store, () => engine.disconnect());
 engine.connect();
 ```

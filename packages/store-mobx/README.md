@@ -128,7 +128,7 @@ import { createSyncEngine } from "@homeostate/core";
 import { createMobxAdapter } from "@homeostate/store-mobx";
 
 const adapter = createMobxAdapter(store, { omit: ["draft"] });
-const engine = createSyncEngine(backend, adapter);
+const engine = createSyncEngine({ backend, adapter });
 engine.connect();
 ```
 

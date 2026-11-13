@@ -47,10 +47,10 @@ const openTab = () => {
   const doc = new Y.Doc();
   seedBoard(doc);
   const store = createStore<Board>(() => ({ shapes: {} }));
-  const engine = createSyncEngine(
-    createYjsBackend(doc, SYNC_MAP_NAME, { text: isShapeText }),
-    createZustandAdapter(store),
-  );
+  const engine = createSyncEngine({
+    backend: createYjsBackend(doc, SYNC_MAP_NAME, { text: isShapeText }),
+    adapter: createZustandAdapter(store),
+  });
   engine.connect();
   cleanups.push(() => engine.disconnect());
   return {

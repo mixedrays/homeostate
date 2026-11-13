@@ -64,10 +64,10 @@ describe("a failed write without onError", () => {
   describe("with createMobxStateTreeAdapter", () => {
     const connect = (backend: MemoryBackend) => {
       const node = Counter.create();
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        createMobxStateTreeAdapter(node),
-      );
+        adapter: createMobxStateTreeAdapter(node),
+      });
       engine.connect();
       disposers.push(() => engine.disconnect());
       return { node, engine };

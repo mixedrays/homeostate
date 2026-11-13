@@ -15,7 +15,7 @@ a state manager, and `crdt-*` packages implement `CrdtBackend` for a CRDT librar
 ```ts
 import { createSyncEngine } from "@homeostate/core";
 
-const engine = createSyncEngine(backend, adapter, { seed: true });
+const engine = createSyncEngine({ backend, adapter, seed: true });
 engine.subscribe((event) => console.log(event)); // "connect", then "disconnect"
 engine.connect();
 engine.getStatus().connected; // true
@@ -134,7 +134,10 @@ text) and edited character by character, so what two peers type into one title a
 const isTitle = (path: readonly (string | number)[]) =>
   path.length === 3 && path[0] === "todos" && path[2] === "title";
 
-createSyncEngine(createYjsBackend(doc, "shared", { text: isTitle }), adapter);
+createSyncEngine({
+  backend: createYjsBackend(doc, "shared", { text: isTitle }),
+  adapter,
+});
 ```
 
 The path runs from the synced root through record keys and array indices, as in
@@ -152,7 +155,7 @@ The engine syncs every top-level key of the store's state but its functions. `om
 the keys it names local, in both directions:
 
 ```ts
-createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
+createSyncEngine({ backend, adapter, omit: ["draft", "searchTerm"] });
 ```
 
 `keys: ["todos"]` syncs the keys it lists instead, and leaves any other key the backend holds
@@ -218,7 +221,9 @@ updates, such as a peer catching up after a slow connection, re-renders once per
 `schedule` option applies the burst once:
 
 ```ts
-createSyncEngine(backend, adapter, {
+createSyncEngine({
+  backend,
+  adapter,
   schedule: (flush) => queueMicrotask(flush),
 });
 ```

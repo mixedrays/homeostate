@@ -46,7 +46,11 @@ const createStore = () => {
 
 const createEngine = (backend: MemoryBackend = createMemoryBackend()) => {
   const store = createStore();
-  return { backend, store, engine: createSyncEngine(backend, store.adapter) };
+  return {
+    backend,
+    store,
+    engine: createSyncEngine({ backend, adapter: store.adapter }),
+  };
 };
 
 const describeStatus = ({ connected, ready, failure }: SyncStatus): string =>
@@ -149,7 +153,9 @@ describe("useSyncStatus", () => {
   it("renders once for a failed wait, which changes two fields", async () => {
     let reject: (reason: unknown) => void = () => {};
     const store = createStore();
-    const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+    const engine = createSyncEngine({
+      backend: createMemoryBackend(),
+      adapter: store.adapter,
       onError: () => {},
       ready: () =>
         new Promise((_resolve, rejectWait) => {

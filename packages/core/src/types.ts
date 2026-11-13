@@ -274,6 +274,18 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
 );
 
 /**
+ * What `createSyncEngine` takes, typed by the store's state `S`, which it takes from `adapter`:
+ * the backend, the store adapter and the sync engine's config.
+ */
+export type SyncEngineOptions<S extends object = JsonObject> =
+  SyncEngineConfig<S> & {
+    /** The CRDT backend the store syncs with */
+    backend: CrdtBackend;
+    /** The store adapter of the store to sync */
+    adapter: StoreAdapter<S>;
+  };
+
+/**
  * The options every setup helper takes, typed by the store's state `S`: the backend, the
  * connect mode and the sync engine's config. A setup helper is the one call in a `store-*`
  * package, such as the Zustand `homeostate` middleware, that creates the store adapter and the

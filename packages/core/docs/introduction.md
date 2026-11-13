@@ -25,7 +25,9 @@ npm install @homeostate/core @homeostate/crdt-yjs yjs
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
   omit: ["draft"],
   seed: true,
   onError: (error, source) =>
@@ -46,12 +48,12 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                                                                                                                                                                                      |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                |
-| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                         |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                |
+| Page                            | APIs and types                                                                                                                                                                                                                                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineOptions`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                                     |
+| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                                              |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                                     |
 
 `createPersistence` keeps the document in browser storage through
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or

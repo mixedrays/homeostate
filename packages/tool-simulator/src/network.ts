@@ -395,11 +395,11 @@ export function createNetwork(options: NetworkOptions = {}): Network {
 
     addPeer: <S extends object>(setup: PeerSetup<S>): Peer<S> => {
       const index = peers.length;
-      const engine = createSyncEngine(
-        setup.backend,
-        setup.adapter,
-        setup.config,
-      );
+      const engine = createSyncEngine({
+        ...setup.config,
+        backend: setup.backend,
+        adapter: setup.adapter,
+      });
       const peer: Peer<S> = {
         index,
         name: setup.name ?? `peer-${index}`,

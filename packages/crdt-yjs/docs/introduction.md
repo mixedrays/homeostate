@@ -25,7 +25,10 @@ import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const doc = new Y.Doc();
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter);
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
+});
 engine.connect();
 ```
 
@@ -67,7 +70,7 @@ the backend's writes. Track the backend's origin instead:
 
 ```ts
 const backend = createYjsBackend(doc, "shared");
-createSyncEngine(backend, adapter).connect();
+createSyncEngine({ backend, adapter }).connect();
 const undoManager = new Y.UndoManager(backend.map, {
   trackedOrigins: new Set([backend.origin]),
 });

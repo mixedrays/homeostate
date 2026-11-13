@@ -50,10 +50,10 @@ const connect = (
   store: TodoStore,
   backend: MemoryBackend = createMemoryBackend(),
 ) => {
-  const engine = createSyncEngine(
+  const engine = createSyncEngine({
     backend,
-    createMobxAdapter(store, { keys: syncedKeys }),
-  );
+    adapter: createMobxAdapter(store, { keys: syncedKeys }),
+  });
   engine.connect();
   return { backend, engine };
 };
@@ -103,7 +103,7 @@ describe("MobxAdapter", () => {
       const store = new EditorStore();
       const backend = createMemoryBackend();
       const adapter = createMobxAdapter(store);
-      createSyncEngine(backend, adapter).connect();
+      createSyncEngine({ backend, adapter }).connect();
 
       expect(backend.read()).toEqual({
         todos: [{ id: "1", title: "a", done: false }],
@@ -160,7 +160,7 @@ describe("MobxAdapter", () => {
       const store = new TodoStore();
       const backend = createMemoryBackend();
       const adapter = createMobxAdapter(store, { omit: ["draft"] });
-      createSyncEngine(backend, adapter).connect();
+      createSyncEngine({ backend, adapter }).connect();
 
       store.draft = "typing";
 
@@ -359,7 +359,7 @@ describe("MobxAdapter", () => {
     }
     const store = new CountedStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createMobxAdapter(store)).connect();
+    createSyncEngine({ backend, adapter: createMobxAdapter(store) }).connect();
     const stop = reaction(
       () => store.todos.length,
       (length) =>
@@ -401,7 +401,9 @@ describe("MobxAdapter", () => {
       const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
       const store = makeAutoObservable({ todos: [] as string[] });
       const onError = vi.fn();
-      createSyncEngine(backend, createMobxAdapter(store), {
+      createSyncEngine({
+        backend,
+        adapter: createMobxAdapter(store),
         ...config,
         onError,
       }).connect();
@@ -423,13 +425,11 @@ describe("MobxAdapter", () => {
     const failingWrite = (onError?: () => void) => {
       const store = new TodoStore();
       const backend = createMemoryBackend();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        createMobxAdapter(store, { keys: syncedKeys }),
-        {
-          onError,
-        },
-      ).connect();
+        adapter: createMobxAdapter(store, { keys: syncedKeys }),
+        onError,
+      }).connect();
       const offline = new Error("offline");
       vi.spyOn(backend, "write").mockImplementationOnce(() => {
         throw offline;
@@ -558,7 +558,7 @@ describe.each<[string, () => SyncedStore, boolean]>([
     const store = create();
     const { backend, writes } = countingWrites(createMemoryBackend());
     const adapter = createMobxAdapter(store, { keys: ["todos", "filter"] });
-    createSyncEngine(backend, adapter).connect();
+    createSyncEngine({ backend, adapter }).connect();
     const todos = store.todos;
     runInAction(() => {
       store.draft = "typing";

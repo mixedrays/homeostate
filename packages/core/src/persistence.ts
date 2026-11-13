@@ -59,7 +59,7 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  * new WebsocketProvider(url, 'todos', doc);
  * const loaded = await persistence.whenLoaded;
  * if (loaded.status === 'empty' || loaded.status === 'loaded') {
- *   createSyncEngine(createYjsBackend(doc, 'shared'), adapter).connect();
+ *   createSyncEngine({ backend: createYjsBackend(doc, 'shared'), adapter }).connect();
  * } else {
  *   showRecovery(loaded);
  * }

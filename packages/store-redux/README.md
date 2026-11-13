@@ -169,7 +169,10 @@ const store = configureStore({
   ),
 });
 
-const engine = createSyncEngine(backend, createReduxAdapter(store));
+const engine = createSyncEngine({
+  backend,
+  adapter: createReduxAdapter(store),
+});
 engine.connect();
 ```
 

@@ -34,7 +34,10 @@ describe("scopeAdapter", () => {
   it("syncs the slice and leaves the rest of the store untouched", () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
-    createSyncEngine(backend, scopeAdapter(store.adapter, docScope)).connect();
+    createSyncEngine({
+      backend,
+      adapter: scopeAdapter(store.adapter, docScope),
+    }).connect();
     const { notes, ui } = store.getState();
 
     expect(backend.read()).toEqual({ title: "doc" });
@@ -53,10 +56,10 @@ describe("scopeAdapter", () => {
   it("ignores store changes outside the slice", () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      scopeAdapter(store.adapter, docScope),
-    );
+      adapter: scopeAdapter(store.adapter, docScope),
+    });
     engine.connect();
     const revision = backend.revision();
     const events: string[] = [];
@@ -72,7 +75,10 @@ describe("scopeAdapter", () => {
   it("writes a change back to an earlier value of the slice", () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
-    createSyncEngine(backend, scopeAdapter(store.adapter, docScope)).connect();
+    createSyncEngine({
+      backend,
+      adapter: scopeAdapter(store.adapter, docScope),
+    }).connect();
 
     store.update((state) => ({ ...state, doc: { title: "second" } }));
     store.update((state) => ({ ...state, doc: { title: "doc" } }));
@@ -92,7 +98,10 @@ describe("scopeAdapter", () => {
       getState: () => snapshot(store.getState()),
     };
     const backend = createMemoryBackend();
-    createSyncEngine(backend, scopeAdapter(copying, docScope)).connect();
+    createSyncEngine({
+      backend,
+      adapter: scopeAdapter(copying, docScope),
+    }).connect();
     const revision = backend.revision();
 
     store.update((state) => ({ ...state, ui: { open: true } }));
@@ -116,10 +125,10 @@ describe("scopeAdapter", () => {
     it("writes nothing for store changes outside the slice", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, titleScope),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, titleScope),
+      }).connect();
       const revision = backend.revision();
 
       store.update((state) => ({ ...state, ui: { open: true } }));
@@ -134,7 +143,10 @@ describe("scopeAdapter", () => {
         setState: () => {},
       };
       const backend = createMemoryBackend({ title: "room" });
-      createSyncEngine(backend, scopeAdapter(ignoring, titleScope)).connect();
+      createSyncEngine({
+        backend,
+        adapter: scopeAdapter(ignoring, titleScope),
+      }).connect();
 
       expect(backend.read()).toEqual({ title: "room" });
 
@@ -159,11 +171,11 @@ describe("scopeAdapter", () => {
       const store = createTestStore<Nested>({
         outer: { inner: { title: "inner" } },
       });
-      createSyncEngine(
-        createMemoryBackend(),
-        scopeAdapter(store.adapter, innerScope),
-        onError && { onError },
-      ).connect();
+      createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: scopeAdapter(store.adapter, innerScope),
+        onError,
+      }).connect();
       return store;
     };
 
@@ -205,10 +217,10 @@ describe("scopeAdapter", () => {
     it("makes connect throw and leaves the room alone", () => {
       const store = createTestStore<Optional>({ count: 0 });
       const backend = createMemoryBackend({ title: "room" });
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, optionalScope),
-      );
+        adapter: scopeAdapter(store.adapter, optionalScope),
+      });
 
       expect(() => engine.connect()).toThrow(TypeError);
 
@@ -223,7 +235,9 @@ describe("scopeAdapter", () => {
       });
       const backend = createMemoryBackend();
       const onError = vi.fn();
-      createSyncEngine(backend, scopeAdapter(store.adapter, optionalScope), {
+      createSyncEngine({
+        backend,
+        adapter: scopeAdapter(store.adapter, optionalScope),
         onError,
       }).connect();
 
@@ -242,7 +256,9 @@ describe("scopeAdapter", () => {
         count: 0,
       });
       const backend = createMemoryBackend();
-      createSyncEngine(backend, scopeAdapter(store.adapter, optionalScope), {
+      createSyncEngine({
+        backend,
+        adapter: scopeAdapter(store.adapter, optionalScope),
         onError: () => {},
       }).connect();
       store.setState({ count: 0 });
@@ -256,10 +272,10 @@ describe("scopeAdapter", () => {
     it("connects with a get that falls back to an empty object", () => {
       const store = createTestStore<Optional>({ count: 0 });
       const backend = createMemoryBackend({ title: "room" });
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, emptyByDefault),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, emptyByDefault),
+      }).connect();
 
       expect(store.getState().doc).toEqual({ title: "room" });
     });
@@ -267,10 +283,10 @@ describe("scopeAdapter", () => {
     it("writes nothing for an absent slice's fallback until the store creates the slice", () => {
       const store = createTestStore<Optional>({ count: 0 });
       const backend = createMemoryBackend();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, emptyByDefault),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, emptyByDefault),
+      }).connect();
       const revision = backend.revision();
 
       store.update((state) => ({ ...state, count: 1 }));
@@ -288,10 +304,10 @@ describe("scopeAdapter", () => {
         count: 0,
       });
       const backend = createMemoryBackend();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, emptyByDefault),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, emptyByDefault),
+      }).connect();
 
       store.setState({ count: 0 });
 
@@ -301,10 +317,10 @@ describe("scopeAdapter", () => {
     it("leaves an empty slice when a peer removes every key", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, docScope),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, docScope),
+      }).connect();
 
       backend.receive({});
 
@@ -323,14 +339,14 @@ describe("scopeAdapter", () => {
       const docBackend = createMemoryBackend();
       const notesBackend = createMemoryBackend();
       const notesEvents: string[] = [];
-      createSyncEngine(
-        docBackend,
-        scopeAdapter(store.adapter, docScope),
-      ).connect();
-      const notesEngine = createSyncEngine(
-        notesBackend,
-        scopeAdapter(store.adapter, notesScope),
-      );
+      createSyncEngine({
+        backend: docBackend,
+        adapter: scopeAdapter(store.adapter, docScope),
+      }).connect();
+      const notesEngine = createSyncEngine({
+        backend: notesBackend,
+        adapter: scopeAdapter(store.adapter, notesScope),
+      });
       notesEngine.subscribe((event) => notesEvents.push(event));
       notesEngine.connect();
       notesEvents.length = 0;
@@ -379,10 +395,10 @@ describe("scopeAdapter", () => {
     it("writes what the store made of it once, and nothing for later changes elsewhere", () => {
       const store = createTestStore(root(), trimming);
       const backend = createMemoryBackend();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, docScope),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, docScope),
+      }).connect();
 
       backend.receive({ title: "  spaced  " });
 
@@ -412,7 +428,10 @@ describe("scopeAdapter", () => {
     it("takes a new root keeping the slice's object as ignored, so room and store disagree until the next local write", () => {
       const { store, adapter } = rejecting((previous) => previous);
       const backend = createMemoryBackend();
-      createSyncEngine(backend, scopeAdapter(adapter, docScope)).connect();
+      createSyncEngine({
+        backend,
+        adapter: scopeAdapter(adapter, docScope),
+      }).connect();
 
       backend.receive({ title: "bad" });
 
@@ -427,7 +446,10 @@ describe("scopeAdapter", () => {
     it("writes back a rejection that makes a new object for the slice", () => {
       const { store, adapter } = rejecting((previous) => ({ ...previous }));
       const backend = createMemoryBackend();
-      createSyncEngine(backend, scopeAdapter(adapter, docScope)).connect();
+      createSyncEngine({
+        backend,
+        adapter: scopeAdapter(adapter, docScope),
+      }).connect();
 
       backend.receive({ title: "bad" });
 
@@ -438,7 +460,7 @@ describe("scopeAdapter", () => {
     it("differs from an unscoped adapter, which writes the same rejection back", () => {
       const { store, adapter } = rejecting((previous) => previous);
       const backend = createMemoryBackend();
-      createSyncEngine(backend, adapter).connect();
+      createSyncEngine({ backend, adapter }).connect();
 
       backend.receive({ ...store.getState(), doc: { title: "bad" } });
 
@@ -450,10 +472,10 @@ describe("scopeAdapter", () => {
     it("keeps them in the slice without keys", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend({ title: "room", extra: 1 });
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, docScope),
-      ).connect();
+        adapter: scopeAdapter(store.adapter, docScope),
+      }).connect();
 
       store.update((state) => ({
         ...state,
@@ -466,7 +488,9 @@ describe("scopeAdapter", () => {
     it("leaves them in the room under keys", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend({ title: "room", extra: 1 });
-      createSyncEngine(backend, scopeAdapter(store.adapter, docScope), {
+      createSyncEngine({
+        backend,
+        adapter: scopeAdapter(store.adapter, docScope),
         keys: ["title"],
       }).connect();
 
@@ -480,13 +504,13 @@ describe("scopeAdapter", () => {
     it("leaves them in the room when set drops them", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend({ title: "room", extra: 1 });
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        scopeAdapter(store.adapter, {
+        adapter: scopeAdapter(store.adapter, {
           get: docScope.get,
           set: (state, { title }) => ({ ...state, doc: { title } }),
         }),
-      ).connect();
+      }).connect();
       expect(backend.read()).toEqual({ title: "room", extra: 1 });
 
       store.update((state) => ({ ...state, doc: { title: "local" } }));
@@ -498,11 +522,11 @@ describe("scopeAdapter", () => {
   it("applies the engine's filter to the slice's keys", () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      scopeAdapter(store.adapter, docScope),
-      { filter: (key) => key !== "title" },
-    );
+      adapter: scopeAdapter(store.adapter, docScope),
+      filter: (key) => key !== "title",
+    });
 
     expect(engine.getSyncedState()).toEqual({});
 
@@ -514,10 +538,10 @@ describe("scopeAdapter", () => {
   it("stops listening when the engine disconnects", () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      scopeAdapter(store.adapter, docScope),
-    );
+      adapter: scopeAdapter(store.adapter, docScope),
+    });
     engine.connect();
     engine.disconnect();
     const revision = backend.revision();
@@ -530,10 +554,10 @@ describe("scopeAdapter", () => {
   it("batches the writes of an adapter that asks for it", async () => {
     const store = createTestStore(root());
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter({ ...store.adapter, batchWrites: true }, docScope),
-    ).connect();
+      adapter: scopeAdapter({ ...store.adapter, batchWrites: true }, docScope),
+    }).connect();
     const write = vi.spyOn(backend, "write");
 
     store.update((state) => ({ ...state, doc: { title: "a" } }));

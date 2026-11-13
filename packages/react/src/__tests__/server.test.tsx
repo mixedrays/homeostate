@@ -7,12 +7,15 @@ import { useSyncStatus } from "../index";
 describe("useSyncStatus on the server", () => {
   it("renders disconnected, whatever the engine holds", () => {
     let state = { count: 0 };
-    const engine = createSyncEngine(createMemoryBackend(), {
-      getState: () => state,
-      setState: (next) => {
-        state = next;
+    const engine = createSyncEngine({
+      backend: createMemoryBackend(),
+      adapter: {
+        getState: () => state,
+        setState: (next) => {
+          state = next;
+        },
+        subscribe: () => () => {},
       },
-      subscribe: () => () => {},
     });
     engine.connect();
     const Badge = () => {

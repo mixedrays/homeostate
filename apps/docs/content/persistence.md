@@ -56,7 +56,9 @@ const persistence = createPersistence(
 
 new WebsocketProvider("wss://sync.example.com", "todos", doc);
 
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
   ready: persistence.whenLoaded,
 });
 engine.connect();
@@ -91,7 +93,9 @@ room. To wait for both, combine them, with the `synced` helper from
 [Waiting for the room](../../../packages/core/docs/sync-engine.md#waiting-for-the-room):
 
 ```ts
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
   ready: () => Promise.all([persistence.whenLoaded, synced(provider)]),
 });
 ```
@@ -183,7 +187,10 @@ const stored = new IndexeddbPersistence("todos", doc);
 new WebsocketProvider("wss://sync.example.com", "todos", doc);
 
 await stored.whenSynced;
-createSyncEngine(createYjsBackend(doc, "shared"), storeAdapter).connect();
+createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter: storeAdapter,
+}).connect();
 ```
 
 It stores the document much as `createPersistence` does: one row per update, merged into one
@@ -209,10 +216,10 @@ const repo = new Repo({
   network: [new BrowserWebSocketClientAdapter("wss://sync.example.com")],
 });
 const docHandle = await repo.find(url);
-createSyncEngine(
-  createAutomergeBackend(docHandle, "shared"),
-  storeAdapter,
-).connect();
+createSyncEngine({
+  backend: createAutomergeBackend(docHandle, "shared"),
+  adapter: storeAdapter,
+}).connect();
 ```
 
 See [With automerge-repo](../../../packages/crdt-automerge/docs/introduction.md#with-automerge-repo)

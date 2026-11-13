@@ -38,7 +38,10 @@ export const describePersistableDoc = <D>(
 
   const connect = (doc: D, initial: TodoState = threeTodos()) => {
     const store = createTestStore(initial);
-    const engine = createSyncEngine(backend(doc), store.adapter);
+    const engine = createSyncEngine({
+      backend: backend(doc),
+      adapter: store.adapter,
+    });
     engine.connect();
     return store;
   };
@@ -291,7 +294,10 @@ export const describePersistableDoc = <D>(
             deriving.setState({ ...state, count: state.todos.length });
         });
         const engines = docs.map((doc, i) =>
-          createSyncEngine(backend(doc), stores[i].adapter),
+          createSyncEngine({
+            backend: backend(doc),
+            adapter: stores[i].adapter,
+          }),
         );
         relay(0);
         engines[0].connect();

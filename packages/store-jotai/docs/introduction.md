@@ -34,10 +34,10 @@ import { createJotaiAdapter } from "@homeostate/store-jotai";
 const counterAtom = atom({ count: 0 });
 const store = createStore();
 
-const engine = createSyncEngine(
-  createYjsBackend(new Y.Doc(), "shared"),
-  createJotaiAdapter(counterAtom, store),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+  adapter: createJotaiAdapter(counterAtom, store),
+});
 engine.connect();
 ```
 
@@ -171,7 +171,7 @@ writes nothing until `ready` resolves, and a function is called on every mount, 
 starts runs from then. A rejected `ready` disconnects the engine and goes to `onError`, and the next
 mount tries again. `atomWithSync` exposes no engine, so `getStatus()` and
 [`useSyncStatus`](../../react/docs/introduction.md) are out of reach here; use
-`createSyncEngine(backend, createJotaiAdapter(atom, store))` to show that status.
+`createSyncEngine({ backend, adapter: createJotaiAdapter(atom, store) })` to show that status.
 
 Given a record of atoms, a key the room holds that the record does not list stays in the room, as
 with the record form of `createJotaiAdapter`.

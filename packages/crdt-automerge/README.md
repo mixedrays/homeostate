@@ -34,10 +34,10 @@ import {
 } from "@homeostate/crdt-automerge";
 
 const handle = createAutomergeHandle(A.init());
-const engine = createSyncEngine(
-  createAutomergeBackend(handle, "shared"),
+const engine = createSyncEngine({
+  backend: createAutomergeBackend(handle, "shared"),
   adapter,
-);
+});
 engine.connect();
 
 // Replication is yours to wire:

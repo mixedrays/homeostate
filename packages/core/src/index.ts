@@ -29,6 +29,7 @@ export type {
   StoreAdapter,
   SyncEngine,
   SyncEngineConfig,
+  SyncEngineOptions,
   SyncErrorSource,
   SyncEvent,
   SyncFailure,

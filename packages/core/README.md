@@ -21,7 +21,9 @@ npm install @homeostate/core @homeostate/crdt-yjs yjs
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
   omit: ["draft"],
   seed: true,
 });

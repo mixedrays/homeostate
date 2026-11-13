@@ -1,8 +1,7 @@
 import type {
-  CrdtBackend,
-  StoreAdapter,
   SyncEngine,
   SyncEngineConfig,
+  SyncEngineOptions,
   SyncErrorSource,
   SyncEvent,
   SyncFailure,
@@ -245,7 +244,7 @@ const syncPredicate = ({
  * This is the core abstraction that makes the sync logic state-manager and
  * CRDT-library agnostic.
  *
- * `config` is typed by the adapter's state, so `keys` and `omit` take only its key names:
+ * The options are typed by the adapter's state, so `keys` and `omit` take only its key names:
  * `{ omit: ['draft'] }` keeps one key local, `{ keys: ['todos'] }` syncs one alone. A key is
  * synced when `filter`, by default `defaultSyncFilter`, keeps it too. The store's value decides
  * what is written, and a backend value is read only when `filter` keeps it and the store's value
@@ -285,18 +284,16 @@ const syncPredicate = ({
  * ```typescript
  * const backend = createYjsBackend(new Y.Doc(), 'shared');
  * const adapter = createZustandAdapter(store);
- * const engine = createSyncEngine(backend, adapter, { omit: ['draft'] });
+ * const engine = createSyncEngine({ backend, adapter, omit: ['draft'] });
  * engine.connect();
  * ```
  */
 export function createSyncEngine<S extends object>(
-  backend: CrdtBackend,
-  adapter: StoreAdapter<S>,
-  config: NoInfer<SyncEngineConfig<S>> = {},
+  options: SyncEngineOptions<S>,
 ): SyncEngine {
-  const { seed = true, schedule, onError, ready } = config;
+  const { backend, adapter, seed = true, schedule, onError, ready } = options;
   // Untyped: the engine also judges keys the backend holds that `S` does not declare.
-  const filter = syncPredicate(config as SyncEngineConfig);
+  const filter = syncPredicate(options as SyncEngineConfig);
 
   let connected = false;
   /** Identifies the wait for `ready` in progress; a wait that is no longer it does nothing. */

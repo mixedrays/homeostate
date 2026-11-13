@@ -201,7 +201,7 @@ describe("a removed map", () => {
       : nestedMap(doc);
     const backend = createYjsBackend(synced, options);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     replication.exchange(doc, peer);
 
     const replace = (): void => {
@@ -333,7 +333,7 @@ describe("map and origin", () => {
     const store = createTestStore(threeTodos());
 
     const backend = createYjsBackend(todos);
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
 
     expect(backend.map).toBe(todos);
     expect(app.toJSON()).toEqual({ title: "Mine", todos: threeTodos() });
@@ -343,7 +343,9 @@ describe("map and origin", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter, {
+    createSyncEngine({
+      backend,
+      adapter: store.adapter,
       omit: ["searchTerm"],
     }).connect();
     const revision = backend.revision();
@@ -398,7 +400,7 @@ describe("undo", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     const undo = new Y.UndoManager(backend.map, {
       trackedOrigins: new Set([backend.origin]),
     });
@@ -426,7 +428,7 @@ describe("undo", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     const peerDoc = new Y.Doc();
     replication.exchange(doc, peerDoc);
     const undo = new Y.UndoManager(backend.map, {
@@ -478,7 +480,7 @@ describe("an update that waits for an earlier one", () => {
     Y.applyUpdate(readerDoc, start);
     const backend = createYjsBackend(readerDoc, NAME, options);
     const store = createTestStore<State>({});
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     return {
       writerDoc,
       readerDoc,

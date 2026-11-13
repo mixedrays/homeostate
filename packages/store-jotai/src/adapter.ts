@@ -63,7 +63,8 @@ class JotaiAdapter<S extends object> implements StoreAdapter<S> {
  * const counterAtom = atom({ count: 0 });
  * const store = createStore();
  * const adapter = createJotaiAdapter(counterAtom, store);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * ```
  */
@@ -102,7 +103,7 @@ export function createJotaiAdapter<S extends object>(
  * const store = createStore();
  * // StoreAdapter<{ todos: Todo[]; searchTerm: string }>
  * const adapter = createJotaiAdapter({ todos: todosAtom, searchTerm: searchTermAtom }, store);
- * createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter).connect();
+ * createSyncEngine({ backend: createYjsBackend(new Y.Doc(), 'shared'), adapter }).connect();
  * ```
  */
 export function createJotaiAdapter<R extends SyncedAtoms<R>>(

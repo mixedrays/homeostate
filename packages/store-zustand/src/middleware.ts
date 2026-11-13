@@ -79,7 +79,11 @@ const homeostateImpl = <T extends object>(
   const { backend, connect = "auto", ...config } = options;
   return (set, get, api) => {
     const initialState = creator(set, get, api);
-    const engine = createSyncEngine(backend, createZustandAdapter(api), config);
+    const engine = createSyncEngine({
+      ...config,
+      backend,
+      adapter: createZustandAdapter(api),
+    });
     /** Cancels a connect waiting for hydration; a no-op once it ran or was cancelled. */
     let stopWaiting: (() => void) | undefined;
     /** Whether the waiting connect resumes a store that a rehydrate disconnected. */

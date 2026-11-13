@@ -99,11 +99,11 @@ describe("createLoroBackend", () => {
     createLoroPersistable(doc).apply(textDeletePanicSnapshot());
     const errors: unknown[] = [];
     const store = createTestStore<Record<string, unknown>>({});
-    createSyncEngine(
-      createLoroBackend(doc, NAME, { text: () => true }),
-      store.adapter,
-      { onError: (error, source) => errors.push([source, error]) },
-    ).connect();
+    createSyncEngine({
+      backend: createLoroBackend(doc, NAME, { text: () => true }),
+      adapter: store.adapter,
+      onError: (error, source) => errors.push([source, error]),
+    }).connect();
     expect(store.getState().chaos).toBe("🙂y");
 
     store.update((state) => ({ ...state, chaos: "" }));
@@ -157,7 +157,9 @@ describe("createLoroBackend", () => {
         backendB.write({ rows: base });
         exchange(b, a);
         const store = createTestStore<{ rows: Row[] }>({ rows: [] });
-        createSyncEngine(createLoroBackend(a, NAME), store.adapter, {
+        createSyncEngine({
+          backend: createLoroBackend(a, NAME),
+          adapter: store.adapter,
           schedule: queueMicrotask,
         }).connect();
 

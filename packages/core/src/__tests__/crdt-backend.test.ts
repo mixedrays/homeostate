@@ -147,7 +147,7 @@ describe("createCrdtBackend", () => {
     const backend = createCrdtBackend(partsOver(doc));
     const store = createTestStore(threeTodos());
 
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
 
     expect(doc.reads).toBe(1);
     expect(doc.root).toEqual({ ...threeTodos(), todos: [todo("remote")] });

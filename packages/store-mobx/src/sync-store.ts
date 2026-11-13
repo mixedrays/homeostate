@@ -70,11 +70,11 @@ export function syncMobxStore<
   O extends DataKey<S> = never,
 >(store: S, options: SyncMobxStoreOptions<S, K, O>): SyncEngine {
   const { backend, connect = "auto", keys, omit, ...config } = options;
-  const engine = createSyncEngine(
-    backend,
-    createMobxAdapter(store, { keys, omit } as MobxAdapterOptions<S, K, O>),
-    config,
-  );
+  const adapter = createMobxAdapter(store, {
+    keys,
+    omit,
+  } as MobxAdapterOptions<S, K, O>);
+  const engine = createSyncEngine({ ...config, backend, adapter });
   if (connect === "auto") engine.connect();
   return engine;
 }

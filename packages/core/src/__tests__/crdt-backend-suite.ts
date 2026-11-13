@@ -315,7 +315,10 @@ export const describeCrdtBackend = <D>(
   ) => {
     const store = createTestStore(initial);
     const peerBackend = backend(doc, options);
-    const engine = createSyncEngine(peerBackend, store.adapter);
+    const engine = createSyncEngine({
+      backend: peerBackend,
+      adapter: store.adapter,
+    });
     engine.connect();
     return { doc, store, backend: peerBackend, engine };
   };
@@ -391,11 +394,13 @@ export const describeCrdtBackend = <D>(
       const doc = createDoc(1);
       const own = backend(doc, { text: todoTitles });
       const store = createTestStore(initialEdited(), resetCount);
-      const engine = createSyncEngine(
-        passPrevious ? own : { ...own, write: (next) => own.write(next) },
-        store.adapter,
-        { filter: withoutDraft },
-      );
+      const engine = createSyncEngine({
+        backend: passPrevious
+          ? own
+          : { ...own, write: (next) => own.write(next) },
+        adapter: store.adapter,
+        filter: withoutDraft,
+      });
       engine.connect();
       const peerDoc = createDoc(2);
       const peer = backend(peerDoc, { text: todoTitles });
@@ -918,7 +923,11 @@ export const describeCrdtBackend = <D>(
           store.update((s) => toggleTodo(s, "3"));
         });
         const onError = vi.fn();
-        createSyncEngine(backend(docA), store.adapter, { onError }).connect();
+        createSyncEngine({
+          backend: backend(docA),
+          adapter: store.adapter,
+          onError,
+        }).connect();
         exchange(docA, docB);
         const b = peer(docB, threeTodos());
 
@@ -1003,7 +1012,11 @@ export const describeCrdtBackend = <D>(
       ) => {
         const store = createTestStore(initial);
         const peerBackend = backend(doc);
-        const engine = createSyncEngine(peerBackend, store.adapter, { ready });
+        const engine = createSyncEngine({
+          backend: peerBackend,
+          adapter: store.adapter,
+          ready,
+        });
         engine.connect();
         return { doc, store, backend: peerBackend, engine };
       };
@@ -1094,7 +1107,9 @@ export const describeCrdtBackend = <D>(
         const ready = new Promise<void>((r) => {
           resolve = r;
         });
-        const engine = createSyncEngine(backend(joinerDoc), store.adapter, {
+        const engine = createSyncEngine({
+          backend: backend(joinerDoc),
+          adapter: store.adapter,
           ready,
           schedule: (flush) => flushes.push(flush),
         });

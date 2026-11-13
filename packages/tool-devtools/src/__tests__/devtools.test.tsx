@@ -49,7 +49,7 @@ beforeEach(() => {
     filter: "all",
   });
   backend = createMemoryBackend();
-  engine = createSyncEngine(backend, store.adapter);
+  engine = createSyncEngine({ backend, adapter: store.adapter });
   engine.connect();
   container = document.createElement("div");
   document.body.append(container);

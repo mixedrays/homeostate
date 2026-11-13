@@ -68,7 +68,8 @@ class MobxStateTreeAdapter<S extends object> implements StoreAdapter<S> {
  *
  * const counter = Counter.create();
  * const adapter = createMobxStateTreeAdapter(counter);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * counter.increment();
  * ```

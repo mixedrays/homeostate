@@ -28,7 +28,7 @@ function setup(initialBackend?: object, seed = true) {
   });
   const backend = createMemoryBackend(initialBackend);
   const write = vi.spyOn(backend, "write");
-  const engine = createSyncEngine(backend, adapter, { seed });
+  const engine = createSyncEngine({ backend, adapter, seed });
   engine.connect();
   cleanups.push(() => engine.disconnect());
   return { store, adapter, backend, engine, write, injector };

@@ -118,7 +118,7 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * ```typescript
  * const doc = new Y.Doc();
  * const backend = createYjsBackend(doc, 'shared');
- * const engine = createSyncEngine(backend, adapter);
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * const undo = new Y.UndoManager(backend.map, { trackedOrigins: new Set([backend.origin]) });
  * ```

@@ -34,10 +34,10 @@ import {
 } from "@homeostate/crdt-automerge";
 
 const handle = createAutomergeHandle(A.init());
-const engine = createSyncEngine(
-  createAutomergeBackend(handle, "shared"),
+const engine = createSyncEngine({
+  backend: createAutomergeBackend(handle, "shared"),
   adapter,
-);
+});
 engine.connect();
 
 // Replication is yours to wire, for example:
@@ -91,10 +91,10 @@ const repo = new Repo({
 });
 // `url` is the document's AutomergeUrl, such as `repo.create().url` where it was created.
 const docHandle = await repo.find(url);
-const engine = createSyncEngine(
-  createAutomergeBackend(docHandle, "shared"),
-  storeAdapter,
-);
+const engine = createSyncEngine({
+  backend: createAutomergeBackend(docHandle, "shared"),
+  adapter: storeAdapter,
+});
 engine.connect();
 ```
 

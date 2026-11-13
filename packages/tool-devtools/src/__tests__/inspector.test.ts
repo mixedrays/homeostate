@@ -35,7 +35,9 @@ afterEach(() => {
 const setup = (options: { filter?: (key: string) => boolean } = {}) => {
   const store = createTestStore<State>(initial());
   const backend = createMemoryBackend();
-  const engine = createSyncEngine(backend, store.adapter, {
+  const engine = createSyncEngine({
+    backend,
+    adapter: store.adapter,
     filter: options.filter,
   });
   engine.connect();
@@ -69,7 +71,9 @@ describe("createInspector", () => {
       name: "counter",
       adapter: store.adapter,
       // Disconnected, so the store keeps its values; it still says which keys are local.
-      engine: createSyncEngine(backend, store.adapter, {
+      engine: createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key) => key !== "draft",
       }),
       backend: {
@@ -135,7 +139,7 @@ describe("createInspector", () => {
     const ready = new Promise<void>((r) => {
       resolve = r;
     });
-    const engine = createSyncEngine(backend, store.adapter, { ready });
+    const engine = createSyncEngine({ backend, adapter: store.adapter, ready });
     inspector = createInspector({
       name: "todos",
       adapter: store.adapter,
@@ -341,7 +345,9 @@ describe("createInspector", () => {
     inspector = createInspector({
       name: "dates",
       adapter: store.adapter,
-      engine: createSyncEngine(createMemoryBackend(), store.adapter, {
+      engine: createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         filter: (key) => key !== "cache",
       }),
     });
@@ -406,7 +412,9 @@ describe("sync events", () => {
     const store = createTestStore<State>(initial());
     const backend = createMemoryBackend();
     const scheduler = manualScheduler();
-    const engine = createSyncEngine(backend, store.adapter, {
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
       schedule: scheduler.schedule,
     });
     engine.connect();
@@ -440,7 +448,9 @@ describe("sync events", () => {
     async (_, engineFirst) => {
       const store = createTestStore<State>(initial());
       const backend = createMemoryBackend();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: (flush) => queueMicrotask(flush),
       });
       if (engineFirst) engine.connect();
@@ -472,7 +482,7 @@ describe("sync events", () => {
         store.set({ ...next, filter: `${next.filter}!` }),
     };
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, adapter, { onError: () => {} });
+    const engine = createSyncEngine({ backend, adapter, onError: () => {} });
     engine.connect();
     const events: string[] = [];
     engine.subscribe((event) => events.push(event));

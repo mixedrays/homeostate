@@ -35,10 +35,10 @@ function openTab(clientID: number) {
   const { ydoc, wsProvider } = connectSharedDoc();
   ydoc.clientID = clientID;
   const store = createStore<TodoState>(() => createInitialTodoState());
-  const engine = createSyncEngine(
-    createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle }),
-    createZustandAdapter(store),
-  );
+  const engine = createSyncEngine({
+    backend: createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle }),
+    adapter: createZustandAdapter(store),
+  });
   engine.connect();
   cleanups.push(() => {
     engine.disconnect();

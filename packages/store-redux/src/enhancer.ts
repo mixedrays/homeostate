@@ -61,11 +61,11 @@ export function homeostate<S extends object = JsonObject>(
   const { backend, connect = "auto", ...config } = options;
   return (createStore) => (reducer, preloadedState) => {
     const store = createStore(withHomeostate(reducer), preloadedState);
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
+      ...config,
       backend,
-      createReduxAdapter(store as unknown as ReduxLikeStore<S>),
-      config,
-    );
+      adapter: createReduxAdapter(store as unknown as ReduxLikeStore<S>),
+    });
     if (connect === "auto") engine.connect();
     return {
       ...store,

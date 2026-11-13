@@ -33,10 +33,10 @@ import { createJotaiAdapter } from "@homeostate/store-jotai";
 const counterAtom = atom({ count: 0 });
 const store = createStore();
 
-const engine = createSyncEngine(
-  createYjsBackend(new Y.Doc(), "shared"),
-  createJotaiAdapter(counterAtom, store),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+  adapter: createJotaiAdapter(counterAtom, store),
+});
 engine.connect();
 ```
 

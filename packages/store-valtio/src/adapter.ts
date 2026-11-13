@@ -53,7 +53,8 @@ class ValtioAdapter<S extends object> implements StoreAdapter<S> {
  *
  * const state = proxy({ count: 0 });
  * const adapter = createValtioAdapter(state);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * state.count++;
  * ```

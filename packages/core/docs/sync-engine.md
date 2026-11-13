@@ -13,21 +13,24 @@ Import these APIs and types from `@homeostate/core`. For an app you can run, sta
 
 ```ts
 declare function createSyncEngine<S extends object>(
-  backend: CrdtBackend,
-  adapter: StoreAdapter<S>,
-  config?: SyncEngineConfig<S>,
+  options: SyncEngineOptions<S>,
 ): SyncEngine;
+
+type SyncEngineOptions<S extends object = JsonObject> = SyncEngineConfig<S> & {
+  backend: CrdtBackend;
+  adapter: StoreAdapter<S>;
+};
 ```
 
 Creates a disconnected engine. Call `connect()` to reconcile the current state and start
 watching both sides. Creation alone does not read, write or subscribe to either side, and does
 not call a `ready` function.
 
-| Parameter | Required | Description                                               |
-| --------- | -------- | --------------------------------------------------------- |
-| `backend` | Yes      | The replicated state, exposed through `CrdtBackend`.      |
-| `adapter` | Yes      | The application store, exposed through `StoreAdapter<S>`. |
-| `config`  | No       | Sync options, typed by `S`. Defaults to `{}`.             |
+| Option    | Required | Description                                                        |
+| --------- | -------- | ------------------------------------------------------------------ |
+| `backend` | Yes      | The replicated state, exposed through `CrdtBackend`.               |
+| `adapter` | Yes      | The application store, exposed through `StoreAdapter<S>`.          |
+| Others    | No       | The [`SyncEngineConfig`](#syncengineconfig) options, typed by `S`. |
 
 Returns a `SyncEngine`. The engine is synchronous, except for the wait for `ready` and the writes
 of an adapter that sets `batchWrites` (see [Batched writes](#batched-writes)), and does not
@@ -50,7 +53,9 @@ import { createZustandAdapter } from "@homeostate/store-zustand";
 
 const store = createStore(() => ({ count: 0, draft: "Only on this device" }));
 const backend = createMemoryBackend({ count: 7 });
-const engine = createSyncEngine(backend, createZustandAdapter(store), {
+const engine = createSyncEngine({
+  backend,
+  adapter: createZustandAdapter(store),
   omit: ["draft"],
   seed: true,
 });
@@ -102,7 +107,7 @@ shared with other code. Without `S`, as `SyncEngineConfig`, a key is any string.
 `omit` is the usual way to keep a key such as a draft or a search term on one device:
 
 ```ts
-createSyncEngine(backend, adapter, { omit: ["draft", "searchTerm"] });
+createSyncEngine({ backend, adapter, omit: ["draft", "searchTerm"] });
 ```
 
 `keys` lists the synced keys instead. A key the backend holds that it does not list is ignored,
@@ -169,7 +174,9 @@ With `schedule`, the first notification hands it a `flush` and later ones wait f
 whole burst is applied with one read and one `setState`:
 
 ```ts
-createSyncEngine(backend, adapter, {
+createSyncEngine({
+  backend,
+  adapter,
   schedule: (flush) => queueMicrotask(flush),
 });
 ```
@@ -270,7 +277,9 @@ whole synced state.
 `ready` holds back every write until the document holds what this peer should adopt:
 
 ```ts
-const engine = createSyncEngine(backend, adapter, {
+const engine = createSyncEngine({
+  backend,
+  adapter,
   ready: () => Promise.all([persistence.whenLoaded, synced(provider)]),
 });
 engine.connect();
@@ -309,7 +318,9 @@ The engine has no timer. To start offline, race `ready` against a timeout:
 const timeout = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-createSyncEngine(backend, adapter, {
+createSyncEngine({
+  backend,
+  adapter,
   ready: () => Promise.race([synced(provider), timeout(3000)]),
 });
 ```
@@ -389,7 +400,9 @@ With `onError`, the engine catches those errors and reports them with their sour
 side's notifier sees them:
 
 ```ts
-createSyncEngine(backend, adapter, {
+createSyncEngine({
+  backend,
+  adapter,
   onError: (error, source) => {
     // source: "store" for getState and setState, "backend" for read and write
     report(error);
@@ -435,7 +448,8 @@ type SetupOptions<S extends object = JsonObject> = SyncEngineConfig<S> & {
 The options shared by every setup helper: the one call in a store adapter package that creates
 the adapter and the engine for one store, such as the
 [Zustand `homeostate` middleware](../../store-zustand/docs/introduction.md). A helper takes the
-store, or what builds it, then these options, flat, with its own added.
+store, or what builds it, then these options, flat, with its own added. They are the engine's
+[options](#createsyncengine) with `connect` in place of `adapter`, which the helper creates.
 
 | Option    | Default  | Behavior                                                                                                                     |
 | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -684,27 +698,27 @@ one engine and one backend each:
 ```ts
 const adapter = createZustandAdapter(store);
 
-createSyncEngine(
-  createYjsBackend(doc, "editor"),
-  scopeAdapter(adapter, {
+createSyncEngine({
+  backend: createYjsBackend(doc, "editor"),
+  adapter: scopeAdapter(adapter, {
     get: (state) => state.shared.editor,
     set: (state, editor) => ({
       ...state,
       shared: { ...state.shared, editor },
     }),
   }),
-).connect();
+}).connect();
 
-createSyncEngine(
-  createYjsBackend(doc, "comments"),
-  scopeAdapter(adapter, {
+createSyncEngine({
+  backend: createYjsBackend(doc, "comments"),
+  adapter: scopeAdapter(adapter, {
     get: (state) => state.shared.comments,
     set: (state, comments) => ({
       ...state,
       shared: { ...state.shared, comments },
     }),
   }),
-).connect();
+}).connect();
 ```
 
 For a top-level key synced to one room, `keys` or `omit` is enough. A store change outside the

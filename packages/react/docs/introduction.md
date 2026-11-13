@@ -52,7 +52,7 @@ that came before the component mounted shows too, as the engine keeps it.
 | [Jotai `atomWithSync`](../../store-jotai/docs/introduction.md)              | Nothing: it exposes no engine |
 
 For Jotai, build the engine yourself and pass that:
-`createSyncEngine(backend, createJotaiAdapter(atom, store))`. A new engine prop is followed in the
+`createSyncEngine({ backend, adapter: createJotaiAdapter(atom, store) })`. A new engine prop is followed in the
 same render.
 
 ## What the status does not tell

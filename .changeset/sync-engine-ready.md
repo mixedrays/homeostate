@@ -7,7 +7,9 @@ backend until it resolves, so a peer joining a populated room adopts it instead 
 with it, whichever CRDT library and provider it uses:
 
 ```ts
-const engine = createSyncEngine(backend, adapter, {
+const engine = createSyncEngine({
+  backend,
+  adapter,
   ready: () => Promise.all([persistence.whenLoaded, synced(provider)]),
 });
 engine.connect();

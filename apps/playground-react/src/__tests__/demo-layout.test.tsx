@@ -41,7 +41,7 @@ async function renderDemo() {
     },
   };
   const backend = createMemoryBackend();
-  const engine = createSyncEngine(backend, adapter, { onError: () => {} });
+  const engine = createSyncEngine({ backend, adapter, onError: () => {} });
   engine.connect();
 
   const container = document.createElement("div");

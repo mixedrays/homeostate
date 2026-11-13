@@ -59,7 +59,10 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  *   get: (state) => state.doc,
  *   set: (state, doc) => ({ ...state, doc }),
  * });
- * createSyncEngine(createYjsBackend(new Y.Doc(), 'doc'), docAdapter).connect();
+ * createSyncEngine({
+ *   backend: createYjsBackend(new Y.Doc(), 'doc'),
+ *   adapter: docAdapter,
+ * }).connect();
  * ```
  */
 export function scopeAdapter<S extends object, T extends JsonObjectInput>(

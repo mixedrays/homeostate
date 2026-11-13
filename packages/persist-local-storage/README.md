@@ -32,7 +32,10 @@ const persistence = createPersistence(
 );
 
 await persistence.whenLoaded;
-createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
+createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
+}).connect();
 ```
 
 Connect the engine after `whenLoaded`, or pass it as the engine's `ready` option, so it adopts the

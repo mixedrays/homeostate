@@ -71,7 +71,7 @@ const adapter = createJotaiAdapter(
   store,
 );
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
-const syncEngine = createSyncEngine(backend, adapter);
+const syncEngine = createSyncEngine({ backend, adapter });
 
 syncEngine.connect();
 

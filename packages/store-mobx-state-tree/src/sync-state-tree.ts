@@ -79,9 +79,10 @@ export function syncStateTree<S extends object>(
   const { backend, connect = "auto", ...config } = options;
   let alive = isAlive(node);
   const adapter = createMobxStateTreeAdapter<S>(node);
-  const engine = createSyncEngine(
+  const engine = createSyncEngine({
+    ...config,
     backend,
-    {
+    adapter: {
       getState: () => adapter.getState(),
       // `disconnect()` runs a pending apply. On a dying node, it would run `beforeDestroy` hooks
       // again, and abort the destroy if the remote state does not fit the model.
@@ -90,8 +91,7 @@ export function syncStateTree<S extends object>(
       },
       subscribe: (onStoreChange) => adapter.subscribe(onStoreChange),
     },
-    config,
-  );
+  });
   addDisposer(node, () => {
     alive = false;
     engine.disconnect();

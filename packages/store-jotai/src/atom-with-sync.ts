@@ -165,11 +165,11 @@ export function atomWithSync(
     if (current?.getStatus().connected === true) {
       throw new Error(SECOND_STORE_MESSAGE);
     }
-    slot.engine ??= createSyncEngine(
+    slot.engine ??= createSyncEngine({
+      ...(config as SyncEngineConfig<object>),
       backend,
-      createJotaiAdapter(root, slot.store),
-      config as SyncEngineConfig<object>,
-    );
+      adapter: createJotaiAdapter(root, slot.store),
+    });
     const { engine } = slot;
     current = engine;
     engine.connect();

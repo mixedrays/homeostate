@@ -73,9 +73,15 @@ describe.each(backends)("Valtio peers on %s", (_, createDoc) => {
     };
     const a = peer(0);
     const b = peer(1);
-    createSyncEngine(a.backend, createValtioAdapter(a.state)).connect();
+    createSyncEngine({
+      backend: a.backend,
+      adapter: createValtioAdapter(a.state),
+    }).connect();
     b.doc.apply(a.doc.encode());
-    createSyncEngine(b.backend, createValtioAdapter(b.state)).connect();
+    createSyncEngine({
+      backend: b.backend,
+      adapter: createValtioAdapter(b.state),
+    }).connect();
     const deliver = (from: typeof a, to: typeof a) =>
       to.doc.apply(from.doc.encode());
     /** Delivers both ways, lets the writes run, and checks that the peers agree. */

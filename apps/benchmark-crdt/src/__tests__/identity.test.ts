@@ -57,7 +57,10 @@ const createPair = (): Pair => {
 
   const peer = (replica: typeof replicaA, state: TodoState): Peer => {
     const store = createStore(state);
-    const engine = createSyncEngine(replica.backend, store.adapter);
+    const engine = createSyncEngine({
+      backend: replica.backend,
+      adapter: store.adapter,
+    });
     engine.connect();
     return { store, engine };
   };

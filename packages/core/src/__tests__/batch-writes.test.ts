@@ -48,7 +48,11 @@ const setup = (
 ) => {
   const backend = createMemoryBackend(initial);
   const store = createPerSetStore(initial);
-  const engine = createSyncEngine(backend, store.adapter, config);
+  const engine = createSyncEngine({
+    backend,
+    adapter: store.adapter,
+    ...config,
+  });
   const events: SyncEvent[] = [];
   engine.subscribe((event) => events.push(event));
   engine.connect();
@@ -178,9 +182,12 @@ describe("an adapter with batchWrites", () => {
     it("writes nothing when the store ignores the apply", async () => {
       const backend = createMemoryBackend(threeTodos());
       const store = createPerSetStore();
-      createSyncEngine(backend, {
-        ...store.adapter,
-        setState: () => {},
+      createSyncEngine({
+        backend,
+        adapter: {
+          ...store.adapter,
+          setState: () => {},
+        },
       }).connect();
       const write = vi.spyOn(backend, "write");
 
@@ -366,7 +373,9 @@ describe("an adapter with batchWrites", () => {
     const ready = new Promise<void>((r) => (resolve = r));
     const backend = createMemoryBackend({ todos: [] });
     const store = createPerSetStore();
-    const engine = createSyncEngine(backend, store.adapter, {
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
       seed: false,
       ready,
     });
@@ -394,7 +403,7 @@ describe("an adapter without batchWrites", () => {
   it("writes each notification synchronously", () => {
     const backend = createMemoryBackend(threeTodos());
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     const write = vi.spyOn(backend, "write");
 
     store.update((s) => toggleTodo(s, "1"));

@@ -88,10 +88,10 @@ To sync a store you already have, create the engine yourself with `createZustand
 import { createSyncEngine } from "@homeostate/core";
 import { createZustandAdapter } from "@homeostate/store-zustand";
 
-const engine = createSyncEngine(
-  createYjsBackend(doc, "shared"),
-  createZustandAdapter(useCounter),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter: createZustandAdapter(useCounter),
+});
 engine.connect();
 ```
 

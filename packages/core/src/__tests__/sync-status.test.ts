@@ -42,7 +42,10 @@ describe("sync status", () => {
   describe("getStatus", () => {
     it("is disconnected until connect, ready after it, and disconnected again after disconnect", () => {
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
+      });
 
       expect(engine.getStatus()).toEqual({
         connected: false,
@@ -68,7 +71,9 @@ describe("sync status", () => {
     it("is connected and not ready during a wait for ready, then ready", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ready: ready.promise,
       });
 
@@ -91,7 +96,7 @@ describe("sync status", () => {
     it("returns the same object until a field changes", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       const before = engine.getStatus();
       expect(engine.getStatus()).toBe(before);
 
@@ -106,7 +111,10 @@ describe("sync status", () => {
 
     it("returns to the same object when the fields return, so a reconnect re-renders nothing", () => {
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
+      });
       engine.connect();
       const connected = engine.getStatus();
 
@@ -119,7 +127,9 @@ describe("sync status", () => {
     it("cannot be changed by whoever reads it, whatever it says", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ready: ready.promise,
       });
       expect(Object.isFrozen(engine.getStatus())).toBe(true);
@@ -138,7 +148,9 @@ describe("sync status", () => {
     it("come with every change of the status, which each listener already reads", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ready: () => ready.promise,
       });
       const seen = record(engine);
@@ -158,7 +170,7 @@ describe("sync status", () => {
     it("leave the status the same object for local and remote changes", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       engine.connect();
       const status = engine.getStatus();
       const seen = record(engine);
@@ -176,7 +188,10 @@ describe("sync status", () => {
 
     it("send nothing for a connect or disconnect that changes nothing", () => {
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
+      });
       const seen = record(engine);
 
       engine.disconnect();
@@ -213,7 +228,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       const seen: [SyncEvent, unknown][] = [];
       engine.subscribe((event) =>
@@ -245,7 +264,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       const setState = store.adapter.setState;
       const error = new Error("setState");
@@ -267,7 +290,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       const setState = store.adapter.setState;
       store.adapter.setState = () => {
@@ -286,7 +313,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       const write = backend.write;
       backend.write = () => {
@@ -305,7 +336,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       const before = engine.getStatus();
       const write = backend.write;
@@ -323,7 +358,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       backend.write = () => {
         throw new Error("write");
@@ -338,7 +377,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, config);
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        ...config,
+      });
       engine.connect();
       const write = backend.write;
       const error = new Error("write");
@@ -367,7 +410,9 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const order: string[] = [];
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...(withOnError ? { onError: () => order.push("onError") } : {}),
       });
       engine.connect();
@@ -391,7 +436,9 @@ describe("sync status", () => {
       const error = new Error("filter");
       let failing = false;
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...config,
         filter: () => {
           if (failing) throw error;
@@ -411,7 +458,9 @@ describe("sync status", () => {
       const store = createTestStore({ count: 0 });
       const error = new Error("schedule");
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...config,
         schedule: () => {
           throw error;
@@ -428,7 +477,9 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...config,
         schedule: () => {},
       });
@@ -458,11 +509,11 @@ describe("sync status", () => {
 
     it("sends error for what connect throws, and a later connect clears it", () => {
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(
-        createMemoryBackend(),
-        store.adapter,
-        config,
-      );
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
+        ...config,
+      });
       const getState = store.adapter.getState;
       const error = new Error("getState");
       store.adapter.getState = () => {
@@ -498,11 +549,11 @@ describe("sync status", () => {
       backend.subscribe = () => {
         throw error;
       };
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        createTestStore({ count: 0 }).adapter,
-        config,
-      );
+        adapter: createTestStore({ count: 0 }).adapter,
+        ...config,
+      });
 
       expect(() => engine.connect()).toThrow(error);
 
@@ -515,11 +566,11 @@ describe("sync status", () => {
       store.adapter.subscribe = () => {
         throw error;
       };
-      const engine = createSyncEngine(
-        createMemoryBackend(),
-        store.adapter,
-        config,
-      );
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
+        ...config,
+      });
 
       expect(() => engine.connect()).toThrow(error);
 
@@ -530,7 +581,9 @@ describe("sync status", () => {
       const store = createTestStore({ count: 0 });
       const error = new Error("ready");
       let failing = true;
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...config,
         ready: () => {
           if (failing) throw error;
@@ -566,7 +619,9 @@ describe("sync status", () => {
       };
       const error = new Error("filter");
       let filtering = false;
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...config,
         filter: () => {
           if (filtering) throw error;
@@ -608,7 +663,9 @@ describe("sync status", () => {
       const store = createTestStore({ count: 0 });
       const first = deferred();
       const waits = [first, deferred()];
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...config,
         ready: () => waits.shift()!.promise,
       });
@@ -636,7 +693,9 @@ describe("sync status", () => {
     it("shows that a ready rejected with no reason failed", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...config,
         ready: ready.promise,
       });
@@ -654,7 +713,9 @@ describe("sync status", () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
       const seen: unknown[] = [];
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...(withOnError ? { onError: () => seen.push("onError") } : {}),
         ready: ready.promise,
       });
@@ -678,7 +739,9 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...config,
         ready: ready.promise,
       });
@@ -706,7 +769,9 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...config,
         schedule: () => {},
         ready: ready.promise,
@@ -735,7 +800,9 @@ describe("sync status", () => {
     it("records nothing for a wait a failed connect abandoned", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...config,
         ready: ready.promise,
       });
@@ -758,7 +825,9 @@ describe("sync status", () => {
     it("records nothing for a rejection after disconnect", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         ...config,
         ready: ready.promise,
       });
@@ -778,7 +847,9 @@ describe("sync status", () => {
     const backend = createMemoryBackend();
     const store = createTestStore({ count: 0 });
     const ready = deferred();
-    const engine = createSyncEngine(backend, store.adapter, {
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
       onError: () => {},
       ready: ready.promise,
     });
@@ -836,11 +907,11 @@ describe("sync status", () => {
       const backend = createMemoryBackend();
       const { store, startNormalising, stopNormalising } = loopingStore();
       const reported: unknown[] = [];
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        store.adapter,
-        withOnError ? { onError: (error) => reported.push(error) } : {},
-      );
+        adapter: store.adapter,
+        ...(withOnError ? { onError: (error) => reported.push(error) } : {}),
+      });
       engine.connect();
       return {
         backend,
@@ -994,7 +1065,9 @@ describe("sync status", () => {
       config: SyncEngineConfig<{ count: number }> = {},
     ) => {
       const waits: ReturnType<typeof deferred>[] = [];
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         ...config,
         ready: () => {
           const wait = deferred();
@@ -1148,7 +1221,7 @@ describe("sync status", () => {
       it("stays consistent when a store subscriber connects during reconciliation", () => {
         const backend = createMemoryBackend({ count: 1 });
         const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(backend, store.adapter);
+        const engine = createSyncEngine({ backend, adapter: store.adapter });
         const violations = observe(engine, store);
         onFirstStoreChange(store, () => engine.connect());
 
@@ -1161,7 +1234,7 @@ describe("sync status", () => {
       it("does nothing when a store subscriber disconnects during reconciliation, as disconnect() is then a no-op", () => {
         const backend = createMemoryBackend({ count: 1 });
         const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(backend, store.adapter);
+        const engine = createSyncEngine({ backend, adapter: store.adapter });
         const violations = observe(engine, store);
         onFirstStoreChange(store, () => engine.disconnect());
 
@@ -1173,7 +1246,10 @@ describe("sync status", () => {
 
       it("ends disconnected when a connect event listener disconnects", () => {
         const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+        const engine = createSyncEngine({
+          backend: createMemoryBackend(),
+          adapter: store.adapter,
+        });
         const violations = observe(engine, store);
         engine.subscribe((event) => {
           if (event === "connect") engine.disconnect();
@@ -1264,7 +1340,10 @@ describe("sync status", () => {
         store.adapter.getState = () => {
           throw error;
         };
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+        const engine = createSyncEngine({
+          backend: createMemoryBackend(),
+          adapter: store.adapter,
+        });
         const violations = observe(engine, store);
         engine.subscribe((event) => {
           store.adapter.getState = getState;
@@ -1284,7 +1363,9 @@ describe("sync status", () => {
       it("returns to the same object when it repairs a failure at once", () => {
         const backend = createMemoryBackend();
         const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(backend, store.adapter, {
+        const engine = createSyncEngine({
+          backend,
+          adapter: store.adapter,
           onError: () => {},
         });
         engine.connect();
@@ -1311,7 +1392,9 @@ describe("sync status", () => {
     it("keeps a failure when a subscriber disconnects during the apply after it", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         onError: () => {},
       });
       engine.connect();
