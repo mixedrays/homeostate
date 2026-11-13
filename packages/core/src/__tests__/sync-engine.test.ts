@@ -2921,6 +2921,98 @@ describe("createSyncEngine", () => {
     });
   });
 
+  describe("store changes that change no synced key", () => {
+    it("writes nothing for a change to a local key, and still sends local", () => {
+      const backend = createMemoryBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine(backend, store.adapter, {
+        omit: ["searchTerm"],
+      });
+      engine.connect();
+      const write = vi.spyOn(backend, "write");
+      const events: SyncEvent[] = [];
+      engine.subscribe((event) => events.push(event));
+
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(write).not.toHaveBeenCalled();
+      expect(events).toEqual(["local"]);
+    });
+
+    it("writes nothing for a local key changed after a remote change", () => {
+      const backend = createMemoryBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter, {
+        omit: ["searchTerm"],
+      }).connect();
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      const write = vi.spyOn(backend, "write");
+
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it("writes a synced change made right after a remote change", () => {
+      const { backend } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine(backend, store.adapter).connect();
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      const write = vi.spyOn(backend, "write");
+
+      store.update((s) => toggleTodo(s, "2"));
+
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(backend.read()).toEqual(
+        toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+      );
+    });
+
+    it("writes the store's value of a key whose backend value the filter rejects", () => {
+      const notLocal = (_key: string, value: unknown) =>
+        !(typeof value === "string" && value.startsWith("local:"));
+      const backend = createMemoryBackend({ todos: ["a"], view: "list" });
+      const store = createTestStore({
+        todos: ["a"],
+        view: "list",
+        draft: "",
+      });
+      createSyncEngine(backend, store.adapter, {
+        filter: notLocal,
+        omit: ["draft"],
+      }).connect();
+      backend.receive({ todos: ["a"], view: "local:grid" });
+
+      store.update((s) => ({ ...s, draft: "x" }));
+
+      expect(backend.read()).toEqual({ todos: ["a"], view: "list" });
+    });
+
+    it("deletes a key the store took from the backend without a write, once the store removes it", () => {
+      type State = { todos: string[]; extra?: number };
+      const withoutExtra = (state: State): State => {
+        const rest = { ...state };
+        delete rest.extra;
+        return rest;
+      };
+      let canHoldExtra = false;
+      const backend = createMemoryBackend({ todos: ["a"], extra: 1 });
+      // A store that cannot hold `extra` until it can, as a class that declares it later.
+      const store = createTestStore<State>({ todos: ["a"] }, (next) =>
+        canHoldExtra ? next : withoutExtra(next),
+      );
+      createSyncEngine(backend, store.adapter).connect();
+      expect(store.getState()).toEqual({ todos: ["a"] });
+
+      canHoldExtra = true;
+      // The backend holds this value already.
+      store.update((s) => ({ ...s, extra: 1 }));
+      store.update(withoutExtra);
+
+      expect(backend.read()).toEqual({ todos: ["a"] });
+    });
+  });
+
   describe("sync events", () => {
     /** Subscribes to `engine` and records each event with `isConnected()` as it arrives. */
     const record = (engine: SyncEngine) => {

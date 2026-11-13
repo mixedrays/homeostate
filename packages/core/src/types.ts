@@ -308,8 +308,9 @@ export type SyncErrorSource = "store" | "backend" | "ready";
 /**
  * What the sync engine has just handled, as `SyncEngine.subscribe` reports it:
  * - `'local'`: a store notification while connected, once its write to the backend returned,
- *   even when it changed only local keys. An echo raised while a remote change is applied sends
- *   none, and neither does a local change while waiting for `ready`, which writes nothing.
+ *   even when it changed only local keys, which writes nothing. An echo raised while a remote
+ *   change is applied sends none, and neither does a local change while waiting for `ready`,
+ *   which writes nothing either.
  * - `'remote'`: an apply of the backend's state, once `setState` and the write of what the store
  *   changed meanwhile returned; once per flush with `schedule`, even when the store is unchanged.
  *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`, once

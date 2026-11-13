@@ -93,6 +93,14 @@ const pathId = (path: string[]): string => JSON.stringify(path);
 const holds = (state: object, key: string): boolean =>
   hasOwn(state, key) && (state as Plain)[key] !== undefined;
 
+/** Whether `held` holds every entry of `state`, each the same value or object. */
+const holdsAll = (held: Plain | undefined, state: Plain): boolean => {
+  if (held === undefined) return false;
+  for (const key of Object.keys(state))
+    if (!hasOwn(held, key) || held[key] !== state[key]) return false;
+  return true;
+};
+
 /** A copy of `state` without `keys`. */
 const withoutKeys = (state: Plain, keys: string[]): Plain => {
   const rest = { ...state };
@@ -861,10 +869,13 @@ export function createSyncEngine<S extends object>(
     lastApplied = null;
     contradictions.clear();
     const synced = filterState(readStore());
-    writeSynced(
-      synced,
-      [...heldKeys].filter((key) => !hasOwn(synced, key)),
-    );
+    const removed = [...heldKeys].filter((key) => !hasOwn(synced, key));
+    // A change to local keys only leaves every synced value the object the backend holds, and
+    // writing it would only make the backend diff the two. A container changed in place looks
+    // unchanged either way; see `StoreAdapter.getState`.
+    if (removed.length === 0 && holdsAll(lastSynced, synced))
+      heldKeys = new Set(Object.keys(synced));
+    else writeSynced(synced, removed);
     emit("local");
   };
 

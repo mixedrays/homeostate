@@ -488,7 +488,9 @@ interface SyncFailure {
 
 After connection, each local notification writes the full filtered store state to the
 backend, a microtask later for an adapter that sets `batchWrites`, along with what the backend
-holds, so the backend can diff against it instead of reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
+holds, so the backend can diff against it instead of reading its document; see [CrdtBackend](#crdtbackend). A notification that changes no synced
+key, such as one for a local key, writes nothing: every synced value is still the one the engine
+last wrote or read, by identity. If the backend holds a remote change
 the store has not been given yet, the engine applies it first, merged with the local change, as
 it applies a pending one; see [Coalescing remote changes](#coalescing-remote-changes). That
 happens when a listener subscribed
@@ -522,13 +524,13 @@ const unsubscribe = engine.subscribe((event) => {
 });
 ```
 
-| Event          | Sent                                                                   | Once per                                                                                                                                                                                           |
-| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"local"`      | after the write to the backend                                         | store notification handled while connected, even one that changed only local keys, or [batched write](#batched-writes). An echo raised while a remote change is applied sends none.                |
-| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                                        |
-| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.                                 |
-| `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply or batched write it runs sends its `"remote"` or `"local"` first; if that throws, `"disconnect"` is still sent, since the engine is disconnected. |
-| `"ready"`      | after reconciling once `ready` resolved; `isReady()` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                                                  |
+| Event          | Sent                                                                   | Once per                                                                                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"local"`      | after the write to the backend, if any                                 | store notification handled while connected, even one that changed only local keys and wrote nothing, or [batched write](#batched-writes). An echo raised while a remote change is applied sends none. |
+| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                                           |
+| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.                                    |
+| `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply or batched write it runs sends its `"remote"` or `"local"` first; if that throws, `"disconnect"` is still sent, since the engine is disconnected.    |
+| `"ready"`      | after reconciling once `ready` resolved; `isReady()` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                                                     |
 
 With `ready`, `"connect"` comes before the wait and covers only the values adopted then. Each
 remote change during the wait sends `"remote"`, a local change sends nothing, since it writes
@@ -692,9 +694,8 @@ createSyncEngine(
 ```
 
 For a top-level key synced to one room, `keys` or `omit` is enough. A store change outside the
-synced keys still makes the engine call `backend.write`, but with the Yjs, Loro and Automerge
-backends that call produces no update to the document, since nothing differs. `scopeAdapter`
-skips the call as well.
+synced keys makes the engine call no `backend.write`, though it still sends `'local'`.
+`scopeAdapter` skips both.
 
 | Member              | Contract                                                                                                                                                        |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |

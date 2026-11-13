@@ -339,6 +339,32 @@ describe("map and origin", () => {
     expect(app.toJSON()).toEqual({ title: "Mine", todos: threeTodos() });
   });
 
+  it("runs no transaction for a store change to an omitted key, also after a remote change", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    const store = createTestStore(threeTodos());
+    createSyncEngine(backend, store.adapter, {
+      omit: ["searchTerm"],
+    }).connect();
+    const revision = backend.revision?.();
+
+    const origins = originsDuring(doc, () =>
+      store.update((s) => ({ ...s, searchTerm: "x" })),
+    );
+    expect(origins).toEqual([]);
+    expect(backend.revision?.()).toBe(revision);
+
+    doc.transact(() => backend.map.set("filterStatus", "done"), "editor");
+    const afterRemote = originsDuring(doc, () =>
+      store.update((s) => ({ ...s, searchTerm: "y" })),
+    );
+
+    expect(afterRemote).toEqual([]);
+    const synced: Partial<TodoState> = threeTodos();
+    delete synced.searchTerm;
+    expect(backend.read()).toEqual({ ...synced, filterStatus: "done" });
+  });
+
   it("syncs a map in a subdocument, tagging its writes there", () => {
     const subdoc = new Y.Doc();
     new Y.Doc().getMap("rooms").set("one", subdoc);
