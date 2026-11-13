@@ -1,5 +1,4 @@
 import {
-  type EditScript,
   type ListChange,
   type RecordChange,
   type TextChange,
@@ -16,12 +15,6 @@ import {
   toJsonValue,
 } from "./json.js";
 import type { JsonObject, JsonObjectInput } from "./types.js";
-
-/**
- * The values `getChanges` diffs: a record, an array or a string. Both values passed to it must
- * be of one of these kinds, so a value typed only as `Diffable` must be narrowed first.
- */
-export type Diffable = JsonObject | unknown[] | string;
 
 /**
  * Decides which strings are collaborative text, by their path from the root of the diffed or
@@ -153,10 +146,10 @@ export function getChanges(
   options?: DiffOptions,
 ): RecordChange[];
 export function getChanges(
-  a: Diffable,
-  b: Diffable,
+  a: JsonObject | unknown[] | string,
+  b: JsonObject | unknown[] | string,
   options: DiffOptions = {},
-): EditScript {
+): RecordChange[] | ListChange[] | TextChange[] {
   if (isString(a) && isString(b)) return getStringChanges(a, b);
   if (isArray(a) && isArray(b)) return getArrayChanges(a, b, [], options);
   if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, [], options);

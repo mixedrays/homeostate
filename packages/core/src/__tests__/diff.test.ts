@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getChanges,
   type ListChange,
-  type Diffable,
   type JsonObject,
   keepIdentity,
+  type TextChange,
   type TextPolicy,
   toJsonValue,
 } from "../index.js";
@@ -12,8 +12,27 @@ import { nonJsonWrites, prototypeMemberKeys, todoTitles } from "./helpers.js";
 
 const item = (id: string, done = false) => ({ id, done });
 
-const appliesCleanly = (a: Diffable, b: Diffable): void => {
+const appliesCleanly = (a: unknown, b: unknown): void => {
   expect(keepIdentity(a, b)).toEqual(b);
+};
+
+const applyText = (text: string, changes: TextChange[]): string => {
+  let revised = text;
+  for (const change of changes) {
+    if (change.type === "insert")
+      revised =
+        revised.slice(0, change.key) + change.value + revised.slice(change.key);
+    else
+      revised =
+        revised.slice(0, change.key) +
+        revised.slice(change.key + (change.count ?? 1));
+  }
+  return revised;
+};
+
+// `keepIdentity` takes a changed string whole, so a text script is checked by applying it.
+const textAppliesCleanly = (a: string, b: string): void => {
+  expect(applyText(a, getChanges(a, b))).toBe(b);
 };
 
 const applySequentially = (
@@ -152,7 +171,13 @@ describe("getChanges", () => {
       ["the quick brown fox", "the slow brown cat"],
       ["aXbXc", "abc"],
       ["abc", "aXbXc"],
-    ])("transforms %j into %j when applied", appliesCleanly);
+      ["", "abc"],
+      ["abc", ""],
+      ["abc", "abcd"],
+      ["abc", "xyz"],
+      ["aaa", "aa"],
+      ["the quick fox", "the quick brown fox"],
+    ])("transforms %j into %j when applied", textAppliesCleanly);
   });
 
   describe("arrays", () => {

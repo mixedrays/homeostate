@@ -200,7 +200,7 @@ One step of an edit script, an object whose `type` is `"insert"`, `"update"`, `"
 In prose, "change" also means a local or remote change to state, and Automerge has changes of its own; write `Change` when the step is meant.
 
 **Edit script**:
-The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, two values of one container kind, all of that kind (`EditScript`); each numeric key addresses the array or string as revised by the steps before it.
+The ordered steps that `getChanges(a, b)` returns to turn `a` into `b`, two values of one container kind: `RecordChange[]`, `ListChange[]` or `TextChange[]`; each numeric key addresses the array or string as revised by the steps before it.
 _Avoid_: Patch, delta, changeset
 
 **Edit change**:

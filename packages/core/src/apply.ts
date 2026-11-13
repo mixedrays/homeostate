@@ -2,7 +2,6 @@ import {
   type ContainerKind,
   type ListChange,
   type RecordChange,
-  type TextChange,
 } from "./change.js";
 import { getChanges, type DiffOptions } from "./diff.js";
 import { isRecord, toJsonValue } from "./json.js";
@@ -58,24 +57,6 @@ export interface ApplyOps {
     path: Path,
   ): void;
 }
-
-/**
- * Revises `value` by the character-level edit script `changes`, which is what `getChanges`
- * returns for two strings. Each index addresses the string as revised by the steps before it.
- * Offsets and deletion counts are UTF-16 units; an absent count means one unit.
- */
-export const applyStringChanges = (
-  value: string,
-  changes: TextChange[],
-): string =>
-  changes.reduce((revised, change) => {
-    const at = change.key;
-    if (change.type === "insert")
-      return revised.slice(0, at) + change.value + revised.slice(at);
-    if (change.type === "delete")
-      return revised.slice(0, at) + revised.slice(at + (change.count ?? 1));
-    return revised;
-  }, value);
 
 /** An edit step of a record's or a list's script. */
 type Edit = Extract<RecordChange | ListChange, { type: "edit" }>;

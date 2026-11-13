@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
-import { getChanges } from "../diff.js";
+import { applyChanges, type ApplyOps } from "../apply.js";
 import { snapshot } from "./helpers.js";
 
 type Plain = Record<string, unknown>;
@@ -65,38 +64,6 @@ const reconcile = <T extends object>(before: T, after: T) => {
   applyChanges(target, before, after, ops);
   return { target, log };
 };
-
-describe("applyStringChanges", () => {
-  it("revises a string by the edit script getChanges produced", () => {
-    const cases: [string, string][] = [
-      ["", "abc"],
-      ["abc", ""],
-      ["abc", "abcd"],
-      ["abc", "xyz"],
-      ["the quick fox", "the quick brown fox"],
-      ["aaa", "aa"],
-    ];
-
-    for (const [before, after] of cases)
-      expect(applyStringChanges(before, getChanges(before, after))).toBe(after);
-  });
-
-  it("deletes a run of UTF-16 units in one step, one unit when the count is absent", () => {
-    expect(
-      applyStringChanges("a😀bc", [{ type: "delete", key: 1, count: 3 }]),
-    ).toBe("ac");
-    expect(applyStringChanges("abc", [{ type: "delete", key: 1 }])).toBe("ac");
-  });
-
-  it("takes only text steps", () => {
-    expect(
-      applyStringChanges("ab", [
-        // @ts-expect-error A text script has no update.
-        { type: "update", key: 0, value: "z" },
-      ]),
-    ).toBe("ab");
-  });
-});
 
 describe("applyChanges", () => {
   it("adds, replaces and removes record keys", () => {

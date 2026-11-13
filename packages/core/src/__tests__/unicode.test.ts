@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
+import { applyChanges, type ApplyOps } from "../apply.js";
 import { getChanges } from "../diff.js";
 import { keepIdentity } from "../index.js";
 import { unicodeEdits } from "./helpers.js";
@@ -50,14 +50,6 @@ const ops: ApplyOps = {
 };
 
 function checkEdits(before: string, after: string) {
-  const changes = getChanges(before, after);
-  let current = before;
-  for (const change of changes) {
-    current = applyStringChanges(current, [change]);
-    // A correct final string alone can hide invalid intermediate CRDT operations.
-    expect(isWellFormed(current)).toBe(true);
-  }
-  expect(current).toBe(after);
   expect(keepIdentity({ text: before }, { text: after })).toEqual({
     text: after,
   });

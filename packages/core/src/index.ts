@@ -7,18 +7,12 @@ export { jsonEqual, toJsonValue } from "./json.js";
 export { keepIdentity } from "./patching.js";
 export { mergeConcurrent } from "./merge.js";
 export type { MergeOptions } from "./merge.js";
-export { applyChanges, applyStringChanges } from "./apply.js";
+export { applyChanges } from "./apply.js";
 export { createCrdtBackend } from "./crdt-backend.js";
 export type { CrdtBackendOptions, CrdtBackendParts } from "./crdt-backend.js";
 export type { ApplyOps, ContainerKind } from "./apply.js";
-export type { Diffable, DiffOptions, TextPolicy } from "./diff.js";
-export type {
-  Change,
-  EditScript,
-  ListChange,
-  RecordChange,
-  TextChange,
-} from "./change.js";
+export type { DiffOptions, TextPolicy } from "./diff.js";
+export type { Change, ListChange, RecordChange, TextChange } from "./change.js";
 export { defaultSyncFilter } from "./types.js";
 export type {
   CrdtBackend,

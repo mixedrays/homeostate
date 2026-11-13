@@ -12,9 +12,7 @@ turn a JSON snapshot into small edits that keep unchanged containers in place.
 ## getChanges
 
 ```ts
-type JsonObject = Record<string, unknown>;
 type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
-type Diffable = JsonObject | unknown[] | string;
 type TextPolicy = (path: readonly (string | number)[]) => boolean;
 
 interface DiffOptions {
@@ -41,9 +39,9 @@ declare function getChanges(
 
 Returns an ordered edit script that transforms `a` into `b`, without mutating either input. Two
 values of one kind return the script of that kind. Records are taken as `JsonObjectInput`, so
-two states typed with an `interface` diff as records. `Diffable` names the kinds it accepts, but
-both values must be of one of them: passing values of different kinds, or values typed only as
-`Diffable`, fails to compile, so narrow them first.
+two states typed with an `interface` diff as records. Both values must be of one kind: passing
+values of different kinds, or values typed as a union of kinds, such as `string | unknown[]`,
+fails to compile, so narrow them first.
 
 | Parameter      | Description                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -112,7 +110,6 @@ type EditChange<K> =
   | { type: "edit"; key: K; kind: "text"; changes: TextChange[] };
 
 type Change = RecordChange | ListChange | TextChange;
-type EditScript = RecordChange[] | ListChange[] | TextChange[];
 ```
 
 A script holds the steps of one kind of container: `RecordChange`s for a record, keyed by
@@ -194,25 +191,6 @@ console.log(getChanges(before, after, { text: isTitle }));
 
 console.log(getChanges(before, after));
 // Without a policy, "status" is edited character by character too.
-```
-
-## applyStringChanges
-
-```ts
-declare const applyStringChanges: (
-  value: string,
-  changes: TextChange[],
-) => string;
-```
-
-Returns `value` revised by a string edit script: what `getChanges` returns for two strings,
-or the script of an `"edit"` step whose `kind` is `"text"`.
-
-```ts title="apply-string-changes-example.ts"
-import { applyStringChanges, getChanges } from "@homeostate/core";
-
-console.log(applyStringChanges("Plan", getChanges("Plan", "Plan it")));
-// "Plan it"
 ```
 
 ## toJsonValue

@@ -2,7 +2,6 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   getChanges,
   type Change,
-  type Diffable,
   type ListChange,
   type RecordChange,
   type TextChange,
@@ -55,14 +54,14 @@ describe("Change types", () => {
   });
 
   it("accepts only two values of one kind", () => {
-    const text = "a" as Diffable;
-    const list = ["a"] as Diffable;
+    const text = "a" as string | unknown[];
+    const list = ["a"] as string | unknown[];
     expect(() =>
       // @ts-expect-error A string and an array have no edit script.
       getChanges("a", ["a"]),
     ).toThrow(TypeError);
     expect(() =>
-      // @ts-expect-error Values typed only as `Diffable` may be of different kinds.
+      // @ts-expect-error Values typed as a union of kinds may be of different kinds.
       getChanges(text, list),
     ).toThrow(TypeError);
   });

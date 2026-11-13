@@ -50,6 +50,3 @@ export type TextChange =
  * consecutive deletes at one index into one step.
  */
 export type Change = RecordChange | ListChange | TextChange;
-
-/** The ordered steps that turn a record, an array or a string into another of its kind. */
-export type EditScript = RecordChange[] | ListChange[] | TextChange[];

@@ -43,3 +43,9 @@
   returned `"pending"` ones. Replace `ChangeType.PENDING` and `"pending"` with `"edit"` wherever
   you build a script or switch on a step's `type`; a `switch` left on `"pending"` no longer
   matches, and TypeScript reports the comparison.
+- `applyStringChanges`, `EditScript` and `Diffable` are no longer exported. `applyStringChanges`
+  returned the string a text script leads to, which is the second string given to `getChanges`,
+  so use that string; to edit a text in place, use `applyChanges` with `ApplyOps.editText`.
+  Replace `EditScript` with the script type of the kind diffed, `RecordChange[]`, `ListChange[]`
+  or `TextChange[]`, as `getChanges` returns it, and `Diffable` with
+  `JsonObject | unknown[] | string`; `getChanges` still needs both values narrowed to one kind.
