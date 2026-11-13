@@ -282,6 +282,50 @@ describe("mergeConcurrent", () => {
         row("r3", { b: 3 }),
       ]);
     });
+
+    it("pairs a record changed in place by position, even where its id names a record elsewhere", () => {
+      // The local side swaps the ids of x and y in place. Each change is a run of one record on
+      // each side, and the ids point to the other run, so each record pairs with its neighbour
+      // in place, by position.
+      expect(
+        merge(
+          [row("k0"), row("x"), row("k1"), row("y"), row("k2")],
+          [
+            row("k0"),
+            row("y", { a: 1 }),
+            row("k1"),
+            row("x", { a: 2 }),
+            row("k2"),
+          ],
+          [
+            row("k0"),
+            row("x", { b: 1 }),
+            row("k1"),
+            row("y", { b: 2 }),
+            row("k2"),
+          ],
+        ),
+      ).toEqual([
+        row("k0"),
+        row("y", { a: 1, b: 1 }),
+        row("k1"),
+        row("x", { a: 2, b: 2 }),
+        row("k2"),
+      ]);
+    });
+
+    it("matches records by id on both sides, in several runs of one side", () => {
+      // Each run deletes a record and changes the next: the local side does it twice, the
+      // remote side once.
+      const base = ["r0", "r1", "r2", "r3", "r4", "r5"].map((id) => row(id));
+      expect(
+        merge(
+          base,
+          [row("r1", { a: 1 }), row("r2"), row("r4", { a: 4 }), row("r5")],
+          [row("r0"), row("r1"), row("r2"), row("r3"), row("r5", { b: 5 })],
+        ),
+      ).toEqual([row("r1", { a: 1 }), row("r2"), row("r5", { b: 5 })]);
+    });
   });
 
   describe("conflicts", () => {

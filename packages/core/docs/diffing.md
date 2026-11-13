@@ -401,7 +401,9 @@ Between the records paired this way, items still pair by position, as `getChange
 A paired item that changed is merged inside when both values are records or arrays, and
 replaced whole otherwise. `getChanges` itself, and so a backend's write, still pairs by
 position. Matching costs time linear in the primitive entries of the arrays' records, plus
-O(k log k) for each run's k pairs.
+O(k log k) for each run's k pairs. A run of one item on each side, such as an item changed in
+place, is left as `getChanges` paired it, so a merge whose runs are all like that does no
+matching.
 
 ## applyChanges
 

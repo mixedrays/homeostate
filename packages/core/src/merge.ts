@@ -137,17 +137,25 @@ const primitiveEntries = (item: unknown): string[] => {
   return entries;
 };
 
-/**
- * For each primitive entry of the records in `items`, the index of the one record that holds
- * it, or `-1` where several do.
- */
-const entryOwners = (items: readonly unknown[]): Map<string, number> => {
+/** The primitive entries of an array's records, by index, and which record holds each entry. */
+interface EntryIndex {
+  /** Each item's primitive entries, as `primitiveEntries` names them. */
+  entries: string[][];
+  /** For each entry, the index of the one record that holds it, or `-1` where several do. */
+  owners: Map<string, number>;
+}
+
+/** Indexes the primitive entries of the records in `items`; see `EntryIndex`. */
+const indexEntries = (items: readonly unknown[]): EntryIndex => {
+  const entries: string[][] = [];
   const owners = new Map<string, number>();
-  items.forEach((item, index) => {
-    for (const entry of primitiveEntries(item))
+  // A loop, since `forEach` skips holes.
+  for (let index = 0; index < items.length; index++) {
+    entries.push(primitiveEntries(items[index]));
+    for (const entry of entries[index])
       owners.set(entry, owners.has(entry) ? -1 : index);
-  });
-  return owners;
+  }
+  return { entries, owners };
 };
 
 /**
@@ -198,10 +206,10 @@ const pairedFate = (
     : "replaced";
 };
 
-/** Which record of `base`, and which of `side`, holds each primitive entry: `entryOwners`. */
+/** The primitive entries of `base` and of `side`, and which record of each holds them. */
 interface Owners {
-  base: Map<string, number>;
-  side: Map<string, number>;
+  base: EntryIndex;
+  side: EntryIndex;
 }
 
 /**
@@ -212,25 +220,23 @@ interface Owners {
  * entries of the run's records, plus O(k log k) for its k pairs.
  */
 const uniquePairs = (
-  base: readonly unknown[],
   start: number,
   end: number,
-  side: readonly unknown[],
   from: number,
   to: number,
   owners: Owners,
 ): (readonly [number, number])[] => {
   /**
-   * The record of the other array that every unique entry of `item` points to: `undefined`
-   * where none does, and `-1` where they point to several.
+   * The record of the other array that every unique entry of the record holding `entries`
+   * points to: `undefined` where none does, and `-1` where they point to several.
    */
   const partner = (
-    item: unknown,
+    entries: readonly string[],
     own: Map<string, number>,
     other: Map<string, number>,
   ): number | undefined => {
     let found: number | undefined;
-    for (const entry of primitiveEntries(item)) {
+    for (const entry of entries) {
       const there = other.get(entry) ?? -1;
       if (there === -1 || own.get(entry) === -1) continue;
       if (found !== undefined && found !== there) return -1;
@@ -238,16 +244,20 @@ const uniquePairs = (
     }
     return found;
   };
+  const { base, side } = owners;
   // Each side record's partner, found once however many base records point to it.
   const sidePartners = new Map<number, number | undefined>();
   const sidePartner = (index: number): number | undefined => {
     if (!sidePartners.has(index))
-      sidePartners.set(index, partner(side[index], owners.side, owners.base));
+      sidePartners.set(
+        index,
+        partner(side.entries[index], side.owners, base.owners),
+      );
     return sidePartners.get(index);
   };
   const pairs: (readonly [number, number])[] = [];
   for (let item = start; item < end; item++) {
-    const index = partner(base[item], owners.base, owners.side);
+    const index = partner(base.entries[item], base.owners, side.owners);
     if (
       index !== undefined &&
       index >= from &&
@@ -274,14 +284,19 @@ const uniquePairs = (
  * are kept. The items between two such pairs are paired by position, as `getChanges` pairs
  * them, and those left over are deleted or inserted.
  *
- * The owners of each entry are counted once, on the first run with items on both sides, in
- * time linear in the arrays' primitive entries. Each run then costs time linear in its
- * records' primitive entries, plus O(k log k) for its k pairs.
+ * A run of one item on each side is left as it is: `getChanges` paired the two, and a pair
+ * by a unique value, which never leaves the run, could only pair them again.
+ *
+ * The entries of each array are indexed once, on the first run that needs them, in time linear
+ * in the array's primitive entries; `indexBase` returns the base's index, which both sides
+ * share. Each run then costs time linear in its records' primitive entries, plus O(k log k) for
+ * its k pairs.
  */
 const matchByUniqueValues = (
   alignment: Alignment,
   base: readonly unknown[],
   side: readonly unknown[],
+  indexBase: () => EntryIndex,
   text: TextPolicy | undefined,
   path: Path,
 ): void => {
@@ -299,12 +314,12 @@ const matchByUniqueValues = (
     while (end < length && fates[end] !== "kept") end++;
     const from = start === 0 ? 0 : at[start - 1] + 1;
     const to = end === length ? side.length : at[end];
-    if (to === from) {
+    if (to === from || (end - start === 1 && to - from === 1)) {
       start = end;
       continue;
     }
-    owners ??= { base: entryOwners(base), side: entryOwners(side) };
-    const pairs = uniquePairs(base, start, end, side, from, to, owners);
+    owners ??= { base: indexBase(), side: indexEntries(side) };
+    const pairs = uniquePairs(start, end, from, to, owners);
     if (pairs.length > 0) {
       for (let item = start; item <= end; item++) inserted[item] = [];
       let item = start;
@@ -338,6 +353,7 @@ const matchByUniqueValues = (
 const alignItems = (
   base: unknown[],
   side: unknown[],
+  indexBase: () => EntryIndex,
   text: TextPolicy | undefined,
   path: Path,
 ): Alignment => {
@@ -346,7 +362,7 @@ const alignItems = (
     base.length,
     false,
   );
-  matchByUniqueValues(alignment, base, side, text, path);
+  matchByUniqueValues(alignment, base, side, indexBase, text, path);
   return alignment;
 };
 
@@ -417,11 +433,14 @@ const mergeArrays = (
   remote: unknown[],
   text: TextPolicy | undefined,
   path: Path,
-): unknown[] =>
-  mergeSequence(
+): unknown[] => {
+  // Built at most once, for both sides, and only if a side needs it.
+  let baseIndex: EntryIndex | undefined;
+  const indexBase = (): EntryIndex => (baseIndex ??= indexEntries(base));
+  return mergeSequence(
     base.length,
-    alignItems(base, local, text, path),
-    alignItems(base, remote, text, path),
+    alignItems(base, local, indexBase, text, path),
+    alignItems(base, remote, indexBase, text, path),
     local,
     remote,
     (item, inLocal, inRemote, at) =>
@@ -433,6 +452,7 @@ const mergeArrays = (
         [...path, at],
       ),
   );
+};
 
 /** Merges text by UTF-16 unit, as arrays merge item by item. */
 const mergeText = (base: string, local: string, remote: string): string =>
