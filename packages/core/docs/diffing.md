@@ -96,12 +96,12 @@ type RecordChange =
 
 type ListChange =
   | { type: "insert" | "update"; key: number; value: unknown }
-  | { type: "delete"; key: number; count?: number }
+  | { type: "delete"; key: number; count: number }
   | EditChange<number>;
 
 type TextChange =
   | { type: "insert"; key: number; value: string }
-  | { type: "delete"; key: number; count?: number };
+  | { type: "delete"; key: number; count: number };
 
 // Not exported: an edit step names the kind of its nested script.
 type EditChange<K> =
@@ -124,8 +124,8 @@ cast. `Change["type"]` is the union of the four types.
 | `"delete"` | Removes a record key, a run of array items or part of a string.           | `count`: how many items or UTF-16 units, on every array and string delete; none for records. |
 | `"edit"`   | Applies a nested script to the existing object, array or string at `key`. | `kind`: the container the script edits; `changes`: its script.                               |
 
-`getChanges` sets `count` on every array and string delete, `1` included. An applier treats an
-absent `count` as `1`, so a script written by hand may leave it out.
+`count` is required, so a script written by hand sets it on every array and string delete, `1`
+included.
 
 Inserted and replacement values may be objects from `b`; clone or convert them when your
 store needs to own them.

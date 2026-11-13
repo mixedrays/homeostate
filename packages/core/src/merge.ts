@@ -63,7 +63,7 @@ const align = (
       const count = units ? (change.value as string).length : 1;
       for (let i = 0; i < count; i++) inserted[item].push(index++);
     } else if (change.type === "delete") {
-      const end = item + (change.count ?? 1);
+      const end = item + change.count;
       while (item < end) fates[item++] = "deleted";
     } else {
       fates[item] = change.type === "update" ? "replaced" : "edited";

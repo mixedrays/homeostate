@@ -229,7 +229,7 @@ const flattenList = (
         break;
       case "delete":
         // One line per item, each at the index the line before it left.
-        for (const item of work.splice(change.key, change.count ?? 1))
+        for (const item of work.splice(change.key, change.count))
           lines.push({ kind: "delete", path: keyPath, before: item as Json });
         break;
       case "update":

@@ -226,7 +226,7 @@ const getStringChanges = (a: string, b: string): TextChange[] => {
     else if (step === "del") {
       // A run of deletions at one offset is one step, counting whole characters.
       if (last?.type === "delete" && last.key === index)
-        last.count = (last.count ?? 1) + from[source].length;
+        last.count += from[source].length;
       else
         changes.push({
           type: "delete",

@@ -22,17 +22,17 @@ export type RecordChange =
 /**
  * One step of an array's edit script. `key` is an index into the array as revised by the steps
  * before it, so appliers never sort or clamp. An insert or update carries one item as `value`;
- * a delete removes `count` items at `key`, and one when `count` is absent.
+ * a delete removes `count` items at `key`.
  */
 export type ListChange =
   | { type: "insert" | "update"; key: number; value: unknown }
-  | { type: "delete"; key: number; count?: number }
+  | { type: "delete"; key: number; count: number }
   | EditChange<number>;
 
 /**
  * One step of a string's edit script. `key` is an offset into the string as revised by the
  * steps before it. An insert carries a run of characters as `value`; a delete removes `count`
- * units at `key`, and one when `count` is absent.
+ * units at `key`.
  *
  * Offsets and counts use UTF-16 code units. Generated edits preserve code point boundaries: a
  * supplementary character is deleted whole, never split between two steps. These are not
@@ -40,13 +40,12 @@ export type ListChange =
  */
 export type TextChange =
   | { type: "insert"; key: number; value: string }
-  | { type: "delete"; key: number; count?: number };
+  | { type: "delete"; key: number; count: number };
 
 /**
  * One step in turning a container into another. Narrow it by `type`, and an edit step's
  * script by `kind`.
  *
- * `getChanges` sets `count` on every array and string delete, one included, and merges
- * consecutive deletes at one index into one step.
+ * `getChanges` merges consecutive deletes at one index into one step.
  */
 export type Change = RecordChange | ListChange | TextChange;

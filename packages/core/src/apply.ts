@@ -103,7 +103,7 @@ const walkEdit = (
       for (const step of change.changes)
         if (step.type === "insert")
           ops.editText(child, step.key, 0, step.value, at);
-        else ops.editText(child, step.key, step.count ?? 1, "", at);
+        else ops.editText(child, step.key, step.count, "", at);
       return;
     }
   }
@@ -147,7 +147,7 @@ const walkList = (
         walkEdit(list, change, next, path, ops, options);
         break;
       case "delete":
-        ops.splice(list, change.key, change.count ?? 1, [], path);
+        ops.splice(list, change.key, change.count, [], path);
         break;
       case "insert":
         ops.splice(list, change.key, 0, [change.value], path);

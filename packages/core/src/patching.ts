@@ -81,7 +81,7 @@ const applyChangesToArray = (
         break;
 
       case "delete":
-        revised.splice(change.key, change.count ?? 1);
+        revised.splice(change.key, change.count);
         break;
     }
   }

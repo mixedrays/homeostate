@@ -24,8 +24,7 @@ const applyText = (text: string, changes: TextChange[]): string => {
         revised.slice(0, change.key) + change.value + revised.slice(change.key);
     else
       revised =
-        revised.slice(0, change.key) +
-        revised.slice(change.key + (change.count ?? 1));
+        revised.slice(0, change.key) + revised.slice(change.key + change.count);
   }
   return revised;
 };
@@ -43,8 +42,7 @@ const applySequentially = (
   for (const change of changes) {
     if (change.type === "insert") revised.splice(change.key, 0, change.value);
     else if (change.type === "update") revised[change.key] = change.value;
-    else if (change.type === "delete")
-      revised.splice(change.key, change.count ?? 1);
+    else if (change.type === "delete") revised.splice(change.key, change.count);
   }
   return revised;
 };

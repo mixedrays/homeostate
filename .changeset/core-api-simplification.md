@@ -49,3 +49,8 @@
   Replace `EditScript` with the script type of the kind diffed, `RecordChange[]`, `ListChange[]`
   or `TextChange[]`, as `getChanges` returns it, and `Diffable` with
   `JsonObject | unknown[] | string`; `getChanges` still needs both values narrowed to one kind.
+- `count` is required on an array or string delete step: `ListChange` and `TextChange` declare
+  `count: number`, no longer `count?: number`. `getChanges` already set it on every such delete,
+  so only a script built by hand changes: add `count: 1` to an array or string delete that left
+  it out before passing the script to `applyChanges`. In plain JavaScript, such a delete no
+  longer removes one item, so add the `count` there too. A record delete still has no `count`.
