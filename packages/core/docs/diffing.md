@@ -327,7 +327,7 @@ array items are `null`, as `JSON.stringify` would store them. Neither input is m
 | What changed                                                                | Result                                                                                                                                     |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Different keys of a record                                                  | Both. Records merge key by key, at any depth, and `__proto__` keys are ignored.                                                            |
-| Different items of an array                                                 | Both. Items are matched as `getChanges` matches them, so an edit lands on the item it targeted after the other side's inserts and deletes. |
+| Different items of an array                                                 | Both. Items are paired as [set out below](#matching-array-items), so an edit lands on its item after the other side's inserts and deletes. |
 | Items inserted at the same place on both sides                              | Both, the remote ones first.                                                                                                               |
 | A string `options.text` marks as text, changed on both sides                | Merged by UTF-16 unit, as an array merges item by item.                                                                                    |
 | The same value, changed differently on both sides                           | The local value. Without `options.text`, a string is one value, replaced whole.                                                            |
@@ -358,6 +358,50 @@ const isTitle = (path: readonly (string | number)[]) => path[0] === "title";
 console.log(mergeConcurrent(base, local, remote, { text: isTitle }));
 // { title: "The plan it", todos: ["x", "a", "b", "c"] }
 ```
+
+### Matching array items
+
+The merge matches each side's items with `base`'s as `getChanges` does first: items equal as
+JSON match. Between two matched items, `getChanges` pairs the rest by position, so a record one
+side changed, no longer equal to its old self, would pair with its neighbour beside an insert or
+a delete, and an edit to it would land on that neighbour or be lost.
+
+So inside each run of items left unmatched, before pairing by position, the merge pairs a `base`
+record with a side's record when they share an entry, such as `id: "r1"`, whose string, number
+or boolean value no other record of either array holds. A value several records hold, such as
+`done: false`, pairs none, even where only one record of the run holds it. So a record still
+matches itself where the other side also changed another of its entries, such as `done`. A
+changed record paired this way merges key by key.
+
+```ts title="merge-matching-example.ts"
+import { mergeConcurrent } from "@homeostate/core";
+
+const base = [{ id: "r1", cells: {} }];
+const local = [{ id: "r1", cells: { a: 2 } }];
+const remote = [
+  { id: "r0", cells: {} },
+  { id: "r1", cells: { b: 1 } },
+];
+
+console.log(mergeConcurrent(base, local, remote));
+// [{ id: "r0", cells: {} }, { id: "r1", cells: { b: 1, a: 2 } }]
+```
+
+Between the records paired this way, items still pair by position, as `getChanges` pairs them:
+
+- items that are not records, such as numbers and strings, and the units of a text;
+- records with no such value: where the value is held twice, such as a duplicated `id`, or one
+  side changed it, such as an `id` replaced with another;
+- a record whose unique values point to different records, such as an `id` pointing to one and
+  a `status: "draft"` that only another record of the other array holds;
+- a record whose pair would cross others, such as one moved past them. Of pairs that cross, the
+  merge keeps the most that stay in order. A moved record then pairs by position, if anything is
+  left beside it, or counts as deleted and inserted, which loses a change made inside it.
+
+A paired item that changed is merged inside when both values are records or arrays, and
+replaced whole otherwise. `getChanges` itself, and so a backend's write, still pairs by
+position. Matching costs time linear in the primitive entries of the arrays' records, plus
+O(k log k) for each run's k pairs.
 
 ## applyChanges
 

@@ -192,13 +192,15 @@ before the pending changes, which both last agreed on, and keeps each side's cha
 | What changed                                                     | Result                                                                                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Different keys of a record                                       | Both. Records merge key by key, at any depth.                                                                                         |
-| Different items of an array                                      | Both. Items are matched as `getChanges` matches them, so a local edit lands on the item it targeted after remote inserts and deletes. |
+| Different items of an array                                      | Both. Items match by value, or by a unique entry such as an `id`, so a local edit lands on its item after remote inserts and deletes. |
 | Items inserted at the same place on both sides                   | Both, the remote ones first.                                                                                                          |
 | The same value, changed differently on both sides                | The local value, as its write would. A string is one value, replaced whole and never merged as text.                                  |
 | A record or array the store changed inside, which remote deleted | Deleted, as a CRDT loses an edit inside a deleted container. A value the store replaced whole, such as a string, is kept instead.     |
 | A value the store deleted                                        | Deleted, also where the remote side changed it.                                                                                       |
 
 The merge is [`mergeConcurrent`](./diffing.md#mergeconcurrent), without a text policy.
+[Matching array items](./diffing.md#matching-array-items) says how it matches the items of a list
+the remote change both moved and changed, and where it falls back to their positions.
 
 Keys the filter keeps local take no part: the merge reads no backend value into them. A key whose
 backend value the filter rejects keeps the store's value, as on every apply. The merged state

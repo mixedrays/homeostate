@@ -561,6 +561,67 @@ describe("an update that waits for an earlier one", () => {
     expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
   });
 
+  describe("the store's edit to a row a peer moved and changed during the gap", () => {
+    type Row = { id: string; cells: Record<string, number> };
+    const row = (id: string, cells: Record<string, number> = {}): Row => ({
+      id,
+      cells,
+    });
+
+    /**
+     * Opens a gap on a reader holding `base` rows, delivers a peer's write of `rows`, has the
+     * store set cell `a` of r1 to 2, closes the gap, and syncs every replica.
+     */
+    const editDuringGap = (base: Row[], rows: Row[]) => {
+      const initial = { rows: base, log: 0 };
+      const { writerDoc, readerDoc, store, write, deliver, peer } =
+        gap(initial);
+      const other = peer();
+      const u0 = write({ ...initial, log: 1 });
+      const u1 = write({ ...initial, log: 2 });
+
+      deliver(u1);
+      deliver(other.write({ rows, log: 0 }));
+      store.update((state) => ({
+        ...state,
+        rows: (state.rows as Row[]).map((r) =>
+          r.id === "r1" ? { ...r, cells: { ...r.cells, a: 2 } } : r,
+        ),
+      }));
+      deliver(u0);
+      syncAll(writerDoc, readerDoc, other.doc);
+
+      return {
+        store: store.getState(),
+        docs: [writerDoc, readerDoc, other.doc].map((doc) =>
+          doc.getMap(NAME).toJSON(),
+        ),
+      };
+    };
+
+    it("lands on that row after the peer inserted a row in front of it", () => {
+      const { store, docs } = editDuringGap(
+        [row("r1")],
+        [row("r0"), row("r1", { b: 1 })],
+      );
+
+      const synced = { rows: [row("r0"), row("r1", { b: 1, a: 2 })], log: 2 };
+      expect(store).toEqual(synced);
+      expect(docs).toEqual([synced, synced, synced]);
+    });
+
+    it("lands on that row after the peer deleted the row in front of it", () => {
+      const { store, docs } = editDuringGap(
+        [row("r0"), row("r1")],
+        [row("r1", { b: 1 })],
+      );
+
+      const synced = { rows: [row("r1", { b: 1, a: 2 })], log: 2 };
+      expect(store).toEqual(synced);
+      expect(docs).toEqual([synced, synced, synced]);
+    });
+  });
+
   it("keeps the store's value when it and a peer replace the same list item during the gap", () => {
     const initial = { list: [1, 2, 3], text: "seed" };
     const { writerDoc, readerDoc, store, write, deliver, peer } = gap(initial);

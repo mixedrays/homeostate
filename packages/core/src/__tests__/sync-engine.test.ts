@@ -2054,6 +2054,50 @@ describe("createSyncEngine", () => {
         ]);
       });
 
+      describe("an edit to an item the remote side moved and changed", () => {
+        type Row = { id: string; cells: Record<string, number> };
+        const row = (id: string, cells: Record<string, number> = {}): Row => ({
+          id,
+          cells,
+        });
+        /** Sets cell `a` of row r1 to 2. */
+        const editR1 = (s: { rows: Row[] }): { rows: Row[] } => ({
+          rows: s.rows.map((r) =>
+            r.id === "r1" ? { ...r, cells: { ...r.cells, a: 2 } } : r,
+          ),
+        });
+
+        it("lands on that item after a remote insert", () => {
+          const state = concurrent(
+            { rows: [row("r1")] },
+            () => ({ rows: [row("r0"), row("r1", { b: 1 })] }),
+            editR1,
+          );
+
+          expect(state.rows).toEqual([row("r0"), row("r1", { b: 1, a: 2 })]);
+        });
+
+        it("lands on that item after a remote delete", () => {
+          const state = concurrent(
+            { rows: [row("r0"), row("r1")] },
+            () => ({ rows: [row("r1", { b: 1 })] }),
+            editR1,
+          );
+
+          expect(state.rows).toEqual([row("r1", { b: 1, a: 2 })]);
+        });
+
+        it("lands on an item the remote side only moved", () => {
+          const state = concurrent(
+            { rows: [row("r1")] },
+            () => ({ rows: [row("r0"), row("r1")] }),
+            editR1,
+          );
+
+          expect(state.rows).toEqual([row("r0"), row("r1", { a: 2 })]);
+        });
+      });
+
       it("keeps the items both sides inserted at one place, the remote ones first", () => {
         const state = concurrent(
           threeTodos(),

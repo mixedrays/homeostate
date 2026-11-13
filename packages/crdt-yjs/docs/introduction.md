@@ -117,9 +117,16 @@ what the document holds, with what the store was shown as the base, so it never 
 value the waiting update replaced, and keeps the changes other peers made in the meantime:
 
 - Objects merge key by key, and a key the store left alone keeps the document's value.
-- Arrays and `Y.Text` strings merge position by position: the store's inserts and deletes
-  land among the items the document holds, and an item either side deleted stays deleted.
-  A change inside an array item merges key by key.
+- Arrays merge item by item, and `Y.Text` strings by UTF-16 unit: the store's inserts and
+  deletes land among the items the document holds, and an item either side deleted stays
+  deleted. A change inside an array item merges key by key.
+- An array item is matched with the item the document holds by value, or else by a string,
+  number or boolean entry no other item of either array holds, such as an `id`. So the store's change
+  to a row lands on that row even where peers inserted or deleted rows beside it and changed
+  that row too. Items with no such entry, such as plain strings or rows with duplicated ids, and
+  a row whose `id` a peer changed, still match by position, so the store's change can land on a
+  neighbour; [Matching array items](../../core/docs/diffing.md#matching-array-items) lists every
+  such case.
 - Where the store and the document both changed one value, as when both replaced a list item
   or a plain string, the store's value wins, as a later write would. A value the document
   lost stays lost if the store only changed what was inside it, as Yjs drops an edit inside a

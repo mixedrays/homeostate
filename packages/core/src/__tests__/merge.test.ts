@@ -92,6 +92,198 @@ describe("mergeConcurrent", () => {
     });
   });
 
+  describe("matching records by a unique value", () => {
+    const row = (id: string, cells: Record<string, number> = {}) => ({
+      id,
+      cells,
+    });
+
+    it("matches a record changed on both sides by its id after an insert", () => {
+      expect(
+        merge(
+          [row("r1")],
+          [row("r1", { a: 2 })],
+          [row("r0"), row("r1", { b: 1 })],
+        ),
+      ).toEqual([row("r0"), row("r1", { b: 1, a: 2 })]);
+      expect(
+        merge(
+          [row("r1")],
+          [row("r0"), row("r1", { a: 2 })],
+          [row("r1", { b: 1 })],
+        ),
+      ).toEqual([row("r0"), row("r1", { a: 2, b: 1 })]);
+    });
+
+    it("matches a record changed on both sides by its id after a delete", () => {
+      expect(
+        merge(
+          [row("r0"), row("r1")],
+          [row("r0"), row("r1", { a: 2 })],
+          [row("r1", { b: 1 })],
+        ),
+      ).toEqual([row("r1", { b: 1, a: 2 })]);
+      expect(
+        merge(
+          [row("r0"), row("r1")],
+          [row("r1", { a: 2 })],
+          [row("r0"), row("r1", { b: 1 })],
+        ),
+      ).toEqual([row("r1", { a: 2, b: 1 })]);
+    });
+
+    it("matches a record by its id where the other side also changed its done flag", () => {
+      const todo = (id: string, done: boolean, cells = {}) => ({
+        id,
+        done,
+        cells,
+      });
+
+      // The remote side inserted r0, and changed r1's flag and cells and r2's cells. Two records
+      // of each array hold `done: false`, so only the ids pair them.
+      expect(
+        merge(
+          [todo("r1", false), todo("r2", false)],
+          [todo("r1", false, { a: 2 }), todo("r2", false)],
+          [
+            todo("r0", false),
+            todo("r1", true, { b: 1 }),
+            todo("r2", false, { b: 2 }),
+          ],
+        ),
+      ).toEqual([
+        todo("r0", false),
+        todo("r1", true, { b: 1, a: 2 }),
+        todo("r2", false, { b: 2 }),
+      ]);
+    });
+
+    it("pairs no records by a value several records of one array share", () => {
+      // `done: true` is on one base record, but on every remote one, so it pairs none, and the
+      // records pair by position: the local edit to the second lands on the second.
+      expect(
+        merge(
+          [
+            { k: "x", done: false },
+            { k: "y", done: true },
+          ],
+          [
+            { k: "x", done: false },
+            { k: "y", done: true, a: 2 },
+          ],
+          [
+            { k: "z", done: true },
+            { k: "w", done: true },
+            { k: "v", done: true },
+          ],
+        ),
+      ).toEqual([
+        { k: "z", done: true },
+        { k: "w", done: true, a: 2 },
+        { k: "v", done: true },
+      ]);
+    });
+
+    it("falls back to position where ids are duplicated", () => {
+      // r1 is twice on each side, so its id pairs nothing, and the local edit to the first r1
+      // lands on r0, the remote side's first record.
+      expect(
+        merge(
+          [row("r1"), row("r1")],
+          [row("r1", { a: 2 }), row("r1")],
+          [row("r0"), row("r1", { b: 1 }), row("r1", { b: 1 })],
+        ),
+      ).toEqual([
+        row("r0", { a: 2 }),
+        row("r1", { b: 1 }),
+        row("r1", { b: 1 }),
+      ]);
+    });
+
+    it("falls back to position where the other side changed the id", () => {
+      expect(
+        merge(
+          [row("r1")],
+          [row("r1", { a: 2 })],
+          [row("r0"), row("r1b", { b: 1 })],
+        ),
+      ).toEqual([row("r0", { a: 2 }), row("r1b", { b: 1 })]);
+    });
+
+    it("does not pair by a value unique within a run but repeated elsewhere in the array", () => {
+      const todo = (id: string, done: boolean, cells = {}) => ({
+        id,
+        done,
+        cells,
+      });
+
+      // r9 is equal on both sides, so the run is r1 against r0 and r1. Within it, `done: false`
+      // is unique on each side, but r9 holds it too, so only the id pairs r1 with itself.
+      expect(
+        merge(
+          [todo("r1", false), todo("r9", false)],
+          [todo("r1", false, { a: 2 }), todo("r9", false)],
+          [todo("r0", false), todo("r1", true, { b: 1 }), todo("r9", false)],
+        ),
+      ).toEqual([
+        todo("r0", false),
+        todo("r1", true, { b: 1, a: 2 }),
+        todo("r9", false),
+      ]);
+    });
+
+    it("falls back to position where two unique values point to different records", () => {
+      const todo = (id: string, done: boolean, cells = {}) => ({
+        id,
+        done,
+        cells,
+      });
+
+      // r1's `done: false` is unique in each array, but held by r0 on the remote side, while
+      // its id points to r1: r1 pairs with r0, its neighbour, by position.
+      expect(
+        merge(
+          [todo("r1", false)],
+          [todo("r1", false, { a: 2 })],
+          [todo("r0", false), todo("r1", true, { b: 1 })],
+        ),
+      ).toEqual([todo("r0", false, { a: 2 }), todo("r1", true, { b: 1 })]);
+    });
+
+    it("keeps the pairs in order, so a record moved past others is deleted and inserted", () => {
+      // The remote side moved r3 to the front and changed every row. Pairing r3 too would cross
+      // the other pairs, so only r1 and r2 pair by id; r3 is deleted and inserted, which drops
+      // the local edit to it, as a CRDT drops an edit inside a deleted item.
+      expect(
+        merge(
+          [row("r1"), row("r2"), row("r3")],
+          [row("r1", { a: 1 }), row("r2", { a: 2 }), row("r3", { a: 3 })],
+          [row("r3", { b: 3 }), row("r1", { b: 1 }), row("r2", { b: 2 })],
+        ),
+      ).toEqual([
+        row("r3", { b: 3 }),
+        row("r1", { b: 1, a: 1 }),
+        row("r2", { b: 2, a: 2 }),
+      ]);
+    });
+
+    it("pairs the records between two matched ones by position", () => {
+      // r1 and r3 pair by id; between them, the base's x pairs with the remote side's y.
+      expect(
+        merge(
+          [row("r1"), { v: "x" }, row("r3")],
+          [row("r1"), { v: "x", a: 2 }, row("r3")],
+          [row("r0"), row("r1", { b: 1 }), { v: "y" }, row("r3", { b: 3 })],
+        ),
+      ).toEqual([
+        row("r0"),
+        row("r1", { b: 1 }),
+        { v: "y", a: 2 },
+        row("r3", { b: 3 }),
+      ]);
+    });
+  });
+
   describe("conflicts", () => {
     it("keeps the local value where both sides changed one value", () => {
       expect(merge({ a: 0 }, { a: 1 }, { a: 2 })).toEqual({ a: 1 });
