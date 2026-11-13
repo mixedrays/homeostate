@@ -141,7 +141,7 @@ export interface DiffLine {
 /**
  * The changes from `before` to `after` as path-addressed lines, derived from core's
  * `getChanges`. Array indices are those of the array as the earlier lines left it, as in
- * the edit script. A string edit is shown as one update of the whole string.
+ * the edit script. Without a text policy, a changed string is one update of the whole string.
  */
 export const diffJson = (before: JsonObject, after: JsonObject): DiffLine[] =>
   flattenRecord(before, after, getChanges(before, after), []);

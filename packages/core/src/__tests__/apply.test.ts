@@ -91,7 +91,9 @@ describe("applyChanges", () => {
     const { ops, log } = createOps();
     const target = { list: [1, 2, 3, 4], title: new Text("a😀b") };
 
-    applyChanges(target, snapshot(target), { list: [], title: "" }, ops);
+    applyChanges(target, snapshot(target), { list: [], title: "" }, ops, {
+      text: () => true,
+    });
 
     expect(target.list).toEqual([]);
     expect(target.title.value).toBe("");
@@ -190,6 +192,7 @@ describe("applyChanges", () => {
       snapshot(target),
       { todos: [{ title: "Plan a 😀 trip" }] },
       ops,
+      { text: () => true },
     );
 
     expect(target.todos[0].title).toBe(title);
@@ -204,6 +207,18 @@ describe("applyChanges", () => {
   it("replaces text whole when the ops cannot edit it", () => {
     const { ops, log } = createOps();
     delete ops.editText;
+    const target = { title: new Text("Plan") };
+
+    applyChanges(target, snapshot(target), { title: "Plan it" }, ops, {
+      text: () => true,
+    });
+
+    expect(target).toEqual({ title: "Plan it" });
+    expect(log).toEqual(["set title"]);
+  });
+
+  it("replaces every string whole without a text policy", () => {
+    const { ops, log } = createOps();
     const target = { title: new Text("Plan") };
 
     applyChanges(target, snapshot(target), { title: "Plan it" }, ops);

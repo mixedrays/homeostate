@@ -43,12 +43,12 @@ two states typed with an `interface` diff as records. Both values must be of one
 values of different kinds, or values typed as a union of kinds, such as `string | unknown[]`,
 fails to compile, so narrow them first.
 
-| Parameter      | Description                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `a`            | The current plain record, array or string.                                                                         |
-| `b`            | The desired value, with the same root kind as `a`.                                                                 |
-| `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
-| `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`.       |
+| Parameter      | Description                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `a`            | The current plain record, array or string.                                                                   |
+| `b`            | The desired value, with the same root kind as `a`.                                                           |
+| `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to none.   |
+| `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`. |
 
 Equal values produce `[]`. An edit script cannot replace its root, so values of different root
 kinds throw a `TypeError` naming both kinds, such as
@@ -165,8 +165,9 @@ counts.
 A `TextPolicy` receives the path of a nested string from the root of `a`: record keys and
 array indices, such as `["todos", 0, "title"]`. An index is the item's position in `b`. A
 string at a path where it returns `true` is diffed character by character. Any other changed
-string is replaced whole by one `"update"` step. Two strings passed directly to `getChanges` are
-always diffed character by character.
+string is replaced whole by one `"update"` step, and so is every changed nested string when
+`options.text` is left out. Two strings passed directly to `getChanges` are always diffed
+character by character, with or without a policy.
 
 The supplied backends pass their `text` option here, so a string outside it reaches the CRDT
 as one value, and concurrent writes keep one of them instead of merging their characters.
@@ -190,7 +191,11 @@ console.log(getChanges(before, after, { text: isTitle }));
 // ]
 
 console.log(getChanges(before, after));
-// Without a policy, "status" is edited character by character too.
+// Without a policy, "title" is replaced whole too:
+// [
+//   { type: "update", key: "status", value: "done" },
+//   { type: "update", key: "title", value: "Plan it" },
+// ]
 ```
 
 ## toJsonValue

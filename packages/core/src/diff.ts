@@ -30,7 +30,8 @@ export type TextPolicy = (path: readonly (string | number)[]) => boolean;
 export interface DiffOptions {
   /**
    * Which nested strings are diffed character by character. Any other string that changes is
-   * replaced whole by one `"update"` step. Without it, every string is diffed character by character.
+   * replaced whole by one `"update"` step. Without it, every nested string is replaced whole.
+   * Two strings passed directly to `getChanges` are always diffed character by character.
    */
   text?: TextPolicy;
   /**
@@ -69,7 +70,7 @@ const nestedChanges = (
 ): Nested | null => {
   const at = [...path, key];
   if (isString(a) && isString(b))
-    return options.text === undefined || options.text(at)
+    return options.text?.(at) === true
       ? { kind: "text", changes: getStringChanges(a, b) }
       : null;
   if (isArray(a) && isArray(b))
@@ -126,7 +127,8 @@ const written = (value: unknown, options: DiffOptions): unknown =>
  * indexes strings, and never split a surrogate pair.
  *
  * Two strings passed directly are always diffed character by character; `options.text` decides
- * for the strings nested in a record or an array.
+ * for the strings nested in a record or an array, and without it each one that changed is
+ * replaced whole.
  *
  * @throws {TypeError} When `a` and `b` are not two records, two arrays or two strings.
  */

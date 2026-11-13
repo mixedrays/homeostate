@@ -78,7 +78,7 @@ const align = (
  * Aligns arrays as a backend's `write` diffs them: as JSON would store them, with every string a
  * value replaced whole, so the merge and the write agree on which item is which.
  */
-const DIFF = { json: true, text: () => false } as const;
+const DIFF: DiffOptions = { json: true };
 
 /** The options that align the array at `path`, its strings that `text` marks diffed as text. */
 const diffOptions = (text: TextPolicy | undefined, path: Path): DiffOptions =>

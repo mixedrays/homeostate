@@ -54,3 +54,9 @@
   so only a script built by hand changes: add `count: 1` to an array or string delete that left
   it out before passing the script to `applyChanges`. In plain JavaScript, such a delete no
   longer removes one item, so add the `count` there too. A record delete still has no `count`.
+- `getChanges` replaces a changed nested string whole by default, as `createCrdtBackend` and
+  `mergeConcurrent` already did: without `options.text`, a string in a record or an array that
+  changed is one `"update"` step instead of an `"edit"` step with a character-level script, and
+  so is what `applyChanges` writes. Two strings passed directly are still diffed character by
+  character. Pass `text: () => true` to keep character-level scripts for every nested string, or
+  a `TextPolicy` for some. The CRDT backends pass their `text` option, so they are unchanged.

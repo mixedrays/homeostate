@@ -1,5 +1,5 @@
 import type { ListChange, RecordChange } from "./change.js";
-import { getChanges, type DiffOptions } from "./diff.js";
+import { getChanges } from "./diff.js";
 import { isRecord, PROTO_KEY } from "./json.js";
 
 /** Whether `value`, an object, is plain: its prototype is `Object.prototype` or `null`. */
@@ -40,18 +40,12 @@ const toPlain = (value: unknown): unknown => {
 const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
-/**
- * Diffs every string as a value: a string has no identity to keep, so a changed one is taken
- * from `next` whole rather than rebuilt from a character-level script.
- */
-const WHOLE_STRINGS: DiffOptions = { text: () => false };
-
 /** The value the edit step `change` leaves at its key, given the value there now. */
 const applyEdit = (
   current: unknown,
   change: Extract<RecordChange | ListChange, { type: "edit" }>,
 ): unknown => {
-  // The diff found a container of `change.kind` at its key; with `WHOLE_STRINGS`, never a text.
+  // The diff found a container of `change.kind` at its key; without a text policy, never a text.
   if (change.kind === "list")
     return applyChangesToArray(current as unknown[], change.changes);
   return applyChangesToObject(
@@ -143,13 +137,13 @@ export const keepIdentity = <T>(previous: T, next: T): T => {
   if (typeof a === "string" && typeof b === "string")
     return a === b ? previous : next;
   if (Array.isArray(a) && Array.isArray(b)) {
-    const changes = getChanges(a, b, WHOLE_STRINGS);
+    const changes = getChanges(a, b);
     return changes.length === 0
       ? previous
       : (applyChangesToArray(a, changes) as T);
   }
   if (isRecord(a) && isRecord(b)) {
-    const changes = getChanges(a, b, WHOLE_STRINGS);
+    const changes = getChanges(a, b);
     return changes.length === 0
       ? previous
       : (applyChangesToObject(a, changes) as T);

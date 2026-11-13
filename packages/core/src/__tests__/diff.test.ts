@@ -281,13 +281,19 @@ describe("getChanges", () => {
           changes: [{ type: "insert", key: 1, value: 3 }],
         },
       ]);
-      expect(getChanges(["ab"], ["abc"])).toEqual([
+      expect(getChanges(["ab"], ["abc"], { text: () => true })).toEqual([
         {
           type: "edit",
           key: 0,
           kind: "text",
           changes: [{ type: "insert", key: 2, value: "c" }],
         },
+      ]);
+    });
+
+    it("replaces a changed string item whole without a text policy", () => {
+      expect(getChanges(["ab"], ["abc"])).toEqual([
+        { type: "update", key: 0, value: "abc" },
       ]);
     });
 
@@ -451,7 +457,9 @@ describe("getChanges", () => {
           changes: [{ type: "insert", key: 1, value: 2 }],
         },
       ]);
-      expect(getChanges({ t: "ab" }, { t: "abc" })).toEqual([
+      expect(
+        getChanges({ t: "ab" }, { t: "abc" }, { text: () => true }),
+      ).toEqual([
         {
           type: "edit",
           key: "t",
@@ -675,11 +683,47 @@ describe("getChanges", () => {
       expect(policy.mock.calls).toEqual([[["doc", "body"]]]);
     });
 
-    it("always diffs two strings passed directly character by character", () => {
-      expect(getChanges("ab", "abc", { text: () => false })).toEqual([
-        { type: "insert", key: 2, value: "c" },
+    it("replaces every changed nested string whole without a policy", () => {
+      expect(
+        getChanges(
+          { title: "ab", todos: [{ title: "ab" }], tags: ["ab"] },
+          { title: "abc", todos: [{ title: "abc" }], tags: ["abc"] },
+        ),
+      ).toEqual([
+        { type: "update", key: "title", value: "abc" },
+        {
+          type: "edit",
+          key: "todos",
+          kind: "list",
+          changes: [
+            {
+              type: "edit",
+              key: 0,
+              kind: "record",
+              changes: [{ type: "update", key: "title", value: "abc" }],
+            },
+          ],
+        },
+        {
+          type: "edit",
+          key: "tags",
+          kind: "list",
+          changes: [{ type: "update", key: 0, value: "abc" }],
+        },
       ]);
     });
+
+    it.each([
+      ["no policy", undefined],
+      ["a policy that marks no string", { text: () => false }],
+    ])(
+      "always diffs two strings passed directly character by character, with %s",
+      (_, options) => {
+        expect(getChanges("ab", "abc", options)).toEqual([
+          { type: "insert", key: 2, value: "c" },
+        ]);
+      },
+    );
   });
 
   describe("with json", () => {

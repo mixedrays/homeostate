@@ -61,6 +61,7 @@ function checkEdits(before: string, after: string) {
     { items: [{ text: before }] },
     { items: [{ text: after }] },
     ops,
+    { text: () => true },
   );
   expect(text.value).toBe(after);
   expect(target.items[0].text).toBe(text);

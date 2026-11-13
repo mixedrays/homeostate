@@ -94,7 +94,7 @@ const main = async (): Promise<void> => {
   const rows: string[][] = [];
   for (const size of [100, 1000, 10_000]) {
     for (const json of [false, true]) {
-      const options: DiffOptions = { json, text: () => false };
+      const options: DiffOptions = { json };
       const inputs = fixtures(size);
       const bench = new Bench({ time: 250, iterations: 10, throws: true });
       for (const { name, before, after, expected } of inputs) {
