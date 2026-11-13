@@ -29,10 +29,12 @@ not call a `ready` function.
 | `adapter` | Yes      | The application store, exposed through `StoreAdapter<S>`. |
 | `config`  | No       | Sync options, typed by `S`. Defaults to `{}`.             |
 
-Returns a `SyncEngine`. The engine is synchronous, except for the wait for `ready`, and does not
+Returns a `SyncEngine`. The engine is synchronous, except for the wait for `ready` and the writes
+of an adapter that sets `batchWrites` (see [Batched writes](#batched-writes)), and does not
 retry. `connect()` throws what it runs into. Once connected, adapter and backend errors go to
 `onError` when it is given; otherwise they, like filter errors, propagate to the caller of the
-operation that triggered them, which is whoever calls `flush` for an apply deferred by `schedule`.
+operation that triggered them, which is whoever calls `flush` for an apply deferred by `schedule`,
+and the microtask for a batched write.
 See [Reporting errors](#reporting-errors).
 
 ### Example
@@ -186,6 +188,9 @@ listener hears of before the engine is applied the same way, with or without `sc
 it does nothing. So does the end of a wait for [`ready`](#waiting-for-the-room), unless the wait
 failed, when the apply is forgone.
 
+A local change waiting for a [batched write](#batched-writes) is merged into a remote apply in the
+same way.
+
 The merge compares the store's synced state and the backend's with what the backend held
 before the pending changes, which both last agreed on, and keeps each side's changes from it:
 
@@ -210,6 +215,50 @@ change that runs a pending apply. After a backend read or write threw, the engin
 what the backend held, so it cannot tell which side changed what: the pending changes then
 replace what the local change did to synced keys, rather than the write reverting them for every
 peer.
+
+### Batched writes
+
+A store adapter that sets `batchWrites`, such as the Valtio adapter, notifies once per
+property set, so one array method like `splice`, `unshift`, `shift`, `sort` or `reverse` notifies
+once per item it shifts, with an intermediate state each time. Written one by one, those states
+make each shifted item look replaced, so a peer's concurrent edit lands on the wrong item and its
+concurrent insert duplicates items. For such an adapter the engine batches local changes:
+
+- The first notification queues one write with `queueMicrotask`, and later ones add nothing
+  until it runs. It writes the store's synced state as it is then, and sends one `"local"`.
+- A remote change applied while the write waits is merged with the waiting local change, as a
+  local change is merged into a pending apply (see
+  [Coalescing remote changes](#coalescing-remote-changes)), and the merged state is written at
+  once, in place of the queued write. A local change that runs a pending apply when its write
+  runs merges the same way.
+- Echoes of `setState` write nothing, since the adapter still notifies synchronously.
+- `disconnect()` writes a waiting local change, merged with a pending apply, before it removes
+  the subscriptions, since on the next `connect()` the backend would win for every key it holds.
+  If that write throws, the error goes to `onError`, or without it to the caller of
+  `disconnect()`, and the engine is disconnected all the same.
+- A write queued before `disconnect()` does nothing when it runs, also after a reconnect.
+- While waiting for [`ready`](#waiting-for-the-room) nothing is queued, since nothing is written.
+- A queued write that throws goes to `onError`. Without `onError` it is thrown from the
+  microtask, where nothing catches it: the browser logs it as an uncaught error, and Node exits
+  unless the process handles `uncaughtException`. Pass `onError` with such an adapter.
+
+So a local change reaches the backend a microtask after the store changed. Code and tests that
+read the backend right after changing the store wait for it first, such as with
+`await Promise.resolve()`. Adapters without the flag are written synchronously.
+
+An adapter that wraps one that sets `batchWrites` must keep the flag, as
+[`scopeAdapter`](#scopeadapter) does:
+
+```ts
+const wrapped: StoreAdapter<State> = {
+  getState: () => adapter.getState(),
+  setState: (state) => adapter.setState(state),
+  subscribe: (onStoreChange) => adapter.subscribe(onStoreChange),
+  batchWrites: adapter.batchWrites,
+};
+```
+
+Without it, the engine writes every intermediate state again, as if the store were not batched.
 
 ### Waiting for the room
 
@@ -331,9 +380,10 @@ concurrent writes merge is up to the library, so `ready` does not make these out
 ### Reporting errors
 
 Once the engine is connected, it calls the adapter and the backend from their notifications,
-from the `flush` and from `disconnect()`. Without `onError`, what they throw propagates there:
-a store validation error in `setState` reaches the provider's message handler, and a failed
-`write` reaches the code that changed the store. The engine stays connected either way, and the
+from the `flush`, from the microtask of a [batched write](#batched-writes) and from
+`disconnect()`. Without `onError`, what they throw propagates there: a store validation error in
+`setState` reaches the provider's message handler, and a failed `write` reaches the code that
+changed the store, or the runtime as an uncaught error for a batched write. The engine stays connected either way, and the
 store and backend differ until the next change succeeds.
 
 With `onError`, the engine catches those errors and reports them with their source, so neither
@@ -425,20 +475,20 @@ interface SyncFailure {
 }
 ```
 
-| Method                      | Returns                   | Behavior                                                                                                                                                                        |
-| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connect()`                 | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                  |
-| `disconnect()`              | `void`                    | Applies a pending remote change, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `isConnected()`             | `boolean`                 | Whether the engine is subscribed, so also while it waits for `ready`. This does not report network connectivity or whether a provider has received the room's state.            |
-| `isReady()`                 | `boolean`                 | Whether the engine is connected and done reconciling, so that local changes are written. See below.                                                                             |
-| `getStatus()`               | `SyncStatus`              | The engine's status, with what went wrong. It says nothing about the network. See [Sync status](#sync-status).                                                                  |
-| `subscribeStatus(listener)` | `Unsubscribe`             | Calls `listener` after every change of `getStatus()`, also for a failure, until unsubscribed. See [Sync status](#sync-status).                                                  |
-| `getSyncedState()`          | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                   |
-| `subscribe(listener)`       | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                 |
+| Method                      | Returns                   | Behavior                                                                                                                                                                                                                                    |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`                 | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                                                                              |
+| `disconnect()`              | `void`                    | Applies a pending remote change and writes a [batched write](#batched-writes) still waiting, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
+| `isConnected()`             | `boolean`                 | Whether the engine is subscribed, so also while it waits for `ready`. This does not report network connectivity or whether a provider has received the room's state.                                                                        |
+| `isReady()`                 | `boolean`                 | Whether the engine is connected and done reconciling, so that local changes are written. See below.                                                                                                                                         |
+| `getStatus()`               | `SyncStatus`              | The engine's status, with what went wrong. It says nothing about the network. See [Sync status](#sync-status).                                                                                                                              |
+| `subscribeStatus(listener)` | `Unsubscribe`             | Calls `listener` after every change of `getStatus()`, also for a failure, until unsubscribed. See [Sync status](#sync-status).                                                                                                              |
+| `getSyncedState()`          | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                                                                               |
+| `subscribe(listener)`       | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                                                                             |
 
 After connection, each local notification writes the full filtered store state to the
-backend, along with what the backend holds, so the backend can diff against it instead of
-reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
+backend, a microtask later for an adapter that sets `batchWrites`, along with what the backend
+holds, so the backend can diff against it instead of reading its document; see [CrdtBackend](#crdtbackend). If the backend holds a remote change
 the store has not been given yet, the engine applies it first, merged with the local change, as
 it applies a pending one; see [Coalescing remote changes](#coalescing-remote-changes). That
 happens when a listener subscribed
@@ -472,13 +522,13 @@ const unsubscribe = engine.subscribe((event) => {
 });
 ```
 
-| Event          | Sent                                                                   | Once per                                                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"local"`      | after the write to the backend                                         | store notification handled while connected, even one that changed only local keys. An echo raised while a remote change is applied sends none.                             |
-| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                |
-| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.         |
-| `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply it runs sends its `"remote"` first; if that apply throws, `"disconnect"` is still sent, since the engine is disconnected. |
-| `"ready"`      | after reconciling once `ready` resolved; `isReady()` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                          |
+| Event          | Sent                                                                   | Once per                                                                                                                                                                                           |
+| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"local"`      | after the write to the backend                                         | store notification handled while connected, even one that changed only local keys, or [batched write](#batched-writes). An echo raised while a remote change is applied sends none.                |
+| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                                        |
+| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.                                 |
+| `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply or batched write it runs sends its `"remote"` or `"local"` first; if that throws, `"disconnect"` is still sent, since the engine is disconnected. |
+| `"ready"`      | after reconciling once `ready` resolved; `isReady()` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                                                  |
 
 With `ready`, `"connect"` comes before the wait and covers only the values adopted then. Each
 remote change during the wait sends `"remote"`, a local change sends nothing, since it writes
@@ -577,14 +627,16 @@ interface StoreAdapter<S extends object> {
   getState: () => S;
   setState: (state: S) => void;
   subscribe: (onStoreChange: () => void) => Unsubscribe;
+  batchWrites?: boolean;
 }
 ```
 
-| Member                | Contract                                                                                                               |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `getState()`          | Returns the current store state, as an object.                                                                         |
-| `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection. |
-| `subscribe(callback)` | Calls the callback when the store changes; returns a function that removes that subscription.                          |
+| Member                | Contract                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getState()`          | Returns the current store state, as an object.                                                                                                                                                                            |
+| `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection.                                                                                                    |
+| `subscribe(callback)` | Calls the callback synchronously when the store changes; returns a function that removes that subscription.                                                                                                               |
+| `batchWrites`         | `true` for a store that notifies once per property set, so that one change notifies several times. The engine then writes once per microtask, and a wrapping adapter must keep it; see [Batched writes](#batched-writes). |
 
 Use a `store-*` package for your state manager, or implement this interface for your own
 store. `S` may include local actions, but the part selected for sync must be plain JSON.
@@ -656,7 +708,9 @@ synced subtree.
 A store change reaches the engine only when the slice differs as JSON: by identity first, then
 with [`jsonEqual`](./diffing.md#jsonequal). So a change elsewhere in the store causes no
 `backend.write` and no `'local'` sync event, also with a `get` that builds a new object and with an
-adapter whose `getState` returns a fresh copy, such as the MobX adapter's.
+adapter whose `getState` returns a fresh copy, such as the MobX adapter's. The scoped adapter
+keeps the adapter's `batchWrites`, so a Valtio slice is written once per microtask too; see
+[Batched writes](#batched-writes).
 
 ### Array slices
 

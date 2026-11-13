@@ -926,9 +926,27 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
+      '@automerge/automerge':
+        specifier: ^3.4.1
+        version: 3.4.1
+      '@homeostate/crdt-automerge':
+        specifier: workspace:^
+        version: link:../crdt-automerge
+      '@homeostate/crdt-loro':
+        specifier: workspace:^
+        version: link:../crdt-loro
+      '@homeostate/crdt-yjs':
+        specifier: workspace:^
+        version: link:../crdt-yjs
+      loro-crdt:
+        specifier: ^1.17.1
+        version: 1.17.1
       valtio:
         specifier: ^2.3.2
         version: 2.3.2(@types/react@19.3.0)(react@19.3.0)
+      yjs:
+        specifier: ^13.6.23
+        version: 13.6.27
 
   packages/store-zustand:
     dependencies:

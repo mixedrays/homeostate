@@ -179,6 +179,9 @@ declare const console: {
   warn: (...data: unknown[]) => void;
 };
 
+// Likewise for `queueMicrotask`, which every browser and Node has.
+declare const queueMicrotask: (callback: () => void) => void;
+
 /** Whether the app runs a production build, where development warnings stay silent. */
 const isProduction = (): boolean => {
   try {
@@ -296,6 +299,17 @@ export function createSyncEngine<S extends object>(
   let applyPending = false;
   /** The flush handed to `schedule` and not run yet; a flush that is no longer it does nothing. */
   let scheduledFlush: (() => void) | null = null;
+  /**
+   * Queues the write of a local change, when the adapter batches its writes; see
+   * `StoreAdapter.batchWrites`. Without it, each notification is written at once.
+   */
+  const scheduleWrite: ((flush: () => void) => void) | undefined =
+    adapter.batchWrites === true ? queueMicrotask : undefined;
+  /**
+   * The flush queued with `scheduleWrite` and not run yet, while the store holds a local change
+   * the engine has not written; a flush that is no longer it does nothing.
+   */
+  let queuedWrite: (() => void) | null = null;
   /**
    * The store's synced state after the last apply that it did not ignore, unless a local change
    * was written since; `null` when unknown.
@@ -704,14 +718,21 @@ export function createSyncEngine<S extends object>(
 
   const syncToStore = (): void => {
     remoteReads++;
-    const known = lastSynced ?? {};
+    const base = lastSynced;
+    const known = base ?? {};
+    // The apply writes the waiting local change, merged with the remote changes, so the queued
+    // write is left with nothing to do. Without a base, the remote changes replace it, as in
+    // `applyUnseenRemote`.
+    const merging = queuedWrite !== null && base !== undefined;
+    queuedWrite = null;
     // Unknown should the read throw.
     lastSynced = undefined;
     lastRevision = readRevision();
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
     const held = readBackend();
     lastSynced = held;
-    if (waiting === null) applyRemote(held, false);
+    if (waiting === null)
+      applyRemote(held, false, [], merging ? base : undefined);
     else {
       // A key only the store holds waits to be seeded; one the backend held, a peer deleted.
       const removed = Object.keys(known).filter((key) => !hasOwn(held, key));
@@ -791,7 +812,6 @@ export function createSyncEngine<S extends object>(
   };
 
   const syncToBackend = (): void => {
-    if (applyingRemote) return;
     if (waiting !== null) {
       changedWhileWaiting = true;
       return;
@@ -810,6 +830,29 @@ export function createSyncEngine<S extends object>(
     emit("local");
   };
 
+  /**
+   * Hears a store notification: writes the local change at once, or, with `scheduleWrite`, queues
+   * one write for every notification until it runs. An echo of `setState` is ignored, and a local
+   * change while waiting for `ready` writes nothing, so neither queues a write.
+   */
+  const onStoreChange = (): void => {
+    if (applyingRemote) return;
+    if (scheduleWrite === undefined || waiting !== null) {
+      guarded(syncToBackend);
+      return;
+    }
+    if (queuedWrite !== null) return;
+    const flush = (): void => {
+      // A flush handed out before `disconnect()`, or before a remote change wrote the local
+      // change, does nothing.
+      if (queuedWrite !== flush) return;
+      queuedWrite = null;
+      guarded(syncToBackend);
+    };
+    queuedWrite = flush;
+    scheduleWrite(flush);
+  };
+
   const unsubscribeAll = (): void => {
     backendUnsubscribe?.();
     backendUnsubscribe = null;
@@ -820,6 +863,7 @@ export function createSyncEngine<S extends object>(
   /** Leaves the connected state: nothing heard, nothing waited for, and `'disconnect'` sent. */
   const stopSyncing = (): void => {
     waiting = null;
+    queuedWrite = null;
     unsubscribeAll();
     // A disconnected engine hears no remote change, so it reads the backend again on connect.
     lastSynced = undefined;
@@ -933,7 +977,7 @@ export function createSyncEngine<S extends object>(
           backend.subscribe(() => guarded(onRemoteChange)),
         );
         storeUnsubscribe = call("store", () =>
-          adapter.subscribe(() => guarded(syncToBackend)),
+          adapter.subscribe(() => onStoreChange()),
         );
       } catch (error) {
         // `disconnect()` cannot reach a subscription made before the throw, so drop it here.
@@ -953,10 +997,14 @@ export function createSyncEngine<S extends object>(
 
       // The store keeps what the backend held while connected; the scheduled flush is dropped.
       scheduledFlush = null;
+      // A waiting local change is written, merged with a pending apply, or it would be lost: on
+      // the next connect the backend wins for every key it holds.
+      const write = queuedWrite !== null;
+      queuedWrite = null;
       try {
-        guarded(runPendingApply);
+        guarded(write ? syncToBackend : runPendingApply);
       } finally {
-        // Also when the pending apply threw: the engine is disconnected all the same.
+        // Also when the pending apply or write threw: the engine is disconnected all the same.
         stopSyncing();
       }
     },

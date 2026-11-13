@@ -526,4 +526,22 @@ describe("scopeAdapter", () => {
 
     expect(backend.revision()).toBe(revision);
   });
+
+  it("batches the writes of an adapter that asks for it", async () => {
+    const store = createTestStore(root());
+    const backend = createMemoryBackend();
+    createSyncEngine(
+      backend,
+      scopeAdapter({ ...store.adapter, batchWrites: true }, docScope),
+    ).connect();
+    const write = vi.spyOn(backend, "write");
+
+    store.update((state) => ({ ...state, doc: { title: "a" } }));
+    store.update((state) => ({ ...state, doc: { title: "b" } }));
+
+    expect(write).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(backend.read()).toEqual({ title: "b" });
+  });
 });

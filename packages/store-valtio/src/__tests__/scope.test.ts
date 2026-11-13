@@ -33,7 +33,7 @@ const notesScope = {
 };
 
 describe("scopeAdapter over a Valtio proxy", () => {
-  it("reconciles a remote change into the slice, leaving the rest of the proxy untouched", () => {
+  it("reconciles a remote change into the slice, leaving the rest of the proxy untouched", async () => {
     const state = createRoot();
     const backend = createMemoryBackend();
     createSyncEngine(
@@ -51,11 +51,12 @@ describe("scopeAdapter over a Valtio proxy", () => {
     expect(state.ui).toBe(ui);
 
     state.doc.title = "local";
+    await Promise.resolve();
 
     expect(backend.read()).toEqual({ title: "local", items: [{ id: "1" }] });
   });
 
-  it("adds no write for a change outside the slice", () => {
+  it("adds no write for a change outside the slice", async () => {
     const state = createRoot();
     const backend = createMemoryBackend();
     createSyncEngine(
@@ -66,11 +67,12 @@ describe("scopeAdapter over a Valtio proxy", () => {
 
     state.ui.open = true;
     state.notes.title = "edited";
+    await Promise.resolve();
 
     expect(write).not.toHaveBeenCalled();
   });
 
-  it("does not tell the other scoped adapter of a remote change", () => {
+  it("does not tell the other scoped adapter of a remote change", async () => {
     const state = createRoot();
     const docBackend = createMemoryBackend();
     const notesBackend = createMemoryBackend();
@@ -81,11 +83,12 @@ describe("scopeAdapter over a Valtio proxy", () => {
 
     docBackend.receive({ title: "remote", items: [] });
 
+    await Promise.resolve();
     expect(state.doc.title).toBe("remote");
     expect(notesWrite).not.toHaveBeenCalled();
   });
 
-  it("keeps syncing when the app replaces the slice's object", () => {
+  it("keeps syncing when the app replaces the slice's object", async () => {
     const state = createRoot();
     const backend = createMemoryBackend();
     createSyncEngine(
@@ -94,6 +97,7 @@ describe("scopeAdapter over a Valtio proxy", () => {
     ).connect();
 
     state.doc = { title: "replaced", items: [] };
+    await Promise.resolve();
 
     expect(backend.read()).toEqual({ title: "replaced", items: [] });
 
