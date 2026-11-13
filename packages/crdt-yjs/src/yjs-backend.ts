@@ -4,12 +4,12 @@ import {
   type CrdtBackend,
   type JsonObject,
   type JsonObjectInput,
+  mergeConcurrent,
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
 import { toPlainMap } from "./mapping.js";
 import { createYjsOps } from "./patching.js";
-import { rebase } from "./merge.js";
 import { copyJson, createHold, hasGap } from "./pending.js";
 
 /** Options for `createYjsBackend` */
@@ -249,8 +249,13 @@ export function createYjsBackend(
     // the document holds, leaving alone what it did not change, the values the gap hides too.
     const seen = previous ?? held.value;
     const real = toPlainMap(map);
-    backend.write(rebase(real, seen, next, text) as JsonObject, real);
-    held.value = rebase(held.value, seen, next, text) as JsonObjectInput;
+    backend.write(
+      mergeConcurrent(seen, next, real, { text }) as JsonObject,
+      real,
+    );
+    held.value = mergeConcurrent(seen, next, held.value, {
+      text,
+    }) as JsonObjectInput;
     // Equal to no revision before it, whether or not the write ran inside a transaction.
     held.revision = {};
   };

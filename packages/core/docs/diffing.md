@@ -1,5 +1,5 @@
 ---
-description: getChanges and its edit script, text policies, the JSON helpers toJsonValue, jsonEqual and keepIdentity, and applying changes in place with ApplyOps.
+description: getChanges, its edit script and text policies, the JSON helpers toJsonValue, jsonEqual, keepIdentity and mergeConcurrent, and applying changes with ApplyOps.
 label: Diff and apply API
 order: 3
 ---
@@ -302,6 +302,61 @@ const next = keepIdentity(previous, {
 });
 
 console.log(next.todos[1] === previous.todos[0]); // true
+```
+
+## mergeConcurrent
+
+```ts
+interface MergeOptions {
+  text?: TextPolicy;
+}
+
+declare const mergeConcurrent: (
+  base: unknown,
+  local: unknown,
+  remote: unknown,
+  options?: MergeOptions,
+) => unknown;
+```
+
+Merges `local` and `remote`, two JSON values that both descend from `base`, so that each keeps
+its own changes from `base`. `undefined` stands for an absent value, and is returned for a value
+the merge leaves absent. Object entries holding `undefined` or a function are absent, and such
+array items are `null`, as `JSON.stringify` would store them. Neither input is mutated.
+
+| What changed                                                                | Result                                                                                                                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Different keys of a record                                                  | Both. Records merge key by key, at any depth, and `__proto__` keys are ignored.                                                            |
+| Different items of an array                                                 | Both. Items are matched as `getChanges` matches them, so an edit lands on the item it targeted after the other side's inserts and deletes. |
+| Items inserted at the same place on both sides                              | Both, the remote ones first.                                                                                                               |
+| A string `options.text` marks as text, changed on both sides                | Merged by UTF-16 unit, as an array merges item by item.                                                                                    |
+| The same value, changed differently on both sides                           | The local value. Without `options.text`, a string is one value, replaced whole.                                                            |
+| A record, array or text the local side changed inside, which remote deleted | Deleted, as a CRDT loses an edit inside a deleted container. A value the local side replaced whole, such as a plain string, is kept.       |
+| A value the local side deleted                                              | Deleted, also where the remote side changed it.                                                                                            |
+
+What only one side changed is that side's value, by identity. Where both sides hold equal
+values, at any level, the merge returns the local one, so a local value that already holds the
+remote changes merges to itself. An item both sides inserted at one place is then kept once
+when the two arrays are equal, but twice when they differ otherwise, as a CRDT would keep it.
+
+The sync engine merges a local change into a pending remote apply with it, without a text
+policy, and `@homeostate/crdt-yjs` merges a store's write into what its document holds while an
+update waits for an earlier one, with its `text` option. Use it to merge two edits of one
+state, such as an offline copy and the room's, as a backend would write them.
+
+```ts title="merge-concurrent-example.ts"
+import { mergeConcurrent } from "@homeostate/core";
+
+const base = { title: "Plan", todos: ["a", "b"] };
+const local = { title: "Plan it", todos: ["a", "b", "c"] };
+const remote = { title: "The plan", todos: ["x", "a", "b"] };
+
+console.log(mergeConcurrent(base, local, remote));
+// { title: "Plan it", todos: ["x", "a", "b", "c"] }
+
+const isTitle = (path: readonly (string | number)[]) => path[0] === "title";
+console.log(mergeConcurrent(base, local, remote, { text: isTitle }));
+// { title: "The plan it", todos: ["x", "a", "b", "c"] }
 ```
 
 ## applyChanges

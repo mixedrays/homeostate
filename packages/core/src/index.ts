@@ -5,6 +5,8 @@ export type { AdapterScope } from "./scope-adapter.js";
 export { getChanges } from "./diff.js";
 export { jsonEqual, toJsonValue } from "./json.js";
 export { keepIdentity } from "./patching.js";
+export { mergeConcurrent } from "./merge.js";
+export type { MergeOptions } from "./merge.js";
 export { applyChanges, applyStringChanges } from "./apply.js";
 export { createCrdtBackend } from "./crdt-backend.js";
 export type { CrdtBackendOptions, CrdtBackendParts } from "./crdt-backend.js";

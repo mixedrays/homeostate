@@ -198,6 +198,8 @@ before the pending changes, which both last agreed on, and keeps each side's cha
 | A record or array the store changed inside, which remote deleted | Deleted, as a CRDT loses an edit inside a deleted container. A value the store replaced whole, such as a string, is kept instead.     |
 | A value the store deleted                                        | Deleted, also where the remote side changed it.                                                                                       |
 
+The merge is [`mergeConcurrent`](./diffing.md#mergeconcurrent), without a text policy.
+
 Keys the filter keeps local take no part: the merge reads no backend value into them. A key whose
 backend value the filter rejects keeps the store's value, as on every apply. The merged state
 goes through `setState`, and what the store holds afterwards is written once, as a local change,

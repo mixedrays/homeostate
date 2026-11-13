@@ -124,6 +124,14 @@ value the waiting update replaced, and keeps the changes other peers made in the
   or a plain string, the store's value wins, as a later write would. A value the document
   lost stays lost if the store only changed what was inside it, as Yjs drops an edit inside a
   deleted map; if the store replaced it, the store's value is written.
+- Object entries holding `undefined` or a function count as absent, and such array items as
+  `null`, as the document stores them.
+- A value the store holds equal to the document's is left as it is, so an item the store and
+  a peer both inserted at one place appears once where the two arrays are otherwise equal,
+  not twice, as two concurrent Yjs inserts would.
+
+The merge is [`mergeConcurrent`](../../core/docs/diffing.md#mergeconcurrent) from
+`@homeostate/core`, with the backend's `text` option.
 
 The wait has two costs:
 
