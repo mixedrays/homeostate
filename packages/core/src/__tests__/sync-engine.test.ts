@@ -911,9 +911,7 @@ describe("createSyncEngine", () => {
           const engine = createSyncEngine(backend, store.adapter, { onError });
           engine.connect();
           const failures: unknown[] = [];
-          engine.subscribeStatus(() =>
-            failures.push(engine.getStatus().failure),
-          );
+          engine.subscribe(() => failures.push(engine.getStatus().failure));
 
           backend.receive({ log: ["a", "b"], logSize: 1 }); // B's append; A writes back logSize: 2
           // C appended concurrently and wrote logSize: 1, which wins over A's 2.
@@ -3350,7 +3348,7 @@ describe("createSyncEngine", () => {
     it.each([
       ["without onError", undefined],
       ["with onError", () => {}],
-    ])("sends nothing when write or setState throws, %s", (_, onError) => {
+    ])("sends only error when write or setState throws, %s", (_, onError) => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       let failSetState = false;
@@ -3382,10 +3380,10 @@ describe("createSyncEngine", () => {
         expect(receive).toThrow("invalid");
       }
 
-      expect(recorded.events()).toEqual([]);
+      expect(recorded.events()).toEqual(["error", "error"]);
     });
 
-    it("sends nothing when connect() throws", () => {
+    it("sends only error when connect() throws", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const engine = createSyncEngine(backend, {
@@ -3399,10 +3397,10 @@ describe("createSyncEngine", () => {
       expect(() => engine.connect()).toThrow("boom");
       engine.disconnect();
 
-      expect(recorded.events()).toEqual([]);
+      expect(recorded.seen).toEqual([["error", false]]);
     });
 
-    it("sends disconnect when the pending apply disconnect() runs throws", () => {
+    it("sends error and then disconnect when the pending apply disconnect() runs throws", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       let flush = (): void => {};
@@ -3423,7 +3421,10 @@ describe("createSyncEngine", () => {
       expect(() => engine.disconnect()).toThrow("invalid");
       flush();
 
-      expect(recorded.seen).toEqual([["disconnect", false]]);
+      expect(recorded.seen).toEqual([
+        ["error", true],
+        ["disconnect", false],
+      ]);
     });
 
     describe("a listener that throws", () => {
@@ -4179,7 +4180,7 @@ describe("createSyncEngine", () => {
 
         expect(seen).toEqual([[failure, "ready", false]]);
         expect(write).not.toHaveBeenCalled();
-        expect(events).toEqual(["connect", "disconnect"]);
+        expect(events).toEqual(["connect", "disconnect", "error"]);
         expect(engine.getStatus().ready).toBe(false);
       });
 
@@ -4245,7 +4246,7 @@ describe("createSyncEngine", () => {
         flushes[0]();
 
         expect(store.getState()).toEqual({ count: 0 });
-        expect(events).toEqual(["connect", "disconnect"]);
+        expect(events).toEqual(["connect", "disconnect", "error"]);
       });
 
       it("hands out a new flush after a failed wait, and the old one does nothing", async () => {
@@ -4295,7 +4296,13 @@ describe("createSyncEngine", () => {
         engine.connect();
         await settled();
 
-        expect(events).toEqual(["connect", "disconnect", "connect", "ready"]);
+        expect(events).toEqual([
+          "connect",
+          "disconnect",
+          "error",
+          "connect",
+          "ready",
+        ]);
       });
 
       it("ignores a rejection after a disconnect", async () => {
@@ -4523,7 +4530,7 @@ describe("createSyncEngine", () => {
 
         expect(onError).toHaveBeenCalledWith(expect.any(TypeError), "backend");
         expect(engine.getStatus().connected).toBe(false);
-        expect(events).toEqual(["connect", "disconnect"]);
+        expect(events).toEqual(["connect", "disconnect", "error"]);
       });
 
       it("reports a seed write that fails and disconnects", async () => {
@@ -4807,7 +4814,7 @@ describe("createSyncEngine", () => {
 
         expect(onError).toHaveBeenCalledWith(expect.any(TypeError), "backend");
         expect(engine.getStatus().connected).toBe(false);
-        expect(events).toEqual(["connect", "disconnect"]);
+        expect(events).toEqual(["connect", "disconnect", "error"]);
       });
 
       it("stops when applying a pending flush at settling disconnects the engine", async () => {

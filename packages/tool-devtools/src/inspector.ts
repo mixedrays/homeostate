@@ -363,7 +363,11 @@ export function createInspector(
     commit(next, label);
   };
 
-  /** What a sync event says about the batch it falls in; `local` only refreshes the view. */
+  /**
+   * What a sync event says about the batch it falls in. `local`, `disconnect` and `error` only
+   * refresh the view: a failure changes no store value, and the `error` that follows an apply
+   * leaves its change logged as remote.
+   */
   const onSyncEvent = (event: SyncEvent): void => {
     if (event === "remote") schedule("remote");
     // Connecting adopts the backend's values, which is a remote change to the store, and so does

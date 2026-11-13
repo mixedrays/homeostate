@@ -23,11 +23,11 @@ engine.disconnect();
 ```
 
 The engine reports a sync event after each local change it writes, remote change it applies,
-connect and disconnect, and `getSyncedState()` returns the store's synced keys; see [Sync events](../../../packages/core/docs/sync-engine.md#sync-events).
+connect, disconnect and failure, and `getSyncedState()` returns the store's synced keys; see [Sync events](../../../packages/core/docs/sync-engine.md#sync-events).
 
-`getStatus()` gathers what the engine has done and what went wrong, and `subscribeStatus` says when
-that changes; see [Sync status](../../../packages/core/docs/sync-engine.md#sync-status). It says
-nothing about the network.
+`getStatus()` gathers what the engine has done and what went wrong, and every change of it comes
+with a sync event; see [Sync status](../../../packages/core/docs/sync-engine.md#sync-status). It
+says nothing about the network.
 
 ## Store adapters
 

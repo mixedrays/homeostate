@@ -277,8 +277,9 @@ const syncPredicate = ({
  * that does not return an object. Once connected, what the adapter or the backend throws goes to
  * `onError` when it is given, and otherwise to whoever triggered the work, as before. A rejected
  * `ready`, or a failure while reconciling after it, disconnects the engine and goes to `onError`,
- * and without it surfaces as an unhandled rejection. Whichever way an error goes, `getStatus()`
- * keeps it until the engine recovers; see `SyncStatus`.
+ * and without it surfaces as an unhandled rejection. Whichever way an error goes, the engine
+ * sends an `'error'` sync event, and `getStatus()` keeps it until the engine recovers; see
+ * `SyncStatus`.
  *
  * @example
  * ```typescript
@@ -354,13 +355,16 @@ export function createSyncEngine<S extends object>(
   let thrownBy: SyncErrorSource | undefined;
   /** What `subscribe` was given; kept across reconnects. */
   const listeners = new Set<(event: SyncEvent) => void>();
-  /** What `subscribeStatus` was given; kept across reconnects. */
-  const statusListeners = new Set<() => void>();
 
   /** The last failure the engine has not recovered from. */
   let failure: SyncFailure | null = null;
   /** Whether the apply in progress stopped a write loop, which leaves `failure` standing. */
   let stoppedLoop = false;
+  /**
+   * A failure the work in progress recorded and carries on after, as a stopped write loop or a
+   * failed wait for `ready` does: `'error'` tells of it once the work's own event has been sent.
+   */
+  let untold: SyncFailure | null = null;
   /** What `getStatus` returned last with a failure. */
   let failedStatus: SyncStatus | null = null;
 
@@ -377,49 +381,23 @@ export function createSyncEngine<S extends object>(
     return failedStatus;
   };
 
-  /** The status `statusListeners` heard last. */
-  let published = getStatus();
-
-  /** Tells every status listener, if the status changed since they last heard. */
-  const publishStatus = (): void => {
-    const status = getStatus();
-    if (status === published) return;
-    published = status;
-    for (const listener of [...statusListeners]) {
-      // A listener changed the status again, and that change has told everyone.
-      if (published !== status) return;
-      if (!statusListeners.has(listener)) continue;
-      try {
-        listener();
-      } catch (error) {
-        console.error("[homeostate] a status listener threw:", error);
-      }
-    }
-  };
-
-  /** Keeps `error` as the status's failure, and tells the status listeners. */
-  const recordFailure = (
-    error: unknown,
-    source: SyncErrorSource | undefined,
-  ): void => {
-    failure = { error, source };
-    publishStatus();
-  };
-
   // `connect()` may come long after a promise rejects, and until then nothing else handles it.
   if (typeof ready === "object") ready.then(undefined, () => {});
 
   /**
-   * Tells every listener that the engine has handled `event`. A listener runs inside a store's or
-   * a document's notification loop, which may stop at the first throw, as Zustand's does, so what
-   * it throws is logged and the other listeners still run.
+   * Tells every listener that the engine has handled `event`, and then of the failure in
+   * `untold`, if any, with `'error'`. A listener runs inside a store's or a document's
+   * notification loop, which may stop at the first throw, as Zustand's does, so what it throws is
+   * logged and the other listeners still run.
    */
   const emit = (event: SyncEvent): void => {
     // What the event reports has completed, so the store and the backend agree again, unless the
-    // engine has just stopped writing back keys that differ. A disconnected engine keeps its
-    // failure, to say why it stopped.
-    if (connected && !stoppedLoop) failure = null;
+    // engine has just stopped writing back keys that differ or the event is the failure itself. A
+    // disconnected engine keeps its failure, to say why it stopped.
+    if (event !== "error" && connected && !stoppedLoop) failure = null;
     stoppedLoop = false;
+    const recorded = untold;
+    untold = null;
     for (const listener of [...listeners]) {
       // One unsubscribed by an earlier listener hears nothing more.
       if (!listeners.has(listener)) continue;
@@ -429,7 +407,17 @@ export function createSyncEngine<S extends object>(
         console.error("[homeostate] a sync event listener threw:", error);
       }
     }
-    publishStatus();
+    // Unless a listener has cleared or replaced it since.
+    if (recorded !== null && failure === recorded) emit("error");
+  };
+
+  /** Keeps `error` as the status's failure, and sends `'error'`. */
+  const recordFailure = (
+    error: unknown,
+    source: SyncErrorSource | undefined,
+  ): void => {
+    failure = { error, source };
+    emit("error");
   };
 
   /** Runs `run`, a call into the store adapter or the backend, recording `source` if it throws. */
@@ -760,7 +748,8 @@ export function createSyncEngine<S extends object>(
   /**
    * Keeps a stopped loop as the status's failure, each time it comes back, and reports it once per
    * set of top-level keys: to `onError` in every build, and otherwise with a warning in
-   * development. The `'remote'` event that ends the apply tells the status listeners.
+   * development. A loop new to the status is told with `'error'` after the `'remote'` that ends
+   * the apply.
    */
   const reportLoop = (paths: string[][]): void => {
     const keys = [...new Set(paths.map(([key]) => key))];
@@ -771,6 +760,7 @@ export function createSyncEngine<S extends object>(
       source: "store",
     };
     reportedLoops.set(id, loop);
+    if (failure !== loop) untold = loop;
     failure = loop;
     if (reported === undefined) {
       if (onError !== undefined) onError(loop.error, "store");
@@ -981,8 +971,9 @@ export function createSyncEngine<S extends object>(
   ): void => {
     applyPending = false;
     scheduledFlush = null;
-    // Not published on its own: `'disconnect'` tells of both changes at once.
+    // `'disconnect'` already shows it, so the status changes once; `'error'` follows.
     failure = { error, source };
+    untold = failure;
     stopSyncing();
     if (onError === undefined || source === undefined) throw error;
     onError(error, source);
@@ -1078,13 +1069,6 @@ export function createSyncEngine<S extends object>(
     },
 
     getStatus,
-
-    subscribeStatus: (listener): Unsubscribe => {
-      statusListeners.add(listener);
-      return () => {
-        statusListeners.delete(listener);
-      };
-    },
 
     getSyncedState: (): Plain => filterState(readStore()),
 

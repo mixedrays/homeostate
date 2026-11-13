@@ -463,6 +463,39 @@ describe("sync events", () => {
     },
   );
 
+  it("logs the apply that stops a write loop as remote, though an error event follows it", async () => {
+    const store = createTestStore<State>(initial());
+    // Rewrites every filter it is given, so a peer that keeps setting it makes a write loop.
+    const adapter = {
+      ...store.adapter,
+      setState: (next: State) =>
+        store.set({ ...next, filter: `${next.filter}!` }),
+    };
+    const backend = createMemoryBackend();
+    const engine = createSyncEngine(backend, adapter, { onError: () => {} });
+    engine.connect();
+    const events: string[] = [];
+    engine.subscribe((event) => events.push(event));
+    inspector = createInspector({ name: "todos", adapter, backend, engine });
+    inspector.start();
+    await tick();
+
+    // One batch per apply, so the last one holds the stopping apply's remote and error events.
+    for (let i = 1; !events.includes("error"); i++) {
+      expect(i).toBeLessThan(20);
+      backend.receive({ ...initial(), filter: `peer ${i}` });
+      await tick();
+    }
+    const stopped = events.filter((event) => event === "remote").length;
+
+    expect(events.slice(-2)).toEqual(["remote", "error"]);
+    const { log } = inspector.getSnapshot();
+    expect(log.at(-1)).toMatchObject({
+      origin: "remote",
+      state: { filter: `peer ${stopped}!` },
+    });
+  });
+
   it("updates the connection status when the app connects or disconnects the engine", async () => {
     const { engine, inspector } = setup();
 

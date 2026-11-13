@@ -722,7 +722,7 @@ describe("syncStateTree with ready", () => {
     const node = TodoStore.create();
     const engine = syncStateTree(node, { backend: createMemoryBackend() });
     const listener = vi.fn();
-    engine.subscribeStatus(listener);
+    engine.subscribe(listener);
     expect(engine.getStatus()).toEqual({
       connected: true,
       ready: true,
@@ -732,7 +732,7 @@ describe("syncStateTree with ready", () => {
     destroy(node);
 
     expect(engine.getStatus().connected).toBe(false);
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledExactlyOnceWith("disconnect");
   });
 
   it("does nothing when ready settles after the node is destroyed", async () => {

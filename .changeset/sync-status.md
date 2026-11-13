@@ -3,10 +3,10 @@
 ---
 
 Read what the sync engine is doing. `getStatus()` returns `{ connected, ready, failure }`, and
-`subscribeStatus(listener)` calls back when it changes:
+every change of it comes with a sync event, so `subscribe` tells when to read it again:
 
 ```ts
-engine.subscribeStatus(() => {
+engine.subscribe(() => {
   const { ready, failure } = engine.getStatus();
   saveButton.disabled = !ready;
   if (failure) report(failure.error, failure.source);
@@ -20,5 +20,5 @@ recovers: the next completed write, apply or connect clears it, and `disconnect(
 `WriteLoopError` shows in every build, with or without `onError`. The status is a frozen object, the
 same one until a field changes.
 
-`onError`, the sync events and what propagates are unchanged. An object that implements
-`SyncEngine` by hand must add `getStatus` and `subscribeStatus`.
+A failure also sends the new `"error"` sync event; see the migration notes. `onError` and what
+propagates are unchanged. An object that implements `SyncEngine` by hand must add `getStatus`.

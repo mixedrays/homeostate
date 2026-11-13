@@ -111,7 +111,7 @@ describe("homeostate middleware", () => {
       ),
     );
     const listener = vi.fn();
-    const unsubscribe = store.homeostate.subscribeStatus(listener);
+    const unsubscribe = store.homeostate.subscribe(listener);
     expect(store.homeostate.getStatus().connected).toBe(false);
 
     store.homeostate.connect();
@@ -121,7 +121,7 @@ describe("homeostate middleware", () => {
       ready: true,
       failure: null,
     });
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledExactlyOnceWith("connect");
     unsubscribe();
   });
 

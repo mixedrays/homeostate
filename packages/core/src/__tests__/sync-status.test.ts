@@ -13,6 +13,7 @@ import {
   type SyncEngine,
   type SyncEngineConfig,
   type SyncEvent,
+  type SyncStatus,
 } from "../index.js";
 import { createMemoryBackend, type MemoryBackend } from "../testing.js";
 import { createTestStore, type TestStore } from "./helpers.js";
@@ -29,6 +30,13 @@ const deferred = () => {
 
 /** Lets every promise reaction already due run. */
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** Records each sync event of `engine`, with the status it reads as the event arrives. */
+const record = (engine: SyncEngine): [SyncEvent, SyncStatus][] => {
+  const seen: [SyncEvent, SyncStatus][] = [];
+  engine.subscribe((event) => seen.push([event, engine.getStatus()]));
+  return seen;
+};
 
 describe("sync status", () => {
   describe("getStatus", () => {
@@ -126,18 +134,14 @@ describe("sync status", () => {
     });
   });
 
-  describe("subscribeStatus", () => {
-    it("calls the listener once per change, with the new status already readable", async () => {
+  describe("sync events", () => {
+    it("come with every change of the status, which each listener already reads", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
       const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
         ready: () => ready.promise,
       });
-      const seen: [boolean, boolean][] = [];
-      engine.subscribeStatus(() => {
-        const { connected, ready } = engine.getStatus();
-        seen.push([connected, ready]);
-      });
+      const seen = record(engine);
 
       engine.connect();
       ready.resolve();
@@ -145,106 +149,41 @@ describe("sync status", () => {
       engine.disconnect();
 
       expect(seen).toEqual([
-        [true, false],
-        [true, true],
-        [false, false],
+        ["connect", { connected: true, ready: false, failure: null }],
+        ["ready", { connected: true, ready: true, failure: null }],
+        ["disconnect", { connected: false, ready: false, failure: null }],
       ]);
     });
 
-    it("calls the listener after the listeners of the sync event", () => {
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-      const order: string[] = [];
-      engine.subscribeStatus(() => order.push("status"));
-      engine.subscribe(() => order.push("event"));
-
-      engine.connect();
-
-      expect(order).toEqual(["event", "status"]);
-    });
-
-    it("stays silent for local and remote changes, which change no status", () => {
+    it("leave the status the same object for local and remote changes", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const engine = createSyncEngine(backend, store.adapter);
       engine.connect();
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
-      const events: SyncEvent[] = [];
-      engine.subscribe((event) => events.push(event));
+      const status = engine.getStatus();
+      const seen = record(engine);
 
       store.setState({ count: 1 });
       backend.receive({ count: 2 });
 
-      expect(events).toEqual(["local", "remote"]);
-      expect(listener).not.toHaveBeenCalled();
+      expect(seen).toEqual([
+        ["local", status],
+        ["remote", status],
+      ]);
+      expect(seen[0]![1]).toBe(status);
+      expect(seen[1]![1]).toBe(status);
     });
 
-    it("stays silent for a connect or disconnect that changes nothing", () => {
+    it("send nothing for a connect or disconnect that changes nothing", () => {
       const store = createTestStore({ count: 0 });
       const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
+      const seen = record(engine);
 
       engine.disconnect();
-      expect(listener).not.toHaveBeenCalled();
-
       engine.connect();
       engine.connect();
-      expect(listener).toHaveBeenCalledTimes(1);
-    });
 
-    it("stops calling a listener once unsubscribed, and keeps it across reconnects until then", () => {
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-      const listener = vi.fn();
-      const unsubscribe = engine.subscribeStatus(listener);
-
-      engine.connect();
-      engine.disconnect();
-      engine.connect();
-      expect(listener).toHaveBeenCalledTimes(3);
-
-      unsubscribe();
-      engine.disconnect();
-      expect(listener).toHaveBeenCalledTimes(3);
-    });
-
-    it("does not call a listener another one unsubscribed during the same change", () => {
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-      const second = vi.fn();
-      let unsubscribeSecond = (): void => {};
-      engine.subscribeStatus(() => unsubscribeSecond());
-      unsubscribeSecond = engine.subscribeStatus(second);
-
-      engine.connect();
-
-      expect(second).not.toHaveBeenCalled();
-    });
-
-    it("logs what a listener throws, and the other listeners still run", () => {
-      const consoleError = vi
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-      const error = new Error("listener");
-      const second = vi.fn();
-      engine.subscribeStatus(() => {
-        throw error;
-      });
-      engine.subscribeStatus(second);
-
-      engine.connect();
-
-      expect(second).toHaveBeenCalledTimes(1);
-      expect(consoleError).toHaveBeenCalledWith(
-        "[homeostate] a status listener threw:",
-        error,
-      );
-      expect(engine.getStatus().connected).toBe(true);
-      consoleError.mockRestore();
+      expect(seen.map(([event]) => event)).toEqual(["connect"]);
     });
   });
 
@@ -276,10 +215,10 @@ describe("sync status", () => {
       const { config } = options();
       const engine = createSyncEngine(backend, store.adapter, config);
       engine.connect();
-      const events: SyncEvent[] = [];
-      engine.subscribe((event) => events.push(event));
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
+      const seen: [SyncEvent, unknown][] = [];
+      engine.subscribe((event) =>
+        seen.push([event, engine.getStatus().failure]),
+      );
       const write = backend.write;
       const error = new Error("write");
       backend.write = () => {
@@ -293,14 +232,13 @@ describe("sync status", () => {
         ready: true,
         failure: { error, source: "backend" },
       });
-      expect(events).toEqual([]);
-      expect(listener).toHaveBeenCalledTimes(1);
+      expect(seen).toEqual([["error", { error, source: "backend" }]]);
 
       backend.write = write;
       store.setState({ count: 2 });
 
       expect(engine.getStatus().failure).toBeNull();
-      expect(listener).toHaveBeenCalledTimes(2);
+      expect(seen.at(-1)).toEqual(["local", null]);
     });
 
     it("records a failed apply and clears it when the next remote change is applied", () => {
@@ -425,7 +363,7 @@ describe("sync status", () => {
       });
     });
 
-    it("tells status listeners of a failure before onError runs", () => {
+    it("sends error with the failure before onError runs", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const order: string[] = [];
@@ -433,14 +371,18 @@ describe("sync status", () => {
         ...(withOnError ? { onError: () => order.push("onError") } : {}),
       });
       engine.connect();
-      engine.subscribeStatus(() => order.push("status"));
+      engine.subscribe((event) =>
+        order.push(`${event}: ${engine.getStatus().failure?.source}`),
+      );
       backend.write = () => {
         throw new Error("write");
       };
 
       attempt(() => store.setState({ count: 1 }));
 
-      expect(order).toEqual(withOnError ? ["status", "onError"] : ["status"]);
+      expect(order).toEqual(
+        withOnError ? ["error: backend", "onError"] : ["error: backend"],
+      );
     });
 
     it("records what filter throws, with no source, and it still propagates", () => {
@@ -482,7 +424,7 @@ describe("sync status", () => {
       expect(engine.getStatus().failure).toEqual({ error });
     });
 
-    it("records a pending apply that fails in disconnect, then disconnects", () => {
+    it("sends error for a pending apply that fails in disconnect, then disconnect", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
@@ -495,16 +437,15 @@ describe("sync status", () => {
       store.adapter.setState = () => {
         throw error;
       };
-      const seen: unknown[] = [];
-      engine.subscribeStatus(() => seen.push(engine.getStatus()));
+      const seen = record(engine);
       backend.receive({ count: 1 });
 
       attempt(() => engine.disconnect());
 
       const failure = { error, source: "store" };
       expect(seen).toEqual([
-        { connected: true, ready: true, failure },
-        { connected: false, ready: false, failure },
+        ["error", { connected: true, ready: true, failure }],
+        ["disconnect", { connected: false, ready: false, failure }],
       ]);
     });
   });
@@ -515,7 +456,7 @@ describe("sync status", () => {
   ])("failed connects, %s", (_name, withOnError) => {
     const config = withOnError ? { onError: () => {} } : {};
 
-    it("records what connect throws, and a later connect clears it", () => {
+    it("sends error for what connect throws, and a later connect clears it", () => {
       const store = createTestStore({ count: 0 });
       const engine = createSyncEngine(
         createMemoryBackend(),
@@ -527,30 +468,28 @@ describe("sync status", () => {
       store.adapter.getState = () => {
         throw error;
       };
-      const events: SyncEvent[] = [];
-      engine.subscribe((event) => events.push(event));
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
+      const seen = record(engine);
 
       expect(() => engine.connect()).toThrow(error);
 
-      expect(engine.getStatus()).toEqual({
-        connected: false,
-        ready: false,
-        failure: { error, source: "store" },
-      });
-      expect(events).toEqual([]);
-      expect(listener).toHaveBeenCalledTimes(1);
+      expect(seen).toEqual([
+        [
+          "error",
+          {
+            connected: false,
+            ready: false,
+            failure: { error, source: "store" },
+          },
+        ],
+      ]);
 
       store.adapter.getState = getState;
       engine.connect();
 
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: true,
-        failure: null,
-      });
-      expect(listener).toHaveBeenCalledTimes(2);
+      expect(seen.at(-1)).toEqual([
+        "connect",
+        { connected: true, ready: true, failure: null },
+      ]);
     });
 
     it("names the backend when its subscribe throws", () => {
@@ -665,7 +604,7 @@ describe("sync status", () => {
       expect(unhandled).toEqual(withOnError ? [] : [error]);
     };
 
-    it("records a rejected ready as one change, and a later connect clears it while it waits", async () => {
+    it("records a rejected ready as one change, sent with disconnect and then error, and a later connect clears it while it waits", async () => {
       const store = createTestStore({ count: 0 });
       const first = deferred();
       const waits = [first, deferred()];
@@ -674,14 +613,17 @@ describe("sync status", () => {
         ready: () => waits.shift()!.promise,
       });
       engine.connect();
-      const seen: unknown[] = [];
-      engine.subscribeStatus(() => seen.push(engine.getStatus()));
+      const seen = record(engine);
       const error = new Error("ready");
 
       await expectingRejection(error, () => first.reject(error));
 
       const failure = { error, source: "ready" };
-      expect(seen).toEqual([{ connected: false, ready: false, failure }]);
+      expect(seen).toEqual([
+        ["disconnect", { connected: false, ready: false, failure }],
+        ["error", { connected: false, ready: false, failure }],
+      ]);
+      expect(seen[1]![1]).toBe(seen[0]![1]);
 
       engine.connect();
       expect(engine.getStatus()).toEqual({
@@ -708,7 +650,7 @@ describe("sync status", () => {
       });
     });
 
-    it("shows the failure to a disconnect listener, before onError runs", async () => {
+    it("shows the failure to disconnect and then error listeners, before onError runs", async () => {
       const store = createTestStore({ count: 0 });
       const ready = deferred();
       const seen: unknown[] = [];
@@ -717,15 +659,19 @@ describe("sync status", () => {
         ready: ready.promise,
       });
       engine.connect();
-      engine.subscribe((event) => {
-        if (event === "disconnect") seen.push(engine.getStatus().failure);
-      });
+      engine.subscribe((event) =>
+        seen.push([event, engine.getStatus().failure]),
+      );
       const error = new Error("ready");
 
       await expectingRejection(error, () => ready.reject(error));
 
       const failure = { error, source: "ready" };
-      expect(seen).toEqual(withOnError ? [failure, "onError"] : [failure]);
+      const events = [
+        ["disconnect", failure],
+        ["error", failure],
+      ];
+      expect(seen).toEqual(withOnError ? [...events, "onError"] : events);
     });
 
     it("records a reconcile that fails at settling as one change", async () => {
@@ -741,17 +687,18 @@ describe("sync status", () => {
       backend.write = () => {
         throw error;
       };
-      const seen: unknown[] = [];
-      engine.subscribeStatus(() => seen.push(engine.getStatus()));
+      const seen = record(engine);
 
       await expectingRejection(error, () => ready.resolve());
 
+      const status = {
+        connected: false,
+        ready: false,
+        failure: { error, source: "backend" },
+      };
       expect(seen).toEqual([
-        {
-          connected: false,
-          ready: false,
-          failure: { error, source: "backend" },
-        },
+        ["disconnect", status],
+        ["error", status],
       ]);
     });
 
@@ -770,13 +717,18 @@ describe("sync status", () => {
         throw error;
       };
       backend.receive({ count: 1 });
-      const seen: unknown[] = [];
-      engine.subscribeStatus(() => seen.push(engine.getStatus()));
+      const seen = record(engine);
 
       await expectingRejection(error, () => ready.resolve());
 
+      const status = {
+        connected: false,
+        ready: false,
+        failure: { error, source: "store" },
+      };
       expect(seen).toEqual([
-        { connected: false, ready: false, failure: { error, source: "store" } },
+        ["disconnect", status],
+        ["error", status],
       ]);
     });
 
@@ -794,13 +746,12 @@ describe("sync status", () => {
       };
       expect(() => engine.connect()).toThrow(error);
       store.adapter.getState = getState;
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
+      const seen = record(engine);
 
       ready.reject(new Error("late"));
       await settled();
 
-      expect(listener).not.toHaveBeenCalled();
+      expect(seen).toEqual([]);
       expect(engine.getStatus().failure).toEqual({ error, source: "store" });
     });
 
@@ -813,13 +764,12 @@ describe("sync status", () => {
       });
       engine.connect();
       engine.disconnect();
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
+      const seen = record(engine);
 
       ready.reject(new Error("late"));
       await settled();
 
-      expect(listener).not.toHaveBeenCalled();
+      expect(seen).toEqual([]);
       expect(engine.getStatus().failure).toBeNull();
     });
   });
@@ -844,13 +794,14 @@ describe("sync status", () => {
       ready: false,
       failure: { source: "store" },
     });
-    const seen: unknown[] = [];
-    engine.subscribeStatus(() => seen.push(engine.getStatus()));
+    const seen = record(engine);
 
     ready.resolve();
     await settled();
 
-    expect(seen).toEqual([{ connected: true, ready: true, failure: null }]);
+    expect(seen).toEqual([
+      ["ready", { connected: true, ready: true, failure: null }],
+    ]);
   });
 
   describe.each([
@@ -909,29 +860,38 @@ describe("sync status", () => {
       for (let i = 1; i <= times; i++) backend.receive({ count: i * 7 });
     };
 
-    it("records the loop in every build, as one change, and stays connected", () => {
+    it("records the loop in every build, shown by the remote that stopped it and then sent as error, and stays connected", () => {
       const { backend, engine } = start();
-      const listener = vi.fn();
-      engine.subscribeStatus(listener);
+      const seen = record(engine);
 
       loop(backend);
 
-      const { failure, connected, ready } = engine.getStatus();
-      expect(failure?.error).toBeInstanceOf(WriteLoopError);
-      expect(failure?.source).toBe("store");
-      expect(connected).toBe(true);
-      expect(ready).toBe(true);
-      expect(listener).toHaveBeenCalledTimes(1);
+      const status = engine.getStatus();
+      expect(status.failure?.error).toBeInstanceOf(WriteLoopError);
+      expect(status.failure?.source).toBe("store");
+      expect(status.connected).toBe(true);
+      expect(status.ready).toBe(true);
+      const stopped = seen.findIndex(([, { failure }]) => failure !== null);
+      expect(seen.map(([event]) => event)).toEqual([
+        ...Array(stopped + 1).fill("remote"),
+        "error",
+        ...Array(6 - stopped).fill("remote"),
+      ]);
+      expect(seen.slice(stopped).every(([, seen]) => seen === status)).toBe(
+        true,
+      );
     });
 
-    it("keeps the same object while the loop holds", () => {
+    it("keeps the same object while the loop holds, and sends no error again", () => {
       const { backend, engine } = start();
       loop(backend);
       const status = engine.getStatus();
+      const seen = record(engine);
 
       loop(backend);
 
       expect(engine.getStatus()).toBe(status);
+      expect(seen.map(([event]) => event)).toEqual(Array(7).fill("remote"));
     });
 
     it("leaves what the loop reports as it was", () => {
@@ -943,7 +903,7 @@ describe("sync status", () => {
 
       expect(reported).toHaveLength(withOnError ? 1 : 0);
       expect(warn).toHaveBeenCalledTimes(withOnError || production ? 0 : 1);
-      expect(events).toEqual(Array(7).fill("remote"));
+      expect(events.filter((event) => event === "remote")).toHaveLength(7);
     });
 
     it("clears once an apply leaves no loop", () => {
@@ -980,18 +940,20 @@ describe("sync status", () => {
       expect(engine.getStatus().failure).toBeNull();
     });
 
-    it("shows a loop that comes back, which onError hears of only once", () => {
+    it("shows a loop that comes back and sends error again, which onError hears of only once", () => {
       const { backend, engine, reported, startNormalising, stopNormalising } =
         start();
       loop(backend);
       stopNormalising();
       backend.receive({ count: 99 });
       expect(engine.getStatus().failure).toBeNull();
+      const seen = record(engine);
 
       startNormalising();
       loop(backend);
 
       expect(engine.getStatus().failure?.error).toBeInstanceOf(WriteLoopError);
+      expect(seen.filter(([event]) => event === "error")).toHaveLength(1);
       expect(reported).toHaveLength(withOnError ? 1 : 0);
     });
   });
@@ -1009,7 +971,6 @@ describe("sync status", () => {
       };
       store.adapter.subscribe(() => check("a store subscriber"));
       engine.subscribe((event) => check(`the ${event} event`));
-      engine.subscribeStatus(() => check("a status listener"));
       return violations;
     };
 
@@ -1056,8 +1017,7 @@ describe("sync status", () => {
         const { engine, waits } = waitingEngine(backend, store);
         const violations = observe(engine, store);
         onFirstStoreChange(store, () => engine.disconnect());
-        const seen: unknown[] = [];
-        engine.subscribeStatus(() => seen.push(engine.getStatus()));
+        const seen = record(engine);
         pendingChange(backend);
 
         waits[0]!.resolve();
@@ -1065,7 +1025,7 @@ describe("sync status", () => {
 
         expect(violations).toEqual([]);
         expect(seen).toEqual([
-          { connected: false, ready: false, failure: null },
+          ["disconnect", { connected: false, ready: false, failure: null }],
         ]);
       });
 
@@ -1242,7 +1202,7 @@ describe("sync status", () => {
         expect(engine.getStatus().connected).toBe(false);
       });
 
-      it("clears the failure when a disconnect listener retries a failed wait, and onError still runs", async () => {
+      it("clears the failure when a disconnect listener retries a failed wait, sends no error, and onError still runs", async () => {
         const store = createTestStore({ count: 0 });
         const reported: unknown[] = [];
         const { engine, waits } = waitingEngine(createMemoryBackend(), store, {
@@ -1253,6 +1213,7 @@ describe("sync status", () => {
         engine.subscribe((event) => {
           if (event === "disconnect" && retries-- > 0) engine.connect();
         });
+        const seen = record(engine);
         const error = new Error("ready");
 
         waits[0]!.reject(error);
@@ -1260,6 +1221,7 @@ describe("sync status", () => {
 
         expect(violations).toEqual([]);
         expect(reported).toEqual([error]);
+        expect(seen.map(([event]) => event)).not.toContain("error");
         expect(engine.getStatus()).toEqual({
           connected: true,
           ready: false,
@@ -1268,52 +1230,16 @@ describe("sync status", () => {
       });
     });
 
-    describe("from a status listener", () => {
-      it("tells every listener once of what a listener's disconnect left", () => {
-        const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-        const violations = observe(engine, store);
-        engine.subscribeStatus(() => {
-          if (engine.getStatus().connected) engine.disconnect();
-        });
-        const seen: boolean[] = [];
-        engine.subscribeStatus(() => seen.push(engine.getStatus().connected));
-
-        engine.connect();
-
-        expect(violations).toEqual([]);
-        expect(seen).toEqual([false]);
-      });
-
-      it("ends connected when a listener reconnects after a disconnect", () => {
-        const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-        engine.connect();
-        const violations = observe(engine, store);
-        let retries = 1;
-        engine.subscribeStatus(() => {
-          if (!engine.getStatus().connected && retries-- > 0) engine.connect();
-        });
-        const seen: boolean[] = [];
-        engine.subscribeStatus(() => seen.push(engine.getStatus().connected));
-
-        engine.disconnect();
-
-        expect(violations).toEqual([]);
-        expect(seen).toEqual([true]);
-        expect(engine.getStatus().connected).toBe(true);
-      });
-
-      it("retries a failed wait from a listener", async () => {
+    describe("from an error listener", () => {
+      it("retries a failed wait", async () => {
         const store = createTestStore({ count: 0 });
         const { engine, waits } = waitingEngine(createMemoryBackend(), store, {
           onError: () => {},
         });
         const violations = observe(engine, store);
         let retries = 1;
-        engine.subscribeStatus(() => {
-          if (engine.getStatus().failure !== null && retries-- > 0)
-            engine.connect();
+        engine.subscribe((event) => {
+          if (event === "error" && retries-- > 0) engine.connect();
         });
 
         waits[0]!.reject(new Error("ready"));
@@ -1331,7 +1257,7 @@ describe("sync status", () => {
         expect(engine.getStatus().ready).toBe(true);
       });
 
-      it("reconnects from a listener hearing of a failed connect, which still throws", () => {
+      it("reconnects after a failed connect, which still throws", () => {
         const store = createTestStore({ count: 0 });
         const getState = store.adapter.getState;
         const error = new Error("getState");
@@ -1340,9 +1266,9 @@ describe("sync status", () => {
         };
         const engine = createSyncEngine(createMemoryBackend(), store.adapter);
         const violations = observe(engine, store);
-        engine.subscribeStatus(() => {
+        engine.subscribe((event) => {
           store.adapter.getState = getState;
-          if (engine.getStatus().failure !== null) engine.connect();
+          if (event === "error") engine.connect();
         });
 
         expect(() => engine.connect()).toThrow(error);
@@ -1355,7 +1281,7 @@ describe("sync status", () => {
         });
       });
 
-      it("returns to the same object when a listener repairs a failure at once", () => {
+      it("returns to the same object when it repairs a failure at once", () => {
         const backend = createMemoryBackend();
         const store = createTestStore({ count: 0 });
         const engine = createSyncEngine(backend, store.adapter, {
@@ -1367,17 +1293,17 @@ describe("sync status", () => {
         backend.write = () => {
           throw new Error("write");
         };
-        const seen: boolean[] = [];
-        engine.subscribeStatus(() => {
-          seen.push(engine.getStatus().failure !== null);
-          if (engine.getStatus().failure === null) return;
+        const seen: string[] = [];
+        engine.subscribe((event) => {
+          seen.push(`${event}: ${engine.getStatus().failure !== null}`);
+          if (event !== "error") return;
           backend.write = write;
           store.setState({ count: 2 });
         });
 
         store.setState({ count: 1 });
 
-        expect(seen).toEqual([true, false]);
+        expect(seen).toEqual(["error: true", "local: false"]);
         expect(engine.getStatus()).toBe(before);
       });
     });

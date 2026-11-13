@@ -146,7 +146,7 @@ A store notification raised while the sync engine applies a remote change. The e
 _Avoid_: Feedback loop
 
 **Sync event**:
-A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, or has ended a wait for `ready`, naming which of the five it was.
+A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, has ended a wait for `ready`, or has recorded a sync failure, naming which of the six it was. Every change of the sync status comes with one.
 A local change that first runs a pending apply is reported as a remote change, whose apply merges the local change in and writes it.
 _Avoid_: Engine event, sync notification
 

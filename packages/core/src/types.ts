@@ -325,8 +325,15 @@ export type SyncErrorSource = "store" | "backend" | "ready";
  *   sends it too, before `onError` runs.
  * - `'ready'`: the end of a wait for `ready`, once reconciliation is done. It covers seeding and
  *   the values adopted, and is never sent without the `ready` option.
+ * - `'error'`: a failure the engine recorded, which `getStatus().failure` holds; see
+ *   `SyncStatus.failure`. Work that throws sends it alone, before `onError` runs or the error
+ *   propagates. A write loop sends it after the `'remote'` of the apply that stopped it, unless
+ *   the loop is the status's failure already. A failed wait for `ready` sends it after
+ *   `'disconnect'`, which already shows the failure, so the status changes once; a
+ *   `'disconnect'` listener that connects again clears the failure, and then it is not sent.
  */
-export type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
+export type SyncEvent =
+  "local" | "remote" | "connect" | "disconnect" | "ready" | "error";
 
 /**
  * What went wrong in the sync engine, as `SyncStatus.failure` holds it. It is kept with or without
@@ -371,9 +378,10 @@ export interface SyncStatus {
    * - a `WriteLoopError`, in every build and with or without `onError`. The engine stays connected.
    *   Unlike `onError`, the status shows a loop each time it comes back.
    *
-   * A later `'local'`, `'remote'`, `'connect'` or `'ready'` sync event sent while connected clears
-   * it, since the store and the backend agree again, unless the apply that sent it stopped a write
-   * loop. `disconnect()` keeps it, to say why the engine stopped.
+   * Each one sends an `'error'` sync event. A later `'local'`, `'remote'`, `'connect'` or `'ready'`
+   * sync event sent while connected clears it, since the store and the backend agree again,
+   * unless the apply that sent it stopped a write loop. `disconnect()` keeps it, to say why the
+   * engine stopped.
    *
    * It holds only what the engine has seen. A provider's errors never reach it, and it cannot
    * clear while the store sends no notification.
@@ -393,19 +401,11 @@ export interface SyncEngine {
    * The engine's status: whether it is connected and ready, and what failed. It is current
    * whenever it is read, also from a store or sync event listener. It returns one object until a
    * field changes, frozen, and the same object whenever the fields are those of an earlier status
-   * without a failure, so comparing by identity tells whether it changed. See `SyncStatus`.
+   * without a failure, so comparing by identity tells whether it changed. Every change comes with
+   * a sync event, whose listeners already read the new status, so `subscribe` tells when to read
+   * it again. See `SyncStatus`.
    */
   getStatus: () => SyncStatus;
-  /**
-   * Calls `listener` after every change of `getStatus()`, until unsubscribed and across
-   * reconnects, and after the listeners of the sync event that came with the change. A local or
-   * remote change that leaves the status as it was calls nothing. Unlike `subscribe`, it also
-   * hears of a failure, which sends no sync event. A listener that changes
-   * the status tells every listener of the new status, and those it was to tell of the old one
-   * are not called. Each listener runs on its own: what it throws goes to `console.error`, and the
-   * other listeners still run.
-   */
-  subscribeStatus: (listener: () => void) => Unsubscribe;
   /**
    * The store's synced keys with the values the store holds, connected or not: a new object
    * holding the keys `filter`, `keys` and `omit` keep, without `__proto__`. Its values are the
@@ -414,9 +414,9 @@ export interface SyncEngine {
   getSyncedState: () => Record<string, unknown>;
   /**
    * Calls `listener` after every sync event until unsubscribed, across reconnects. Events are
-   * sent synchronously once the work is done, and not at all when it throws or when `connect()`
-   * or `disconnect()` changes nothing. Each listener runs on its own: what it throws goes to
-   * `console.error`, and the other listeners still run.
+   * sent synchronously once the work is done. Work that throws sends only `'error'`, and a
+   * `connect()` or `disconnect()` that changes nothing sends nothing. Each listener runs on its
+   * own: what it throws goes to `console.error`, and the other listeners still run.
    */
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }

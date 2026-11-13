@@ -298,7 +298,7 @@ users from losing edits, disable editing until [`getStatus().ready`](#sync-statu
 
 | `ready`                              | What the engine does                                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Rejects                              | Disconnects, writes nothing, sends `"disconnect"`, then reports to `onError`.                  |
+| Rejects                              | Disconnects, writes nothing, sends `"disconnect"` and `"error"`, then reports to `onError`.    |
 | Resolves, but reconciling then fails | The same, with the source `"store"` or `"backend"`; see [Reporting errors](#reporting-errors). |
 | Never settles                        | Keeps waiting, adopting remote changes and writing nothing, until `disconnect()`.              |
 | Settles after `disconnect()`         | Nothing, also when the engine has reconnected since and waits for another promise.             |
@@ -404,7 +404,7 @@ engine disconnected, and errors from `filter`, `schedule` and `onError` itself p
 With [`ready`](#waiting-for-the-room), part of connecting comes after `connect()` has returned, so
 there is no caller left to throw to. A rejected `ready`, or an adapter or backend error while
 reconciling after it, also leaves the engine disconnected: it forgoes a pending apply, sends
-`"disconnect"`, then calls `onError` with the source `"ready"`, or the error's own source. Without `onError`, the error
+`"disconnect"` and `"error"`, then calls `onError` with the source `"ready"`, or the error's own source. Without `onError`, the error
 surfaces as an unhandled rejection. Call `connect()` to try again.
 
 A `read()` or `getState()` that returns something other than an object breaks its contract. The
@@ -421,7 +421,8 @@ each as an array of record keys, such as `["seenBy","p2"]`. Each set of top-leve
 once, in every build. Without `onError`, the engine warns once in development instead. A stopped
 path is written back again, without a local change, once an apply no longer contradicts it.
 
-However an error is reported, [`getStatus()`](#sync-status) keeps it until the engine recovers.
+However an error is reported, the engine sends an [`"error"`](#when-error-is-sent) sync event,
+and [`getStatus()`](#sync-status) keeps it until the engine recovers.
 
 ## SetupOptions
 
@@ -454,12 +455,12 @@ interface SyncEngine {
   connect: () => void;
   disconnect: () => void;
   getStatus: () => SyncStatus;
-  subscribeStatus: (listener: () => void) => Unsubscribe;
   getSyncedState: () => Record<string, unknown>;
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
 
-type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
+type SyncEvent =
+  "local" | "remote" | "connect" | "disconnect" | "ready" | "error";
 
 interface SyncStatus {
   readonly connected: boolean;
@@ -473,14 +474,13 @@ interface SyncFailure {
 }
 ```
 
-| Method                      | Returns                   | Behavior                                                                                                                                                                                                                                    |
-| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connect()`                 | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                                                                              |
-| `disconnect()`              | `void`                    | Applies a pending remote change and writes a [batched write](#batched-writes) still waiting, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `getStatus()`               | `SyncStatus`              | The engine's status, with what went wrong. It says nothing about the network. See [Sync status](#sync-status).                                                                                                                              |
-| `subscribeStatus(listener)` | `Unsubscribe`             | Calls `listener` after every change of `getStatus()`, also for a failure, until unsubscribed. See [Sync status](#sync-status).                                                                                                              |
-| `getSyncedState()`          | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                                                                               |
-| `subscribe(listener)`       | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                                                                             |
+| Method                | Returns                   | Behavior                                                                                                                                                                                                                                    |
+| --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`           | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                                                                              |
+| `disconnect()`        | `void`                    | Applies a pending remote change and writes a [batched write](#batched-writes) still waiting, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
+| `getStatus()`         | `SyncStatus`              | The engine's status, with what went wrong. It says nothing about the network. See [Sync status](#sync-status).                                                                                                                              |
+| `getSyncedState()`    | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                                                                               |
+| `subscribe(listener)` | `Unsubscribe`             | Calls `listener` after every sync event until unsubscribed, across reconnects. See [Sync events](#sync-events).                                                                                                                             |
 
 After connection, each local notification writes the full filtered store state to the
 backend, a microtask later for an adapter that sets `batchWrites`, along with what the backend
@@ -527,26 +527,46 @@ const unsubscribe = engine.subscribe((event) => {
 | `"connect"`    | after reconciliation and both subscriptions; `getStatus().connected` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.                                    |
 | `"disconnect"` | after both subscriptions are removed; `getStatus().connected` is `false`       | `disconnect()` that disconnects. A pending apply or batched write it runs sends its `"remote"` or `"local"` first; if that throws, `"disconnect"` is still sent, since the engine is disconnected.    |
 | `"ready"`      | after reconciling once `ready` resolved; `getStatus().ready` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                                                     |
+| `"error"`      | once a failure is recorded; `getStatus().failure` holds it                     | failure; see [When `"error"` is sent](#when-error-is-sent).                                                                                                                                           |
 
 With `ready`, `"connect"` comes before the wait and covers only the values adopted then. Each
 remote change during the wait sends `"remote"`, a local change sends nothing, since it writes
-nothing, and `"ready"` ends the wait. A wait that fails sends `"disconnect"` instead.
+nothing, and `"ready"` ends the wait. A wait that fails sends `"disconnect"` and `"error"` instead.
 
-Events are sent synchronously, once the work is done. Nothing is sent when the work throws,
-whether the error goes to `onError` or to the caller, or when `connect()` or `disconnect()`
-changes nothing. Listeners run inside a store's or a document's notification loop, and some,
+Events are sent synchronously, once the work is done. Work that throws sends only `"error"`,
+whether the error goes to `onError` or to the caller, and a `connect()` or `disconnect()` that
+changes nothing sends nothing. Listeners run inside a store's or a document's notification loop, and some,
 such as Zustand's, stop at the first throw, so each listener runs on its own: what it throws goes
 to `console.error`, and the other listeners and the store's subscribers still run. A listener
 unsubscribed by an earlier one during the same event is not called.
 
+#### When `"error"` is sent
+
+`"error"` tells of a failure as soon as the status holds it, so a listener can read
+`getStatus().failure`:
+
+| Failure                                                                          | Events                                                                                                           |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Work that throws: a write, read or `setState`, `connect()`, `filter`, `schedule` | `"error"` alone, before `onError` runs or the error propagates                                                   |
+| A pending apply or batched write that throws in `disconnect()`                   | `"error"`, then `"disconnect"`                                                                                   |
+| A [write loop](#reporting-errors)                                                | The `"remote"` of the apply that stopped it, then `"error"`; `onError` hears of the loop first, during the apply |
+| A failed wait for `ready`                                                        | `"disconnect"`, then `"error"`, then `onError`                                                                   |
+
+A write loop and a failed wait let the work finish first, and its event already shows the failure,
+so the status changes once: the apply that stopped the loop ends with its `"remote"`, and the
+failed wait with the engine disconnected. `"error"` then names the failure for a listener that
+switches on the event. A write loop sends it again only once the loop has cleared and come back,
+and a failed wait does not send it when a `"disconnect"` listener has connected again, which
+clears the failure.
+
 ### Sync status
 
-`getStatus()` says what the engine has done, and `subscribeStatus` says when that changes, so a
-component can disable editing during a wait or show that a change did not sync. For React, use
-[`useSyncStatus`](../../react/docs/introduction.md).
+`getStatus()` says what the engine has done, and every change of it comes with a
+[sync event](#sync-events), so a component can disable editing during a wait or show that a change
+did not sync. For React, use [`useSyncStatus`](../../react/docs/introduction.md).
 
 ```ts
-const unsubscribe = engine.subscribeStatus(() => {
+const unsubscribe = engine.subscribe(() => {
   const { ready, failure } = engine.getStatus();
   saveButton.disabled = !ready;
   if (failure) report(failure.error, failure.source);
@@ -567,15 +587,15 @@ const unsubscribe = engine.subscribeStatus(() => {
 
 `getStatus()` is current whenever it is read, also from a store subscriber or a listener during
 reconciliation. It returns a frozen object, the same one until a field changes, so comparing by
-identity tells whether it changed: `useSyncExternalStore` needs that. Local and remote changes alone do not call `subscribeStatus` listeners, which run after the
-listeners of the sync event that came with the change. A listener that changes the status tells
-every listener of the new status, and each listener runs on its own, as with `subscribe`.
+identity tells whether it changed: `useSyncExternalStore` needs that. A sync event listener
+already reads the new status, and local and remote changes leave the object as it was, so a
+listener that compares it does nothing for them.
 
 #### What sets and clears a failure
 
 The engine keeps a failure with or without `onError`, which works as it did: `onError` is still
-called, or the error still propagates. Unlike a sync event, a failure reaches `subscribeStatus`
-listeners, and a component mounted later can still read it.
+called, or the error still propagates. Each failure sends an [`"error"`](#when-error-is-sent)
+event, and a component mounted later can still read it.
 
 | Failure                                                                          | Status while it stands        | Cleared by                                                          |
 | -------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------- |

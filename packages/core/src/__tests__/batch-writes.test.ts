@@ -268,7 +268,7 @@ describe("an adapter with batchWrites", () => {
 
       expect(onError).toHaveBeenCalledWith(offline, "backend");
       expect(engine.getStatus().connected).toBe(false);
-      expect(events).toEqual(["disconnect"]);
+      expect(events).toEqual(["error", "disconnect"]);
       expect(engine.getStatus().failure).toEqual({
         error: offline,
         source: "backend",

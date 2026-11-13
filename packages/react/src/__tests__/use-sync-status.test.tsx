@@ -7,6 +7,7 @@ import {
   createSyncEngine,
   type StoreAdapter,
   type SyncEngine,
+  type SyncEvent,
   type SyncStatus,
 } from "@homeostate/core";
 import {
@@ -126,7 +127,7 @@ describe("useSyncStatus", () => {
     expect(container.textContent).toBe("connected, ready, backend");
   });
 
-  it("shows a failure as it happens, though no sync event tells of it", async () => {
+  it("shows a failure as it happens, and its recovery", async () => {
     const { backend, store, engine } = createEngine();
     engine.connect();
     const container = await render(<Badge engine={engine} />);
@@ -172,9 +173,9 @@ describe("useSyncStatus", () => {
     let subscribed = 0;
     const counted: SyncEngine = {
       ...engine,
-      subscribeStatus: (listener) => {
+      subscribe: (listener) => {
         subscribed++;
-        const unsubscribe = engine.subscribeStatus(listener);
+        const unsubscribe = engine.subscribe(listener);
         return () => {
           subscribed--;
           unsubscribe();
@@ -204,9 +205,9 @@ describe("useSyncStatus", () => {
     let subscriptions = 0;
     const counted: SyncEngine = {
       ...engine,
-      subscribeStatus: (listener) => {
+      subscribe: (listener) => {
         subscriptions++;
-        return engine.subscribeStatus(listener);
+        return engine.subscribe(listener);
       },
     };
     let rerender: (tick: number) => void = () => {};
@@ -277,8 +278,8 @@ describe("useSyncStatus", () => {
       getStatus() {
         return this.inner.getStatus();
       }
-      subscribeStatus(listener: () => void) {
-        return this.inner.subscribeStatus(listener);
+      subscribe(listener: (event: SyncEvent) => void) {
+        return this.inner.subscribe(listener);
       }
       constructor(private inner: SyncEngine) {}
     }

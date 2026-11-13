@@ -16,7 +16,8 @@ const getServerStatus = (): SyncStatus => SERVER_STATUS;
 
 /**
  * Reads a sync engine's status in a React component, and re-renders it when the status changes.
- * Local and remote changes that leave the status as it was re-render nothing. Pass any
+ * It reads the status again on every sync event, and local and remote changes that leave the
+ * status as it was re-render nothing, since `getStatus()` returns the same object. Pass any
  * `SyncEngine`: the one `createSyncEngine` returns, Zustand's or Redux's `store.homeostate`, or
  * what `syncMobxStore` or `syncStateTree` return.
  *
@@ -44,10 +45,11 @@ const getServerStatus = (): SyncStatus => SERVER_STATUS;
  * ```
  */
 export function useSyncStatus(
-  engine: Pick<SyncEngine, "getStatus" | "subscribeStatus">,
+  engine: Pick<SyncEngine, "getStatus" | "subscribe">,
 ): SyncStatus {
+  // Every change of the status comes with a sync event; the event itself is not needed.
   const subscribe = useCallback(
-    (listener: () => void) => engine.subscribeStatus(listener),
+    (listener: () => void) => engine.subscribe(() => listener()),
     [engine],
   );
   const getStatus = useCallback(() => engine.getStatus(), [engine]);
