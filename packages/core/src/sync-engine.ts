@@ -83,6 +83,26 @@ const withValuesAt = (
   return copy;
 };
 
+/**
+ * `patched`, the synced state given to the store, with the store's own value, from `applied`, at
+ * each key `applied` holds and no path of `paths` starts at, since the two are equal as JSON there.
+ * So it equals `patched` as JSON, and holds the very objects of `applied` wherever the store left a
+ * key as it was given, even for a store whose `getState` returns copies. At every other key it
+ * holds `patched`'s value, which shares every object the store kept.
+ */
+const keptObjects = (
+  patched: Plain,
+  applied: Plain,
+  paths: string[][],
+): Plain => {
+  const changed = new Set(paths.map(([key]) => key));
+  const kept: Plain = {};
+  for (const key of Object.keys(patched))
+    kept[key] =
+      !changed.has(key) && hasOwn(applied, key) ? applied[key] : patched[key];
+  return kept;
+};
+
 /** Identifies a path in a set. */
 const pathId = (path: string[]): string => JSON.stringify(path);
 
@@ -563,8 +583,8 @@ export function createSyncEngine<S extends object>(
   /**
    * Records `held`, the backend's whole state an apply read, as `lastSynced`, with the store's
    * objects in place of the backend's, so that the next write skips what is unchanged by identity,
-   * as after a local write. `state`, the store's synced state, must equal `target` as JSON. Only a
-   * key whose value in `target` came from `held` is taken: one whose backend value `filter`
+   * as after a local write. `state`, which holds the store's objects, must equal `target` as JSON.
+   * Only a key whose value in `target` came from `held` is taken: one whose backend value `filter`
    * rejected holds the store's value there, which the backend lacks. Does nothing when a newer
    * read has been recorded meanwhile, by a remote change applied while the store took this one.
    */
@@ -659,11 +679,9 @@ export function createSyncEngine<S extends object>(
     );
     countContradictions(target, paths);
     lastApplied = applied;
-    if (paths.length === 0) {
-      // The store took `target` as it is, so `applied` equals it but for keys it cannot hold.
-      recordStoreObjects(held, target, applied);
-      return;
-    }
+    // The backend still holds `held`, which the write-back below, if any, is diffed against.
+    recordStoreObjects(held, target, keptObjects(patched, applied, paths));
+    if (paths.length === 0) return;
     const stopped = paths.filter(
       (path) => (contradictions.get(pathId(path)) ?? 0) >= LOOP_THRESHOLD,
     );

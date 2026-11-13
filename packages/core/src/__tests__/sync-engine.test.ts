@@ -408,6 +408,28 @@ describe("createSyncEngine", () => {
           withCard(withCard(board(), "a", { done: true }), "c", { title: "C" }),
         );
       });
+
+      it("shares the store's cards with the next local write once that path is stopped", () => {
+        const { backend, previous } = checkedBackend(board());
+        const store = createTestStore(board(), (next) =>
+          withCard(next, "c", { title: next.cards.c!.title.toUpperCase() }),
+        );
+        createSyncEngine(backend, store.adapter, {
+          onError: () => {},
+        }).connect();
+        for (let i = 1; i <= 7; i++)
+          backend.receive(withCard(board(), "a", { done: i % 2 === 1 }));
+        // The last apply wrote nothing back.
+        expect(backend.read()).toEqual(withCard(board(), "a", { done: true }));
+        const applied = store.getState();
+
+        store.update((s) => withCard(s, "b", { done: true }));
+
+        const last = previous.at(-1) as Board;
+        expect(last.cards.a).toBe(applied.cards.a);
+        expect(last.cards.a).toBe(store.getState().cards.a);
+        expect(backend.read()).toEqual(store.getState());
+      });
     });
 
     it("writes what the store derives when connecting to a non-empty backend", () => {
@@ -1214,6 +1236,108 @@ describe("createSyncEngine", () => {
       const last = previous.at(-1) as TodoState;
       expect(last.todos[0]).toBe(held.todos[0]);
       expect(last.todos[2]).toBe(store.getState().todos[2]);
+    });
+
+    describe("to the write-back of a key the store changes during a remote change", () => {
+      type Counted = TodoState & { done: number };
+
+      const counted = (): Counted => ({ ...threeTodos(), done: 0 });
+
+      /** `state` with `done` counting its completed todos. */
+      const withDone = (state: Counted): Counted => ({
+        ...state,
+        done: state.todos.filter((t) => t.completed).length,
+      });
+
+      /** A remote change that toggles todo `1` and leaves `done` as the backend holds it. */
+      const toggledRemotely = (): Counted => ({
+        ...toggleTodo(counted(), "1"),
+        done: 0,
+      });
+
+      /** A store with a subscriber that keeps `done` in step with `todos`. */
+      const subscriberStore = () => {
+        const store = createTestStore(counted());
+        store.adapter.subscribe(() => {
+          const state = store.getState();
+          const next = withDone(state);
+          if (next.done !== state.done) store.setState(next);
+        });
+        return store;
+      };
+
+      it.each([
+        ["setState derives", () => createTestStore(counted(), withDone)],
+        ["a subscriber derives", subscriberStore],
+      ])(
+        "shares the todos the store kept when %s the key",
+        (_, createStore) => {
+          const { backend, previous } = checkedBackend(counted());
+          const store = createStore();
+          createSyncEngine(backend, store.adapter).connect();
+          const write = vi.spyOn(backend, "write");
+
+          backend.receive(toggledRemotely());
+
+          expect(write).toHaveBeenCalledTimes(1);
+          const last = previous.at(-1) as Counted;
+          expect(last.todos).toBe(store.getState().todos);
+          expect(store.getState().done).toBe(1);
+          expect(backend.read()).toEqual(store.getState());
+        },
+      );
+
+      it("shares the store's copies when setState keeps copies of what it is given", () => {
+        const { backend, previous } = checkedBackend(counted());
+        const store = createTestStore(counted(), (next) =>
+          withDone(snapshot(next)),
+        );
+        createSyncEngine(backend, store.adapter).connect();
+
+        backend.receive(toggledRemotely());
+
+        const last = previous.at(-1) as Counted;
+        expect(last.todos).toBe(store.getState().todos);
+        expect(backend.read()).toEqual(store.getState());
+      });
+
+      it("shares the todos the store kept in the key it changed", () => {
+        const { backend, previous } = checkedBackend(threeTodos());
+        // Trims a title only when it needs trimming, keeping every other todo.
+        const store = createTestStore(threeTodos(), (next) => ({
+          ...next,
+          todos: next.todos.map((t) =>
+            t.title === t.title.trim() ? t : { ...t, title: t.title.trim() },
+          ),
+        }));
+        createSyncEngine(backend, store.adapter).connect();
+
+        backend.receive(addTodo(threeTodos(), todo("4", " Todo 4 ")));
+
+        const last = previous.at(-1) as TodoState;
+        const state = store.getState();
+        expect(state).toEqual(addTodo(threeTodos(), todo("4")));
+        expect(last.todos[0]).toBe(state.todos[0]);
+        expect(last.todos[2]).toBe(state.todos[2]);
+        expect(backend.read()).toEqual(state);
+      });
+
+      it("passes what the backend holds for a key whose remote value the filter rejects", () => {
+        const notLocal = (_key: string, value: unknown) =>
+          !(typeof value === "string" && value.startsWith("local:"));
+        const { backend, previous } = checkedBackend(counted());
+        const store = createTestStore(counted(), withDone);
+        createSyncEngine(backend, store.adapter, {
+          filter: notLocal,
+        }).connect();
+
+        backend.receive({ ...toggledRemotely(), searchTerm: "local:x" });
+
+        const last = previous.at(-1) as Counted;
+        expect(last.searchTerm).toBe("local:x");
+        expect(last.todos).toBe(store.getState().todos);
+        expect(backend.read()).toEqual(store.getState());
+      });
     });
 
     it("passes what the backend holds for a key whose remote value the filter rejects", () => {
