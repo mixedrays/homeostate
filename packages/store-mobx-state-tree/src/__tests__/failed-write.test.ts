@@ -105,7 +105,7 @@ describe("a failed write without onError", () => {
       node.increment();
 
       expect(backend.read()).toEqual({ count: 2 });
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(engine.getStatus().failure).toBeNull();
     });
 
@@ -183,7 +183,7 @@ describe("a failed write without onError", () => {
         boom,
       );
       expect(backend.read()).toEqual({ count: 2 });
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(other.read()).toEqual({ count: 1 });
     });
 
@@ -197,7 +197,7 @@ describe("a failed write without onError", () => {
       node.increment();
       destroy(node);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(backend.read()).toEqual({ count: 0 });
     });
   });

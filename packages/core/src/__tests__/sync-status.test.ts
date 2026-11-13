@@ -243,7 +243,7 @@ describe("sync status", () => {
         "[homeostate] a status listener threw:",
         error,
       );
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       consoleError.mockRestore();
     });
   });
@@ -616,7 +616,7 @@ describe("sync status", () => {
       });
 
       await settled();
-      expect(engine.isReady()).toBe(true);
+      expect(engine.getStatus().ready).toBe(true);
     });
 
     it("gives what filter throws in connect no source, even after a failure that had one", () => {
@@ -997,7 +997,7 @@ describe("sync status", () => {
   });
 
   describe("re-entrant calls", () => {
-    /** What every observer of `engine` saw that cannot be true, or disagrees with its methods. */
+    /** What every observer of `engine` saw that cannot be true. */
     const observe = <S extends object>(
       engine: SyncEngine,
       store: TestStore<S>,
@@ -1005,10 +1005,6 @@ describe("sync status", () => {
       const violations: string[] = [];
       const check = (where: string) => {
         const { connected, ready } = engine.getStatus();
-        if (connected !== engine.isConnected())
-          violations.push(`connected disagrees in ${where}`);
-        if (ready !== engine.isReady())
-          violations.push(`ready disagrees in ${where}`);
         if (ready && !connected) violations.push(`ready alone in ${where}`);
       };
       store.adapter.subscribe(() => check("a store subscriber"));

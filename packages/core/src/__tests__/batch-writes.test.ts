@@ -267,7 +267,7 @@ describe("an adapter with batchWrites", () => {
       expect(() => engine.disconnect()).not.toThrow();
 
       expect(onError).toHaveBeenCalledWith(offline, "backend");
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(events).toEqual(["disconnect"]);
       expect(engine.getStatus().failure).toEqual({
         error: offline,
@@ -285,7 +285,7 @@ describe("an adapter with batchWrites", () => {
       store.mutate((s) => toggleTodo(s, "1"));
 
       expect(() => engine.disconnect()).toThrow(offline);
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("leaves nothing for a flush handed out before disconnect", async () => {
@@ -351,7 +351,7 @@ describe("an adapter with batchWrites", () => {
       expect(() => store.mutate((s) => toggleTodo(s, "1"))).not.toThrow();
       expect(queued).toHaveLength(1);
       expect(() => queued[0]()).toThrow(offline);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(engine.getStatus().failure).toEqual({
         error: offline,
         source: "backend",
@@ -380,7 +380,7 @@ describe("an adapter with batchWrites", () => {
     await ready;
     await microtask();
 
-    expect(engine.isReady()).toBe(true);
+    expect(engine.getStatus().ready).toBe(true);
     expect(backend.read()).toEqual({
       ...threeTodos(),
       todos: [],

@@ -148,7 +148,7 @@ detects that order and throws when the store is created, naming the right one.
 
 With `persist` inside, the store connects once it is hydrated: at once with synchronous
 storage such as `localStorage`, and after the read with asynchronous storage such as React
-Native's `AsyncStorage` or an IndexedDB wrapper. Until then `store.homeostate.isConnected()`
+Native's `AsyncStorage` or an IndexedDB wrapper. Until then `store.homeostate.getStatus().connected`
 is `false`. Calling `store.homeostate.disconnect()` cancels the pending connect, and calling
 `store.homeostate.connect()`, as with `connect: "manual"`, connects once hydration has
 finished. If hydration fails, the store stays disconnected, and Zustand passes the error to

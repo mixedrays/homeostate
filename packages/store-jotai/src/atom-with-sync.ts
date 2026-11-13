@@ -162,7 +162,7 @@ export function atomWithSync(
   syncedAtom.onMount = (setAtom) => {
     const slot = setAtom(READ_SLOT) as StoreSlot;
     if (slot.store === undefined) throw new Error(NO_STORE_MESSAGE);
-    if (current?.isConnected() === true) {
+    if (current?.getStatus().connected === true) {
       throw new Error(SECOND_STORE_MESSAGE);
     }
     slot.engine ??= createSyncEngine(

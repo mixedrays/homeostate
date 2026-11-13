@@ -128,7 +128,7 @@ _Avoid_: Initializing, bootstrapping
 The `seed` option in `SyncEngineConfig`: `"if-empty"`, the default, seeds during connect, and `"never"` leaves those keys for the next local change. Despite its name, `"if-empty"` works per key.
 
 **Ready**:
-The `ready` option in `SyncEngineConfig`: a promise, or a function returning one, that the sync engine waits for before it writes to the CRDT backend, so that a peer does not seed before the document holds what it should adopt. While waiting, the engine is connected but not ready: it applies remote changes per key and writes nothing, and local changes are provisional. `isReady()` tells the two apart.
+The `ready` option in `SyncEngineConfig`: a promise, or a function returning one, that the sync engine waits for before it writes to the CRDT backend, so that a peer does not seed before the document holds what it should adopt. While waiting, the engine is connected but not ready: it applies remote changes per key and writes nothing, and local changes are provisional. `getStatus().ready` tells the two apart.
 _Avoid_: Initialized, synced
 
 **Local change**:

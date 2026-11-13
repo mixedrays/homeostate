@@ -13,9 +13,9 @@ engine.subscribeStatus(() => {
 });
 ```
 
-`connected` and `ready` are what `isConnected()` and `isReady()` return, and say nothing about the
-network: `connected` stays `true` while the sync server is down, and without the `ready` option
-`ready` equals `connected`. `failure` holds what went wrong and its source until the engine
+`connected` says whether the engine is subscribed, and `ready` whether local changes are written.
+Neither says anything about the network: `connected` stays `true` while the sync server is down,
+and without the `ready` option `ready` equals `connected`. `failure` holds what went wrong and its source until the engine
 recovers: the next completed write, apply or connect clears it, and `disconnect()` keeps it. A
 `WriteLoopError` shows in every build, with or without `onError`. The status is a frozen object, the
 same one until a field changes.

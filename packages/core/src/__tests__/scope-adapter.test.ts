@@ -212,7 +212,7 @@ describe("scopeAdapter", () => {
 
       expect(() => engine.connect()).toThrow(TypeError);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(backend.read()).toEqual({ title: "room" });
     });
 

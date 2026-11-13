@@ -101,7 +101,7 @@ export interface InspectorSnapshot {
   backend: JsonObject | null;
   /** Why the backend could not be read; comparisons are unavailable while set. */
   backendError: string | null;
-  /** `engine.isConnected()`, or `null` without an engine. */
+  /** `engine.getStatus().connected`, or `null` without an engine. */
   connected: boolean | null;
   keyStatus: Readonly<Record<string, KeyStatus>>;
   /** Values in synced keys that are not plain JSON, so the engine does not sync them as they are. */
@@ -269,7 +269,7 @@ export function createInspector(
       warnings,
       backend,
       backendError,
-      connected: source.engine ? source.engine.isConnected() : null,
+      connected: source.engine ? source.engine.getStatus().connected : null,
       keyStatus: keyStatusOf(
         store,
         localKeys,

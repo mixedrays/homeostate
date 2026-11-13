@@ -99,7 +99,7 @@ describe("createSyncEngine", () => {
       store.update((s) => toggleTodo(s, "1"));
 
       expect(write).toHaveBeenCalledTimes(1);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     it("keeps synced keys the backend lacks and seeds them in one write", () => {
@@ -2094,7 +2094,7 @@ describe("createSyncEngine", () => {
 
       expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
       expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("is safe to call twice and to reconnect afterwards, adopting the backend", () => {
@@ -2109,7 +2109,7 @@ describe("createSyncEngine", () => {
       backend.receive(addTodo(threeTodos(), todo("4")));
       engine.connect();
 
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
 
       store.update((s) => toggleTodo(s, "2"));
@@ -2611,7 +2611,7 @@ describe("createSyncEngine", () => {
 
       expect(() => engine.disconnect()).toThrow("invalid snapshot");
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       const write = vi.spyOn(backend, "write");
       store.update((s) => toggleTodo(s, "2"));
       expect(write).not.toHaveBeenCalled();
@@ -2696,7 +2696,7 @@ describe("createSyncEngine", () => {
 
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError).toHaveBeenCalledWith(invalid, "store");
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     it("reports a write that throws on a local change, instead of throwing to the store's notifier", () => {
@@ -2790,7 +2790,7 @@ describe("createSyncEngine", () => {
       expect(() => engine.connect()).toThrow("invalid snapshot");
 
       expect(onError).not.toHaveBeenCalled();
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("throws to the backend's notifier without onError, and stays connected", () => {
@@ -2808,7 +2808,7 @@ describe("createSyncEngine", () => {
         "invalid snapshot",
       );
 
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     describe("with schedule", () => {
@@ -2853,7 +2853,7 @@ describe("createSyncEngine", () => {
         expect(() => engine.disconnect()).not.toThrow();
 
         expect(onError).toHaveBeenCalledWith(invalid, "store");
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
     });
   });
@@ -2881,7 +2881,7 @@ describe("createSyncEngine", () => {
         );
 
         expect(write).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       },
     );
 
@@ -2989,7 +2989,7 @@ describe("createSyncEngine", () => {
       backend.receive({ a: 2 });
 
       expect(setState).not.toHaveBeenCalled();
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("leaves no adapter subscription when the backend subscription throws", () => {
@@ -3004,7 +3004,7 @@ describe("createSyncEngine", () => {
       expect(() => engine.connect()).toThrow("boom");
 
       expect(storeSubscriptions()).toBe(0);
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("leaves no subscriptions when seeding the backend throws", () => {
@@ -3021,7 +3021,7 @@ describe("createSyncEngine", () => {
 
       expect(backendSubscriptions()).toBe(0);
       expect(storeSubscriptions()).toBe(0);
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("subscribes once to each side when connecting again", () => {
@@ -3039,7 +3039,7 @@ describe("createSyncEngine", () => {
 
       expect(backendSubscriptions()).toBe(1);
       expect(storeSubscriptions()).toBe(1);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
   });
 
@@ -3136,11 +3136,11 @@ describe("createSyncEngine", () => {
   });
 
   describe("sync events", () => {
-    /** Subscribes to `engine` and records each event with `isConnected()` as it arrives. */
+    /** Subscribes to `engine` and records each event with whether it is connected as it arrives. */
     const record = (engine: SyncEngine) => {
       const events: [SyncEvent, boolean][] = [];
       const unsubscribe = engine.subscribe((event) =>
-        events.push([event, engine.isConnected()]),
+        events.push([event, engine.getStatus().connected]),
       );
       return {
         events: () => events.map(([event]) => event),
@@ -3801,7 +3801,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(write).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
         expect(events).toEqual(["connect", "disconnect"]);
       });
 
@@ -3935,9 +3935,9 @@ describe("createSyncEngine", () => {
         engine.connect();
 
         expect(store.getState()).toEqual({ count: 0 });
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
         await settled();
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
       });
 
       it("does not run ready until connect", () => {
@@ -3967,9 +3967,9 @@ describe("createSyncEngine", () => {
 
         expect(store.getState()).toEqual({ count: 7, label: "edit" });
         expect(write).not.toHaveBeenCalled();
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
         engine.disconnect();
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
     });
 
@@ -3980,18 +3980,18 @@ describe("createSyncEngine", () => {
         const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
           ready: ready.promise,
         });
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
 
         engine.connect();
-        expect(engine.isConnected()).toBe(true);
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().connected).toBe(true);
+        expect(engine.getStatus().ready).toBe(false);
 
         ready.resolve();
         await settled();
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
 
         engine.disconnect();
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
       });
 
       it("reports ready as soon as it connects without the option, and sends no ready event", () => {
@@ -3999,14 +3999,14 @@ describe("createSyncEngine", () => {
         const engine = createSyncEngine(createMemoryBackend(), store.adapter);
         const events: SyncEvent[] = [];
         engine.subscribe((event) => events.push(event));
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
 
         engine.connect();
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
         expect(events).toEqual(["connect"]);
 
         engine.disconnect();
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
       });
 
       it("stays not ready for a store subscriber until reconciliation is done", async () => {
@@ -4018,7 +4018,7 @@ describe("createSyncEngine", () => {
         });
         engine.connect();
         const seen: boolean[] = [];
-        store.adapter.subscribe(() => seen.push(engine.isReady()));
+        store.adapter.subscribe(() => seen.push(engine.getStatus().ready));
 
         // A write of its own tells no subscriber, so reconciling is what brings it to the store.
         backend.write({ count: 2 });
@@ -4027,7 +4027,7 @@ describe("createSyncEngine", () => {
 
         expect(store.getState()).toEqual({ count: 2 });
         expect(seen).toEqual([false]);
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
       });
 
       it("never reports ready when reconciliation fails after changing the store", async () => {
@@ -4044,8 +4044,8 @@ describe("createSyncEngine", () => {
         });
         engine.connect();
         const seen: boolean[] = [];
-        engine.subscribe(() => seen.push(engine.isReady()));
-        store.adapter.subscribe(() => seen.push(engine.isReady()));
+        engine.subscribe(() => seen.push(engine.getStatus().ready));
+        store.adapter.subscribe(() => seen.push(engine.getStatus().ready));
 
         backend.write({ count: 2 });
         vi.spyOn(backend, "write").mockImplementation(() => {
@@ -4054,7 +4054,7 @@ describe("createSyncEngine", () => {
         ready.resolve();
         await settled();
 
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
         expect(seen).not.toContain(true);
       });
 
@@ -4074,8 +4074,8 @@ describe("createSyncEngine", () => {
         ready.resolve();
         await settled();
 
-        expect(engine.isConnected()).toBe(false);
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
         expect(events).toEqual(["connect", "disconnect"]);
       });
 
@@ -4103,13 +4103,13 @@ describe("createSyncEngine", () => {
         first.resolve();
         await settled();
 
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
         expect(events).toEqual(["connect", "disconnect", "connect"]);
 
         second.resolve();
         await settled();
 
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
         expect(events).toEqual(["connect", "disconnect", "connect", "ready"]);
       });
 
@@ -4141,7 +4141,7 @@ describe("createSyncEngine", () => {
         });
         const seen: [SyncEvent, boolean, unknown][] = [];
         engine.subscribe((event) =>
-          seen.push([event, engine.isReady(), backend.read()]),
+          seen.push([event, engine.getStatus().ready, backend.read()]),
         );
 
         engine.connect();
@@ -4168,7 +4168,7 @@ describe("createSyncEngine", () => {
         const engine: SyncEngine = createSyncEngine(backend, store.adapter, {
           ready: ready.promise,
           onError: (error, source) =>
-            seen.push([error, source, engine.isConnected()]),
+            seen.push([error, source, engine.getStatus().connected]),
         });
         const events: SyncEvent[] = [];
         engine.subscribe((event) => events.push(event));
@@ -4180,7 +4180,7 @@ describe("createSyncEngine", () => {
         expect(seen).toEqual([[failure, "ready", false]]);
         expect(write).not.toHaveBeenCalled();
         expect(events).toEqual(["connect", "disconnect"]);
-        expect(engine.isReady()).toBe(false);
+        expect(engine.getStatus().ready).toBe(false);
       });
 
       it("stops hearing both sides and keeps what the store adopted", async () => {
@@ -4221,7 +4221,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(onError).toHaveBeenCalledOnce();
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
         expect(backend.read()).toEqual({ count: 0 });
       });
 
@@ -4345,7 +4345,7 @@ describe("createSyncEngine", () => {
           await settled();
 
           expect(unhandled).toEqual([failure]);
-          expect(engine.isConnected()).toBe(false);
+          expect(engine.getStatus().connected).toBe(false);
         });
 
         it("does not leave a promise rejected before connect unhandled", async () => {
@@ -4385,7 +4385,7 @@ describe("createSyncEngine", () => {
           await settled();
 
           expect(unhandled).toEqual([failure]);
-          expect(engine.isConnected()).toBe(false);
+          expect(engine.getStatus().connected).toBe(false);
         });
 
         it("drops the rejection of a wait a failed connect abandoned", async () => {
@@ -4431,7 +4431,7 @@ describe("createSyncEngine", () => {
           await settled();
 
           expect(write).not.toHaveBeenCalled();
-          expect(engine.isReady()).toBe(false);
+          expect(engine.getStatus().ready).toBe(false);
         });
 
         it("does not blame a filter that throws on an earlier failed connect", async () => {
@@ -4496,7 +4496,7 @@ describe("createSyncEngine", () => {
 
           expect(onError).not.toHaveBeenCalled();
           expect(unhandled).toEqual([failure]);
-          expect(engine.isConnected()).toBe(false);
+          expect(engine.getStatus().connected).toBe(false);
         });
       });
     });
@@ -4522,7 +4522,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(onError).toHaveBeenCalledWith(expect.any(TypeError), "backend");
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
         expect(events).toEqual(["connect", "disconnect"]);
       });
 
@@ -4545,7 +4545,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(onError).toHaveBeenCalledWith(failure, "backend");
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
 
       it("reports a setState that fails while reconciling and disconnects", async () => {
@@ -4576,7 +4576,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(onError).toHaveBeenCalledWith(failure, "store");
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
 
       it("reconnects after a failure", async () => {
@@ -4596,7 +4596,7 @@ describe("createSyncEngine", () => {
         engine.connect();
         await settled();
 
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
         expect(backend.read()).toEqual({ count: 0 });
       });
 
@@ -4611,7 +4611,7 @@ describe("createSyncEngine", () => {
           { ready: deferred().promise },
         );
         expect(() => engine.connect()).toThrow(TypeError);
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
 
         const good = createMemoryBackend();
         const subscribe = vi.spyOn(good, "subscribe");
@@ -4624,7 +4624,7 @@ describe("createSyncEngine", () => {
           { ready: deferred().promise },
         );
         expect(() => badStore.connect()).toThrow(TypeError);
-        expect(badStore.isConnected()).toBe(false);
+        expect(badStore.getStatus().connected).toBe(false);
         expect(subscribe).not.toHaveBeenCalled();
       });
 
@@ -4644,7 +4644,7 @@ describe("createSyncEngine", () => {
 
         expect(() => engine.connect()).toThrow(failure);
         expect(read).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
 
       it("reports a remote change that fails while waiting, and stays waiting", async () => {
@@ -4669,13 +4669,13 @@ describe("createSyncEngine", () => {
 
         backend.receive({ count: 7 });
         expect(onError).toHaveBeenCalledWith(failure, "store");
-        expect(engine.isConnected()).toBe(true);
+        expect(engine.getStatus().connected).toBe(true);
 
         failing = false;
         ready.resolve();
         await settled();
         expect(store.getState()).toEqual({ count: 7 });
-        expect(engine.isReady()).toBe(true);
+        expect(engine.getStatus().ready).toBe(true);
       });
     });
 
@@ -4806,7 +4806,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(onError).toHaveBeenCalledWith(expect.any(TypeError), "backend");
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
         expect(events).toEqual(["connect", "disconnect"]);
       });
 
@@ -4829,7 +4829,7 @@ describe("createSyncEngine", () => {
         await settled();
 
         expect(write).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
 
       it("schedules the next remote change after one covered by reconciliation", async () => {

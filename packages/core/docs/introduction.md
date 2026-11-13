@@ -33,7 +33,7 @@ const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
 });
 
 engine.connect();
-engine.isConnected(); // true
+engine.getStatus().connected; // true
 engine.disconnect();
 ```
 

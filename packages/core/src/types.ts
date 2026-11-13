@@ -350,13 +350,16 @@ export interface SyncFailure {
  */
 export interface SyncStatus {
   /**
-   * What `isConnected()` returns: the engine is subscribed to the store and the backend, also
-   * while it waits for `ready`.
+   * Whether the engine is connected: subscribed to the store and the backend, also while it waits
+   * for `ready`.
    */
   readonly connected: boolean;
   /**
-   * What `isReady()` returns: a local change is written. Without the `ready` option it equals
-   * `connected`, so it says nothing about the room either.
+   * Whether the engine is connected and done reconciling, so that a local change is written. With
+   * the `ready` option it is false until `ready` has resolved and reconciliation is done, and
+   * false again on every reconnect until the same is true. Without the option it equals
+   * `connected`, so it says nothing about the room either. Whichever the options, it is false
+   * while disconnected.
    */
   readonly ready: boolean;
   /**
@@ -386,20 +389,11 @@ export interface SyncEngine {
   connect: () => void;
   /** Stop synchronization and cleanup */
   disconnect: () => void;
-  /** Check if engine is connected, which includes waiting for `ready`; see `isReady` */
-  isConnected: () => boolean;
   /**
-   * Whether the engine is connected and done reconciling, so that a local change is written. With
-   * the `ready` option it is false until `ready` has resolved and reconciliation is done, and
-   * false again on every reconnect until the same is true. Without the option it equals
-   * `isConnected()`. Whichever the options, it is false while disconnected.
-   */
-  isReady: () => boolean;
-  /**
-   * The engine's status, which agrees with `isConnected()` and `isReady()` whenever it is read. It
-   * returns one object until a field changes, frozen, and the same object whenever the fields are
-   * those of an earlier status without a failure, so comparing by identity tells whether it
-   * changed. See `SyncStatus`.
+   * The engine's status: whether it is connected and ready, and what failed. It is current
+   * whenever it is read, also from a store or sync event listener. It returns one object until a
+   * field changes, frozen, and the same object whenever the fields are those of an earlier status
+   * without a failure, so comparing by identity tells whether it changed. See `SyncStatus`.
    */
   getStatus: () => SyncStatus;
   /**

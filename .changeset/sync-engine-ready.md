@@ -26,9 +26,8 @@ A rejected `ready`, or a failure while reconciling after it, disconnects the eng
 waiting until `disconnect()`. The engine has no timer: to start offline, race `ready` against a
 timeout, which trades safety for that start.
 
-`SyncEngine` gains `isReady()`, and `SyncEvent` the `"ready"` event, sent only with the option.
-`isReady()` is false while disconnected and, with the option, until reconciliation is done;
-without it, it equals `isConnected()`. `isConnected()` is true while waiting. An object that
-implements `SyncEngine` by hand must add `isReady`.
+`SyncEvent` gains the `"ready"` event, sent only with the option. `getStatus().ready` is false
+while disconnected and, with the option, until reconciliation is done; without it, it equals
+`getStatus().connected`, which is true while waiting.
 
 Without `ready`, the engine behaves as before.

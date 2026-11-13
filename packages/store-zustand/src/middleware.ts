@@ -121,7 +121,7 @@ const homeostateImpl = <T extends object>(
       let hydrations = 0;
       persistApi.onHydrate(() => {
         hydrations++;
-        if (!engine.isConnected()) return;
+        if (!engine.getStatus().connected) return;
         engine.disconnect();
         connectWhenHydrated();
         resumingRehydrated = true;

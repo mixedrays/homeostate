@@ -65,7 +65,7 @@ backend.receive({ count: 9 });
 console.log(store.getState()); // { count: 9, draft: "Only on this device" }
 
 engine.disconnect();
-console.log(engine.isConnected()); // false
+console.log(engine.getStatus().connected); // false
 ```
 
 ## SyncEngineConfig
@@ -283,7 +283,7 @@ for a bad `read()` or `getState()`. Until `ready` settles:
 - A remote change is applied per key, as `connect()` does: a key the backend holds wins, and a
   key only the store holds stays. A key the backend held and a peer deleted is removed.
 - Nothing is written: no seed, no local change, and nothing the store changes during an apply.
-- `schedule`, `keys`, `omit` and `filter` work as usual, and `isConnected()` is `true`.
+- `schedule`, `keys`, `omit` and `filter` work as usual, and `getStatus().connected` is `true`.
 
 Once it resolves, the engine runs a pending apply, reconciles as `connect()` does without
 `ready`, and sends `"ready"`. So with `ready` resolving after the room's state reached the document, a joining
@@ -294,7 +294,7 @@ on the library; see [How backends differ](#how-backends-differ).
 Local changes made before then are provisional. A key the backend holds keeps the backend's
 value, so the change is dropped. A key it lacks is written with the rest, also with
 `seed: "never"`, where a local change while waiting counts as the next local change. To keep
-users from losing edits, disable editing until [`isReady()`](#syncengine).
+users from losing edits, disable editing until [`getStatus().ready`](#sync-status) is `true`.
 
 | `ready`                              | What the engine does                                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
@@ -453,8 +453,6 @@ when it is mounted.
 interface SyncEngine {
   connect: () => void;
   disconnect: () => void;
-  isConnected: () => boolean;
-  isReady: () => boolean;
   getStatus: () => SyncStatus;
   subscribeStatus: (listener: () => void) => Unsubscribe;
   getSyncedState: () => Record<string, unknown>;
@@ -479,8 +477,6 @@ interface SyncFailure {
 | --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `connect()`                 | `void`                    | Reconciles current state per key, then subscribes to backend and store changes. Calling it again while connected does nothing.                                                                                                              |
 | `disconnect()`              | `void`                    | Applies a pending remote change and writes a [batched write](#batched-writes) still waiting, then removes both subscriptions. Calling it while disconnected does nothing. It does not destroy the store, document, provider or persistence. |
-| `isConnected()`             | `boolean`                 | Whether the engine is subscribed, so also while it waits for `ready`. This does not report network connectivity or whether a provider has received the room's state.                                                                        |
-| `isReady()`                 | `boolean`                 | Whether the engine is connected and done reconciling, so that local changes are written. See below.                                                                                                                                         |
 | `getStatus()`               | `SyncStatus`              | The engine's status, with what went wrong. It says nothing about the network. See [Sync status](#sync-status).                                                                                                                              |
 | `subscribeStatus(listener)` | `Unsubscribe`             | Calls `listener` after every change of `getStatus()`, also for a failure, until unsubscribed. See [Sync status](#sync-status).                                                                                                              |
 | `getSyncedState()`          | `Record<string, unknown>` | The store's synced keys with the values the store holds, connected or not. See [Synced state](#synced-state).                                                                                                                               |
@@ -501,10 +497,10 @@ it on both sides, including deletions. Unchanged subtrees keep their identity. S
 notifications raised synchronously while the engine applies remote state are ignored to avoid
 echoing that state back.
 
-`isReady()` is `false` while disconnected. With `ready`, it stays `false` from `connect()` until
-`ready` has resolved and reconciliation is done, also on a reconnect. Without `ready`, it equals
-`isConnected()`. Use it to disable editing during the wait; it says what the engine has done, not
-what the network has.
+`getStatus().ready` is `false` while disconnected. With `ready`, it stays `false` from `connect()`
+until `ready` has resolved and reconciliation is done, also on a reconnect. Without `ready`, it
+equals `getStatus().connected`. Use it to disable editing during the wait; it says what the engine
+has done, not what the network has.
 
 Reconnecting runs reconciliation again: backend values replace disconnected local edits
 for matching keys. For offline editing, leave the engine connected and disconnect the
@@ -514,23 +510,23 @@ network provider instead. See [Connecting](/docs/concepts#connecting).
 
 `subscribe` reports what the engine has just handled, so a tool such as the devtools can tell a
 remote change from a local one and show the connection as it changes, without guessing from
-timing or polling `isConnected()`:
+timing or polling `getStatus()`:
 
 ```ts
 const unsubscribe = engine.subscribe((event) => {
   if (event === "connect" || event === "disconnect")
-    showStatus(engine.isConnected());
+    showStatus(engine.getStatus().connected);
   if (event === "remote") markRemote();
 });
 ```
 
-| Event          | Sent                                                                   | Once per                                                                                                                                                                                              |
-| -------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"local"`      | after the write to the backend, if any                                 | store notification handled while connected, even one that changed only local keys and wrote nothing, or [batched write](#batched-writes). An echo raised while a remote change is applied sends none. |
-| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                                           |
-| `"connect"`    | after reconciliation and both subscriptions; `isConnected()` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.                                    |
-| `"disconnect"` | after both subscriptions are removed; `isConnected()` is `false`       | `disconnect()` that disconnects. A pending apply or batched write it runs sends its `"remote"` or `"local"` first; if that throws, `"disconnect"` is still sent, since the engine is disconnected.    |
-| `"ready"`      | after reconciling once `ready` resolved; `isReady()` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                                                     |
+| Event          | Sent                                                                           | Once per                                                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"local"`      | after the write to the backend, if any                                         | store notification handled while connected, even one that changed only local keys and wrote nothing, or [batched write](#batched-writes). An echo raised while a remote change is applied sends none. |
+| `"remote"`     | after `setState` and the write of the keys the store changed meanwhile         | apply, so once per flush with `schedule`, even when the store is unchanged. A local change that first runs a pending apply sends `"remote"`, not `"local"`.                                           |
+| `"connect"`    | after reconciliation and both subscriptions; `getStatus().connected` is `true` | `connect()` that connects. It covers seeding and the values adopted from the backend, which send no `"local"` or `"remote"` of their own. With `ready`, see below.                                    |
+| `"disconnect"` | after both subscriptions are removed; `getStatus().connected` is `false`       | `disconnect()` that disconnects. A pending apply or batched write it runs sends its `"remote"` or `"local"` first; if that throws, `"disconnect"` is still sent, since the engine is disconnected.    |
+| `"ready"`      | after reconciling once `ready` resolved; `getStatus().ready` is `true`         | wait for `ready` that ends well. It covers seeding and the values adopted. Never sent without the `ready` option.                                                                                     |
 
 With `ready`, `"connect"` comes before the wait and covers only the values adopted then. Each
 remote change during the wait sends `"remote"`, a local change sends nothing, since it writes
@@ -563,16 +559,15 @@ const unsubscribe = engine.subscribeStatus(() => {
 > the sync server is down. Without the [`ready`](#waiting-for-the-room) option, `ready` equals
 > `connected` and says no more. Read the provider's own state to show whether a peer is online.
 
-| Field       | Value                                                                                                                                                  |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `connected` | What `isConnected()` returns.                                                                                                                          |
-| `ready`     | What `isReady()` returns. With the `ready` option, `false` during every wait, and a `ready` that races a timeout makes it `true` with the server down. |
-| `failure`   | What went wrong and what it came from, or `null`. `error` may be anything, even `undefined` for a `ready` rejected with no reason, so test `failure`.  |
+| Field       | Value                                                                                                                                                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connected` | Whether the engine is subscribed to the store and the backend, so also while it waits for `ready`.                                                                                                                    |
+| `ready`     | Whether the engine is connected and done reconciling, so that local changes are written. With the `ready` option, `false` during every wait, and a `ready` that races a timeout makes it `true` with the server down. |
+| `failure`   | What went wrong and what it came from, or `null`. `error` may be anything, even `undefined` for a `ready` rejected with no reason, so test `failure`.                                                                 |
 
-`getStatus()` agrees with `isConnected()` and `isReady()` whenever it is read, also from a store
-subscriber or a listener during reconciliation. It returns a frozen object, the same one until a
-field changes, so comparing by identity tells whether it changed: `useSyncExternalStore` needs
-that. Local and remote changes alone do not call `subscribeStatus` listeners, which run after the
+`getStatus()` is current whenever it is read, also from a store subscriber or a listener during
+reconciliation. It returns a frozen object, the same one until a field changes, so comparing by
+identity tells whether it changed: `useSyncExternalStore` needs that. Local and remote changes alone do not call `subscribeStatus` listeners, which run after the
 listeners of the sync event that came with the change. A listener that changes the status tells
 every listener of the new status, and each listener runs on its own, as with `subscribe`.
 

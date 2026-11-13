@@ -1077,10 +1077,6 @@ export function createSyncEngine<S extends object>(
       }
     },
 
-    isConnected: (): boolean => connected,
-
-    isReady: (): boolean => reconciled,
-
     getStatus,
 
     subscribeStatus: (listener): Unsubscribe => {

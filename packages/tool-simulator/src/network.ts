@@ -365,7 +365,7 @@ export function createNetwork(options: NetworkOptions = {}): Network {
 
     const views = peers.map(view);
     peers.forEach((peer, i) => {
-      if (peer.engine.isConnected())
+      if (peer.engine.getStatus().connected)
         describe(
           `${peer.name}'s store differs from its document`,
           views[i].store,
