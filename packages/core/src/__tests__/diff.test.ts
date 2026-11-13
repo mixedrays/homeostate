@@ -636,6 +636,25 @@ describe("getChanges", () => {
       expect(policy.mock.calls).toEqual([[["todos", 1, "title"]], [["term"]]]);
     });
 
+    it("asks only about strings that changed", () => {
+      const policy = vi.fn<TextPolicy>(() => true);
+      const before = {
+        doc: { title: "Trip", body: "Plan" },
+        tags: ["one"],
+        term: "x",
+      };
+      // A copy, as a backend's `previous` read from its document is: no shared containers.
+      const after = {
+        doc: { title: "Trip", body: "Plan it" },
+        tags: ["one"],
+        term: "x",
+      };
+
+      getChanges(before, after, { json: true, text: policy });
+
+      expect(policy.mock.calls).toEqual([[["doc", "body"]]]);
+    });
+
     it("always diffs two strings passed directly character by character", () => {
       expect(getChanges("ab", "abc", { text: () => false })).toEqual([
         { type: INSERT, key: 2, value: "c" },
@@ -655,6 +674,32 @@ describe("getChanges", () => {
         expect(getChanges(expected, next, json)).toEqual([]);
       },
     );
+
+    it("finds no change in entries that are the same as JSON, NaN and infinite numbers included", () => {
+      const record = { n: 1 };
+      expect(
+        getChanges(
+          { a: NaN, b: NaN, c: Infinity, d: 1, e: record, f: "x" },
+          { a: NaN, b: null, c: -Infinity, d: 1, e: record, f: "x" },
+          json,
+        ),
+      ).toEqual([]);
+    });
+
+    it("deletes and inserts entries that are absent as JSON on one side only", () => {
+      const save = () => {};
+      expect(
+        getChanges(
+          { a: undefined, b: 1, c: undefined, d: save, e: save },
+          { a: undefined, b: undefined, c: 2, d: save, e: 3 },
+          json,
+        ),
+      ).toEqual([
+        { type: DELETE, key: "b" },
+        { type: INSERT, key: "c", value: 2 },
+        { type: INSERT, key: "e", value: 3 },
+      ]);
+    });
 
     it("carries values as JSON would store them", () => {
       expect(

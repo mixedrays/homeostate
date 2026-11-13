@@ -365,6 +365,9 @@ const getRecordChanges = (
         value: written(value, options),
       });
     else {
+      // Unchanged, so neither its path nor, for a string, the text policy is needed. `NaN`,
+      // which is not `===` itself, falls through to `same`.
+      if (a[property] === value) continue;
       const nested = nestedChanges(a[property], value, path, property, options);
       if (nested === null) {
         if (!same(a[property], value))
