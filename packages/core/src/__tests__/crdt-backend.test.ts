@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createCrdtBackend,
+  createSyncEngine,
   type ApplyOps,
   type CrdtBackendParts,
   type JsonObject,
   type TextPolicy,
 } from "../index.js";
+import { createTestStore, threeTodos, todo } from "./helpers.js";
 
 type Plain = Record<string, unknown>;
 
@@ -123,6 +125,17 @@ describe("createCrdtBackend", () => {
 
     expect(doc.reads).toBe(0);
     expect(doc.root).toEqual({ count: 2, label: "b" });
+  });
+
+  it("reads its document once when the sync engine seeds the keys it lacks", () => {
+    const doc = createDoc({ todos: [todo("remote")] });
+    const backend = createCrdtBackend(partsOver(doc));
+    const store = createTestStore(threeTodos());
+
+    createSyncEngine(backend, store.adapter).connect();
+
+    expect(doc.reads).toBe(1);
+    expect(doc.root).toEqual({ ...threeTodos(), todos: [todo("remote")] });
   });
 
   it("diffs against its document without previous", () => {

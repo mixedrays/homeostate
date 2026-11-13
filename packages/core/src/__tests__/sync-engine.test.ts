@@ -1284,11 +1284,9 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("passes nothing to the seed write, and what it seeded to the next one", () => {
-      const { backend, previous } = checkedBackend({
-        todos: [todo("remote")],
-        secret: "remote",
-      });
+    it("passes what it read to the seed write, and what it seeded to the next one", () => {
+      const held = { todos: [todo("remote")], secret: "remote" };
+      const { backend, previous } = checkedBackend(held);
       const store = createTestStore(threeTodos());
       createSyncEngine(backend, store.adapter, {
         filter: (key: string) => key !== "secret",
@@ -1302,7 +1300,7 @@ describe("createSyncEngine", () => {
 
       store.update((s) => setSearchTerm(s, "x"));
 
-      expect(previous).toEqual([undefined, seeded]);
+      expect(previous).toEqual([held, seeded]);
     });
 
     it("passes what it read after a remote change, local keys included", () => {

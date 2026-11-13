@@ -940,7 +940,8 @@ export function createSyncEngine<S extends object>(
       const seeded: Plain = { ...held };
       for (const key of missing) seeded[key] = local[key];
       const reads = remoteReads;
-      call("backend", () => backend.write(seeded));
+      // Only the store has been read since, so the backend still holds `held`.
+      call("backend", () => backend.write(seeded, held));
       // A remote change applied during the write has given the store what it read.
       if (remoteReads !== reads) return;
       held = seeded;
