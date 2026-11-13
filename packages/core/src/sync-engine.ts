@@ -484,16 +484,24 @@ export function createSyncEngine<S extends object>(
         ) as S,
     );
 
-  /** Builds the next store state from `current`, whose synced part `synced` becomes `target`. */
-  const mergeStates = (current: S, synced: Plain, target: Plain): S => {
+  /**
+   * Builds the next store state from `current`, whose synced part `synced` becomes `target`.
+   * Returns it with its synced part, `patched`, which equals `target` as JSON and keeps every
+   * object of `synced` that `target` leaves unchanged.
+   */
+  const mergeStates = (
+    current: S,
+    synced: Plain,
+    target: Plain,
+  ): { next: S; patched: Plain } => {
     const patched = keepIdentity(synced, target);
-    if (patched === synced) return current;
+    if (patched === synced) return { next: current, patched };
 
     const merged: Plain = { ...current, ...patched };
     for (const key of Object.keys(synced)) {
       if (!hasOwn(patched, key)) delete merged[key];
     }
-    return merged as S;
+    return { next: merged as S, patched };
   };
 
   /**
@@ -567,6 +575,8 @@ export function createSyncEngine<S extends object>(
     let synced: Plain;
     let target: Plain;
     let next: S;
+    /** The synced part of `next`; see `mergeStates`. */
+    let patched: Plain;
     /** Whether `target` holds a local change the backend lacks. */
     let local = false;
     const keysBefore = heldKeys;
@@ -583,7 +593,7 @@ export function createSyncEngine<S extends object>(
         local = !jsonEqual(merged, remote);
         target = local ? merged : remote;
       }
-      next = mergeStates(current, synced, target);
+      ({ next, patched } = mergeStates(current, synced, target));
       if (next !== current) call("store", () => adapter.setState(next));
       else if (!local) {
         heldKeys = new Set(Object.keys(synced));
@@ -611,8 +621,9 @@ export function createSyncEngine<S extends object>(
     heldKeys = new Set(Object.keys(applied));
     // A key the store lacks after the apply and lacked before is one it cannot hold or does not
     // sync, such as a key a MobX class does not declare, so it stays in the backend. One it held
-    // before, it removed.
-    const paths = changedPaths(target, applied).filter(
+    // before, it removed. Compared with `patched` rather than `target`, which is equal as JSON but
+    // shares no object with the store, so that what the apply left alone is skipped by identity.
+    const paths = changedPaths(patched, applied).filter(
       ([key]) => hasOwn(applied, key) || hasOwn(synced, key),
     );
     countContradictions(target, paths);

@@ -343,6 +343,73 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
     });
 
+    describe("in a part the remote change left alone", () => {
+      type Card = { title: string; done: boolean };
+      interface Board {
+        cards: Record<string, Card>;
+      }
+
+      const board = (): Board => ({
+        cards: {
+          a: { title: "a", done: false },
+          b: { title: "b", done: false },
+          c: { title: "c", done: false },
+        },
+      });
+
+      const withCard = (state: Board, id: string, card: Partial<Card>) => ({
+        ...state,
+        cards: { ...state.cards, [id]: { ...state.cards[id]!, ...card } },
+      });
+
+      it("writes back a card the store changes when a remote change marks another one done", () => {
+        const { backend } = checkedBackend(board());
+        // Card `c` follows card `a`.
+        const store = createTestStore(board(), (next) =>
+          next.cards.c!.done === next.cards.a!.done
+            ? next
+            : withCard(next, "c", { done: next.cards.a!.done }),
+        );
+        const before = store.getState();
+        createSyncEngine(backend, store.adapter).connect();
+        const write = vi.spyOn(backend, "write");
+
+        backend.receive(withCard(board(), "a", { done: true }));
+
+        const marked = withCard(withCard(board(), "a", { done: true }), "c", {
+          done: true,
+        });
+        expect(store.getState()).toEqual(marked);
+        expect(store.getState().cards.b).toBe(before.cards.b);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(backend.read()).toEqual(marked);
+      });
+
+      it("stops writing back the one path a peer keeps re-writing", () => {
+        const onError = vi.fn();
+        const { backend } = checkedBackend(board());
+        // Card `c`'s title is kept in upper case.
+        const store = createTestStore(board(), (next) =>
+          withCard(next, "c", { title: next.cards.c!.title.toUpperCase() }),
+        );
+        createSyncEngine(backend, store.adapter, { onError }).connect();
+
+        // Each remote change toggles card `a` and holds card `c`'s title in lower case again.
+        for (let i = 1; i <= 7; i++)
+          backend.receive(withCard(board(), "a", { done: i % 2 === 1 }));
+
+        expect(onError).toHaveBeenCalledTimes(1);
+        const [error] = onError.mock.calls[0]!;
+        expect(error).toBeInstanceOf(WriteLoopError);
+        expect((error as Error).message).toContain(
+          'stopped writing back ["cards","c","title"]:',
+        );
+        expect(store.getState()).toEqual(
+          withCard(withCard(board(), "a", { done: true }), "c", { title: "C" }),
+        );
+      });
+    });
+
     it("writes what the store derives when connecting to a non-empty backend", () => {
       const backend = createMemoryBackend({ todos: ["a", "b"], count: 0 });
       const store = subscriberStore();
