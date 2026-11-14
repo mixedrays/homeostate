@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { createSyncEngine } from "@homeostate/core";
+import { createSyncEngine, type SyncEngineOptions } from "@homeostate/core";
 import {
   addTodo,
   createTestStore,
@@ -56,28 +56,15 @@ const toShared = (value: unknown): unknown => {
   return value;
 };
 
-/** What the suite needs to look inside the synced map `mapOf` returns. */
-const inspection = (mapOf: (doc: Y.Doc) => Y.Map<unknown>) => {
-  const at = (doc: Y.Doc, path: (string | number)[]): unknown =>
-    path.reduce<unknown>(
-      (container, key) =>
-        container instanceof Y.Map
-          ? container.get(key as string)
-          : (container as Y.Array<unknown>).get(key as number),
-      mapOf(doc),
-    );
-  return {
-    storeForeign: (doc: Y.Doc, key: string, value: unknown) => {
-      mapOf(doc).set(key, value);
-    },
-    storeForeignContainers: (doc: Y.Doc, key: string, value: unknown) => {
-      mapOf(doc).set(key, toShared(value));
-    },
-    containerId: at,
-    isText: (doc: Y.Doc, path: (string | number)[]) =>
-      at(doc, path) instanceof Y.Text,
-  };
-};
+/** The shared type at `path` in `doc`'s synced map. */
+const at = (doc: Y.Doc, path: (string | number)[]): unknown =>
+  path.reduce<unknown>(
+    (container, key) =>
+      container instanceof Y.Map
+        ? container.get(key as string)
+        : (container as Y.Array<unknown>).get(key as number),
+    doc.getMap(NAME),
+  );
 
 describeCrdtBackend("createYjsBackend", {
   createDoc: (id) => {
@@ -87,7 +74,14 @@ describeCrdtBackend("createYjsBackend", {
   },
   backend: (doc, options) => createYjsBackend(doc, NAME, options),
   ...replication,
-  ...inspection((doc) => doc.getMap(NAME)),
+  storeForeign: (doc, key, value) => {
+    doc.getMap(NAME).set(key, value);
+  },
+  storeForeignContainers: (doc, key, value) => {
+    doc.getMap(NAME).set(key, toShared(value));
+  },
+  containerId: at,
+  isText: (doc, path) => at(doc, path) instanceof Y.Text,
 });
 
 /**
@@ -103,18 +97,6 @@ const layout = (() => {
 
 const nestedMap = (doc: Y.Doc): Y.Map<unknown> =>
   doc.getMap("app").get("todos") as Y.Map<unknown>;
-
-describeCrdtBackend("createYjsBackend over a nested Y.Map", {
-  createDoc: (id) => {
-    const doc = new Y.Doc();
-    if (id !== undefined) doc.clientID = id;
-    Y.applyUpdate(doc, layout);
-    return doc;
-  },
-  backend: (doc, options) => createYjsBackend(nestedMap(doc), options),
-  ...replication,
-  ...inspection(nestedMap),
-});
 
 describe("createYjsBackend", () => {
   it("has no revision inside a transaction, and a new one once its observers are called", () => {
@@ -165,6 +147,38 @@ describe("createYjsBackend", () => {
 
     expect(backend.revision()).toBe(before);
   });
+
+  it("keeps its revision for a change elsewhere in the document", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1 });
+    const before = backend.revision();
+
+    doc.getText("editor").insert(0, "typed");
+    createYjsBackend(doc, "other").write({ count: 2 });
+
+    expect(backend.revision()).toBe(before);
+  });
+
+  it("has a new revision for an edit deep inside the map once its observers are called", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME, {
+      text: (path) => path.at(-1) === "title",
+    });
+    backend.write({ todos: [{ id: "1", title: "Todo" }] });
+    const before = backend.revision();
+    const title = at(doc, ["todos", 0, "title"]) as Y.Text;
+    let observed: unknown;
+    title.observe(() => {
+      observed = backend.revision();
+    });
+
+    title.insert(4, "!");
+
+    expect(observed).toBeDefined();
+    expect(observed).not.toBe(before);
+    expect(backend.revision()).toBe(observed);
+  });
 });
 
 describe("a removed map", () => {
@@ -185,10 +199,13 @@ describe("a removed map", () => {
     return Y.encodeStateAsUpdate(doc);
   })();
 
-  /** A connected backend over the nested map, and a peer that replaces the map under `key`. */
+  /**
+   * A connected backend over the nested map, whose engine takes `onError`, and a peer that
+   * replaces the map under `key`.
+   */
   const replacedBy = (
     key: "todos" | "section",
-    options?: YjsBackendOptions,
+    onError?: SyncEngineOptions["onError"],
   ) => {
     const deep = key === "section";
     const update = deep ? deepLayout : layout;
@@ -199,78 +216,173 @@ describe("a removed map", () => {
           "todos",
         ) as Y.Map<unknown>)
       : nestedMap(doc);
-    const backend = createYjsBackend(synced, options);
+    const backend = createYjsBackend(synced);
     const store = createTestStore(threeTodos());
-    createSyncEngine({ backend, adapter: store.adapter }).connect();
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
+      onError,
+    });
+    engine.connect();
     replication.exchange(doc, peer);
 
     const replace = (): void => {
       peer.getMap("app").set(key, new Y.Map());
       replication.exchange(doc, peer);
     };
-    return { doc, backend, store, replace };
+    return { doc, peer, backend, engine, store, replace };
   };
 
-  it("reports once when a peer replaces the synced map", () => {
-    const onRemoved = vi.fn();
-    const { doc, replace } = replacedBy("todos", { onRemoved });
+  it("reports the removal at once, and once, as a backend failure", () => {
+    const onError = vi.fn();
+    const { doc, engine, store, replace } = replacedBy("todos", onError);
 
     replace();
     doc.getMap("app").set("title", "Mine");
 
-    expect(onRemoved).toHaveBeenCalledTimes(1);
-    expect(onRemoved).toHaveBeenCalledWith(expect.any(Error));
-  });
-
-  it("reports when a peer replaces a map holding the synced map", () => {
-    const onRemoved = vi.fn();
-    const { replace } = replacedBy("section", { onRemoved });
-
-    replace();
-
-    expect(onRemoved).toHaveBeenCalledTimes(1);
-  });
-
-  it("only reports the removal: reads and store changes after it do not throw", () => {
-    const { backend, store, replace } = replacedBy("todos", {
-      onRemoved: () => {},
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringMatching(/removed/) }),
+      "backend",
+    );
+    expect(engine.getStatus().failure).toEqual({
+      error: onError.mock.calls[0]?.[0],
+      source: "backend",
     });
+    expect(store.getState()).toEqual(threeTodos());
+  });
+
+  it("reports the removal of a map holding the synced map", () => {
+    const onError = vi.fn();
+    const { replace } = replacedBy("section", onError);
 
     replace();
 
-    expect(() => backend.read()).not.toThrow();
-    expect(() => store.update((s) => toggleTodo(s, "1"))).not.toThrow();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
   });
 
-  it("logs the removal with console.error by default", () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    try {
-      replacedBy("todos").replace();
+  it("keeps the store's state after the removal, and reports each store change as a backend failure", () => {
+    const onError = vi.fn();
+    const { engine, store, replace } = replacedBy("todos", onError);
 
-      expect(consoleError).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Error),
+    replace();
+    store.update((s) => toggleTodo(s, "1"));
+    store.update((s) => toggleTodo(s, "2"));
+
+    expect(store.getState()).toEqual(
+      toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+    );
+    expect(onError).toHaveBeenCalledTimes(3);
+    for (const [error, source] of onError.mock.calls) {
+      expect(error).toEqual(
+        expect.objectContaining({ message: expect.stringMatching(/removed/) }),
       );
-    } finally {
-      consoleError.mockRestore();
+      expect(source).toBe("backend");
     }
+    expect(engine.getStatus().failure).toEqual({
+      error: onError.mock.calls[2]?.[0],
+      source: "backend",
+    });
+  });
+
+  it("throws from read and write once the map is removed", () => {
+    const { backend, replace } = replacedBy("todos", () => {});
+
+    replace();
+
+    expect(() => backend.read()).toThrow(/removed/);
+    expect(() => backend.write(threeTodos(), {})).toThrow(/removed/);
+  });
+
+  it("throws the removal from the update that brought it, without onError", () => {
+    const { engine, store, replace } = replacedBy("todos");
+
+    expect(replace).toThrow(/removed/);
+    expect(engine.getStatus().failure).toEqual({
+      error: expect.any(Error),
+      source: "backend",
+    });
+    expect(store.getState()).toEqual(threeTodos());
   });
 
   it("stops watching for the removal once unsubscribed", () => {
     const doc = replica();
     const peer = replica();
-    const onRemoved = vi.fn();
-    const unsubscribe = createYjsBackend(nestedMap(doc), {
-      onRemoved,
-    }).subscribe(() => {});
+    const onChange = vi.fn();
+    const unsubscribe = createYjsBackend(nestedMap(doc)).subscribe(onChange);
 
     unsubscribe();
     peer.getMap("app").set("todos", new Y.Map());
     replication.exchange(doc, peer);
 
-    expect(onRemoved).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("fails the next connect() after a removal while disconnected", () => {
+    const onError = vi.fn();
+    const { engine, store, replace } = replacedBy("todos", onError);
+
+    engine.disconnect();
+    replace();
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(() => engine.connect()).toThrow(/removed/);
+    expect(engine.getStatus()).toMatchObject({
+      connected: false,
+      failure: { error: expect.any(Error), source: "backend" },
+    });
+    expect(store.getState()).toEqual(threeTodos());
+  });
+
+  describe("with an update waiting for an earlier one", () => {
+    /** Two updates from a third replica to another shared type, the second depending on the first. */
+    const twoUpdates = (doc: Y.Doc): [Uint8Array, Uint8Array] => {
+      const other = replica();
+      other.clientID = 3;
+      replication.exchange(doc, other);
+      const updates: Uint8Array[] = [];
+      other.on("update", (update: Uint8Array) => updates.push(update));
+      other.getText("notes").insert(0, "a");
+      other.getText("notes").insert(1, "b");
+      return [updates[0] as Uint8Array, updates[1] as Uint8Array];
+    };
+
+    it("reports a removal while the gap is open at once, and not again when it closes", () => {
+      const onError = vi.fn();
+      const { doc, store, replace } = replacedBy("todos", onError);
+      const [u0, u1] = twoUpdates(doc);
+
+      Y.applyUpdate(doc, u1);
+      replace();
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
+      Y.applyUpdate(doc, u0);
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toEqual(threeTodos());
+    });
+
+    it("reports once a removal in the transaction that closes a gap the watch began with", () => {
+      const onError = vi.fn();
+      const { doc, peer, engine, store } = replacedBy("todos", onError);
+      const updates: Uint8Array[] = [];
+      peer.on("update", (update: Uint8Array) => updates.push(update));
+      peer.transact(() => {
+        peer.getText("notes").insert(0, "a");
+        peer.getMap("app").set("todos", new Y.Map());
+      });
+      peer.getText("notes").insert(1, "b");
+      engine.disconnect();
+      Y.applyUpdate(doc, updates[1] as Uint8Array);
+      engine.connect();
+
+      Y.applyUpdate(doc, updates[0] as Uint8Array);
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
+      expect(store.getState()).toEqual(threeTodos());
+    });
   });
 
   it("throws a TypeError for a map already removed from its document", () => {
@@ -298,32 +410,6 @@ const originsDuring = (doc: Y.Doc, run: () => void): unknown[] => {
 };
 
 describe("map and origin", () => {
-  it("exposes the synced map and the origin that tags its writes", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME);
-
-    const origins = originsDuring(doc, () => backend.write({ count: 1 }));
-
-    expect(backend.map).toBe(doc.getMap(NAME));
-    expect(origins).toEqual([backend.origin]);
-  });
-
-  it("tags every write with a custom origin, and reports only other origins", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME, { origin: "store" });
-    const onRemoteChange = vi.fn();
-    backend.subscribe(onRemoteChange);
-
-    const origins = originsDuring(doc, () => backend.write({ count: 1 }));
-    doc.transact(() => backend.map.set("count", 2), "store");
-    expect(onRemoteChange).not.toHaveBeenCalled();
-    doc.transact(() => backend.map.set("count", 3), "editor");
-
-    expect(backend.origin).toBe("store");
-    expect(origins).toEqual(["store"]);
-    expect(onRemoteChange).toHaveBeenCalledTimes(1);
-  });
-
   it("syncs a store into a nested map, leaving the rest of the document alone", () => {
     const doc = new Y.Doc();
     const app = doc.getMap("app");
@@ -467,9 +553,14 @@ describe("an update that waits for an earlier one", () => {
    * reader's store synced by an engine. Each `write` returns the writer's update, which the
    * test delivers to the reader with `deliver`, in any order. `peer` adds a third replica on
    * client 3 holding `initial`, whose `write` returns its update too. Every backend takes
-   * `options`.
+   * `options`, and the engine `schedule`.
    */
-  const gap = (initial: State, readerId = 2, options?: YjsBackendOptions) => {
+  const gap = (
+    initial: State,
+    readerId = 2,
+    options?: YjsBackendOptions,
+    schedule?: SyncEngineOptions["schedule"],
+  ) => {
     const writerDoc = new Y.Doc();
     writerDoc.clientID = 1;
     const readerDoc = new Y.Doc();
@@ -480,7 +571,7 @@ describe("an update that waits for an earlier one", () => {
     Y.applyUpdate(readerDoc, start);
     const backend = createYjsBackend(readerDoc, NAME, options);
     const store = createTestStore<State>({});
-    createSyncEngine({ backend, adapter: store.adapter }).connect();
+    createSyncEngine({ backend, adapter: store.adapter, schedule }).connect();
     return {
       writerDoc,
       readerDoc,
@@ -503,45 +594,49 @@ describe("an update that waits for an earlier one", () => {
     for (const a of docs) for (const b of docs) replication.exchange(a, b);
   };
 
-  it("keeps a replaced key while its replacement waits for an earlier update", () => {
-    const { store, write, deliver } = gap({ text: "seed", log: "seed" });
-    const u0 = write({ text: "seed", log: "changed" });
-    const u1 = write({ text: "changed", log: "changed" });
+  type Gap = ReturnType<typeof gap>;
 
-    deliver(u1);
-    expect(store.getState()).toEqual({ text: "seed", log: "seed" });
-    deliver(u0);
-    expect(store.getState()).toEqual({ text: "changed", log: "changed" });
-  });
+  it.each([
+    [
+      "the synced map",
+      ({ write }: Gap): Uint8Array[] => [
+        write({ text: "seed", log: "changed" }),
+        write({ text: "changed", log: "changed" }),
+      ],
+      { text: "changed", log: "changed" },
+    ],
+    [
+      "another shared type",
+      ({ writerDoc }: Gap): Uint8Array[] => {
+        const updates: Uint8Array[] = [];
+        writerDoc.on("update", (update: Uint8Array) => updates.push(update));
+        writerDoc.getText("notes").insert(0, "a");
+        writerDoc.getText("notes").insert(1, "b");
+        return updates;
+      },
+      { text: "seed", log: "seed" },
+    ],
+  ])(
+    "delays a peer's change to another key until a gap in %s closes",
+    (_where, open, closed) => {
+      const initial = { text: "seed", log: "seed" };
+      const context = gap(initial);
+      const { readerDoc, backend, store, deliver, peer } = context;
+      const onChange = vi.fn();
+      backend.subscribe(onChange);
+      const [u0, u1] = open(context) as [Uint8Array, Uint8Array];
 
-  it("delays a peer's change to another key until the gap closes", () => {
-    const { readerDoc, store, write, deliver } = gap({
-      text: "seed",
-      log: "seed",
-    });
-    const peerDoc = new Y.Doc();
-    peerDoc.clientID = 3;
-    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(readerDoc));
-    const u0 = write({ text: "seed", log: "changed" });
-    const u1 = write({ text: "changed", log: "changed" });
-
-    deliver(u1);
-    const before = Y.encodeStateVector(peerDoc);
-    createYjsBackend(peerDoc, NAME).write({
-      text: "seed",
-      log: "seed",
-      other: 1,
-    });
-    deliver(Y.encodeStateAsUpdate(peerDoc, before));
-    expect(readerDoc.getMap(NAME).get("other")).toBe(1);
-    expect(store.getState()).toEqual({ text: "seed", log: "seed" });
-    deliver(u0);
-    expect(store.getState()).toEqual({
-      text: "changed",
-      log: "changed",
-      other: 1,
-    });
-  });
+      deliver(u1);
+      deliver(peer().write({ ...initial, other: 1 }));
+      expect(readerDoc.getMap(NAME).get("other")).toBe(1);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(store.getState()).toEqual(initial);
+      expect(backend.read()).toEqual(initial);
+      deliver(u0);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toEqual({ ...closed, other: 1 });
+    },
+  );
 
   it("keeps a peer's insert into a list the gap touched when the store changes that list", () => {
     const initial = { list: [1, 2, 3], log: 0 };
@@ -564,29 +659,6 @@ describe("an update that waits for an earlier one", () => {
     expect(store.getState()).toEqual(synced);
     expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
     expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
-  it("merges the store's change inside a list item key by key", () => {
-    const initial = { todos: [{ title: "seed", done: false }], log: 0 };
-    const { writerDoc, readerDoc, store, write, deliver } = gap(initial);
-    const u0 = write({ ...initial, log: 1 });
-    const u1 = write({ todos: [{ title: "changed", done: false }], log: 1 });
-
-    deliver(u1);
-    store.update((state) => ({
-      ...state,
-      todos: [{ title: "seed", done: true }],
-    }));
-    expect(readerDoc.getMap(NAME).toJSON()).toEqual({
-      todos: [{ done: true }],
-      log: 0,
-    });
-    deliver(u0);
-    syncAll(writerDoc, readerDoc);
-
-    const synced = { todos: [{ title: "changed", done: true }], log: 1 };
-    expect(store.getState()).toEqual(synced);
-    expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
   });
 
   describe("the store's edit to a row a peer moved and changed during the gap", () => {
@@ -650,24 +722,6 @@ describe("an update that waits for an earlier one", () => {
     });
   });
 
-  it("keeps the store's value when it and a peer replace the same list item during the gap", () => {
-    const initial = { list: [1, 2, 3], text: "seed" };
-    const { writerDoc, readerDoc, store, write, deliver, peer } = gap(initial);
-    const other = peer();
-    const u0 = write({ ...initial, text: "middle" });
-    const u1 = write({ ...initial, text: "changed" });
-
-    deliver(u1);
-    deliver(other.write({ ...initial, list: [1, 8, 3] }));
-    store.update((state) => ({ ...state, list: [1, 5, 3] }));
-    deliver(u0);
-    syncAll(writerDoc, readerDoc, other.doc);
-
-    const synced = { list: [1, 5, 3], text: "changed" };
-    expect(store.getState()).toEqual(synced);
-    expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
   it("keeps the store's replacement of a list item the gap replaced, beside the gap's", () => {
     const initial = { list: [1, 2, 3], log: 0 };
     const { writerDoc, readerDoc, store, write, deliver } = gap(initial);
@@ -683,49 +737,6 @@ describe("an update that waits for an earlier one", () => {
     const synced = { list: [1, 9, 5, 3], log: 1 };
     expect(store.getState()).toEqual(synced);
     expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
-  it("drops the store's change inside an object the gap replaced", () => {
-    const initial = { todo: { title: "seed", done: false }, log: 0 };
-    const { writerDoc, readerDoc, store, write, deliver } = gap(initial);
-    const u0 = write({ ...initial, log: 1 });
-    let u1: Uint8Array | undefined;
-    writerDoc.once("update", (update: Uint8Array) => {
-      u1 = update;
-    });
-    writerDoc.getMap(NAME).set("todo", new Y.Map<unknown>([["title", "new"]]));
-
-    deliver(u1 as Uint8Array);
-    store.update((state) => ({
-      ...state,
-      todo: { title: "seed", done: true },
-    }));
-    expect(readerDoc.getMap(NAME).has("todo")).toBe(false);
-    deliver(u0);
-    syncAll(writerDoc, readerDoc);
-
-    // As the document would, had the store changed the replaced map.
-    const synced = { todo: { title: "new" }, log: 1 };
-    expect(store.getState()).toEqual(synced);
-    expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
-  it("writes an item the store and a peer both inserted at one place once", () => {
-    const initial = { list: [1], log: 0 };
-    const { writerDoc, readerDoc, store, write, deliver, peer } = gap(initial);
-    const other = peer();
-    const u0 = write({ ...initial, log: 1 });
-    const u1 = write({ ...initial, log: 2 });
-
-    deliver(u1);
-    deliver(other.write({ ...initial, list: [1, 2] }));
-    store.update((state) => ({ ...state, list: [1, 2] }));
-    deliver(u0);
-    syncAll(writerDoc, readerDoc, other.doc);
-
-    const synced = { list: [1, 2], log: 2 };
-    expect(store.getState()).toEqual(synced);
-    expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
   });
 
   it("merges a function or undefined entry an earlier write left as JSON would store it", () => {
@@ -750,28 +761,6 @@ describe("an update that waits for an earlier one", () => {
   describe("with text", () => {
     const options: YjsBackendOptions = { text: () => true };
 
-    it("merges the store's edit with a gap that replaced part of the text", () => {
-      const initial = { note: "hello world", log: "seed" };
-      const { writerDoc, readerDoc, store, write, deliver } = gap(
-        initial,
-        2,
-        options,
-      );
-      const u0 = write({ ...initial, log: "changed" });
-      const u1 = write({ note: "hello there", log: "changed" });
-
-      deliver(u1);
-      // The gap deleted what the update replaced, and keeps the rest waiting.
-      expect(readerDoc.getMap(NAME).toJSON().note).not.toContain("world");
-      store.update((state) => ({ ...state, note: "Hello world" }));
-      deliver(u0);
-      syncAll(writerDoc, readerDoc);
-
-      const synced = { note: "Hello there", log: "changed" };
-      expect(store.getState()).toEqual(synced);
-      expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-    });
-
     it("keeps a peer's insert into the text the gap touched when the store edits it", () => {
       const initial = { note: "hello world", log: "seed" };
       const { writerDoc, readerDoc, store, write, deliver, peer } = gap(
@@ -785,6 +774,7 @@ describe("an update that waits for an earlier one", () => {
 
       deliver(u1);
       deliver(other.write({ ...initial, note: "hello world!" }));
+      // The gap deleted what the update replaced, and keeps the rest waiting.
       expect(readerDoc.getMap(NAME).toJSON().note).not.toContain("world");
       expect(readerDoc.getMap(NAME).toJSON().note).toContain("!");
       store.update((state) => ({ ...state, note: "Hello world" }));
@@ -816,29 +806,58 @@ describe("an update that waits for an earlier one", () => {
     expect(backend.read()).toEqual({ text: "changed", log: "changed" });
   });
 
-  it("holds back for a gap in another shared type, and reports once it closes", () => {
-    const { writerDoc, readerDoc, backend, store, deliver } = gap({
-      text: "seed",
-    });
-    const onChange = vi.fn();
-    backend.subscribe(onChange);
+  it.each([
+    ["a peer's change", { a: 1 }],
+    ["the store's change", { b: 1 }],
+  ])(
+    "keeps %s from just before the gap when the store changes during it",
+    (_change, change) => {
+      const initial = { text: "seed", log: "seed" };
+      const { store, write, deliver } = gap(initial);
+      if ("a" in change) deliver(write({ ...initial, ...change }));
+      else store.update((state) => ({ ...state, ...change }));
+      const u0 = write({ ...initial, log: "changed", ...change });
+      const u1 = write({ text: "changed", log: "changed", ...change });
+
+      deliver(u1);
+      store.update((state) => ({ ...state, other: 1 }));
+      expect(store.getState()).toEqual({ ...initial, ...change, other: 1 });
+      deliver(u0);
+      expect(store.getState()).toEqual({
+        text: "changed",
+        log: "changed",
+        ...change,
+        other: 1,
+      });
+    },
+  );
+
+  it("applies a change it reported before a gap in another shared type once the gap closes", () => {
+    const flushes: (() => void)[] = [];
+    const flush = (): void => flushes.splice(0).forEach((run) => run());
+    const { writerDoc, readerDoc, store, write, deliver } = gap(
+      { text: "seed", log: "seed" },
+      2,
+      undefined,
+      (run) => flushes.push(run),
+    );
+    deliver(write({ text: "changed", log: "seed" }));
     const updates: Uint8Array[] = [];
     writerDoc.on("update", (update: Uint8Array) => updates.push(update));
     writerDoc.getText("notes").insert(0, "a");
     writerDoc.getText("notes").insert(1, "b");
-    const peerDoc = new Y.Doc();
-    peerDoc.clientID = 3;
-    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(readerDoc));
-    const before = Y.encodeStateVector(peerDoc);
-    createYjsBackend(peerDoc, NAME).write({ text: "seed", other: 1 });
 
+    // The change waits for the flush, which runs while the gap is open, after a store change.
     deliver(updates[1]);
-    deliver(Y.encodeStateAsUpdate(peerDoc, before));
-    expect(onChange).not.toHaveBeenCalled();
-    expect(store.getState()).toEqual({ text: "seed" });
+    store.update((state) => ({ ...state, log: "local" }));
+    flush();
+    expect(readerDoc.getMap(NAME).toJSON()).toEqual({
+      text: "changed",
+      log: "local",
+    });
     deliver(updates[0]);
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(store.getState()).toEqual({ text: "seed", other: 1 });
+    flush();
+    expect(store.getState()).toEqual({ text: "changed", log: "local" });
   });
 
   it.each([
@@ -869,30 +888,6 @@ describe("an update that waits for an earlier one", () => {
       expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
     },
   );
-
-  it("keeps a nested key and an array item while their replacements wait", () => {
-    const initial = {
-      todo: { title: "seed", done: false },
-      list: [1, 2, 3],
-      log: 0,
-    };
-    const { store, write, deliver } = gap(initial);
-    const u0 = write({ ...initial, log: 1 });
-    const u1 = write({
-      todo: { title: "changed", done: false },
-      list: [1, 9, 3],
-      log: 1,
-    });
-
-    deliver(u1);
-    expect(store.getState()).toEqual(initial);
-    deliver(u0);
-    expect(store.getState()).toEqual({
-      todo: { title: "changed", done: false },
-      list: [1, 9, 3],
-      log: 1,
-    });
-  });
 
   it("writes the store's change to a key the gap touched over what the document holds", () => {
     const initial = {

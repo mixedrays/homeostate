@@ -42,26 +42,31 @@ either and stores such array items as `null`, as `JSON.stringify` does.
 
 Besides `read`, `write` and `subscribe`, the backend has `map`, the synced `Y.Map`, and
 `origin`, which tags every transaction its `write` runs. `subscribe` skips transactions with
-that origin, so the engine hears only other changes. Pass `origin` to choose the value; it
-must be unique to this backend.
+that origin, so the engine hears only other changes. The origin is a `Symbol` unique to the
+backend, so no other writer can share it; to track the backend's writes, pass it to
+`Y.UndoManager` as in [Undo and redo](#undo-and-redo).
 
 To keep the synced state in a map you already have, such as one nested in another map or in
 a subdocument, pass the map instead of a document and a name:
 
 ```ts
 const synced = doc.getMap("app").get("store") as Y.Map<unknown>;
-const backend = createYjsBackend(synced, { origin: "store" });
+const backend = createYjsBackend(synced);
 ```
 
 The map must already be part of a document, or `createYjsBackend` throws a `TypeError`.
 Create a nested map once, such as in the document's initial state: two peers that each set a
 new map under the same key keep only one of them.
 
-When a peer replaces the synced map, or a map holding it, the backend calls `onRemoved` once,
-with an `Error`; by default it logs the error with `console.error`. No peer sees a write to the
-removed map, so to keep syncing, disconnect the engine and connect a new one over the map that
-replaced it. A backend notices the removal only while subscribed, as it is while its engine is
-connected.
+When a peer replaces the synced map, or a map holding it, no peer would see a write to the
+removed map, so from then on the backend's `read` and `write` throw an `Error` whose message
+says the synced `Y.Map` was removed. A subscribed backend notices the removal at once, as it is
+while its engine is connected: the engine reads, and reports the error as a failure with the
+source `'backend'`, to `onError` and in `getStatus().failure`. Without `onError`, the error
+propagates from the Yjs update that removed the map, as for any backend failure in a remote
+change. Each later store change fails the same way, and the store keeps its state. An engine
+connected after the removal throws from `connect()`. To keep syncing, disconnect the engine and
+connect a new one over the map that replaced it.
 
 ## Undo and redo
 
@@ -110,9 +115,12 @@ Yjs then applies the update's deletes at once and keeps the rest waiting, so a v
 update replaces would vanish until the earlier update arrives.
 
 While its document holds such a waiting update, a subscribed backend shows the state from
-before it: `read()` returns what the map held then, `revision()` keeps its value, and
-`subscribe` reports nothing. Once the earlier update arrives, the backend reports one change
-and the store catches up. The store only ever shows states the document passed through.
+before it: `read()` returns what the map held when the engine last read or wrote it,
+`revision()` keeps the value that goes with it, and `subscribe` reports nothing. That is the
+state just before the waiting update, or with the engine's `schedule`, the state at its last
+flush or write: remote changes waiting for the flush stay out of the store until the earlier
+update arrives. Then the backend reports one change and the store catches up. The store only
+ever shows states the document passed through.
 
 Local changes still reach the document meanwhile. A write merges what the store changed into
 what the document holds, with what the store was shown as the base, so it never puts back a
