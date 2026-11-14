@@ -594,35 +594,49 @@ describe("an update that waits for an earlier one", () => {
     for (const a of docs) for (const b of docs) replication.exchange(a, b);
   };
 
-  it("delays a peer's change to another key until the gap closes", () => {
-    const { readerDoc, backend, store, write, deliver } = gap({
-      text: "seed",
-      log: "seed",
-    });
-    const peerDoc = new Y.Doc();
-    peerDoc.clientID = 3;
-    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(readerDoc));
-    const u0 = write({ text: "seed", log: "changed" });
-    const u1 = write({ text: "changed", log: "changed" });
+  type Gap = ReturnType<typeof gap>;
 
-    deliver(u1);
-    const before = Y.encodeStateVector(peerDoc);
-    createYjsBackend(peerDoc, NAME).write({
-      text: "seed",
-      log: "seed",
-      other: 1,
-    });
-    deliver(Y.encodeStateAsUpdate(peerDoc, before));
-    expect(readerDoc.getMap(NAME).get("other")).toBe(1);
-    expect(store.getState()).toEqual({ text: "seed", log: "seed" });
-    expect(backend.read()).toEqual({ text: "seed", log: "seed" });
-    deliver(u0);
-    expect(store.getState()).toEqual({
-      text: "changed",
-      log: "changed",
-      other: 1,
-    });
-  });
+  it.each([
+    [
+      "the synced map",
+      ({ write }: Gap): Uint8Array[] => [
+        write({ text: "seed", log: "changed" }),
+        write({ text: "changed", log: "changed" }),
+      ],
+      { text: "changed", log: "changed" },
+    ],
+    [
+      "another shared type",
+      ({ writerDoc }: Gap): Uint8Array[] => {
+        const updates: Uint8Array[] = [];
+        writerDoc.on("update", (update: Uint8Array) => updates.push(update));
+        writerDoc.getText("notes").insert(0, "a");
+        writerDoc.getText("notes").insert(1, "b");
+        return updates;
+      },
+      { text: "seed", log: "seed" },
+    ],
+  ])(
+    "delays a peer's change to another key until a gap in %s closes",
+    (_where, open, closed) => {
+      const initial = { text: "seed", log: "seed" };
+      const context = gap(initial);
+      const { readerDoc, backend, store, deliver, peer } = context;
+      const onChange = vi.fn();
+      backend.subscribe(onChange);
+      const [u0, u1] = open(context) as [Uint8Array, Uint8Array];
+
+      deliver(u1);
+      deliver(peer().write({ ...initial, other: 1 }));
+      expect(readerDoc.getMap(NAME).get("other")).toBe(1);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(store.getState()).toEqual(initial);
+      expect(backend.read()).toEqual(initial);
+      deliver(u0);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toEqual({ ...closed, other: 1 });
+    },
+  );
 
   it("keeps a peer's insert into a list the gap touched when the store changes that list", () => {
     const initial = { list: [1, 2, 3], log: 0 };
@@ -790,31 +804,6 @@ describe("an update that waits for an earlier one", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(backend.revision()).not.toBe(revision);
     expect(backend.read()).toEqual({ text: "changed", log: "changed" });
-  });
-
-  it("holds back for a gap in another shared type, and reports once it closes", () => {
-    const { writerDoc, readerDoc, backend, store, deliver } = gap({
-      text: "seed",
-    });
-    const onChange = vi.fn();
-    backend.subscribe(onChange);
-    const updates: Uint8Array[] = [];
-    writerDoc.on("update", (update: Uint8Array) => updates.push(update));
-    writerDoc.getText("notes").insert(0, "a");
-    writerDoc.getText("notes").insert(1, "b");
-    const peerDoc = new Y.Doc();
-    peerDoc.clientID = 3;
-    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(readerDoc));
-    const before = Y.encodeStateVector(peerDoc);
-    createYjsBackend(peerDoc, NAME).write({ text: "seed", other: 1 });
-
-    deliver(updates[1]);
-    deliver(Y.encodeStateAsUpdate(peerDoc, before));
-    expect(onChange).not.toHaveBeenCalled();
-    expect(store.getState()).toEqual({ text: "seed" });
-    deliver(updates[0]);
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(store.getState()).toEqual({ text: "seed", other: 1 });
   });
 
   it.each([
