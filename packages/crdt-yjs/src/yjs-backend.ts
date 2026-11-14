@@ -118,22 +118,17 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * nested in another shared type or live in a subdocument, but must already be part of a
  * document.
  *
- * Writes run in a transaction tagged with `backend.origin`, and `subscribe`
- * skips events from that origin, so the engine only hears about remote changes.
+ * Writes run in a transaction tagged with `backend.origin`, and `subscribe` skips events from
+ * that origin, so the engine only hears about remote changes.
  *
- * While subscribed, it shows only states its document passed through. When an update arrives
- * before an earlier one it depends on, Yjs applies the update's deletes and keeps the rest
- * waiting, which would hide a value the update replaces. Until the earlier update arrives,
- * `read` returns what the map held when the backend last read or wrote it, `revision` keeps the
- * value that goes with it, and `subscribe` reports nothing; then it reports the changes at once.
- * Writes meanwhile merge what the store changed into what the document holds, leaving the
- * hidden values alone. The wait covers every change, such as a peer's change to another key, and
- * a gap anywhere in the document, since Yjs tracks waiting updates per document.
+ * While its document holds an update waiting for an earlier one, a subscribed backend shows the
+ * state as the engine last read or wrote it (with `schedule`, at its last flush or write) and
+ * reports nothing, then reports one change when the earlier update arrives. See
+ * {@link https://homeostate.pages.dev/docs/crdt-yjs/introduction#updates-out-of-order | Updates out of order}.
  *
- * Once a peer removes the map, as by replacing it or a map holding it with a new map, `read` and
- * `write` throw, since no peer would see a write to it. A subscribed backend then reports one
- * change at once, even while an update waits, so that the engine reads and reports the error.
- * Create a backend over the map that replaced it.
+ * Once a peer removes the map, as by replacing it or a map holding it, `read` and `write` throw.
+ * A subscribed backend then reports one change at once, even while an update waits, so that the
+ * engine reads and reports the error.
  *
  * @example
  * ```typescript
