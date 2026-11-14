@@ -107,9 +107,9 @@ const applyChangesToObject = (
 };
 
 /**
- * Returns `next`, reusing every subtree of `previous` it leaves unchanged, without `__proto__`
- * keys: built from `previous` by applying the edit script `getChanges` finds between them, so
- * only the containers along a changed path are new, and an item that shifts in a list, such as
+ * Returns `next`, without `__proto__` keys, reusing every subtree of `previous` that `next` leaves
+ * unchanged. The result is built from `previous` by applying the edit script that `getChanges`
+ * finds between the two, so only the containers along a changed path are new, and an item that shifts in a list, such as
  * after an insert at the top, keeps its identity. Neither input is mutated.
  *
  * When nothing changed, `previous` itself is returned; when the two are of different kinds,
