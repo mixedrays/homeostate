@@ -553,9 +553,14 @@ describe("an update that waits for an earlier one", () => {
    * reader's store synced by an engine. Each `write` returns the writer's update, which the
    * test delivers to the reader with `deliver`, in any order. `peer` adds a third replica on
    * client 3 holding `initial`, whose `write` returns its update too. Every backend takes
-   * `options`.
+   * `options`, and the engine `schedule`.
    */
-  const gap = (initial: State, readerId = 2, options?: YjsBackendOptions) => {
+  const gap = (
+    initial: State,
+    readerId = 2,
+    options?: YjsBackendOptions,
+    schedule?: SyncEngineOptions["schedule"],
+  ) => {
     const writerDoc = new Y.Doc();
     writerDoc.clientID = 1;
     const readerDoc = new Y.Doc();
@@ -566,7 +571,7 @@ describe("an update that waits for an earlier one", () => {
     Y.applyUpdate(readerDoc, start);
     const backend = createYjsBackend(readerDoc, NAME, options);
     const store = createTestStore<State>({});
-    createSyncEngine({ backend, adapter: store.adapter }).connect();
+    createSyncEngine({ backend, adapter: store.adapter, schedule }).connect();
     return {
       writerDoc,
       readerDoc,
@@ -810,6 +815,60 @@ describe("an update that waits for an earlier one", () => {
     deliver(updates[0]);
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(store.getState()).toEqual({ text: "seed", other: 1 });
+  });
+
+  it.each([
+    ["a peer's change", { a: 1 }],
+    ["the store's change", { b: 1 }],
+  ])(
+    "keeps %s from just before the gap when the store changes during it",
+    (_change, change) => {
+      const initial = { text: "seed", log: "seed" };
+      const { store, write, deliver } = gap(initial);
+      if ("a" in change) deliver(write({ ...initial, ...change }));
+      else store.update((state) => ({ ...state, ...change }));
+      const u0 = write({ ...initial, log: "changed", ...change });
+      const u1 = write({ text: "changed", log: "changed", ...change });
+
+      deliver(u1);
+      store.update((state) => ({ ...state, other: 1 }));
+      expect(store.getState()).toEqual({ ...initial, ...change, other: 1 });
+      deliver(u0);
+      expect(store.getState()).toEqual({
+        text: "changed",
+        log: "changed",
+        ...change,
+        other: 1,
+      });
+    },
+  );
+
+  it("applies a change it reported before a gap in another shared type once the gap closes", () => {
+    const flushes: (() => void)[] = [];
+    const flush = (): void => flushes.splice(0).forEach((run) => run());
+    const { writerDoc, readerDoc, store, write, deliver } = gap(
+      { text: "seed", log: "seed" },
+      2,
+      undefined,
+      (run) => flushes.push(run),
+    );
+    deliver(write({ text: "changed", log: "seed" }));
+    const updates: Uint8Array[] = [];
+    writerDoc.on("update", (update: Uint8Array) => updates.push(update));
+    writerDoc.getText("notes").insert(0, "a");
+    writerDoc.getText("notes").insert(1, "b");
+
+    // The change waits for the flush, which runs while the gap is open, after a store change.
+    deliver(updates[1]);
+    store.update((state) => ({ ...state, log: "local" }));
+    flush();
+    expect(readerDoc.getMap(NAME).toJSON()).toEqual({
+      text: "changed",
+      log: "local",
+    });
+    deliver(updates[0]);
+    flush();
+    expect(store.getState()).toEqual({ text: "changed", log: "local" });
   });
 
   it.each([

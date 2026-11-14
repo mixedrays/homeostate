@@ -115,9 +115,12 @@ Yjs then applies the update's deletes at once and keeps the rest waiting, so a v
 update replaces would vanish until the earlier update arrives.
 
 While its document holds such a waiting update, a subscribed backend shows the state from
-before it: `read()` returns what the map held then, `revision()` keeps its value, and
-`subscribe` reports nothing. Once the earlier update arrives, the backend reports one change
-and the store catches up. The store only ever shows states the document passed through.
+before it: `read()` returns what the map held when the engine last read or wrote it,
+`revision()` keeps the value that goes with it, and `subscribe` reports nothing. That is the
+state just before the waiting update, or with the engine's `schedule`, the state at its last
+flush or write: remote changes waiting for the flush stay out of the store until the earlier
+update arrives. Then the backend reports one change and the store catches up. The store only
+ever shows states the document passed through.
 
 Local changes still reach the document meanwhile. A write merges what the store changed into
 what the document holds, with what the store was shown as the base, so it never puts back a

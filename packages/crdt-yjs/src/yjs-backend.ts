@@ -115,11 +115,11 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * While subscribed, it shows only states its document passed through. When an update arrives
  * before an earlier one it depends on, Yjs applies the update's deletes and keeps the rest
  * waiting, which would hide a value the update replaces. Until the earlier update arrives,
- * `read` returns what the map held before, `revision` keeps its value, and `subscribe` reports
- * nothing; then it reports the changes at once. Writes meanwhile merge what the store changed
- * into what the document holds, leaving the hidden values alone. The wait covers every change, such as a peer's change to
- * another key, and a gap anywhere in the document, since Yjs tracks waiting updates per
- * document.
+ * `read` returns what the map held when the backend last read or wrote it, `revision` keeps the
+ * value that goes with it, and `subscribe` reports nothing; then it reports the changes at once.
+ * Writes meanwhile merge what the store changed into what the document holds, leaving the
+ * hidden values alone. The wait covers every change, such as a peer's change to another key, and
+ * a gap anywhere in the document, since Yjs tracks waiting updates per document.
  *
  * Once a peer removes the map, as by replacing it or a map holding it with a new map, `read` and
  * `write` throw, since no peer would see a write to it. A subscribed backend then reports one
@@ -190,7 +190,8 @@ export function createYjsBackend(
       const untrack = hold.track();
       /**
        * Whether a change other than this backend's own may wait for the gap to close: one made
-       * while it was open, or before this watch began, when one is open already.
+       * while it was open, one `read` does not show yet, or one made before this watch began,
+       * when one is open already.
        */
       let missed = hasGap(doc);
       /** The transaction that closed the gap, while its missed changes are unreported. */
@@ -206,7 +207,13 @@ export function createYjsBackend(
         onChange(own && !closed);
       };
       const watchGap = (transaction: Y.Transaction): void => {
-        if (!missed || hasGap(doc)) return;
+        if (hasGap(doc)) {
+          // `read` shows the map as last read or written, which may lack a change reported
+          // before the gap and not read yet, as with the engine's `schedule`.
+          if (hold.held()?.revision !== changes()) missed = true;
+          return;
+        }
+        if (!missed) return;
         missed = false;
         closing = transaction;
       };
