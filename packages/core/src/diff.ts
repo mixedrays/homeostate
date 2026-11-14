@@ -39,8 +39,8 @@ export interface DiffOptions {
   /**
    * Diff `a` and `b` as `toJsonValue` would return them, without copying either first, and pass
    * the values the changes carry through `toJsonValue`. A CRDT backend sets it on
-   * `write(next, previous)`, so no change it applies holds a value JSON cannot, and none removes
-   * an entry its document never held.
+   * `write(next, previous)`, so no change it applies holds a value JSON cannot hold, and no change
+   * removes an entry its document never held.
    */
   json?: boolean;
 }
@@ -321,8 +321,8 @@ const getRecordChanges = (
         value: written(value, options),
       });
     else {
-      // Unchanged, so neither its path nor, for a string, the text policy is needed. `NaN`,
-      // which is not `===` itself, falls through to `same`.
+      // The value is unchanged, so neither its path nor, for a string, the text policy is
+      // needed. `NaN`, which is not `===` to itself, falls through to `same`.
       if (a[property] === value) continue;
       const nested = nestedChanges(a[property], value, path, property, options);
       if (nested === null) {
