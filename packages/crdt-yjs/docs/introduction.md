@@ -42,15 +42,16 @@ either and stores such array items as `null`, as `JSON.stringify` does.
 
 Besides `read`, `write` and `subscribe`, the backend has `map`, the synced `Y.Map`, and
 `origin`, which tags every transaction its `write` runs. `subscribe` skips transactions with
-that origin, so the engine hears only other changes. Pass `origin` to choose the value; it
-must be unique to this backend.
+that origin, so the engine hears only other changes. The origin is a `Symbol` unique to the
+backend, so no other writer can share it; to track the backend's writes, pass it to
+`Y.UndoManager` as in [Undo and redo](#undo-and-redo).
 
 To keep the synced state in a map you already have, such as one nested in another map or in
 a subdocument, pass the map instead of a document and a name:
 
 ```ts
 const synced = doc.getMap("app").get("store") as Y.Map<unknown>;
-const backend = createYjsBackend(synced, { origin: "store" });
+const backend = createYjsBackend(synced);
 ```
 
 The map must already be part of a document, or `createYjsBackend` throws a `TypeError`.

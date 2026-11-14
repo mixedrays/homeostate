@@ -335,22 +335,6 @@ const originsDuring = (doc: Y.Doc, run: () => void): unknown[] => {
 };
 
 describe("map and origin", () => {
-  it("tags every write with a custom origin, and reports only other origins", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME, { origin: "store" });
-    const onRemoteChange = vi.fn();
-    backend.subscribe(onRemoteChange);
-
-    const origins = originsDuring(doc, () => backend.write({ count: 1 }));
-    doc.transact(() => backend.map.set("count", 2), "store");
-    expect(onRemoteChange).not.toHaveBeenCalled();
-    doc.transact(() => backend.map.set("count", 3), "editor");
-
-    expect(backend.origin).toBe("store");
-    expect(origins).toEqual(["store"]);
-    expect(onRemoteChange).toHaveBeenCalledTimes(1);
-  });
-
   it("syncs a store into a nested map, leaving the rest of the document alone", () => {
     const doc = new Y.Doc();
     const app = doc.getMap("app");

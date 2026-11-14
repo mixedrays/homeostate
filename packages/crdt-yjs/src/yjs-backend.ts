@@ -22,11 +22,6 @@ export interface YjsBackendOptions {
    */
   text?: TextPolicy;
   /**
-   * The origin of every transaction `write` runs. `subscribe` skips transactions with this
-   * origin, so it must be unique to this backend. Defaults to a private Symbol.
-   */
-  origin?: unknown;
-  /**
    * Called once when the synced map is removed from its document, as when a peer replaces it,
    * or a map holding it, with a new map. No peer would see a write to the removed map, so from
    * then on `read` and `write` throw; create a backend over the map that replaced it. Only a
@@ -129,7 +124,7 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * nested in another shared type or live in a subdocument, but must already be part of a
  * document.
  *
- * Writes run in a transaction tagged with `origin`, and `subscribe`
+ * Writes run in a transaction tagged with `backend.origin`, and `subscribe`
  * skips events from that origin, so the engine only hears about remote changes.
  *
  * While subscribed, it shows only states its document passed through. When an update arrives
@@ -178,11 +173,9 @@ export function createYjsBackend(
     throw new TypeError(
       "createYjsBackend needs a Y.Doc and a name, or a Y.Map that is part of a Y.Doc",
     );
-  const {
-    origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`),
-    onRemoved = reportRemoved,
-    text,
-  } = options;
+  const { onRemoved = reportRemoved, text } = options;
+  // Unique to this backend, since `subscribe` skips every transaction with it.
+  const origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`);
   const transactions = countTransactions(doc);
   // Backends over one map share its count.
   if (!transactions.changes.has(map)) transactions.changes.set(map, 0);
