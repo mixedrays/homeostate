@@ -28,7 +28,6 @@ import type { JsonObject, JsonObjectInput } from "./types.js";
  */
 export type TextPolicy = (path: readonly (string | number)[]) => boolean;
 
-/** Options for `getChanges`. */
 export interface DiffOptions {
   /**
    * Which nested strings are diffed character by character. Any other string that changes is
