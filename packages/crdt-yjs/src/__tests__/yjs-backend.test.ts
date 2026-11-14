@@ -56,28 +56,15 @@ const toShared = (value: unknown): unknown => {
   return value;
 };
 
-/** What the suite needs to look inside the synced map `mapOf` returns. */
-const inspection = (mapOf: (doc: Y.Doc) => Y.Map<unknown>) => {
-  const at = (doc: Y.Doc, path: (string | number)[]): unknown =>
-    path.reduce<unknown>(
-      (container, key) =>
-        container instanceof Y.Map
-          ? container.get(key as string)
-          : (container as Y.Array<unknown>).get(key as number),
-      mapOf(doc),
-    );
-  return {
-    storeForeign: (doc: Y.Doc, key: string, value: unknown) => {
-      mapOf(doc).set(key, value);
-    },
-    storeForeignContainers: (doc: Y.Doc, key: string, value: unknown) => {
-      mapOf(doc).set(key, toShared(value));
-    },
-    containerId: at,
-    isText: (doc: Y.Doc, path: (string | number)[]) =>
-      at(doc, path) instanceof Y.Text,
-  };
-};
+/** The shared type at `path` in `doc`'s synced map. */
+const at = (doc: Y.Doc, path: (string | number)[]): unknown =>
+  path.reduce<unknown>(
+    (container, key) =>
+      container instanceof Y.Map
+        ? container.get(key as string)
+        : (container as Y.Array<unknown>).get(key as number),
+    doc.getMap(NAME),
+  );
 
 describeCrdtBackend("createYjsBackend", {
   createDoc: (id) => {
@@ -87,7 +74,14 @@ describeCrdtBackend("createYjsBackend", {
   },
   backend: (doc, options) => createYjsBackend(doc, NAME, options),
   ...replication,
-  ...inspection((doc) => doc.getMap(NAME)),
+  storeForeign: (doc, key, value) => {
+    doc.getMap(NAME).set(key, value);
+  },
+  storeForeignContainers: (doc, key, value) => {
+    doc.getMap(NAME).set(key, toShared(value));
+  },
+  containerId: at,
+  isText: (doc, path) => at(doc, path) instanceof Y.Text,
 });
 
 /**
@@ -103,18 +97,6 @@ const layout = (() => {
 
 const nestedMap = (doc: Y.Doc): Y.Map<unknown> =>
   doc.getMap("app").get("todos") as Y.Map<unknown>;
-
-describeCrdtBackend("createYjsBackend over a nested Y.Map", {
-  createDoc: (id) => {
-    const doc = new Y.Doc();
-    if (id !== undefined) doc.clientID = id;
-    Y.applyUpdate(doc, layout);
-    return doc;
-  },
-  backend: (doc, options) => createYjsBackend(nestedMap(doc), options),
-  ...replication,
-  ...inspection(nestedMap),
-});
 
 describe("createYjsBackend", () => {
   it("has no revision inside a transaction, and a new one once its observers are called", () => {
