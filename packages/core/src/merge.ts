@@ -204,12 +204,9 @@ interface Owners {
 }
 
 /**
- * The pairs of a base record, among `base[start]` to `base[end - 1]`, and a side record, among
- * `side[from]` to `side[to - 1]`, that share a primitive entry that no other record of either
- * array holds, as `owners` counts them. A pair is left out when another such entry points
- * either record elsewhere, even outside the run. Of the pairs left, it returns the most that
- * keep their order. Linear in the primitive entries of the run's records, plus O(k log k) for
- * its k pairs.
+ * The pairs `matchByUniqueValues` makes between the base records `base[start]` to
+ * `base[end - 1]` and the side records `side[from]` to `side[to - 1]`, by the entries `owners`
+ * indexes, in order.
  */
 const uniquePairs = (
   start: number,
@@ -356,13 +353,11 @@ const alignItems = (
 };
 
 /**
- * Merges `ours` and `theirs`, two scripts that edit a sequence of `length` items, to `local`
- * and to `remote`. Each position takes the items both sides inserted there, the remote ones
- * first, then each item as `both` merges it, unless a side deleted it. An item the remote side
- * deleted and the local side replaced takes the local value, as a CRDT keeps a new item beside
- * a deleted one. An item the remote side deleted and the local side changed in place stays
- * deleted, as an edit inside a deleted container is lost. `both` takes the item's index in the sequence, in `local`, in `remote`, and in the
- * merged sequence.
+ * Merges `ours` and `theirs`, the alignments of two scripts that edit a sequence of `length`
+ * items, to `local` and to `remote`. Each position takes the items both sides inserted there,
+ * the remote ones first, then each item as `both` merges it. An item a side deleted is dropped
+ * or kept as `mergeConcurrent` sets out. `both` takes the item's index in the sequence, in
+ * `local`, in `remote`, and in the merged sequence.
  */
 const mergeSequence = <T>(
   length: number,
@@ -481,8 +476,7 @@ const mergeRecords = (
  * Merges arrays item by item, each item read as JSON would store it, where `base` and `local`
  * differ. The merge needs each side's script from `base` anyway, and they tell how the arrays
  * compare: `remote` equals `base` when its script is empty, and `local` when the two scripts are
- * equal. An item that a side's alignment keeps is equal to the base item, and an item it changes
- * is not, so an item only one side changed merges without comparing it again.
+ * equal.
  */
 const mergeArrays = (
   base: unknown[],
@@ -584,14 +578,10 @@ const merge = (
  * `toJsonValue`. No input is mutated.
  *
  * - Records merge key by key. `__proto__` keys are ignored.
- * - Arrays merge item by item, each side's items matched with `base`'s. Items equal as JSON
- *   match first, as `getChanges` matches them. Between two of those, a base record and a side
- *   record match next when they share a string, number or boolean entry, such as `id: "r1"`,
- *   that no other record of either array holds, unless another such entry points one of them
- *   to a different record, or the match would cross another. The rest pair by position.
- *   So an item changed on one side, and moved and changed by the other, still merges with
- *   itself when it holds such an entry. Items both sides inserted at one place keep the remote
- *   ones first.
+ * - Arrays merge item by item, each side's items matched with `base`'s by value, then by an
+ *   entry exactly one record of each array holds, such as `id: "r1"`, then by position; see
+ *   {@link https://homeostate.pages.dev/docs/core/diffing#matching-array-items | Matching array items}.
+ *   Items both sides inserted at one place keep the remote ones first.
  * - Strings `options.text` marks as text merge by UTF-16 unit, as arrays merge item by item.
  *   Every other string, and every other value, is replaced whole.
  * - Where both sides changed one value differently, the local value wins, as its write would.
