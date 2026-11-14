@@ -581,8 +581,8 @@ const merge = (
 /**
  * Merges `local` and `remote`, two JSON values that both descend from `base`, so that each keeps
  * its own changes from `base`. `undefined` stands for an absent value, and is returned for one
- * the merge leaves absent. Entries holding `undefined` or a function are absent, and such array
- * items are `null`, as JSON would store them. No input is mutated.
+ * the merge leaves absent. Values compare as `JSON.stringify` would store them; see
+ * `toJsonValue`. No input is mutated.
  *
  * - Records merge key by key. `__proto__` keys are ignored.
  * - Arrays merge item by item, each side's items matched with `base`'s. Items equal as JSON
