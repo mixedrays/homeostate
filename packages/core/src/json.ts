@@ -2,7 +2,7 @@
 export const isAbsent = (value: unknown): boolean =>
   value === undefined || typeof value === "function";
 
-/** Whether `value` is an object other than an array, as the diff compares records. */
+/** Whether `value` is an object other than an array. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
