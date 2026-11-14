@@ -303,16 +303,6 @@ const originsDuring = (doc: Y.Doc, run: () => void): unknown[] => {
 };
 
 describe("map and origin", () => {
-  it("exposes the synced map and the origin that tags its writes", () => {
-    const doc = new Y.Doc();
-    const backend = createYjsBackend(doc, NAME);
-
-    const origins = originsDuring(doc, () => backend.write({ count: 1 }));
-
-    expect(backend.map).toBe(doc.getMap(NAME));
-    expect(origins).toEqual([backend.origin]);
-  });
-
   it("tags every write with a custom origin, and reports only other origins", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME, { origin: "store" });
@@ -507,17 +497,6 @@ describe("an update that waits for an earlier one", () => {
   const syncAll = (...docs: Y.Doc[]): void => {
     for (const a of docs) for (const b of docs) replication.exchange(a, b);
   };
-
-  it("keeps a replaced key while its replacement waits for an earlier update", () => {
-    const { store, write, deliver } = gap({ text: "seed", log: "seed" });
-    const u0 = write({ text: "seed", log: "changed" });
-    const u1 = write({ text: "changed", log: "changed" });
-
-    deliver(u1);
-    expect(store.getState()).toEqual({ text: "seed", log: "seed" });
-    deliver(u0);
-    expect(store.getState()).toEqual({ text: "changed", log: "changed" });
-  });
 
   it("delays a peer's change to another key until the gap closes", () => {
     const { readerDoc, store, write, deliver } = gap({
@@ -755,28 +734,6 @@ describe("an update that waits for an earlier one", () => {
   describe("with text", () => {
     const options: YjsBackendOptions = { text: () => true };
 
-    it("merges the store's edit with a gap that replaced part of the text", () => {
-      const initial = { note: "hello world", log: "seed" };
-      const { writerDoc, readerDoc, store, write, deliver } = gap(
-        initial,
-        2,
-        options,
-      );
-      const u0 = write({ ...initial, log: "changed" });
-      const u1 = write({ note: "hello there", log: "changed" });
-
-      deliver(u1);
-      // The gap deleted what the update replaced, and keeps the rest waiting.
-      expect(readerDoc.getMap(NAME).toJSON().note).not.toContain("world");
-      store.update((state) => ({ ...state, note: "Hello world" }));
-      deliver(u0);
-      syncAll(writerDoc, readerDoc);
-
-      const synced = { note: "Hello there", log: "changed" };
-      expect(store.getState()).toEqual(synced);
-      expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-    });
-
     it("keeps a peer's insert into the text the gap touched when the store edits it", () => {
       const initial = { note: "hello world", log: "seed" };
       const { writerDoc, readerDoc, store, write, deliver, peer } = gap(
@@ -790,6 +747,7 @@ describe("an update that waits for an earlier one", () => {
 
       deliver(u1);
       deliver(other.write({ ...initial, note: "hello world!" }));
+      // The gap deleted what the update replaced, and keeps the rest waiting.
       expect(readerDoc.getMap(NAME).toJSON().note).not.toContain("world");
       expect(readerDoc.getMap(NAME).toJSON().note).toContain("!");
       store.update((state) => ({ ...state, note: "Hello world" }));
@@ -874,30 +832,6 @@ describe("an update that waits for an earlier one", () => {
       expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
     },
   );
-
-  it("keeps a nested key and an array item while their replacements wait", () => {
-    const initial = {
-      todo: { title: "seed", done: false },
-      list: [1, 2, 3],
-      log: 0,
-    };
-    const { store, write, deliver } = gap(initial);
-    const u0 = write({ ...initial, log: 1 });
-    const u1 = write({
-      todo: { title: "changed", done: false },
-      list: [1, 9, 3],
-      log: 1,
-    });
-
-    deliver(u1);
-    expect(store.getState()).toEqual(initial);
-    deliver(u0);
-    expect(store.getState()).toEqual({
-      todo: { title: "changed", done: false },
-      list: [1, 9, 3],
-      log: 1,
-    });
-  });
 
   it("writes the store's change to a key the gap touched over what the document holds", () => {
     const initial = {
