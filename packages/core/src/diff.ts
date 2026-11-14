@@ -4,6 +4,7 @@ import {
   type TextChange,
 } from "./change.js";
 import {
+  deepEqual,
   hasOwn,
   isAbsent,
   isRecord,
@@ -83,31 +84,6 @@ const nestedChanges = (
 /** `===`, except that `NaN` equals itself, so a store that keeps holding it has not changed. */
 const isSame = (a: unknown, b: unknown): boolean =>
   a === b || (Number.isNaN(a) && Number.isNaN(b));
-
-const deepEqual = (a: unknown, b: unknown): boolean => {
-  if (isSame(a, b)) return true;
-  if (isArray(a) && isArray(b)) {
-    if (a.length !== b.length) return false;
-    // A loop, since `every` skips holes.
-    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false;
-    return true;
-  }
-  if (isRecord(a) && isRecord(b)) {
-    const keys = Object.keys(a);
-    return (
-      keyCount(keys, a) === keyCount(Object.keys(b), b) &&
-      keys.every(
-        (key) =>
-          key === PROTO_KEY || (hasOwn(b, key) && deepEqual(a[key], b[key])),
-      )
-    );
-  }
-  return false;
-};
-
-/** The number of `keys` the diff compares, so records equal under `deepEqual` diff to nothing. */
-const keyCount = (keys: string[], record: object): number =>
-  hasOwn(record, PROTO_KEY) ? keys.length - 1 : keys.length;
 
 /** A value a change carries: with `options.json`, as JSON would store it. */
 const written = (value: unknown, options: DiffOptions): unknown =>

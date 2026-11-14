@@ -920,6 +920,44 @@ describe("getChanges", () => {
         { type: "insert", key: "a", value: undefined },
       ]);
     });
+
+    it("matches array items by value, not as JSON, when off", () => {
+      const save = () => 1;
+      const insertOnly = {
+        type: "edit",
+        key: "l",
+        kind: "list",
+        changes: [{ type: "insert", key: 0, value: 0 }],
+      };
+      const same: unknown[] = [{ a: 1, b: undefined }, [NaN, save, undefined]];
+      const differentValues: [unknown, unknown][] = [
+        [{ a: 1, b: undefined }, { a: 1 }],
+        [
+          [1, null],
+          [1, undefined],
+        ],
+        [[NaN], [null]],
+        [[save], [() => 1]],
+      ];
+
+      // The item before it is new, so only a match keeps the item from being rewritten.
+      for (const item of same)
+        expect(getChanges({ l: [item] }, { l: [0, item] })).toEqual([
+          insertOnly,
+        ]);
+      for (const [before, after] of differentValues)
+        expect(getChanges({ l: [before] }, { l: [0, after] })).toEqual([
+          {
+            type: "edit",
+            key: "l",
+            kind: "list",
+            changes: [
+              { type: "update", key: 0, value: 0 },
+              { type: "insert", key: 1, value: after },
+            ],
+          },
+        ]);
+    });
   });
 
   describe("known limitations", () => {

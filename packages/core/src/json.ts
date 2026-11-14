@@ -32,6 +32,57 @@ export const jsonItem = (value: unknown): unknown =>
   isAbsent(value) ? null : value;
 
 /**
+ * `jsonEqual` with `json`, and `deepEqual` without: entries holding `undefined` or a function are
+ * then present and compared by identity, and only `NaN` equals a value that is not `===` to it.
+ * The rest of the walk, keys included, is shared.
+ */
+const equal = (a: unknown, b: unknown, json: boolean): boolean => {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    // Loops, since `every` skips holes.
+    if (json) {
+      for (let i = 0; i < a.length; i++)
+        if (!equal(jsonItem(a[i]), jsonItem(b[i]), true)) return false;
+    } else {
+      for (let i = 0; i < a.length; i++)
+        if (!equal(a[i], b[i], false)) return false;
+    }
+    return true;
+  }
+  if (isRecord(a) && isRecord(b)) {
+    let count = 0;
+    for (const key of Object.keys(a)) {
+      const value = a[key];
+      if (key === PROTO_KEY || (json && isAbsent(value))) continue;
+      if (!hasOwn(b, key) || !equal(value, b[key], json)) return false;
+      count++;
+    }
+    // `b` rarely holds `__proto__` or absent entries, so its own key count usually settles it.
+    return count === Object.keys(b).length || count === keyCount(b, json);
+  }
+  return json
+    ? toJsonPrimitive(a) === toJsonPrimitive(b)
+    : Number.isNaN(a) && Number.isNaN(b);
+};
+
+/** The number of entries of `record` that `equal` compares. */
+const keyCount = (record: Record<string, unknown>, json: boolean): number => {
+  let count = 0;
+  for (const key of Object.keys(record))
+    if (key !== PROTO_KEY && !(json && isAbsent(record[key]))) count++;
+  return count;
+};
+
+/**
+ * Whether `a` and `b` are equal as values, as `getChanges` matches array items without `json`:
+ * an entry holding `undefined` differs from a missing one, and `NaN` equals itself, so a store
+ * that keeps holding it has not changed. Keys compare as in `jsonEqual`.
+ */
+export const deepEqual = (a: unknown, b: unknown): boolean =>
+  equal(a, b, false);
+
+/**
  * Whether `a` and `b` are equal as `JSON.stringify` would store them in an object: entries
  * holding `undefined` or a function are absent, such array items, holes included, equal `null`,
  * and so do `NaN` and infinite numbers. Records compare their own keys only, so a key such as
@@ -39,39 +90,11 @@ export const jsonItem = (value: unknown): unknown =>
  * both sides. Meant for JSON values: any other object, such as a `Date`, compares as a record of
  * its own enumerable entries.
  */
-export const jsonEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    // A loop, since `every` skips holes.
-    for (let i = 0; i < a.length; i++)
-      if (!jsonItemEqual(a[i], b[i])) return false;
-    return true;
-  }
-  if (isRecord(a) && isRecord(b)) {
-    let count = 0;
-    for (const key of Object.keys(a)) {
-      if (key === PROTO_KEY || isAbsent(a[key])) continue;
-      if (!hasOwn(b, key) || !jsonEqual(a[key], b[key])) return false;
-      count++;
-    }
-    // `b` rarely holds absent entries, so its own key count usually settles it.
-    return count === Object.keys(b).length || count === jsonKeyCount(b);
-  }
-  return toJsonPrimitive(a) === toJsonPrimitive(b);
-};
+export const jsonEqual = (a: unknown, b: unknown): boolean => equal(a, b, true);
 
 /** `jsonEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
 export const jsonItemEqual = (a: unknown, b: unknown): boolean =>
-  jsonEqual(jsonItem(a), jsonItem(b));
-
-/** The number of entries of `record` that `JSON.stringify` stores and the diff compares. */
-const jsonKeyCount = (record: Record<string, unknown>): number => {
-  let count = 0;
-  for (const key of Object.keys(record))
-    if (key !== PROTO_KEY && !isAbsent(record[key])) count++;
-  return count;
-};
+  equal(jsonItem(a), jsonItem(b), true);
 
 /**
  * Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
