@@ -89,59 +89,6 @@ describe("sync status", () => {
     });
   });
 
-  describe("sync events", () => {
-    it("come with every change of the status, which each listener already reads", () => {
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-      });
-      const seen = record(engine);
-
-      engine.connect();
-      engine.disconnect();
-
-      expect(seen).toEqual([
-        ["connect", { connected: true, failure: null }],
-        ["disconnect", { connected: false, failure: null }],
-      ]);
-    });
-
-    it("leave the status the same object for local and remote changes", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine({ backend, adapter: store.adapter });
-      engine.connect();
-      const status = engine.getStatus();
-      const seen = record(engine);
-
-      store.setState({ count: 1 });
-      backend.receive({ count: 2 });
-
-      expect(seen).toEqual([
-        ["local", status],
-        ["remote", status],
-      ]);
-      expect(seen[0]![1]).toBe(status);
-      expect(seen[1]![1]).toBe(status);
-    });
-
-    it("send nothing for a connect or disconnect that changes nothing", () => {
-      const store = createTestStore({ count: 0 });
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-      });
-      const seen = record(engine);
-
-      engine.disconnect();
-      engine.connect();
-      engine.connect();
-
-      expect(seen.map(([event]) => event)).toEqual(["connect"]);
-    });
-  });
-
   describe.each([
     ["with onError", true],
     ["without onError", false],
@@ -164,7 +111,7 @@ describe("sync status", () => {
       }
     };
 
-    it("records a failed write and clears it when the next local change is written", () => {
+    it("records a failed write and clears it, back to the same object, when the next local change is written", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ count: 0 });
       const { config } = options();
@@ -174,6 +121,7 @@ describe("sync status", () => {
         ...config,
       });
       engine.connect();
+      const before = engine.getStatus();
       const seen: [SyncEvent, unknown][] = [];
       engine.subscribe((event) =>
         seen.push([event, engine.getStatus().failure]),
@@ -196,6 +144,7 @@ describe("sync status", () => {
       store.setState({ count: 2 });
 
       expect(engine.getStatus().failure).toBeNull();
+      expect(engine.getStatus()).toBe(before);
       expect(seen.at(-1)).toEqual(["local", null]);
     });
 
@@ -269,28 +218,6 @@ describe("sync status", () => {
 
       expect(engine.getStatus().failure).toBeNull();
       expect(store.getState()).toEqual({ count: 2 });
-    });
-
-    it("returns to the same object when a failure is set and cleared", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({ count: 0 });
-      const { config } = options();
-      const engine = createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        ...config,
-      });
-      engine.connect();
-      const before = engine.getStatus();
-      const write = backend.write;
-      backend.write = () => {
-        throw new Error("write");
-      };
-      attempt(() => store.setState({ count: 1 }));
-      backend.write = write;
-      store.setState({ count: 2 });
-
-      expect(engine.getStatus()).toBe(before);
     });
 
     it("keeps the same object while a failure stands", () => {

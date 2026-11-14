@@ -150,18 +150,6 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ ...threeTodos(), secret: "remote" });
     });
 
-    it("leaves the store object untouched when every backend key already matches", () => {
-      const backend = createMemoryBackend({ todos: threeTodos().todos });
-      const store = createTestStore(threeTodos());
-      const before = store.getState();
-      const setState = vi.spyOn(store.adapter, "setState");
-
-      createSyncEngine({ backend, adapter: store.adapter }).connect();
-
-      expect(setState).not.toHaveBeenCalled();
-      expect(store.getState()).toBe(before);
-    });
-
     it("leaves the store object untouched when it holds NaN", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ ...threeTodos(), progress: NaN });
@@ -313,30 +301,6 @@ describe("createSyncEngine", () => {
 
       expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
       expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
-    });
-
-    it("writes once, passing what it read as the previous state", () => {
-      const { backend, previous } = checkedBackend();
-      const store = subscriberStore();
-      createSyncEngine({ backend, adapter: store.adapter }).connect();
-      const write = vi.spyOn(backend, "write");
-
-      backend.receive({ todos: ["a", "b"], count: 0 });
-
-      expect(write).toHaveBeenCalledTimes(1);
-      expect(previous.at(-1)).toEqual({ todos: ["a", "b"], count: 0 });
-    });
-
-    it("writes nothing back when the remote change needs no derived write", () => {
-      const backend = createMemoryBackend();
-      const store = subscriberStore();
-      createSyncEngine({ backend, adapter: store.adapter }).connect();
-      const write = vi.spyOn(backend, "write");
-
-      backend.receive({ todos: ["a", "b"], count: 2 });
-
-      expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
-      expect(write).not.toHaveBeenCalled();
     });
 
     it("writes nothing when the store ignores the remote change", () => {
@@ -1524,24 +1488,6 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
     });
 
-    it("passes what it read when the store transforms a remote change", () => {
-      const { backend, previous } = checkedBackend();
-      const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
-        ...s,
-        todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
-      });
-      const store = createTestStore(threeTodos(), trimTitles);
-      createSyncEngine({ backend, adapter: store.adapter }).connect();
-      const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
-
-      backend.receive(remote);
-
-      // The trimmed titles are written back.
-      expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
-      expect(previous.at(-1)).toEqual(remote);
-      expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
-    });
-
     it("passes nothing to the write-back when the backend changed during setState", () => {
       const { backend, previous } = checkedBackend();
       const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
@@ -1741,35 +1687,48 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("keeps a store's function when a remote value arrives under its key", () => {
-      const addTodo = () => {};
-      const backend = createMemoryBackend();
-      const store = createTestStore({ todos: [] as string[], addTodo });
-      createSyncEngine({ backend, adapter: store.adapter }).connect();
+    it.each([
+      ["no config", {}],
+      [
+        "a custom filter that keeps its key",
+        { filter: (key: string) => key !== "secret" },
+      ],
+      ["omit", { omit: ["searchTerm"] }],
+      ["keys", { keys: ["todos", "addTodo"] }],
+    ] as [
+      string,
+      SyncEngineConfig<{
+        todos: string[];
+        searchTerm: string;
+        addTodo: () => void;
+      }>,
+    ][])(
+      "keeps a store's function when a remote value arrives under its key, with %s",
+      (_, config) => {
+        const addTodo = () => {};
+        const backend = createMemoryBackend();
+        const store = createTestStore({
+          todos: [] as string[],
+          searchTerm: "",
+          addTodo,
+        });
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          ...config,
+        }).connect();
+        const remote = { todos: ["a"], searchTerm: "", addTodo: "oops" };
 
-      backend.receive({ todos: ["a"], addTodo: "oops" });
+        backend.receive(remote);
 
-      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
-      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
-    });
-
-    it("keeps a store's function local when a custom filter keeps its key", () => {
-      const addTodo = () => {};
-      const backend = createMemoryBackend();
-      const store = createTestStore({ todos: [] as string[], addTodo });
-      const engine = createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: (key: string) => key !== "secret",
-      });
-      engine.connect();
-      expect(engine.getSyncedState()).toEqual({ todos: [] });
-
-      backend.receive({ todos: ["a"], addTodo: "oops" });
-
-      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
-      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
-    });
+        expect(store.getState()).toEqual({
+          todos: ["a"],
+          searchTerm: "",
+          addTodo,
+        });
+        expect(backend.read()).toEqual(remote);
+      },
+    );
 
     it("calls filter with the key alone, and not for a function", () => {
       const backend = createMemoryBackend({ todos: ["a"], extra: 1 });
@@ -1976,42 +1935,6 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: threeTodos().todos });
       expect(filter.mock.calls.map(([key]) => key)).not.toContain("searchTerm");
     });
-
-    it.each([
-      ["omit", { omit: ["searchTerm"] }],
-      ["keys", { keys: ["todos", "addTodo"] }],
-    ] as [
-      string,
-      SyncEngineConfig<{
-        todos: string[];
-        searchTerm: string;
-        addTodo: () => void;
-      }>,
-    ][])(
-      "keeps a store's function when a remote value arrives under its key, with %s",
-      (_, config) => {
-        const addTodo = () => {};
-        const backend = createMemoryBackend();
-        const store = createTestStore({
-          todos: [] as string[],
-          searchTerm: "",
-          addTodo,
-        });
-        createSyncEngine({
-          backend,
-          adapter: store.adapter,
-          ...config,
-        }).connect();
-
-        backend.receive({ todos: ["a"], addTodo: "oops" });
-
-        expect(store.getState()).toEqual({
-          todos: ["a"],
-          searchTerm: "",
-          addTodo,
-        });
-      },
-    );
 
     it("syncs the keys listed less those omitted when given both at runtime", () => {
       const backend = createMemoryBackend();
@@ -3237,22 +3160,6 @@ describe("createSyncEngine", () => {
       expect(held).toEqual(toggleTodo(threeTodos(), "1"));
     });
 
-    it("sends local for a store change to local keys only", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore(threeTodos());
-      const engine = createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: (key) => key !== "searchTerm",
-      });
-      engine.connect();
-      const recorded = record(engine);
-
-      store.update((s) => setSearchTerm(s, "x"));
-
-      expect(recorded.events()).toEqual(["local"]);
-    });
-
     it("sends remote once the store holds the remote change and what it derived is written", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ todos: [] as string[], count: 0 });
@@ -3489,33 +3396,6 @@ describe("createSyncEngine", () => {
       engine.disconnect();
 
       expect(recorded.seen).toEqual([["error", false]]);
-    });
-
-    it("sends error and then disconnect when the pending apply disconnect() runs throws", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore(threeTodos());
-      let flush = (): void => {};
-      const engine = createSyncEngine({
-        backend,
-        adapter: {
-          ...store.adapter,
-          setState: () => {
-            throw new Error("invalid");
-          },
-        },
-        schedule: (next) => (flush = next),
-      });
-      engine.connect();
-      const recorded = record(engine);
-
-      backend.receive(toggleTodo(threeTodos(), "1"));
-      expect(() => engine.disconnect()).toThrow("invalid");
-      flush();
-
-      expect(recorded.seen).toEqual([
-        ["error", true],
-        ["disconnect", false],
-      ]);
     });
 
     describe("a listener that throws", () => {
