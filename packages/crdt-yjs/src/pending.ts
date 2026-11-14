@@ -13,7 +13,7 @@ export const hasGap = (doc: Y.Doc): boolean =>
   doc.store.pendingStructs !== null;
 
 /** What a backend shows while its document has a gap: the map's content as it last knew it. */
-export interface Held {
+interface Held {
   /** The map's content, as `JSON.stringify` would store it; may hold values it would leave out. */
   value: JsonObjectInput;
   /** The `revision` that goes with it. */
@@ -58,15 +58,12 @@ export const createHold = (
     /** Records `value` as the map's content, as just read or written. */
     remember,
 
-    /** Shows what the map held while a gap is open, until the returned cleanup is called. */
+    /** Shows what the map held while a gap is open, until the returned cleanup is called, once. */
     track: (): (() => void) => {
       // With a gap open already, what the map holds now is all that is known.
       if (tracked++ === 0 && known?.revision !== changes())
         remember(toPlainMap(map));
-      let stopped = false;
       return () => {
-        if (stopped) return;
-        stopped = true;
         tracked--;
       };
     },

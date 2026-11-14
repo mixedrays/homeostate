@@ -1,9 +1,8 @@
 import * as Y from "yjs";
 import type { JsonObject, TextPolicy } from "@homeostate/core";
 
-export type SharedType = Y.Map<unknown> | Y.Array<unknown> | Y.Text;
-
-export type Path = readonly (string | number)[];
+/** The path of a value, as a text policy reads it. */
+type Path = Parameters<TextPolicy>[0];
 
 /**
  * Converts a plain JSON value at `path` into its shared counterpart: arrays become Y.Arrays,
@@ -67,7 +66,7 @@ const objectToYMap = (
  * whole is returned as Yjs decoded it, which may have built such a prototype too; the sync
  * engine copies those objects into plain ones before they reach the store.
  */
-export const toPlainValue = (value: unknown): unknown => {
+const toPlainValue = (value: unknown): unknown => {
   if (value instanceof Y.Map) return toPlainMap(value);
   if (value instanceof Y.Array) return value.map(toPlainValue);
   if (value instanceof Y.AbstractType) return value.toJSON();
