@@ -4,11 +4,10 @@ import { childPath, toSharedType } from "./mapping.js";
 
 /**
  * How `applyChanges` writes into Yjs shared types. Every value it writes becomes its shared
- * counterpart per the text policy: strings the policy marks as text are Y.Texts, edited
- * character by character, and any other string is a plain value. A string held as the other
- * kind becomes the configured one when it next changes.
- *
- * @param text Which strings, by path from the synced map, are Y.Texts. Defaults to none.
+ * counterpart: strings that `text` marks as text, by their path from the synced map, are
+ * Y.Texts, edited character by character, and any other string, or every string without
+ * `text`, is a plain value. A string held as the other kind becomes the configured one when it
+ * next changes.
  */
 export const createYjsOps = (text?: TextPolicy): ApplyOps => ({
   kind: (value) =>
