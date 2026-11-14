@@ -129,9 +129,8 @@ export interface CrdtBackend {
    * The sync engine passes the whole subtree as `next`: the store's synced keys, and every
    * other key as the backend holds it, so that a write deletes only what the store removed.
    *
-   * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
-   * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing,
-   * and `NaN` or infinite numbers where it holds `null`.
+   * `previous`, when given, is what the synced subtree holds now, before it is turned into JSON:
+   * like `next`, it may hold values that `toJsonValue` leaves out or turns into `null`.
    * The sync engine passes the whole state it last wrote or read, once `revision` or a read
    * shows that the backend still holds it, so a backend can diff against it with `json: true`
    * instead of reading its document, and unchanged subtrees of `next` match it by identity.
@@ -218,10 +217,7 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
   onError?: (error: unknown, source: SyncErrorSource) => void;
 } & (
   | {
-      /**
-       * The only keys to sync, if `filter` keeps them. A key the backend holds that it does not
-       * list is ignored, like one the store holds: it stays in the backend as it is.
-       */
+      /** The only keys to sync, if `filter` keeps them. */
       keys: readonly (keyof S & string)[];
       omit?: never;
     }
@@ -229,8 +225,7 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
       keys?: never;
       /**
        * Keys to keep local; every other key `filter` keeps is synced, including one the
-       * backend holds that `S` does not declare. One it names that the backend holds, such as
-       * a key another peer syncs, stays in the backend as it is.
+       * backend holds that `S` does not declare.
        */
       omit?: readonly (keyof S & string)[];
     }
@@ -368,9 +363,9 @@ export interface SyncEngine {
   getSyncedState: () => Record<string, unknown>;
   /**
    * Calls `listener` after every sync event until unsubscribed, across reconnects. Events are
-   * sent synchronously once the work is done. Work that throws sends only `'error'`, and a
-   * `connect()` or `disconnect()` that changes nothing sends nothing. Each listener runs on its
-   * own: what it throws goes to `console.error`, and the other listeners still run.
+   * sent synchronously once the work is done; see `SyncEvent` for when each one is sent. Each
+   * listener runs on its own: what it throws goes to `console.error`, and the other listeners
+   * still run.
    */
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
