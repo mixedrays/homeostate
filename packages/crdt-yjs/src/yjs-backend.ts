@@ -1,3 +1,12 @@
+// For maintainers: this package uses Yjs members its README leaves out, which any 13.x release
+// the peer range allows could change:
+// - a shared type's `_item`, and that item's `deleted` and `parent`: `isRemoved`,
+//   `countTransactions` and `watch`, to find a removed map and the maps a change is inside;
+// - `transaction.changed` and the document's `beforeObserverCalls` event: `countTransactions`
+//   and `watch`, for `revision` and for a gap that closes;
+// - `doc.store.pendingStructs`: `hasGap` in `pending.ts`.
+// The tests "a removed map", "an update that waits for an earlier one" and the revision tests
+// catch a change to any of them, so run them when raising the Yjs version.
 import * as Y from "yjs";
 import {
   createCrdtBackend,
