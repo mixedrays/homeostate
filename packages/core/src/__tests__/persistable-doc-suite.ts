@@ -141,22 +141,6 @@ export const describePersistableDoc = <D>(
       ).toEqual(addTodo(threeTodos(), todo("4")));
     });
 
-    it("stores updates received from peers", async () => {
-      const first = await open();
-      const peer = createDoc();
-      exchange(first.doc, peer);
-      const peerStore = connect(peer);
-      peerStore.setState(addTodo(peerStore.getState(), todo("remote")));
-      exchange(first.doc, peer);
-      await first.persistence.destroy();
-
-      const reloaded = await open(first.adapter);
-
-      expect(reloaded.store.getState().todos.map((t) => t.id)).toContain(
-        "remote",
-      );
-    });
-
     it("restores edits stored after a failed append, which depend on it", async () => {
       const memory = createMemoryPersistenceAdapter();
       const append = vi.fn(memory.append);

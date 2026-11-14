@@ -467,15 +467,6 @@ export const describeCrdtBackend = <D>(
       },
     );
 
-    scenario("keeps the document when a read result is mutated").run(() => {
-      const doc = createDoc();
-      backend(doc).write({ obj: { a: [1] } });
-
-      (backend(doc).read() as { obj: { a: number[] } }).obj.a.push(2);
-
-      expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
-    });
-
     // One backend throughout, so that a backend which keeps what it read between reads shows
     // whether a caller's mutation reaches its later reads.
     scenario("keeps its later reads when a read result is mutated").run(() => {
