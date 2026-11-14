@@ -21,7 +21,6 @@ import { toPlainMap } from "./mapping.js";
 import { createYjsOps } from "./patching.js";
 import { copyJson, createHold, hasGap } from "./pending.js";
 
-/** Options for `createYjsBackend` */
 export interface YjsBackendOptions {
   /**
    * Which strings are stored as Y.Text, by their path from the synced map, such as
@@ -34,7 +33,7 @@ export interface YjsBackendOptions {
 
 /** The `CrdtBackend` `createYjsBackend` returns, with the Yjs objects it works on. */
 export interface YjsBackend extends CrdtBackend {
-  /** The synced map. */
+  /** The Y.Map this backend syncs: `doc.getMap(name)`, or the map passed in. */
   readonly map: Y.Map<unknown>;
   /**
    * The origin of every transaction `write` runs, to pass to `Y.UndoManager` as one of its
@@ -144,7 +143,6 @@ export function createYjsBackend(
   options?: YjsBackendOptions,
 ): YjsBackend;
 // Last, so that `Parameters` and other inference from `typeof createYjsBackend` see this form.
-/** Creates a CrdtBackend over the Y.Map called `name` inside `doc`. */
 export function createYjsBackend(
   doc: Y.Doc,
   name: string,
