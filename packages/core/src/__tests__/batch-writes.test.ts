@@ -367,36 +367,6 @@ describe("an adapter with batchWrites", () => {
       vi.unstubAllGlobals();
     }
   });
-
-  it("writes a change made while waiting for ready once ready resolves", async () => {
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => (resolve = r));
-    const backend = createMemoryBackend({ todos: [] });
-    const store = createPerSetStore();
-    const engine = createSyncEngine({
-      backend,
-      adapter: store.adapter,
-      seed: false,
-      ready,
-    });
-    engine.connect();
-    const write = vi.spyOn(backend, "write");
-
-    store.mutate((s) => setSearchTerm(s, "x"));
-    await microtask();
-    expect(write).not.toHaveBeenCalled();
-    resolve();
-    await ready;
-    await microtask();
-
-    expect(engine.getStatus().ready).toBe(true);
-    expect(backend.read()).toEqual({
-      ...threeTodos(),
-      todos: [],
-      searchTerm: "x",
-    });
-    expect(write).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("an adapter without batchWrites", () => {

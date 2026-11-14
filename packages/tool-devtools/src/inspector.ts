@@ -370,10 +370,8 @@ export function createInspector(
    */
   const onSyncEvent = (event: SyncEvent): void => {
     if (event === "remote") schedule("remote");
-    // Connecting adopts the backend's values, which is a remote change to the store, and so does
-    // reconciling once `ready` settles.
-    else if (event === "connect" || event === "ready")
-      schedule("remote", CONNECTED_LABEL);
+    // Connecting adopts the backend's values, which is a remote change to the store.
+    else if (event === "connect") schedule("remote", CONNECTED_LABEL);
     else schedule("local");
   };
 

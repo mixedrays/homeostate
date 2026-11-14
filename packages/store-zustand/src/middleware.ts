@@ -164,18 +164,17 @@ const homeostateImpl = <T extends object>(
  * It takes the state creator and its options: the `backend`, any `CrdtBackend` such as
  * `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
  * `connect` mode, and the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
- * `onError`, `ready`), whose key names are checked against the store's state.
+ * `onError`), whose key names are checked against the store's state.
  * The engine is exposed as `store.homeostate`, so `store.homeostate.disconnect()` stops syncing.
  *
  * The store connects when it is created. With `connect: "manual"`, nothing reads or writes the
  * backend until the app calls `store.homeostate.connect()`, for example once its provider has
- * synced. With `ready`, the store connects as usual, adopts remote changes, and writes nothing
- * until `ready` resolves.
+ * synced or `persistence.whenLoaded` has resolved, so that the store does not seed its initial
+ * state over the room's.
  *
  * Put Zustand's `persist` inside: `homeostate(persist(creator, options), { backend })`. The
  * store then connects once `persist` has hydrated it, and a `connect()` made before that waits
- * for it, so the room wins over the persisted state as on any `connect()`. `ready` is waited
- * for after that, so the store writes once both have finished. A `persist.rehydrate()` on a
+ * for it, so the room wins over the persisted state as on any `connect()`. A `persist.rehydrate()` on a
  * connected store disconnects it until the store is hydrated again, or the rehydrate has failed,
  * then reconnects it, unless the app disconnected it meanwhile. With `persist` outside, creating
  * the store throws.

@@ -111,7 +111,7 @@ describe.each(backends)("%s peers", (_name, docs) => {
     [0, 1],
     [1, 0],
   ])(
-    "keep the room for a joiner that waits for ready (room %i, joiner %i)",
+    "keep the room for a joiner that connects once it has arrived (room %i, joiner %i)",
     async (roomIndex, joinerIndex) => {
       network = createNetwork({ seed: 5, latency: [1, 10] });
       const room = todoPeer(docs, roomIndex);
@@ -120,28 +120,23 @@ describe.each(backends)("%s peers", (_name, docs) => {
       room.store.setState({ title: "groceries" });
       await network.settle();
 
-      let resolve!: () => void;
-      const ready = new Promise<void>((r) => {
-        resolve = r;
-      });
-      const joiner = todoPeer(docs, joinerIndex, { config: { ready } });
+      const joiner = todoPeer(docs, joinerIndex, { connect: false });
       joiner.store.setState({ extra: "mine" } as Partial<TodoState>);
-      network.addPeer(joiner.setup);
+      const peer = network.addPeer(joiner.setup);
       await network.settle();
 
       // Its key only the store holds is not written yet, so the room has not converged.
-      expect(joiner.store.getState().title).toBe("groceries");
       expect(() => network?.expectConverged()).toThrow(ConvergenceError);
 
-      resolve();
-      await ready;
+      peer.engine.connect();
       await network.settle();
 
       network.expectConverged();
-      expect(room.store.getState()).toMatchObject({
-        title: "groceries",
-        extra: "mine",
-      });
+      for (const peer of [room, joiner])
+        expect(peer.store.getState()).toMatchObject({
+          title: "groceries",
+          extra: "mine",
+        });
     },
   );
 

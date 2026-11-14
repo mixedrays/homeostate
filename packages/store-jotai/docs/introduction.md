@@ -166,10 +166,9 @@ keep the atom mounted and disconnect the CRDT library's provider instead.
 If connecting throws, the error reaches whoever mounted the atom, and that store stays unsynced
 until it is discarded.
 
-With [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), the atom connects on mount and
-writes nothing until `ready` resolves, and a function is called on every mount, so a timer it
-starts runs from then. A rejected `ready` disconnects the engine and goes to `onError`, and the next
-mount tries again. `atomWithSync` exposes no engine, so `getStatus()` and
+To keep the atoms' initial values from competing with a populated room, mount the atom once the
+document holds what it should adopt, such as after `persistence.whenLoaded` has resolved; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room). `atomWithSync` exposes no engine, so `getStatus()` and
 [`useSyncStatus`](../../react/docs/introduction.md) are out of reach here; use
 `createSyncEngine({ backend, adapter: createJotaiAdapter(atom, store) })` to show that status.
 

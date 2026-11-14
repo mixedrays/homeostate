@@ -111,12 +111,12 @@ _Avoid_: Structural sharing, referential equality
 ## Sync lifecycle
 
 **Connect**:
-The `SyncEngine.connect()` call that runs reconciliation and then subscribes the sync engine to the store and the CRDT backend; `disconnect()` removes both subscriptions. With `ready`, it adopts what the backend holds, subscribes, and leaves writing to the reconciliation after the wait.
+The `SyncEngine.connect()` call that runs reconciliation and then subscribes the sync engine to the store and the CRDT backend; `disconnect()` removes both subscriptions. An app that waits for the room calls it once the document holds the room's state, with `connect: "manual"` on a setup helper.
 A connected engine says nothing about the network. Providers and simulated links have their own `connect`, which does.
 _Avoid_: Start, attach
 
 **Reconciliation**:
-The per-key merge `connect()` performs before subscribing, or once `ready` resolves when given: a synced key the CRDT backend holds wins over the store's value, and a synced key only the store holds stays in the store.
+The per-key merge `connect()` performs before subscribing: a synced key the CRDT backend holds wins over the store's value, and a synced key only the store holds stays in the store.
 _Avoid_: Initial sync, hydration
 
 **Seeding**:
@@ -126,10 +126,6 @@ _Avoid_: Initializing, bootstrapping
 
 **Seed option**:
 The `seed` option in `SyncEngineConfig`: `true`, the default, seeds during connect each synced key the backend lacks, even when it holds others, and `false` leaves those keys for the next local change.
-
-**Ready**:
-The `ready` option in `SyncEngineConfig`: a promise, or a function returning one, that the sync engine waits for before it writes to the CRDT backend, so that a peer does not seed before the document holds what it should adopt. While waiting, the engine is connected but not ready: it applies remote changes per key and writes nothing, and local changes are provisional. `getStatus().ready` tells the two apart.
-_Avoid_: Initialized, synced
 
 **Local change**:
 A change made to the store on this peer, which the sync engine writes to the CRDT backend as the whole synced state.
@@ -146,12 +142,12 @@ A store notification raised while the sync engine applies a remote change. The e
 _Avoid_: Feedback loop
 
 **Sync event**:
-A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, has ended a wait for `ready`, or has recorded a sync failure, naming which of the six it was. Every change of the sync status comes with one.
+A notification the sync engine sends once it has handled a local change, a remote change, a connect or a disconnect, or has recorded a sync failure, naming which of the five it was. Every change of the sync status comes with one.
 A local change that first runs a pending apply is reported as a remote change, whose apply merges the local change in and writes it.
 _Avoid_: Engine event, sync notification
 
 **Sync status**:
-The `SyncStatus` that `getStatus()` returns: whether the sync engine is connected, whether it is ready, and its sync failure. It describes the engine, never the network: a provider that is offline changes no field.
+The `SyncStatus` that `getStatus()` returns: whether the sync engine is connected, and its sync failure. It describes the engine, never the network: a provider that is offline changes no field.
 _Avoid_: Connection status, sync state
 
 **Sync failure**:

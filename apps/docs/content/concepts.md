@@ -201,12 +201,13 @@ microtask later, and merges a remote change that arrives meanwhile with the wait
 `disconnect()` writes a waiting change first. See
 [Batched writes](../../../packages/core/docs/sync-engine.md#batched-writes).
 
-A provider delivers the room's state after the engine has connected, so a new document may
-still be empty on `connect()`, and a key this peer seeds then competes with the room's. Pass
-[`ready`](../../../packages/core/docs/sync-engine.md#waiting-for-the-room) to hold back every
-write until the document holds what the peer should adopt: the engine connects and applies
-remote changes at once, and reconciles as above once `ready` resolves. Local changes made before
-then are provisional: the room wins for every key it holds.
+A provider delivers the room's state some time after it starts, so a new document may still be
+empty on `connect()`, and a key this peer seeds then competes with the room's. Call `connect()`
+once the document holds what the peer should adopt, such as after `persistence.whenLoaded` or the
+provider's first sync, with `connect: "manual"` on a setup helper; see
+[Waiting for the room](../../../packages/core/docs/sync-engine.md#waiting-for-the-room). Until
+then the engine reads and writes neither side, and local changes made meanwhile are provisional:
+the room wins for every key it holds.
 
 > [!IMPORTANT]
 > A reconnect adopts the backend again, so edits made while the engine was disconnected are

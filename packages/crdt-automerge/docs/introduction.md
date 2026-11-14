@@ -113,10 +113,9 @@ that each create it, each from a document without it, make two competing maps, a
 keeps one of them whole: the other peer's keys are lost, even those no other peer wrote. Peers
 still end with one consistent state, and a document that already holds the map merges per key.
 
-So waiting for the provider matters more here. Without
-[`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), or when its timeout expires
-before the room's state arrives, a peer that seeds an empty document can remove keys only the
-room held. Yjs and Loro merge these two writes per key.
+So [waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) before
+`connect()` matters more here. A peer that connects at once, or whose timeout expires before the
+room's state arrives, can seed an empty document and remove keys only the room held. Yjs and Loro merge these two writes per key.
 
 ## Strings and text
 

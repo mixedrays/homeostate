@@ -63,12 +63,12 @@ engine.connect(); // sync again
 The store connects before the helper returns: a room that already has state replaces the store's
 synced fields, and an empty room is seeded from the store.
 
-| Option                                           | Default  | Description                                                 |
-| ------------------------------------------------ | -------- | ----------------------------------------------------------- |
-| `backend`                                        |          | The `CrdtBackend` the store syncs with                      |
-| `connect`                                        | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below  |
-| `keys`, `omit`                                   |          | The fields to sync, or those to keep local                  |
-| `filter`, `seed`, `schedule`, `onError`, `ready` |          | The engine's `SyncEngineConfig`, typed by the synced fields |
+| Option                                  | Default  | Description                                                 |
+| --------------------------------------- | -------- | ----------------------------------------------------------- |
+| `backend`                               |          | The `CrdtBackend` the store syncs with                      |
+| `connect`                               | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below  |
+| `keys`, `omit`                          |          | The fields to sync, or those to keep local                  |
+| `filter`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the synced fields |
 
 The helper syncs the store's observable data fields; computeds, actions and fields MobX does not
 observe stay local, and so do the fields `omit` names, such as a `draft` each user types on their
@@ -115,9 +115,9 @@ provider.once("sync", () => engine.connect());
 
 A field added afterwards to an `observable({...})` store is not synced unless `keys` names it.
 
-To connect right away and only hold back writes, pass [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room) instead of
-`connect: "manual"`: the store adopts remote changes as they arrive, and nothing is written until
-`ready` resolves.
+Waiting this way keeps the store's initial state from competing with a populated room; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for what to wait
+for, such as `persistence.whenLoaded`.
 
 ### Without the helper
 

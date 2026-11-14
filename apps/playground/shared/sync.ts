@@ -45,8 +45,8 @@ export const createInitialTodoState = (): TodoState => ({
  * inserting the same JSON would create competing root values and let a joining tab reset
  * the room. Client 0 authors only this seed; each live document keeps its own client ID.
  *
- * Kept instead of the sync engine's `ready` option, which would leave a tab without todos until
- * its provider syncs or a timeout expires. The provider's sync would not be enough either: it
+ * Kept instead of connecting the engine once its provider syncs, which would leave a tab without
+ * todos until then or until a timeout expires. The provider's sync would not be enough either: it
  * covers the wire, and the network link can deliver to this document later.
  */
 function seedTodos(doc: Y.Doc): void {

@@ -36,10 +36,10 @@ npm install @homeostate/persist-indexeddb
 
 ## Usage
 
-Create the persistence next to the document, and pass `whenLoaded` to the sync engine as
-`ready`, so it writes nothing until the stored document is restored:
+Create the persistence next to the document, and connect the sync engine once `whenLoaded`
+resolves, so it writes nothing until the stored document is restored:
 
-```ts {9-13,17-20}
+```ts {9-13,17}
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { createPersistence, createSyncEngine } from "@homeostate/core";
@@ -56,10 +56,10 @@ const persistence = createPersistence(
 
 new WebsocketProvider("wss://sync.example.com", "todos", doc);
 
+await persistence.whenLoaded;
 const engine = createSyncEngine({
   backend: createYjsBackend(doc, "shared"),
   adapter,
-  ready: persistence.whenLoaded,
 });
 engine.connect();
 ```
@@ -70,34 +70,35 @@ stored, local edits and those from peers alike.
 > [!IMPORTANT]
 > Do not seed before `whenLoaded`. Until it resolves the document may still be empty, so the
 > engine would write the store's defaults as new operations, and they could win over the restored
-> values. With `ready`, the engine adopts what arrives and writes nothing until then. Connecting
-> after `await persistence.whenLoaded` is safe too. The provider may connect at any time.
+> values. Connect after `await persistence.whenLoaded`. The provider may connect at any time.
 
-Every setup helper takes the same option, so the store connects when it is created. With the
-Zustand middleware:
+With a setup helper, pass `connect: "manual"` and connect the engine it exposes once
+`whenLoaded` resolves. With the Zustand middleware:
 
 ```ts
 const useTodos = create<TodoState>()(
   homeostate(creator, {
     backend: createYjsBackend(doc, "shared"),
-    ready: persistence.whenLoaded,
+    connect: "manual",
   }),
 );
+
+await persistence.whenLoaded;
+useTodos.homeostate.connect();
 ```
+
+Jotai's `atomWithSync` has no `connect` option: mount the atom once `whenLoaded` resolves.
 
 ### Waiting for the provider too
 
-`whenLoaded` tells the engine that the stored document is back, not that the room's state has
+`whenLoaded` tells that the stored document is back, not that the room's state has
 arrived. On a first visit nothing is stored, so a peer that seeds then competes with a populated
 room. To wait for both, combine them, with the `synced` helper from
 [Waiting for the room](../../../packages/core/docs/sync-engine.md#waiting-for-the-room):
 
 ```ts
-const engine = createSyncEngine({
-  backend: createYjsBackend(doc, "shared"),
-  adapter,
-  ready: () => Promise.all([persistence.whenLoaded, synced(provider)]),
-});
+await Promise.all([persistence.whenLoaded, synced(provider)]);
+engine.connect();
 ```
 
 This never settles while the provider cannot reach the server. An app that must start offline
@@ -105,11 +106,11 @@ can race the provider against a timeout, which trades safety for an offline star
 state arrives after the timeout, its values compete with what this peer seeded.
 
 ```ts
-ready: () =>
-  Promise.all([
-    persistence.whenLoaded,
-    Promise.race([synced(provider), timeout(3000)]),
-  ]),
+await Promise.all([
+  persistence.whenLoaded,
+  Promise.race([synced(provider), timeout(3000)]),
+]);
+engine.connect();
 ```
 
 ## Checking what was restored
@@ -135,16 +136,8 @@ if (loaded.status === "empty" || loaded.status === "loaded") {
 
 Connecting after `"partial"` or `"failed"` can seed the store's defaults for what was not
 restored, as on a first visit; a log that could not be applied stays in storage either way, see
-[Unreadable stored updates](#unreadable-stored-updates). So does passing `whenLoaded` as `ready`
-as it is, since it never rejects. To hold writes back instead, reject from `ready`, which
-disconnects the engine and reports to its `onError`:
-
-```ts
-ready: persistence.whenLoaded.then((loaded) => {
-  if (loaded.status === "partial" || loaded.status === "failed")
-    throw new Error(`The stored document was not restored: ${loaded.status}`);
-}),
-```
+[Unreadable stored updates](#unreadable-stored-updates). To hold writes back instead, leave the
+engine disconnected, as above.
 
 The errors are the ones `onError`
 received while loading, not those of later writes. The result only describes restoring the

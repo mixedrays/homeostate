@@ -191,9 +191,6 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    * seeded, and those keys are written with the next local change. Reconciliation is per key
    * either way: a key the backend holds wins over the store's value, and a key only the store
    * holds stays in the store.
-   *
-   * With `ready`, seeding happens once `ready` resolves, and a local change made during the wait
-   * counts as the next local change for `false`.
    */
   seed?: boolean;
   /**
@@ -212,47 +209,16 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    * replaced whole is kept. After a backend read or write threw, nothing tells which side changed
    * what, so the remote changes replace what the local change did to synced keys.
    *
-   * `disconnect()` runs a pending apply too, and so does the end of a wait for `ready`, unless
-   * that wait failed.
+   * `disconnect()` runs a pending apply too.
    */
   schedule?: (flush: () => void) => void;
   /**
    * Called with what the store adapter or the backend threw once the engine is connected, while
    * it applies a remote change or writes a local one, instead of letting the error reach the
    * other side's notifier. Without it, the error propagates to whoever triggered the work.
-   * `connect()` always throws what it runs into itself. With `ready`, a rejection and a failure
-   * while reconciling after it come later, so they go here, and without `onError` they surface as
-   * unhandled rejections. See `SyncErrorSource`.
+   * `connect()` always throws what it runs into itself. See `SyncErrorSource`.
    */
   onError?: (error: unknown, source: SyncErrorSource) => void;
-  /**
-   * What the engine waits for before it writes to the backend: a promise, or a function
-   * returning one that every `connect()` calls. Resolve it once the document holds what the
-   * app wants to adopt, such as when `whenLoaded` resolves or a provider has synced, so that a
-   * peer joining a populated room does not compete with it.
-   *
-   * `connect()` adopts what the backend holds, keeps the keys only the store holds, and
-   * subscribes to both sides. While waiting, remote changes are applied the same way, except that
-   * a key the backend held and no longer holds is removed from the store. Nothing is written: no
-   * seed, no local change, and nothing the store changes during an apply.
-   *
-   * Once `ready` resolves, the engine runs a pending apply, then reconciles per key as `connect()`
-   * does without it. Local changes made meanwhile are provisional: a key the backend holds keeps
-   * the backend's value, and a key it lacks is written then, also with `seed: false`.
-   *
-   * A rejected `ready`, or a failure while reconciling, disconnects the engine: it forgoes a
-   * pending apply, writes nothing more, hears neither side, and reports the error to `onError`. A
-   * later `connect()` tries
-   * again, which only a function can make succeed: a promise stays rejected. A `ready` that never
-   * settles keeps the engine waiting until `disconnect()`.
-   *
-   * Every `connect()` reconciles after waiting, at least a microtask later. A promise made ahead
-   * is already settled on a reconnect, so that wait ends at once; a function can wait anew, and
-   * local changes are then provisional again meanwhile. A promise rejected before `connect()`
-   * is not an unhandled rejection: the engine takes it up when it connects. A `connect()` that
-   * throws abandons its wait, and what the promise does afterwards is ignored.
-   */
-  ready?: PromiseLike<unknown> | (() => PromiseLike<unknown>);
 } & (
   | {
       /**
@@ -299,7 +265,9 @@ export type SetupOptions<S extends object = JsonObject> =
      * Who connects the engine:
      * - `'auto'`: the helper, once the store is ready, such as when it is created (default)
      * - `'manual'`: the app, by calling `connect()` on the engine the helper exposes; until then
-     *   the engine reads and writes neither the store nor the backend
+     *   the engine reads and writes neither the store nor the backend. Connect once the document
+     *   holds what the app wants to adopt, such as after `await persistence.whenLoaded`, so that
+     *   the store does not compete with a populated room
      */
     connect?: "auto" | "manual";
   };
@@ -309,39 +277,29 @@ export type SetupOptions<S extends object = JsonObject> =
  * - `'store'`: the store adapter's `getState` or `setState`, or a store that keeps changing
  *   what it is given (see `WriteLoopError`)
  * - `'backend'`: the backend's `read` or `write`
- * - `'ready'`: the `ready` promise, which rejected with this error; the engine has disconnected
  */
-export type SyncErrorSource = "store" | "backend" | "ready";
+export type SyncErrorSource = "store" | "backend";
 
 /**
  * What the sync engine has just handled, as `SyncEngine.subscribe` reports it:
  * - `'local'`: a store notification while connected, once its write to the backend returned,
  *   even when it changed only local keys, which writes nothing. An echo raised while a remote
- *   change is applied sends none, and neither does a local change while waiting for `ready`,
- *   which writes nothing either.
+ *   change is applied sends none.
  * - `'remote'`: an apply of the backend's state, once `setState` and the write of what the store
  *   changed meanwhile returned; once per flush with `schedule`, even when the store is unchanged.
  *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`, once
  *   the write of the merged state returned.
  * - `'connect'`: a `connect()` that connected, once reconciliation and both subscriptions are
  *   done. It covers seeding and the values adopted from the backend, which send nothing else.
- *   With `ready` it comes before the wait, so it covers only the values adopted, and `'ready'`
- *   covers the rest.
  * - `'disconnect'`: a `disconnect()` that disconnected, once both subscriptions are removed. A
  *   pending apply it runs sends its `'remote'` first, and `'disconnect'` follows even when that
- *   apply throws, since the engine is disconnected all the same. A wait for `ready` that fails
- *   sends it too, before `onError` runs.
- * - `'ready'`: the end of a wait for `ready`, once reconciliation is done. It covers seeding and
- *   the values adopted, and is never sent without the `ready` option.
+ *   apply throws, since the engine is disconnected all the same.
  * - `'error'`: a failure the engine recorded, which `getStatus().failure` holds; see
  *   `SyncStatus.failure`. Work that throws sends it alone, before `onError` runs or the error
  *   propagates. A write loop sends it after the `'remote'` of the apply that stopped it, unless
- *   the loop is the status's failure already. A failed wait for `ready` sends it after
- *   `'disconnect'`, which already shows the failure, so the status changes once; a
- *   `'disconnect'` listener that connects again clears the failure, and then it is not sent.
+ *   the loop is the status's failure already.
  */
-export type SyncEvent =
-  "local" | "remote" | "connect" | "disconnect" | "ready" | "error";
+export type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "error";
 
 /**
  * What went wrong in the sync engine, as `SyncStatus.failure` holds it. It is kept with or without
@@ -349,7 +307,7 @@ export type SyncEvent =
  * error still propagates.
  */
 export interface SyncFailure {
-  /** What was thrown or rejected. It may be anything, `undefined` included. */
+  /** What was thrown. It may be anything, `undefined` included. */
   readonly error: unknown;
   /**
    * What the error came from, as `onError` is told. Missing for what comes from none of those
@@ -365,29 +323,20 @@ export interface SyncFailure {
  */
 export interface SyncStatus {
   /**
-   * Whether the engine is connected: subscribed to the store and the backend, also while it waits
-   * for `ready`.
+   * Whether the engine is connected: done reconciling and subscribed to the store and the backend,
+   * so that a local change is written. It says nothing about the room: a peer that has not loaded
+   * or received the room's state yet is connected all the same.
    */
   readonly connected: boolean;
-  /**
-   * Whether the engine is connected and done reconciling, so that a local change is written. With
-   * the `ready` option it is false until `ready` has resolved and reconciliation is done, and
-   * false again on every reconnect until the same is true. Without the option it equals
-   * `connected`, so it says nothing about the room either. Whichever the options, it is false
-   * while disconnected.
-   */
-  readonly ready: boolean;
   /**
    * The failure the engine has not recovered from, or `null`. It is set by:
    * - a failed write, read or `setState` while the engine syncs. The engine stays connected.
    * - a `connect()` that throws, which leaves it disconnected.
-   * - a failed wait for `ready`: a rejection, or a failure while reconciling after it, which
-   *   disconnects it.
    * - a `WriteLoopError`, in every build and with or without `onError`. The engine stays connected.
    *   Unlike `onError`, the status shows a loop each time it comes back.
    *
-   * Each one sends an `'error'` sync event. A later `'local'`, `'remote'`, `'connect'` or `'ready'`
-   * sync event sent while connected clears it, since the store and the backend agree again,
+   * Each one sends an `'error'` sync event. A later `'local'`, `'remote'` or `'connect'` sync
+   * event sent while connected clears it, since the store and the backend agree again,
    * unless the apply that sent it stopped a write loop. `disconnect()` keeps it, to say why the
    * engine stopped.
    *
@@ -406,7 +355,7 @@ export interface SyncEngine {
   /** Stop synchronization and cleanup */
   disconnect: () => void;
   /**
-   * The engine's status: whether it is connected and ready, and what failed. It is current
+   * The engine's status: whether it is connected, and what failed. It is current
    * whenever it is read, also from a store or sync event listener. It returns one object until a
    * field changes, frozen, and the same object whenever the fields are those of an earlier status
    * without a failure, so comparing by identity tells whether it changed. Every change comes with

@@ -142,17 +142,10 @@ const expectRecord = (
 /** The statuses that hold no failure, shared so that equal fields mean the same object. */
 const DISCONNECTED: SyncStatus = Object.freeze({
   connected: false,
-  ready: false,
   failure: null,
 });
-const WAITING: SyncStatus = Object.freeze({
+const CONNECTED: SyncStatus = Object.freeze({
   connected: true,
-  ready: false,
-  failure: null,
-});
-const READY: SyncStatus = Object.freeze({
-  connected: true,
-  ready: true,
   failure: null,
 });
 
@@ -269,16 +262,11 @@ const syncPredicate = ({
  * engine hears of it, as when a listener subscribed to the document first changes the store as it
  * hears of it; see `CrdtBackend.revision`.
  *
- * With `ready`, `connect()` adopts what the backend holds and subscribes, and nothing is written
- * until `ready` resolves, when the engine reconciles; see `SyncEngineConfig.ready`.
- *
  * `connect()` throws what it runs into, including a `TypeError` for a `read()` or `getState()`
  * that does not return an object. Once connected, what the adapter or the backend throws goes to
- * `onError` when it is given, and otherwise to whoever triggered the work, as before. A rejected
- * `ready`, or a failure while reconciling after it, disconnects the engine and goes to `onError`,
- * and without it surfaces as an unhandled rejection. Whichever way an error goes, the engine
- * sends an `'error'` sync event, and `getStatus()` keeps it until the engine recovers; see
- * `SyncStatus`.
+ * `onError` when it is given, and otherwise to whoever triggered the work, as before. Whichever
+ * way an error goes, the engine sends an `'error'` sync event, and `getStatus()` keeps it until
+ * the engine recovers; see `SyncStatus`.
  *
  * @example
  * ```typescript
@@ -291,17 +279,11 @@ const syncPredicate = ({
 export function createSyncEngine<S extends object>(
   options: SyncEngineOptions<S>,
 ): SyncEngine {
-  const { backend, adapter, seed = true, schedule, onError, ready } = options;
+  const { backend, adapter, seed = true, schedule, onError } = options;
   // Untyped: the engine also judges keys the backend holds that `S` does not declare.
   const filter = syncPredicate(options as SyncEngineConfig);
 
   let connected = false;
-  /** Identifies the wait for `ready` in progress; a wait that is no longer it does nothing. */
-  let waiting: object | null = null;
-  /** Whether `connect()`, and the wait for `ready` if any, have reconciled the two sides. */
-  let reconciled = false;
-  /** Whether a local change arrived during that wait; it writes what `seed: false` holds back. */
-  let changedWhileWaiting = false;
   let storeUnsubscribe: Unsubscribe | null = null;
   let backendUnsubscribe: Unsubscribe | null = null;
   let applyingRemote = false;
@@ -358,28 +340,23 @@ export function createSyncEngine<S extends object>(
   /** Whether the apply in progress stopped a write loop, which leaves `failure` standing. */
   let stoppedLoop = false;
   /**
-   * A failure the work in progress recorded and carries on after, as a stopped write loop or a
-   * failed wait for `ready` does: `'error'` tells of it once the work's own event has been sent.
+   * A failure the work in progress recorded and carries on after, as a stopped write loop does:
+   * `'error'` tells of it once the work's own event has been sent.
    */
   let untold: SyncFailure | null = null;
   /** What `getStatus` returned last with a failure. */
   let failedStatus: SyncStatus | null = null;
 
   const getStatus = (): SyncStatus => {
-    const healthy = !connected ? DISCONNECTED : reconciled ? READY : WAITING;
-    if (failure === null) return healthy;
+    if (failure === null) return connected ? CONNECTED : DISCONNECTED;
     if (
       failedStatus?.failure !== failure ||
-      failedStatus.connected !== healthy.connected ||
-      failedStatus.ready !== healthy.ready
+      failedStatus.connected !== connected
     ) {
-      failedStatus = Object.freeze({ ...healthy, failure });
+      failedStatus = Object.freeze({ connected, failure });
     }
     return failedStatus;
   };
-
-  // `connect()` may come long after a promise rejects, and until then nothing else handles it.
-  if (typeof ready === "object") ready.then(undefined, () => {});
 
   /**
    * Tells every listener that the engine has handled `event`, and then of the failure in
@@ -588,10 +565,9 @@ export function createSyncEngine<S extends object>(
   /**
    * Makes the store's synced state what it reads from `held`, the backend's whole state, then
    * writes what the store changed in response; see `readRemote`. With `keepLocalOnly`, a synced
-   * key the backend does not hold is left in place instead of being deleted, except the `removed`
-   * keys; that is the connect-time reconciliation, and every apply while waiting for `ready`.
-   * Otherwise what it reads is the whole synced state. `lastSynced` must already be what the
-   * backend holds.
+   * key the backend does not hold is left in place instead of being deleted; that is the
+   * connect-time reconciliation. Otherwise what it reads is the whole synced state. `lastSynced`
+   * must already be what the backend holds.
    *
    * With `base`, the store may hold a local change the engine has not written, made since the
    * backend held `base`, its whole state then. The store's synced state is then merged with what
@@ -601,7 +577,6 @@ export function createSyncEngine<S extends object>(
   const applyRemote = (
     held: Plain,
     keepLocalOnly: boolean,
-    removed: string[] = [],
     base?: Plain,
   ): void => {
     let current: S;
@@ -618,8 +593,7 @@ export function createSyncEngine<S extends object>(
       current = readStore();
       synced = filterState(current);
       const remote = readRemote(held, current, synced);
-      if (keepLocalOnly)
-        target = { ...withoutKeys(synced, removed), ...remote };
+      if (keepLocalOnly) target = { ...synced, ...remote };
       else if (base === undefined) target = remote;
       else {
         const merged = mergeLocalChange(base, current, synced, remote);
@@ -637,8 +611,6 @@ export function createSyncEngine<S extends object>(
     } finally {
       applyingRemote = false;
     }
-    // What the store changed reaches the backend when reconciling after `ready`.
-    if (waiting !== null) return;
     const after = readStore();
     // A store that ignored the change entirely, such as a Redux store without the replace case,
     // would otherwise write its old state back over every peer's.
@@ -767,7 +739,6 @@ export function createSyncEngine<S extends object>(
   const syncToStore = (): void => {
     remoteReads++;
     const base = lastSynced;
-    const known = base ?? {};
     // The apply writes the waiting local change, merged with the remote changes, so the queued
     // write is left with nothing to do. Without a base, the remote changes replace it, as in
     // `applyUnseenRemote`.
@@ -779,13 +750,7 @@ export function createSyncEngine<S extends object>(
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
     const held = readBackend();
     lastSynced = held;
-    if (waiting === null)
-      applyRemote(held, false, [], merging ? base : undefined);
-    else {
-      // A key only the store holds waits to be seeded; one the backend held, a peer deleted.
-      const removed = Object.keys(known).filter((key) => !hasOwn(held, key));
-      applyRemote(held, true, removed);
-    }
+    applyRemote(held, false, merging ? base : undefined);
     emit("remote");
   };
 
@@ -854,16 +819,12 @@ export function createSyncEngine<S extends object>(
     }
     remoteReads++;
     lastSynced = held;
-    applyRemote(held, false, [], synced);
+    applyRemote(held, false, synced);
     emit("remote");
     return true;
   };
 
   const syncToBackend = (): void => {
-    if (waiting !== null) {
-      changedWhileWaiting = true;
-      return;
-    }
     // Otherwise the write would revert those remote changes. Applying them merges the local
     // change in and writes what it kept, so there is nothing left to write. A store that ignored
     // the apply keeps its stale state out of the backend this way too.
@@ -883,12 +844,12 @@ export function createSyncEngine<S extends object>(
 
   /**
    * Hears a store notification: writes the local change at once, or, with `scheduleWrite`, queues
-   * one write for every notification until it runs. An echo of `setState` is ignored, and a local
-   * change while waiting for `ready` writes nothing, so neither queues a write.
+   * one write for every notification until it runs. An echo of `setState` is ignored, so it queues
+   * no write.
    */
   const onStoreChange = (): void => {
     if (applyingRemote) return;
-    if (scheduleWrite === undefined || waiting !== null) {
+    if (scheduleWrite === undefined) {
       guarded(syncToBackend);
       return;
     }
@@ -911,9 +872,8 @@ export function createSyncEngine<S extends object>(
     storeUnsubscribe = null;
   };
 
-  /** Leaves the connected state: nothing heard, nothing waited for, and `'disconnect'` sent. */
+  /** Leaves the connected state: nothing heard, and `'disconnect'` sent. */
   const stopSyncing = (): void => {
-    waiting = null;
     queuedWrite = null;
     unsubscribeAll();
     // A disconnected engine hears no remote change, so it reads the backend again on connect.
@@ -922,30 +882,27 @@ export function createSyncEngine<S extends object>(
     lastApplied = null;
     contradictions.clear();
     connected = false;
-    reconciled = false;
     emit("disconnect");
   };
 
   /**
    * The per-key merge of `connect()`: a key the backend holds wins, and a key only the store holds
-   * stays in the store and, with `seedMissing`, is written in one write.
+   * stays in the store and, with `seed`, is written in one write. The engine subscribes to the
+   * backend only afterwards, so no remote change is applied meanwhile.
    */
-  const reconcile = (seedMissing: boolean): void => {
+  const reconcile = (): void => {
     let held = readBackend();
     const remote = filterState(held);
     const local = filterState(readStore());
     const remoteKeys = new Set(Object.keys(remote));
     const missing = Object.keys(local).filter((key) => !remoteKeys.has(key));
 
-    if (seedMissing && missing.length > 0) {
+    if (seed && missing.length > 0) {
       // Keys this peer does not sync stay as the backend holds them.
       const seeded: Plain = { ...held };
       for (const key of missing) seeded[key] = local[key];
-      const reads = remoteReads;
       // Only the store has been read since, so the backend still holds `held`.
       call("backend", () => backend.write(seeded, held));
-      // A remote change applied during the write has given the store what it read.
-      if (remoteReads !== reads) return;
       held = seeded;
     }
 
@@ -954,78 +911,13 @@ export function createSyncEngine<S extends object>(
     applyRemote(held, true);
   };
 
-  /**
-   * Disconnects after a wait that cannot go on, and hands `error` to `onError`. With no `onError`
-   * or no `source`, it throws, which nothing catches, so that `error` reaches the runtime as an
-   * unhandled rejection: there is no caller of `connect()` left to tell.
-   */
-  const failConnect = (
-    error: unknown,
-    source: SyncErrorSource | undefined,
-  ): void => {
-    applyPending = false;
-    scheduledFlush = null;
-    // `'disconnect'` already shows it, so the status changes once; `'error'` follows.
-    failure = { error, source };
-    untold = failure;
-    stopSyncing();
-    if (onError === undefined || source === undefined) throw error;
-    onError(error, source);
-  };
-
-  /** Ends `wait` once `ready` has resolved, unless the engine has left it since. */
-  const onReady = (wait: object): void => {
-    if (waiting !== wait) return;
-    scheduledFlush = null;
-    thrownBy = undefined;
-    try {
-      // Still waiting, so that a key a peer deleted leaves the store instead of being seeded.
-      runPendingApply();
-      // Code it notified may have disconnected the engine.
-      if (waiting !== wait) return;
-      waiting = null;
-      reconcile(seed || changedWhileWaiting);
-    } catch (error) {
-      const source = thrownBy;
-      thrownBy = undefined;
-      failConnect(error, source);
-      return;
-    }
-    // Code reconciling notified may have disconnected the engine, or started another wait.
-    if (!connected || waiting !== null) return;
-    reconciled = true;
-    emit("ready");
-  };
-
-  /** Ends `wait` once `ready` has rejected, unless the engine has left it since. */
-  const onRejected = (wait: object, error: unknown): void => {
-    if (waiting === wait) failConnect(error, "ready");
-  };
-
   return {
     connect: (): void => {
       if (connected) return;
 
       thrownBy = undefined;
-      let settling: PromiseLike<unknown> | undefined;
       try {
-        settling = typeof ready === "function" ? ready() : ready;
-      } catch (error) {
-        recordFailure(error, "ready");
-        throw error;
-      }
-      const wait = settling === undefined ? null : {};
-      waiting = wait;
-      changedWhileWaiting = false;
-      // Before anything can throw: a throw abandons the wait, which leaves this nothing to do.
-      if (wait !== null) {
-        void Promise.resolve(settling).then(
-          () => onReady(wait),
-          (error: unknown) => onRejected(wait, error),
-        );
-      }
-      try {
-        reconcile(wait === null && seed);
+        reconcile();
         backendUnsubscribe = call("backend", () =>
           backend.subscribe(() => guarded(onRemoteChange)),
         );
@@ -1036,12 +928,10 @@ export function createSyncEngine<S extends object>(
         // `disconnect()` cannot reach a subscription made before the throw, so drop it here.
         unsubscribeAll();
         lastSynced = undefined;
-        waiting = null;
         recordFailure(error, thrownBy);
         throw error;
       }
       connected = true;
-      reconciled = wait === null;
       emit("connect");
     },
 

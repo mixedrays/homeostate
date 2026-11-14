@@ -38,8 +38,8 @@ createSyncEngine({
 }).connect();
 ```
 
-Connect the engine after `whenLoaded`, or pass it as the engine's `ready` option, so it adopts the
-restored state instead of seeding the store's defaults over it. Its result tells whether a stored document was found and restored in
+Connect the engine after `whenLoaded`, so it adopts the restored state instead of seeding the
+store's defaults over it. Its result tells whether a stored document was found and restored in
 full; see the [persistence guide](https://homeostate.pages.dev/docs/persistence#checking-what-was-restored).
 
 `createIndexedDbAdapter({ name, indexedDB })` takes an optional database name (default

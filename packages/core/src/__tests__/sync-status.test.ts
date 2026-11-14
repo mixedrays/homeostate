@@ -11,25 +11,11 @@ import {
   createSyncEngine,
   WriteLoopError,
   type SyncEngine,
-  type SyncEngineConfig,
   type SyncEvent,
   type SyncStatus,
 } from "../index.js";
 import { createMemoryBackend, type MemoryBackend } from "../testing.js";
 import { createTestStore, type TestStore } from "./helpers.js";
-
-const deferred = () => {
-  let resolve!: () => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<void>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-};
-
-/** Lets every promise reaction already due run. */
-const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Records each sync event of `engine`, with the status it reads as the event arrives. */
 const record = (engine: SyncEngine): [SyncEvent, SyncStatus][] => {
@@ -40,57 +26,20 @@ const record = (engine: SyncEngine): [SyncEvent, SyncStatus][] => {
 
 describe("sync status", () => {
   describe("getStatus", () => {
-    it("is disconnected until connect, ready after it, and disconnected again after disconnect", () => {
+    it("is disconnected until connect, connected after it, and disconnected again after disconnect", () => {
       const store = createTestStore({ count: 0 });
       const engine = createSyncEngine({
         backend: createMemoryBackend(),
         adapter: store.adapter,
       });
 
-      expect(engine.getStatus()).toEqual({
-        connected: false,
-        ready: false,
-        failure: null,
-      });
+      expect(engine.getStatus()).toEqual({ connected: false, failure: null });
 
       engine.connect();
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: true,
-        failure: null,
-      });
+      expect(engine.getStatus()).toEqual({ connected: true, failure: null });
 
       engine.disconnect();
-      expect(engine.getStatus()).toEqual({
-        connected: false,
-        ready: false,
-        failure: null,
-      });
-    });
-
-    it("is connected and not ready during a wait for ready, then ready", async () => {
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ready: ready.promise,
-      });
-
-      engine.connect();
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: false,
-        failure: null,
-      });
-
-      ready.resolve();
-      await settled();
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: true,
-        failure: null,
-      });
+      expect(engine.getStatus()).toEqual({ connected: false, failure: null });
     });
 
     it("returns the same object until a field changes", () => {
@@ -124,46 +73,37 @@ describe("sync status", () => {
       expect(engine.getStatus()).toBe(connected);
     });
 
-    it("cannot be changed by whoever reads it, whatever it says", async () => {
+    it("cannot be changed by whoever reads it, whatever it says", () => {
       const store = createTestStore({ count: 0 });
-      const ready = deferred();
       const engine = createSyncEngine({
         backend: createMemoryBackend(),
         adapter: store.adapter,
-        ready: ready.promise,
       });
       expect(Object.isFrozen(engine.getStatus())).toBe(true);
 
       engine.connect();
       expect(Object.isFrozen(engine.getStatus())).toBe(true);
 
-      ready.resolve();
-      await settled();
-      expect(engine.getStatus().ready).toBe(true);
+      engine.disconnect();
       expect(Object.isFrozen(engine.getStatus())).toBe(true);
     });
   });
 
   describe("sync events", () => {
-    it("come with every change of the status, which each listener already reads", async () => {
+    it("come with every change of the status, which each listener already reads", () => {
       const store = createTestStore({ count: 0 });
-      const ready = deferred();
       const engine = createSyncEngine({
         backend: createMemoryBackend(),
         adapter: store.adapter,
-        ready: () => ready.promise,
       });
       const seen = record(engine);
 
       engine.connect();
-      ready.resolve();
-      await settled();
       engine.disconnect();
 
       expect(seen).toEqual([
-        ["connect", { connected: true, ready: false, failure: null }],
-        ["ready", { connected: true, ready: true, failure: null }],
-        ["disconnect", { connected: false, ready: false, failure: null }],
+        ["connect", { connected: true, failure: null }],
+        ["disconnect", { connected: false, failure: null }],
       ]);
     });
 
@@ -248,7 +188,6 @@ describe("sync status", () => {
 
       expect(engine.getStatus()).toEqual({
         connected: true,
-        ready: true,
         failure: { error, source: "backend" },
       });
       expect(seen).toEqual([["error", { error, source: "backend" }]]);
@@ -394,16 +333,11 @@ describe("sync status", () => {
       engine.disconnect();
       expect(engine.getStatus()).toEqual({
         connected: false,
-        ready: false,
         failure: { error, source: "backend" },
       });
 
       engine.connect();
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: true,
-        failure: null,
-      });
+      expect(engine.getStatus()).toEqual({ connected: true, failure: null });
     });
 
     it("sends error with the failure before onError runs", () => {
@@ -495,8 +429,8 @@ describe("sync status", () => {
 
       const failure = { error, source: "store" };
       expect(seen).toEqual([
-        ["error", { connected: true, ready: true, failure }],
-        ["disconnect", { connected: false, ready: false, failure }],
+        ["error", { connected: true, failure }],
+        ["disconnect", { connected: false, failure }],
       ]);
     });
   });
@@ -524,14 +458,7 @@ describe("sync status", () => {
       expect(() => engine.connect()).toThrow(error);
 
       expect(seen).toEqual([
-        [
-          "error",
-          {
-            connected: false,
-            ready: false,
-            failure: { error, source: "store" },
-          },
-        ],
+        ["error", { connected: false, failure: { error, source: "store" } }],
       ]);
 
       store.adapter.getState = getState;
@@ -539,7 +466,7 @@ describe("sync status", () => {
 
       expect(seen.at(-1)).toEqual([
         "connect",
-        { connected: true, ready: true, failure: null },
+        { connected: true, failure: null },
       ]);
     });
 
@@ -577,40 +504,6 @@ describe("sync status", () => {
       expect(engine.getStatus().failure).toEqual({ error, source: "store" });
     });
 
-    it("records a ready function that throws, and a later connect clears it", async () => {
-      const store = createTestStore({ count: 0 });
-      const error = new Error("ready");
-      let failing = true;
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ...config,
-        ready: () => {
-          if (failing) throw error;
-          return Promise.resolve();
-        },
-      });
-
-      expect(() => engine.connect()).toThrow(error);
-
-      expect(engine.getStatus()).toEqual({
-        connected: false,
-        ready: false,
-        failure: { error, source: "ready" },
-      });
-
-      failing = false;
-      engine.connect();
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: false,
-        failure: null,
-      });
-
-      await settled();
-      expect(engine.getStatus().ready).toBe(true);
-    });
-
     it("gives what filter throws in connect no source, even after a failure that had one", () => {
       const store = createTestStore({ count: 0 });
       const getState = store.adapter.getState;
@@ -636,243 +529,6 @@ describe("sync status", () => {
 
       expect(engine.getStatus().failure).toEqual({ error });
     });
-  });
-
-  describe.each([
-    ["with onError", true],
-    ["without onError", false],
-  ])("failed waits for ready, %s", (_name, withOnError) => {
-    const config = withOnError ? { onError: () => {} } : {};
-
-    /** Runs `work`, whose failure without `onError` is an unhandled rejection. */
-    const expectingRejection = async (
-      error: unknown,
-      work: () => void,
-    ): Promise<void> => {
-      const unhandled: unknown[] = [];
-      const onUnhandled = (reason: unknown) => unhandled.push(reason);
-      process.on("unhandledRejection", onUnhandled);
-      work();
-      await settled();
-      await settled();
-      process.off("unhandledRejection", onUnhandled);
-      expect(unhandled).toEqual(withOnError ? [] : [error]);
-    };
-
-    it("records a rejected ready as one change, sent with disconnect and then error, and a later connect clears it while it waits", async () => {
-      const store = createTestStore({ count: 0 });
-      const first = deferred();
-      const waits = [first, deferred()];
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ...config,
-        ready: () => waits.shift()!.promise,
-      });
-      engine.connect();
-      const seen = record(engine);
-      const error = new Error("ready");
-
-      await expectingRejection(error, () => first.reject(error));
-
-      const failure = { error, source: "ready" };
-      expect(seen).toEqual([
-        ["disconnect", { connected: false, ready: false, failure }],
-        ["error", { connected: false, ready: false, failure }],
-      ]);
-      expect(seen[1]![1]).toBe(seen[0]![1]);
-
-      engine.connect();
-      expect(engine.getStatus()).toEqual({
-        connected: true,
-        ready: false,
-        failure: null,
-      });
-    });
-
-    it("shows that a ready rejected with no reason failed", async () => {
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ...config,
-        ready: ready.promise,
-      });
-      engine.connect();
-
-      await expectingRejection(undefined, () => ready.reject());
-
-      expect(engine.getStatus().failure).toEqual({
-        error: undefined,
-        source: "ready",
-      });
-    });
-
-    it("shows the failure to disconnect and then error listeners, before onError runs", async () => {
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const seen: unknown[] = [];
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ...(withOnError ? { onError: () => seen.push("onError") } : {}),
-        ready: ready.promise,
-      });
-      engine.connect();
-      engine.subscribe((event) =>
-        seen.push([event, engine.getStatus().failure]),
-      );
-      const error = new Error("ready");
-
-      await expectingRejection(error, () => ready.reject(error));
-
-      const failure = { error, source: "ready" };
-      const events = [
-        ["disconnect", failure],
-        ["error", failure],
-      ];
-      expect(seen).toEqual(withOnError ? [...events, "onError"] : events);
-    });
-
-    it("records a reconcile that fails at settling as one change", async () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const engine = createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        ...config,
-        ready: ready.promise,
-      });
-      engine.connect();
-      const error = new Error("seed");
-      backend.write = () => {
-        throw error;
-      };
-      const seen = record(engine);
-
-      await expectingRejection(error, () => ready.resolve());
-
-      const status = {
-        connected: false,
-        ready: false,
-        failure: { error, source: "backend" },
-      };
-      expect(seen).toEqual([
-        ["disconnect", status],
-        ["error", status],
-      ]);
-    });
-
-    it("records a pending apply that fails at settling as one change", async () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const engine = createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        ...config,
-        schedule: () => {},
-        ready: ready.promise,
-      });
-      engine.connect();
-      const error = new Error("setState");
-      store.adapter.setState = () => {
-        throw error;
-      };
-      backend.receive({ count: 1 });
-      const seen = record(engine);
-
-      await expectingRejection(error, () => ready.resolve());
-
-      const status = {
-        connected: false,
-        ready: false,
-        failure: { error, source: "store" },
-      };
-      expect(seen).toEqual([
-        ["disconnect", status],
-        ["error", status],
-      ]);
-    });
-
-    it("records nothing for a wait a failed connect abandoned", async () => {
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ...config,
-        ready: ready.promise,
-      });
-      const getState = store.adapter.getState;
-      const error = new Error("getState");
-      store.adapter.getState = () => {
-        throw error;
-      };
-      expect(() => engine.connect()).toThrow(error);
-      store.adapter.getState = getState;
-      const seen = record(engine);
-
-      ready.reject(new Error("late"));
-      await settled();
-
-      expect(seen).toEqual([]);
-      expect(engine.getStatus().failure).toEqual({ error, source: "store" });
-    });
-
-    it("records nothing for a rejection after disconnect", async () => {
-      const store = createTestStore({ count: 0 });
-      const ready = deferred();
-      const engine = createSyncEngine({
-        backend: createMemoryBackend(),
-        adapter: store.adapter,
-        ...config,
-        ready: ready.promise,
-      });
-      engine.connect();
-      engine.disconnect();
-      const seen = record(engine);
-
-      ready.reject(new Error("late"));
-      await settled();
-
-      expect(seen).toEqual([]);
-      expect(engine.getStatus().failure).toBeNull();
-    });
-  });
-
-  it("clears a failed apply during a wait for ready once the wait ends well", async () => {
-    const backend = createMemoryBackend();
-    const store = createTestStore({ count: 0 });
-    const ready = deferred();
-    const engine = createSyncEngine({
-      backend,
-      adapter: store.adapter,
-      onError: () => {},
-      ready: ready.promise,
-    });
-    engine.connect();
-    const setState = store.adapter.setState;
-    store.adapter.setState = () => {
-      throw new Error("setState");
-    };
-    backend.receive({ count: 1 });
-    store.adapter.setState = setState;
-    expect(engine.getStatus()).toMatchObject({
-      connected: true,
-      ready: false,
-      failure: { source: "store" },
-    });
-    const seen = record(engine);
-
-    ready.resolve();
-    await settled();
-
-    expect(seen).toEqual([
-      ["ready", { connected: true, ready: true, failure: null }],
-    ]);
   });
 
   describe.each([
@@ -941,7 +597,6 @@ describe("sync status", () => {
       expect(status.failure?.error).toBeInstanceOf(WriteLoopError);
       expect(status.failure?.source).toBe("store");
       expect(status.connected).toBe(true);
-      expect(status.ready).toBe(true);
       const stopped = seen.findIndex(([, { failure }]) => failure !== null);
       expect(seen.map(([event]) => event)).toEqual([
         ...Array(stopped + 1).fill("remote"),
@@ -1030,22 +685,7 @@ describe("sync status", () => {
   });
 
   describe("re-entrant calls", () => {
-    /** What every observer of `engine` saw that cannot be true. */
-    const observe = <S extends object>(
-      engine: SyncEngine,
-      store: TestStore<S>,
-    ) => {
-      const violations: string[] = [];
-      const check = (where: string) => {
-        const { connected, ready } = engine.getStatus();
-        if (ready && !connected) violations.push(`ready alone in ${where}`);
-      };
-      store.adapter.subscribe(() => check("a store subscriber"));
-      engine.subscribe((event) => check(`the ${event} event`));
-      return violations;
-    };
-
-    /** Runs `act` the first time the store notifies; it subscribes after `observe`. */
+    /** Runs `act` the first time the store notifies; it subscribes after the engine. */
     const onFirstStoreChange = <S extends object>(
       store: TestStore<S>,
       act: () => void,
@@ -1058,189 +698,26 @@ describe("sync status", () => {
       });
     };
 
-    /** An engine waiting for a function `ready`, with the waits it started. */
-    const waitingEngine = (
-      backend: MemoryBackend,
-      store: TestStore<{ count: number }>,
-      config: SyncEngineConfig<{ count: number }> = {},
-    ) => {
-      const waits: ReturnType<typeof deferred>[] = [];
-      const engine = createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        ...config,
-        ready: () => {
-          const wait = deferred();
-          waits.push(wait);
-          return wait.promise;
-        },
-      });
-      engine.connect();
-      return { engine, waits };
-    };
-
-    describe("during reconciliation at settling", () => {
-      /** A backend change only the reconcile at settling brings to the store. */
-      const pendingChange = (backend: MemoryBackend) =>
-        backend.write({ count: 2 });
-
-      it("reports no status of ready after a subscriber disconnects", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 });
-        const { engine, waits } = waitingEngine(backend, store);
-        const violations = observe(engine, store);
-        onFirstStoreChange(store, () => engine.disconnect());
-        const seen = record(engine);
-        pendingChange(backend);
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(seen).toEqual([
-          ["disconnect", { connected: false, ready: false, failure: null }],
-        ]);
-      });
-
-      it("stays waiting after a subscriber reconnects", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 });
-        const { engine, waits } = waitingEngine(backend, store);
-        const violations = observe(engine, store);
-        onFirstStoreChange(store, () => {
-          engine.disconnect();
-          engine.connect();
-        });
-        pendingChange(backend);
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus()).toEqual({
-          connected: true,
-          ready: false,
-          failure: null,
-        });
-
-        waits[1]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus().ready).toBe(true);
-      });
-
-      it("records a write back that fails after a subscriber disconnected", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 }, (state) => ({
-          count: state.count + 1000,
-        }));
-        const { engine, waits } = waitingEngine(backend, store, {
-          onError: () => {},
-        });
-        const violations = observe(engine, store);
-        onFirstStoreChange(store, () => engine.disconnect());
-        pendingChange(backend);
-        const error = new Error("write");
-        backend.write = () => {
-          throw error;
-        };
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus()).toEqual({
-          connected: false,
-          ready: false,
-          failure: { error, source: "backend" },
-        });
-      });
-    });
-
-    describe("during a pending apply at settling", () => {
-      const pending = () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 });
-        const { engine, waits } = waitingEngine(backend, store, {
-          schedule: () => {},
-        });
-        const violations = observe(engine, store);
-        backend.receive({ count: 2 });
-        return { store, engine, waits, violations };
-      };
-
-      it("ends disconnected after a subscriber disconnects", async () => {
-        const { store, engine, waits, violations } = pending();
-        onFirstStoreChange(store, () => engine.disconnect());
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus()).toEqual({
-          connected: false,
-          ready: false,
-          failure: null,
-        });
-      });
-
-      it("stays waiting after a subscriber reconnects", async () => {
-        const { store, engine, waits, violations } = pending();
-        onFirstStoreChange(store, () => {
-          engine.disconnect();
-          engine.connect();
-        });
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus()).toEqual({
-          connected: true,
-          ready: false,
-          failure: null,
-        });
-      });
-
-      it("ends disconnected after a remote event listener disconnects", async () => {
-        const { engine, waits, violations } = pending();
-        engine.subscribe((event) => {
-          if (event === "remote") engine.disconnect();
-        });
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus().connected).toBe(false);
-      });
-    });
-
     describe("during connect", () => {
       it("stays consistent when a store subscriber connects during reconciliation", () => {
         const backend = createMemoryBackend({ count: 1 });
         const store = createTestStore({ count: 0 });
         const engine = createSyncEngine({ backend, adapter: store.adapter });
-        const violations = observe(engine, store);
         onFirstStoreChange(store, () => engine.connect());
 
         engine.connect();
 
-        expect(violations).toEqual([]);
-        expect(engine.getStatus().ready).toBe(true);
+        expect(engine.getStatus().connected).toBe(true);
       });
 
       it("does nothing when a store subscriber disconnects during reconciliation, as disconnect() is then a no-op", () => {
         const backend = createMemoryBackend({ count: 1 });
         const store = createTestStore({ count: 0 });
         const engine = createSyncEngine({ backend, adapter: store.adapter });
-        const violations = observe(engine, store);
         onFirstStoreChange(store, () => engine.disconnect());
 
         engine.connect();
 
-        expect(violations).toEqual([]);
         expect(engine.getStatus().connected).toBe(true);
       });
 
@@ -1250,89 +727,17 @@ describe("sync status", () => {
           backend: createMemoryBackend(),
           adapter: store.adapter,
         });
-        const violations = observe(engine, store);
         engine.subscribe((event) => {
           if (event === "connect") engine.disconnect();
         });
 
         engine.connect();
 
-        expect(violations).toEqual([]);
         expect(engine.getStatus().connected).toBe(false);
-      });
-    });
-
-    describe("from a sync event listener", () => {
-      it("ends disconnected when a ready listener disconnects", async () => {
-        const store = createTestStore({ count: 0 });
-        const { engine, waits } = waitingEngine(createMemoryBackend(), store);
-        const violations = observe(engine, store);
-        engine.subscribe((event) => {
-          if (event === "ready") engine.disconnect();
-        });
-
-        waits[0]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus().connected).toBe(false);
-      });
-
-      it("clears the failure when a disconnect listener retries a failed wait, sends no error, and onError still runs", async () => {
-        const store = createTestStore({ count: 0 });
-        const reported: unknown[] = [];
-        const { engine, waits } = waitingEngine(createMemoryBackend(), store, {
-          onError: (error) => reported.push(error),
-        });
-        const violations = observe(engine, store);
-        let retries = 1;
-        engine.subscribe((event) => {
-          if (event === "disconnect" && retries-- > 0) engine.connect();
-        });
-        const seen = record(engine);
-        const error = new Error("ready");
-
-        waits[0]!.reject(error);
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(reported).toEqual([error]);
-        expect(seen.map(([event]) => event)).not.toContain("error");
-        expect(engine.getStatus()).toEqual({
-          connected: true,
-          ready: false,
-          failure: null,
-        });
       });
     });
 
     describe("from an error listener", () => {
-      it("retries a failed wait", async () => {
-        const store = createTestStore({ count: 0 });
-        const { engine, waits } = waitingEngine(createMemoryBackend(), store, {
-          onError: () => {},
-        });
-        const violations = observe(engine, store);
-        let retries = 1;
-        engine.subscribe((event) => {
-          if (event === "error" && retries-- > 0) engine.connect();
-        });
-
-        waits[0]!.reject(new Error("ready"));
-        await settled();
-        expect(engine.getStatus()).toEqual({
-          connected: true,
-          ready: false,
-          failure: null,
-        });
-
-        waits[1]!.resolve();
-        await settled();
-
-        expect(violations).toEqual([]);
-        expect(engine.getStatus().ready).toBe(true);
-      });
-
       it("reconnects after a failed connect, which still throws", () => {
         const store = createTestStore({ count: 0 });
         const getState = store.adapter.getState;
@@ -1344,7 +749,6 @@ describe("sync status", () => {
           backend: createMemoryBackend(),
           adapter: store.adapter,
         });
-        const violations = observe(engine, store);
         engine.subscribe((event) => {
           store.adapter.getState = getState;
           if (event === "error") engine.connect();
@@ -1352,12 +756,7 @@ describe("sync status", () => {
 
         expect(() => engine.connect()).toThrow(error);
 
-        expect(violations).toEqual([]);
-        expect(engine.getStatus()).toEqual({
-          connected: true,
-          ready: true,
-          failure: null,
-        });
+        expect(engine.getStatus()).toEqual({ connected: true, failure: null });
       });
 
       it("returns to the same object when it repairs a failure at once", () => {
@@ -1411,7 +810,6 @@ describe("sync status", () => {
 
       expect(engine.getStatus()).toEqual({
         connected: false,
-        ready: false,
         failure: { error, source: "backend" },
       });
     });

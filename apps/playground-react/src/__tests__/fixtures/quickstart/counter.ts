@@ -35,9 +35,11 @@ export const useCounter = create<CounterState>()(
       count: 0,
       increment: () => set((state) => ({ count: state.count + 1 })),
     }),
-    { backend: createYjsBackend(doc, "shared"), ready: () => synced(provider) },
+    { backend: createYjsBackend(doc, "shared"), connect: "manual" },
   ),
 );
+
+synced(provider).then(() => useCounter.homeostate.connect());
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

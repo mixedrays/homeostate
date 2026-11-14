@@ -8,7 +8,6 @@ import type { SyncEngine, SyncStatus } from "@homeostate/core";
  */
 const SERVER_STATUS: SyncStatus = Object.freeze({
   connected: false,
-  ready: false,
   failure: null,
 });
 
@@ -22,9 +21,9 @@ const getServerStatus = (): SyncStatus => SERVER_STATUS;
  * what `syncMobxStore` or `syncStateTree` return.
  *
  * The status describes the engine, not the network: the engine knows nothing of the provider.
- * `connected` means only that the engine is subscribed to the store and the backend, and it stays
- * true while the sync server is down. Without the `ready` option, `ready` says no more than
- * `connected`. Read the provider's own state to show whether the peer is online.
+ * `connected` means only that the engine is done reconciling and subscribed to the store and the
+ * backend, and it stays true while the sync server is down. Read the provider's own state to show
+ * whether the peer is online.
  *
  * @param engine - The sync engine to read
  * @returns The engine's status, or a disconnected one on the server and during hydration
@@ -34,11 +33,11 @@ const getServerStatus = (): SyncStatus => SERVER_STATUS;
  * import { useSyncStatus } from "@homeostate/react";
  *
  * function Editor() {
- *   const { ready, failure } = useSyncStatus(useTodoStore.homeostate);
+ *   const { connected, failure } = useSyncStatus(useTodoStore.homeostate);
  *   return (
  *     <>
  *       {failure && <p role="alert">Changes are not syncing.</p>}
- *       <textarea disabled={!ready} />
+ *       <textarea disabled={!connected} />
  *     </>
  *   );
  * }

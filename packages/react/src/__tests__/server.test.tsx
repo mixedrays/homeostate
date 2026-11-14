@@ -19,13 +19,13 @@ describe("useSyncStatus on the server", () => {
     });
     engine.connect();
     const Badge = () => {
-      const { connected, ready, failure } = useSyncStatus(engine);
-      return <p>{[connected, ready, failure].join()}</p>;
+      const { connected, failure } = useSyncStatus(engine);
+      return <p>{[connected, failure].join()}</p>;
     };
 
     const html = renderToString(<Badge />);
 
     expect(typeof document).toBe("undefined");
-    expect(html).toBe("<p>false,false,</p>");
+    expect(html).toBe("<p>false,</p>");
   });
 });

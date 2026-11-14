@@ -689,66 +689,17 @@ describe("syncStateTree", () => {
       ).toThrow();
     });
   });
-});
-
-describe("syncStateTree with ready", () => {
-  const settled = (): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve));
-
-  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
-    const backend = createMemoryBackend();
-    const node = TodoStore.create();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-
-    const engine = syncStateTree(node, { backend, ready });
-
-    expect(engine.getStatus().connected).toBe(true);
-    expect(engine.getStatus().ready).toBe(false);
-    expect(backend.read()).toEqual({});
-
-    backend.receive({ filter: "done" });
-    expect(node.filter).toBe("done");
-
-    resolve();
-    await settled();
-    expect(engine.getStatus().ready).toBe(true);
-    expect(backend.read()).toEqual({ todos: [], filter: "done" });
-  });
 
   it("forwards the engine's status, which shows the node's destroy", () => {
     const node = TodoStore.create();
     const engine = syncStateTree(node, { backend: createMemoryBackend() });
     const listener = vi.fn();
     engine.subscribe(listener);
-    expect(engine.getStatus()).toEqual({
-      connected: true,
-      ready: true,
-      failure: null,
-    });
+    expect(engine.getStatus()).toEqual({ connected: true, failure: null });
 
     destroy(node);
 
     expect(engine.getStatus().connected).toBe(false);
     expect(listener).toHaveBeenCalledExactlyOnceWith("disconnect");
-  });
-
-  it("does nothing when ready settles after the node is destroyed", async () => {
-    const backend = createMemoryBackend();
-    const node = TodoStore.create();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-    const engine = syncStateTree(node, { backend, ready });
-
-    destroy(node);
-    resolve();
-    await settled();
-
-    expect(engine.getStatus().connected).toBe(false);
-    expect(backend.read()).toEqual({});
   });
 });
