@@ -143,8 +143,7 @@ export function createYjsBackend(
   map: Y.Map<unknown>,
   options?: YjsBackendOptions,
 ): YjsBackend;
-// Last, so that `Parameters` and other inference from `typeof createYjsBackend` see this form,
-// as they did before the map form existed.
+// Last, so that `Parameters` and other inference from `typeof createYjsBackend` see this form.
 /** Creates a CrdtBackend over the Y.Map called `name` inside `doc`. */
 export function createYjsBackend(
   doc: Y.Doc,
@@ -156,7 +155,7 @@ export function createYjsBackend(
   nameOrOptions?: string | YjsBackendOptions,
   docOptions?: YjsBackendOptions,
 ): YjsBackend {
-  // The name tells the forms apart: `instanceof` fails when an app loads two copies of Yjs.
+  // The name tells the forms apart.
   const named = typeof nameOrOptions === "string";
   const map = named
     ? (source as Y.Doc).getMap<unknown>(nameOrOptions)
@@ -193,9 +192,9 @@ export function createYjsBackend(
     watch: (onChange): Unsubscribe => {
       const untrack = hold.track();
       /**
-       * Whether a change other than this backend's own may wait for the gap to close: one made
-       * while it was open, one `read` does not show yet, or one made before this watch began,
-       * when one is open already.
+       * Whether the gap's closing must report a change. Set while a gap is open by a peer's
+       * change to the map, and by any transaction, this backend's own included, while what
+       * `read` shows is behind the map; set from the start when a gap is open already.
        */
       let missed = hasGap(doc);
       /** The transaction that closed the gap, while its missed changes are unreported. */
