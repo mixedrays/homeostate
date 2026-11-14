@@ -19,8 +19,8 @@ import { isRecord, kindOf, toJsonValue } from "./json.js";
  */
 export interface ApplyOps {
   /**
-   * What `value`, the target or a child read with `get`, is to the walk: a container it edits in
-   * place, or `undefined` for a plain value, which it replaces whole.
+   * How the walk treats `value`, the target or a child read with `get`: the kind of container it
+   * edits in place, or `undefined` for a plain value, which it replaces whole.
    */
   kind(value: unknown): ContainerKind | undefined;
   /** The child at `key` of the record or list `container`. */
@@ -44,8 +44,8 @@ export interface ApplyOps {
   ): void;
   /**
    * Delete `deleteCount` units at `index` of the text `text`, as `TextChange` counts them, then
-   * insert `inserted` there. `path` is the text's own path. Omit it for a store without text:
-   * `kind` then never returns `"text"`, and a text it does return is replaced whole.
+   * insert `inserted` there. `path` is the text's own path. Omit it for a store without text.
+   * `kind` should then never return `"text"`; if it does, the text is replaced whole.
    */
   editText?(
     text: unknown,
@@ -57,8 +57,8 @@ export interface ApplyOps {
 }
 
 /**
- * Applies the edit step `change` to the child at its key of `container`, whose next value is
- * `next`. The child is edited in place when it is the kind of container the step's script edits;
+ * Applies the edit step `change` to the child of `container` at the step's key. `next` is the
+ * next value of `container`. The child is edited in place when it is the kind of container the step's script edits;
  * any other child, such as a string held as a plain value or a plain value other code stored, is
  * replaced whole by its next value.
  */
@@ -164,8 +164,9 @@ const walkList = (
  * @param next What `target` should hold.
  * @param ops How this store or document writes; see {@link ApplyOps}.
  * @param options Passed to `getChanges`.
- * @throws {TypeError} When `target` is not a record with two records, or a list with two arrays,
- * as `ops.kind` and `current` and `next` tell. Nothing is written then.
+ * @throws {TypeError} Unless `target` is a record and `current` and `next` are records, or
+ * `target` is a list and `current` and `next` are arrays, as `ops.kind` tells for `target`.
+ * Nothing is written then.
  */
 export const applyChanges = (
   target: object,
