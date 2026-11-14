@@ -98,15 +98,19 @@ describe("scopeAdapter", () => {
       getState: () => snapshot(store.getState()),
     };
     const backend = createMemoryBackend();
-    createSyncEngine({
+    const engine = createSyncEngine({
       backend,
       adapter: scopeAdapter(copying, docScope),
-    }).connect();
+    });
+    engine.connect();
     const revision = backend.revision();
+    const events: string[] = [];
+    engine.subscribe((event) => events.push(event));
 
     store.update((state) => ({ ...state, ui: { open: true } }));
 
     expect(backend.revision()).toBe(revision);
+    expect(events).toEqual([]);
 
     store.update((state) => ({ ...state, doc: { title: "local" } }));
 
@@ -122,18 +126,22 @@ describe("scopeAdapter", () => {
       }),
     };
 
-    it("writes nothing for store changes outside the slice", () => {
+    it("writes nothing and sends no sync event for store changes outside the slice", () => {
       const store = createTestStore(root());
       const backend = createMemoryBackend();
-      createSyncEngine({
+      const engine = createSyncEngine({
         backend,
         adapter: scopeAdapter(store.adapter, titleScope),
-      }).connect();
+      });
+      engine.connect();
       const revision = backend.revision();
+      const events: string[] = [];
+      engine.subscribe((event) => events.push(event));
 
       store.update((state) => ({ ...state, ui: { open: true } }));
 
       expect(backend.revision()).toBe(revision);
+      expect(events).toEqual([]);
     });
 
     it("keeps the room when the store ignores what it is given", () => {
@@ -280,18 +288,22 @@ describe("scopeAdapter", () => {
       expect(store.getState().doc).toEqual({ title: "room" });
     });
 
-    it("writes nothing for an absent slice's fallback until the store creates the slice", () => {
+    it("writes nothing and sends no sync event for an absent slice's fallback until the store creates the slice", () => {
       const store = createTestStore<Optional>({ count: 0 });
       const backend = createMemoryBackend();
-      createSyncEngine({
+      const engine = createSyncEngine({
         backend,
         adapter: scopeAdapter(store.adapter, emptyByDefault),
-      }).connect();
+      });
+      engine.connect();
       const revision = backend.revision();
+      const events: string[] = [];
+      engine.subscribe((event) => events.push(event));
 
       store.update((state) => ({ ...state, count: 1 }));
 
       expect(backend.revision()).toBe(revision);
+      expect(events).toEqual([]);
 
       store.update((state) => ({ ...state, doc: { title: "made" } }));
 
