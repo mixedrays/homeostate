@@ -205,8 +205,8 @@ declare const toJsonValue: (value: unknown) => unknown;
 ```
 
 Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
-function are left out, such array items, holes included, become `null`, so do `NaN` and
-infinite numbers, and own `__proto__` keys are dropped. Only the containers on a path to a changed value are copied, and a value
+function are left out; array items holding them, and holes, become `null`, and so do `NaN` and
+infinite numbers; own `__proto__` keys are dropped. Only the containers on a path to a changed value are copied, and a value
 that is already JSON is returned as is.
 
 `getChanges` with `json: true` applies the same rule to both sides as it diffs, and passes only
@@ -229,8 +229,8 @@ declare const jsonEqual: (a: unknown, b: unknown) => boolean;
 ```
 
 Returns whether `a` and `b` are equal as `JSON.stringify` would store them: object entries
-holding `undefined` or a function are absent, such array items, holes included, equal `null`,
-and so do `NaN` and infinite numbers. Records compare their own keys only, so a key named after
+holding `undefined` or a function are absent; array items holding them, and holes, equal
+`null`, and so do `NaN` and infinite numbers. Records compare their own keys only, so a key named after
 an `Object.prototype` member, such as `constructor` or `toString`, is never found on an object
 that lacks it, and `__proto__` keys are ignored on both sides. It is the equality the sync
 engine uses to tell whether a key changed. Pass it JSON values: any other object, such as a
