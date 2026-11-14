@@ -9,7 +9,6 @@ import {
   PROTO_KEY,
 } from "./json.js";
 
-/** Options for `mergeConcurrent`. */
 export interface MergeOptions {
   /**
    * Which strings are text, merged by UTF-16 unit, by their path from the root of the merged
@@ -404,7 +403,6 @@ interface Report {
   found: Comparison;
 }
 
-/** Records `comparison` in `report`, if given, and returns `value`. */
 const found = <T>(
   report: Report | undefined,
   comparison: Comparison,
