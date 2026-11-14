@@ -433,6 +433,17 @@ export function createSyncEngine<S extends object>(
   const isUnchanged = (revision: unknown): boolean =>
     revision !== undefined && revision === lastRevision;
 
+  /** Records `state` as what the backend holds, at `revision`. */
+  const recordSynced = (state: Plain, revision: unknown): void => {
+    lastRevision = revision;
+    lastSynced = state;
+  };
+
+  /** Records the keys of `state`, the store's synced state, as `heldKeys`. */
+  const recordHeldKeys = (state: Plain): void => {
+    heldKeys = new Set(Object.keys(state));
+  };
+
   /** The store's whole state. */
   const readStore = (): S =>
     call(
@@ -487,9 +498,8 @@ export function createSyncEngine<S extends object>(
     call("backend", () => backend.write(next, previous));
     // A remote change applied during the write has already recorded what it read.
     if (remoteReads !== reads) return;
-    lastRevision = readRevision();
-    lastSynced = next;
-    heldKeys = new Set(Object.keys(synced));
+    recordSynced(next, readRevision());
+    recordHeldKeys(synced);
   };
 
   /**
@@ -570,7 +580,7 @@ export function createSyncEngine<S extends object>(
       ({ next, patched } = mergeStates(current, synced, target));
       if (next !== current) call("store", () => adapter.setState(next));
       else if (!local) {
-        heldKeys = new Set(Object.keys(synced));
+        recordHeldKeys(synced);
         // Nothing changed, so `synced` equals `target`.
         recordStoreObjects(held, synced);
         return;
@@ -582,7 +592,7 @@ export function createSyncEngine<S extends object>(
     // A store that ignored the change entirely, such as a Redux store without the replace case,
     // would otherwise write its old state back over every peer's.
     if (after === current && next !== current) {
-      heldKeys = new Set(Object.keys(synced));
+      recordHeldKeys(synced);
       return;
     }
     const applied = filterState(after);
@@ -592,7 +602,7 @@ export function createSyncEngine<S extends object>(
     }
     // The store's notifications were ignored meanwhile, so a key it normalised or derived from
     // `next` reaches the backend only here. An echo of `next` alone equals `target`.
-    heldKeys = new Set(Object.keys(applied));
+    recordHeldKeys(applied);
     // A key the store lacks after the apply and lacked before is one it cannot hold or does not
     // sync, such as a key a MobX class does not declare, so it stays in the backend. One it held
     // before, it removed. Compared with `patched` rather than `target`, which is equal as JSON but
@@ -631,14 +641,19 @@ export function createSyncEngine<S extends object>(
    */
   const isStale = (): boolean => !isUnchanged(readRevision());
 
+  /** Starts the loop counts again, as for a local change; see `countContradictions`. */
+  const restartLoopCounts = (): void => {
+    lastApplied = null;
+    contradictions.clear();
+  };
+
   /**
    * Writes `applied`, the store's synced state after an apply that merged a local change into
    * it, and deletes each of the `held` keys it lacks, which the store removed. It is a local
    * change, so the loop counts start again, as for any written local change.
    */
   const writeLocalChange = (applied: Plain, held: Iterable<string>): void => {
-    lastApplied = null;
-    contradictions.clear();
+    restartLoopCounts();
     const removed = [...new Set(held)].filter((key) => !hasOwn(applied, key));
     writeSynced(applied, removed, isStale());
   };
@@ -777,14 +792,13 @@ export function createSyncEngine<S extends object>(
     // Unknown should the read throw.
     lastSynced = undefined;
     const held = readBackend();
-    lastRevision = revision;
     if (jsonEqual(held, synced)) {
       // Kept rather than `held`, since the store's unchanged subtrees share its objects.
-      lastSynced = synced;
+      recordSynced(synced, revision);
       return false;
     }
     remoteReads++;
-    lastSynced = held;
+    recordSynced(held, revision);
     applyRemote(held, false, synced);
     emit("remote");
     return true;
@@ -795,15 +809,14 @@ export function createSyncEngine<S extends object>(
     // change in and writes what it kept, so there is nothing left to write. A store that ignored
     // the apply keeps its stale state out of the backend this way too.
     if (applyUnseenRemote()) return;
-    lastApplied = null;
-    contradictions.clear();
+    restartLoopCounts();
     const synced = filterState(readStore());
     const removed = [...heldKeys].filter((key) => !hasOwn(synced, key));
     // A change to local keys only leaves every synced value the object the backend holds, and
     // writing it would only make the backend diff the two. A container changed in place looks
     // unchanged either way; see `StoreAdapter.getState`.
     if (removed.length === 0 && holdsAll(lastSynced, synced))
-      heldKeys = new Set(Object.keys(synced));
+      recordHeldKeys(synced);
     else writeSynced(synced, removed);
     emit("local");
   };
@@ -845,8 +858,7 @@ export function createSyncEngine<S extends object>(
     // A disconnected engine hears no remote change, so it reads the backend again on connect.
     lastSynced = undefined;
     heldKeys = new Set();
-    lastApplied = null;
-    contradictions.clear();
+    restartLoopCounts();
     connected = false;
     emit("disconnect");
   };
@@ -872,8 +884,7 @@ export function createSyncEngine<S extends object>(
       held = seeded;
     }
 
-    lastRevision = readRevision();
-    lastSynced = held;
+    recordSynced(held, readRevision());
     applyRemote(held, true);
   };
 
