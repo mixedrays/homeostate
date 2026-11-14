@@ -43,9 +43,9 @@ export interface ApplyOps {
     path: Path,
   ): void;
   /**
-   * Delete `deleteCount` UTF-16 units at `index` of the text `text`, then insert `inserted` there.
-   * `path` is the text's own path. Omit it for a store without text: `kind` then never returns
-   * `"text"`, and a text it does return is replaced whole.
+   * Delete `deleteCount` units at `index` of the text `text`, as `TextChange` counts them, then
+   * insert `inserted` there. `path` is the text's own path. Omit it for a store without text:
+   * `kind` then never returns `"text"`, and a text it does return is replaced whole.
    */
   editText?(
     text: unknown,
