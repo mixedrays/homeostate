@@ -37,11 +37,10 @@ export interface DiffOptions {
    */
   text?: TextPolicy;
   /**
-   * Diff `a` and `b` as `JSON.stringify` would store them, without copying either first: object
-   * entries holding `undefined` or a function are absent, such array items, holes included, are
-   * `null`, and so are `NaN` and infinite numbers. The values the changes carry are passed
-   * through `toJsonValue`. A CRDT backend sets it on `write(next, previous)`, so no change it
-   * applies holds a value JSON cannot, and none removes an entry its document never held.
+   * Diff `a` and `b` as `toJsonValue` would return them, without copying either first, and pass
+   * the values the changes carry through `toJsonValue`. A CRDT backend sets it on
+   * `write(next, previous)`, so no change it applies holds a value JSON cannot, and none removes
+   * an entry its document never held.
    */
   json?: boolean;
 }
@@ -91,14 +90,8 @@ const written = (value: unknown, options: DiffOptions): unknown =>
  * arrays or two strings. A script cannot replace its root, so values of different kinds throw a
  * `TypeError` naming both kinds. Nested values that change kind are replaced by one `"update"` step.
  *
- * The steps are applied in order. Each array index or string offset addresses the array or
- * string as revised by the steps before it, so a backend applies them one by one without
- * sorting or clamping. String offsets and delete counts are UTF-16 code units, as JavaScript
- * indexes strings, and never split a surrogate pair.
- *
- * Two strings passed directly are always diffed character by character; `options.text` decides
- * for the strings nested in a record or an array, and without it each one that changed is
- * replaced whole.
+ * The steps are applied in order; see `ListChange` and `TextChange` for what their indices
+ * address. See `DiffOptions.text` for which strings are diffed character by character.
  *
  * @throws {TypeError} When `a` and `b` are not two records, two arrays or two strings.
  */
