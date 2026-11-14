@@ -610,8 +610,8 @@ or a string counts as a change of that array or string.
   store keeps its value there, which differs from the backend's, and the engine still writes every
   other path the store changes.
 - The count starts again with an apply that changes the path without contradicting it, an apply
-  in which the store keeps another peer's new value there, or a written local change. An apply
-  that changes the path on neither side leaves the count as it is.
+  in which the store keeps another peer's new value there, or a local change. An apply that
+  changes the path on neither side leaves the count as it is.
 - A stopped path is written back again, without a local change, as soon as an apply no longer
   contradicts it, such as when another peer writes the value this store holds.
 
@@ -806,9 +806,8 @@ against it with `applyChanges` and `json: true` instead of reading its document,
 with [`createCrdtBackend`](#createcrdtbackend) does; unchanged subtrees of `next` are then the
 same objects and compare by identity. Like `next`, it may
 hold `undefined` and functions, which `json: true` treats as absent. The engine passes nothing
-for the seed write during reconciliation, after a write that threw, and for a write back after
-`setState` during which the revision moved, or when it cannot tell. A backend may ignore
-`previous`.
+after a backend read or write threw, and for a write back after `setState` during which the
+revision moved, or when it cannot tell. A backend may ignore `previous`.
 
 A document can change before `subscribe` reports it: another listener may hear of a remote
 change first, and some libraries report changes only once a transaction ends or is committed.
