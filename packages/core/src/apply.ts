@@ -159,10 +159,6 @@ const walkList = (
  * JSON `target` holds. Everything else keeps its identity, which is what fine-grained stores
  * react to and what keeps a CRDT update small.
  *
- * @param target The record or list to mutate.
- * @param current What `target` holds now, as plain JSON.
- * @param next What `target` should hold.
- * @param ops How this store or document writes; see {@link ApplyOps}.
  * @param options Passed to `getChanges`.
  * @throws {TypeError} Unless `target` is a record and `current` and `next` are records, or
  * `target` is a list and `current` and `next` are arrays, as `ops.kind` tells for `target`.
