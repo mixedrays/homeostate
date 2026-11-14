@@ -172,12 +172,13 @@ createSyncEngine({
 `queueMicrotask` coalesces what arrives in one task; `requestAnimationFrame` applies at most
 once per frame. Until the flush, `getState()` does not show the pending remote changes.
 
-Local changes are still written synchronously. One made while an apply is pending runs that
-apply first, merged with the local change, and writes the result, so the write neither reverts
-the remote changes nor loses the local one. With `queueMicrotask` that only happens for code
-that changes the store in the same task as a remote update; a longer delay, such as
-`requestAnimationFrame`, lets user input fall in the window too. A remote change another
-listener hears of before the engine is applied the same way, with or without `schedule`; see
+Local changes are still written synchronously. A local change made while an apply is pending
+runs that apply first, merges the local change into it, and writes the result, so the write
+neither reverts the remote changes nor loses the local one. With `queueMicrotask` that only
+happens for code that changes the store in the same task as a remote update; a longer delay,
+such as `requestAnimationFrame`, lets user input fall in the window too. A remote change that
+another listener hears of before the engine does is applied the same way, with or without
+`schedule`; see
 [SyncEngine](#syncengine). `disconnect()` also runs a pending apply, and a flush called after
 it does nothing.
 
@@ -602,8 +603,8 @@ re-write each other's changes forever. The engine stops such a loop by watching 
 store changes: the record keys from the root, such as `seenBy.p2`, where a change inside an array
 or a string counts as a change of that array or string.
 
-- An apply contradicts a path when the store changes it, and the remote state holds another value
-  there than the store held after the apply before. If the store also changes a path that is not
+- An apply contradicts a path when the store changes it, and the remote state holds a different
+  value there than the store held after the previous apply. If the store also changes a path that is not
   contradicted, such as a key it derives from a new edit, the apply contradicts none of them.
 - Once 6 applies in a row contradict the same path, the engine stops writing that path back. The
   store keeps its value there, which differs from the backend's, and the engine still writes every
@@ -614,8 +615,8 @@ or a string counts as a change of that array or string.
 - A stopped path is written back again, without a local change, as soon as an apply no longer
   contradicts it, such as when another peer writes the value this store holds.
 
-So a concurrent write that wins over a write back, as when two peers append to a list a third
-counts, is written over again and not reported, while a loop contradicts the path on every apply
+So a concurrent write that wins over a write back, as when two peers append to a list whose
+length a third peer stores, is written over again and not reported, while a loop contradicts the path on every apply
 and stops after a few round trips. The engine reports a stop as a `WriteLoopError`; see
 [Reporting errors](#reporting-errors).
 
@@ -739,7 +740,8 @@ slice, as `{ ...state.doc }` does.
 ### Rooms and keys
 
 Each slice needs a synced subtree of its own, such as a `name` of its own on `createYjsBackend`.
-On one subtree, each slice's engine hands it the keys the other slice writes.
+If two slices shared one subtree, each slice's engine would hand its slice the keys the other
+slice writes.
 
 A key the room holds reaches the slice even if `T` does not declare it, and stays in the room as
 long as the slice keeps it. Under `keys`, it is ignored and stays in the room. A `set` that drops
