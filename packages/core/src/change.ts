@@ -10,6 +10,15 @@ type EditChange<K extends string | number> =
   | { type: "edit"; key: K; kind: "list"; changes: ListChange[] }
   | { type: "edit"; key: K; kind: "text"; changes: TextChange[] };
 
+/** An edit step of a record's or a list's script. Internal: not exported from `index.ts`. */
+export type EditStep = EditChange<string> | EditChange<number>;
+
+/**
+ * A value's path from the root of the value a script edits: record keys and array indices.
+ * Internal: not exported from `index.ts`.
+ */
+export type Path = readonly (string | number)[];
+
 /**
  * One step of a record's edit script. `key` is a property name. An insert or update carries
  * the new `value`, a delete only the key.

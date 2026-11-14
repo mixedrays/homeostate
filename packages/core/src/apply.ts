@@ -1,14 +1,12 @@
 import {
   type ContainerKind,
+  type EditStep,
   type ListChange,
+  type Path,
   type RecordChange,
 } from "./change.js";
 import { getChanges, type DiffOptions } from "./diff.js";
 import { isRecord, toJsonValue } from "./json.js";
-
-export type { ContainerKind } from "./change.js";
-
-type Path = readonly (string | number)[];
 
 /**
  * How one store or document writes into its containers. `applyChanges` decides *what* to write;
@@ -58,9 +56,6 @@ export interface ApplyOps {
   ): void;
 }
 
-/** An edit step of a record's or a list's script. */
-type Edit = Extract<RecordChange | ListChange, { type: "edit" }>;
-
 /**
  * Applies the edit step `change` to the child at its key of `container`, whose next value is
  * `next`. The child is edited in place when it is the kind of container the step's script edits;
@@ -69,7 +64,7 @@ type Edit = Extract<RecordChange | ListChange, { type: "edit" }>;
  */
 const walkEdit = (
   container: object,
-  change: Edit,
+  change: EditStep,
   next: unknown,
   path: Path,
   ops: ApplyOps,

@@ -10,20 +10,21 @@ import type {
 } from "./types.js";
 import { keepIdentity } from "./patching.js";
 import { mergeConcurrent } from "./merge.js";
+import { logError, warnInDevelopment } from "./env.js";
 import {
   hasOwn,
-  isAbsent,
   isRecord,
+  jsonEntry,
   jsonEqual,
   kindOf,
   PROTO_KEY,
 } from "./json.js";
 
+/**
+ * A state, the store's or the backend's, or a slice of one. The same type as `JsonObject`, but
+ * not named so: the store's may hold values JSON cannot, such as functions.
+ */
 type Plain = Record<string, unknown>;
-
-/** The value of `key` in `state` as JSON would store it; `undefined` when it would be left out. */
-const jsonEntry = (state: Plain, key: string): unknown =>
-  hasOwn(state, key) && !isAbsent(state[key]) ? state[key] : undefined;
 
 /**
  * The paths of record keys, from the root, at which `a` and `b` differ as JSON would store them.
@@ -186,27 +187,8 @@ export class WriteLoopError extends Error {
   }
 }
 
-// Declared here so that core needs no Node types; bundlers replace `process.env.NODE_ENV`.
-declare const process: { env: { NODE_ENV?: string } };
-
-// Likewise, as the ES libs have no `console`.
-declare const console: {
-  error: (...data: unknown[]) => void;
-  warn: (...data: unknown[]) => void;
-};
-
-// Likewise for `queueMicrotask`, which every browser and Node has.
+// Declared here so that core needs no DOM or Node types; every browser and Node has it.
 declare const queueMicrotask: (callback: () => void) => void;
-
-/** Whether the app runs a production build, where development warnings stay silent. */
-const isProduction = (): boolean => {
-  try {
-    return process.env.NODE_ENV === "production";
-  } catch {
-    // No bundler replaced it, and `process` does not exist outside Node.
-    return false;
-  }
-};
 
 /**
  * The one test of whether a top-level entry is synced, in both directions: never `__proto__` or a
@@ -373,7 +355,7 @@ export function createSyncEngine<S extends object>(
       try {
         listener(event);
       } catch (error) {
-        console.error("[homeostate] a sync event listener threw:", error);
+        logError("a sync event listener threw:", error);
       }
     }
     // Unless a listener has cleared or replaced it since.
@@ -714,8 +696,7 @@ export function createSyncEngine<S extends object>(
     failure = loop;
     if (reported === undefined) {
       if (onError !== undefined) onError(loop.error, "store");
-      else if (!isProduction())
-        console.warn(`[homeostate] ${loopMessage(paths)}`);
+      else warnInDevelopment(loopMessage(paths));
     }
     stoppedLoop = true;
   };

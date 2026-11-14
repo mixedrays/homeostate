@@ -1,9 +1,8 @@
-import type { ListChange, TextChange } from "./change.js";
+import type { ListChange, Path, TextChange } from "./change.js";
 import { getChanges, type DiffOptions, type TextPolicy } from "./diff.js";
 import {
-  hasOwn,
-  isAbsent,
   isRecord,
+  jsonEntry,
   jsonEqual,
   jsonItem,
   jsonItemEqual,
@@ -18,9 +17,6 @@ export interface MergeOptions {
    */
   text?: TextPolicy;
 }
-
-/** A value's path from the root of the merged value: record keys and array indices. */
-type Path = readonly (string | number)[];
 
 /**
  * What an edit script did to one item of the sequence it edits: left it as it was, replaced it
@@ -85,10 +81,6 @@ const diffOptions = (text: TextPolicy | undefined, path: Path): DiffOptions =>
   text === undefined
     ? DIFF
     : { json: true, text: (at) => text([...path, ...at]) };
-
-/** The entry of `record` at `key` as JSON would store it; `undefined` when it would be left out. */
-const entry = (record: Record<string, unknown>, key: string): unknown =>
-  hasOwn(record, key) && !isAbsent(record[key]) ? record[key] : undefined;
 
 /** Whether `value` is a string that `text` marks as text at `path`. */
 const isText = (
@@ -415,9 +407,9 @@ const mergeRecords = (
   keys.delete(PROTO_KEY);
   for (const key of keys) {
     const value = merge(
-      entry(base, key),
-      entry(local, key),
-      entry(remote, key),
+      jsonEntry(base, key),
+      jsonEntry(local, key),
+      jsonEntry(remote, key),
       text,
       [...path, key],
     );

@@ -5,12 +5,10 @@ import type {
   PersistenceConfig,
   PersistenceLoadResult,
 } from "./types.js";
-
-// Declared here so that core needs no Node types; the ES libs have no `console`.
-declare const console: { error: (...data: unknown[]) => void };
+import { logError } from "./env.js";
 
 const reportError = (error: unknown): void => {
-  console.error("[homeostate] persistence failed:", error);
+  logError("persistence failed:", error);
 };
 
 const ignore = (): void => {};
@@ -77,7 +75,7 @@ export function createPersistence(
     try {
       onError(error);
     } catch (thrown) {
-      console.error("[homeostate] persistence onError threw:", thrown);
+      logError("persistence onError threw:", thrown);
     }
   };
 

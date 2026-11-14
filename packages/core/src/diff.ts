@@ -1,5 +1,6 @@
 import {
   type ListChange,
+  type Path,
   type RecordChange,
   type TextChange,
 } from "./change.js";
@@ -45,13 +46,6 @@ export interface DiffOptions {
   json?: boolean;
 }
 
-type Path = (string | number)[];
-
-const isArray = (value: unknown): value is Array<unknown> =>
-  Array.isArray(value);
-
-const isString = (value: unknown): value is string => typeof value === "string";
-
 /** A nested edit script and the kind of container it edits. */
 type Nested =
   | { kind: "record"; changes: RecordChange[] }
@@ -70,11 +64,11 @@ const nestedChanges = (
   options: DiffOptions,
 ): Nested | null => {
   const at = [...path, key];
-  if (isString(a) && isString(b))
+  if (typeof a === "string" && typeof b === "string")
     return options.text?.(at) === true
       ? { kind: "text", changes: getStringChanges(a, b) }
       : null;
-  if (isArray(a) && isArray(b))
+  if (Array.isArray(a) && Array.isArray(b))
     return { kind: "list", changes: getArrayChanges(a, b, at, options) };
   if (isRecord(a) && isRecord(b))
     return { kind: "record", changes: getRecordChanges(a, b, at, options) };
@@ -128,8 +122,10 @@ export function getChanges(
   b: JsonObject | unknown[] | string,
   options: DiffOptions = {},
 ): RecordChange[] | ListChange[] | TextChange[] {
-  if (isString(a) && isString(b)) return getStringChanges(a, b);
-  if (isArray(a) && isArray(b)) return getArrayChanges(a, b, [], options);
+  if (typeof a === "string" && typeof b === "string")
+    return getStringChanges(a, b);
+  if (Array.isArray(a) && Array.isArray(b))
+    return getArrayChanges(a, b, [], options);
   if (isRecord(a) && isRecord(b)) return getRecordChanges(a, b, [], options);
   throw new TypeError(
     `getChanges needs two strings, two arrays or two records, got ${kindOf(a)} and ${kindOf(b)}`,

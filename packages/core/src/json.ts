@@ -31,6 +31,13 @@ export const toJsonPrimitive = (value: unknown): unknown =>
 export const jsonItem = (value: unknown): unknown =>
   isAbsent(value) ? null : value;
 
+/** The entry of `record` at `key` as JSON would store it; `undefined` when it would be left out. */
+export const jsonEntry = (
+  record: Record<string, unknown>,
+  key: string,
+): unknown =>
+  hasOwn(record, key) && !isAbsent(record[key]) ? record[key] : undefined;
+
 /**
  * `jsonEqual` with `json`, and `deepEqual` without: entries holding `undefined` or a function are
  * then present and compared by identity, and only `NaN` equals a value that is not `===` to it.

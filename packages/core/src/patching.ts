@@ -1,4 +1,4 @@
-import type { ListChange, RecordChange } from "./change.js";
+import type { EditStep, ListChange, RecordChange } from "./change.js";
 import { getChanges } from "./diff.js";
 import { isRecord, PROTO_KEY } from "./json.js";
 
@@ -41,10 +41,7 @@ const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
 /** The value the edit step `change` leaves at its key, given the value there now. */
-const applyEdit = (
-  current: unknown,
-  change: Extract<RecordChange | ListChange, { type: "edit" }>,
-): unknown => {
+const applyEdit = (current: unknown, change: EditStep): unknown => {
   // The diff found a container of `change.kind` at its key; without a text policy, never a text.
   if (change.kind === "list")
     return applyChangesToArray(current as unknown[], change.changes);
