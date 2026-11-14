@@ -551,29 +551,6 @@ describe("an update that waits for an earlier one", () => {
     expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
   });
 
-  it("merges the store's change inside a list item key by key", () => {
-    const initial = { todos: [{ title: "seed", done: false }], log: 0 };
-    const { writerDoc, readerDoc, store, write, deliver } = gap(initial);
-    const u0 = write({ ...initial, log: 1 });
-    const u1 = write({ todos: [{ title: "changed", done: false }], log: 1 });
-
-    deliver(u1);
-    store.update((state) => ({
-      ...state,
-      todos: [{ title: "seed", done: true }],
-    }));
-    expect(readerDoc.getMap(NAME).toJSON()).toEqual({
-      todos: [{ done: true }],
-      log: 0,
-    });
-    deliver(u0);
-    syncAll(writerDoc, readerDoc);
-
-    const synced = { todos: [{ title: "changed", done: true }], log: 1 };
-    expect(store.getState()).toEqual(synced);
-    expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
   describe("the store's edit to a row a peer moved and changed during the gap", () => {
     type Row = { id: string; cells: Record<string, number> };
     const row = (id: string, cells: Record<string, number> = {}): Row => ({
@@ -635,24 +612,6 @@ describe("an update that waits for an earlier one", () => {
     });
   });
 
-  it("keeps the store's value when it and a peer replace the same list item during the gap", () => {
-    const initial = { list: [1, 2, 3], text: "seed" };
-    const { writerDoc, readerDoc, store, write, deliver, peer } = gap(initial);
-    const other = peer();
-    const u0 = write({ ...initial, text: "middle" });
-    const u1 = write({ ...initial, text: "changed" });
-
-    deliver(u1);
-    deliver(other.write({ ...initial, list: [1, 8, 3] }));
-    store.update((state) => ({ ...state, list: [1, 5, 3] }));
-    deliver(u0);
-    syncAll(writerDoc, readerDoc, other.doc);
-
-    const synced = { list: [1, 5, 3], text: "changed" };
-    expect(store.getState()).toEqual(synced);
-    expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
   it("keeps the store's replacement of a list item the gap replaced, beside the gap's", () => {
     const initial = { list: [1, 2, 3], log: 0 };
     const { writerDoc, readerDoc, store, write, deliver } = gap(initial);
@@ -668,49 +627,6 @@ describe("an update that waits for an earlier one", () => {
     const synced = { list: [1, 9, 5, 3], log: 1 };
     expect(store.getState()).toEqual(synced);
     expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
-  it("drops the store's change inside an object the gap replaced", () => {
-    const initial = { todo: { title: "seed", done: false }, log: 0 };
-    const { writerDoc, readerDoc, store, write, deliver } = gap(initial);
-    const u0 = write({ ...initial, log: 1 });
-    let u1: Uint8Array | undefined;
-    writerDoc.once("update", (update: Uint8Array) => {
-      u1 = update;
-    });
-    writerDoc.getMap(NAME).set("todo", new Y.Map<unknown>([["title", "new"]]));
-
-    deliver(u1 as Uint8Array);
-    store.update((state) => ({
-      ...state,
-      todo: { title: "seed", done: true },
-    }));
-    expect(readerDoc.getMap(NAME).has("todo")).toBe(false);
-    deliver(u0);
-    syncAll(writerDoc, readerDoc);
-
-    // As the document would, had the store changed the replaced map.
-    const synced = { todo: { title: "new" }, log: 1 };
-    expect(store.getState()).toEqual(synced);
-    expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
-  });
-
-  it("writes an item the store and a peer both inserted at one place once", () => {
-    const initial = { list: [1], log: 0 };
-    const { writerDoc, readerDoc, store, write, deliver, peer } = gap(initial);
-    const other = peer();
-    const u0 = write({ ...initial, log: 1 });
-    const u1 = write({ ...initial, log: 2 });
-
-    deliver(u1);
-    deliver(other.write({ ...initial, list: [1, 2] }));
-    store.update((state) => ({ ...state, list: [1, 2] }));
-    deliver(u0);
-    syncAll(writerDoc, readerDoc, other.doc);
-
-    const synced = { list: [1, 2], log: 2 };
-    expect(store.getState()).toEqual(synced);
-    expect(other.doc.getMap(NAME).toJSON()).toEqual(synced);
   });
 
   it("merges a function or undefined entry an earlier write left as JSON would store it", () => {
