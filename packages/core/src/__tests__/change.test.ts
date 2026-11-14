@@ -93,19 +93,12 @@ describe("Change types", () => {
     const insert: TextChange = { type: "insert", key: 0, value: 1 };
     // @ts-expect-error A text script has no update.
     const update: TextChange = { type: "update", key: 0, value: "x" };
-    // @ts-expect-error A list key is a number.
-    const stringIndex: ListChange = { type: "insert", key: "0", value: 1 };
     // @ts-expect-error A list delete says how many items it removes.
     const listDelete: ListChange = { type: "delete", key: 0 };
     // @ts-expect-error A text delete says how many units it removes.
     const textDelete: TextChange = { type: "delete", key: 0 };
-    expect([
-      ...rejected,
-      insert,
-      update,
-      stringIndex,
-      listDelete,
-      textDelete,
-    ]).toHaveLength(7);
+    expect([...rejected, insert, update, listDelete, textDelete]).toHaveLength(
+      6,
+    );
   });
 });

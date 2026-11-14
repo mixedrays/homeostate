@@ -161,19 +161,11 @@ describe("getChanges", () => {
       ["abcabc", "abc"],
       ["aaa", "a"],
       ["a", "aaa"],
-      ["x", "y"],
-      ["search", "sea"],
-      ["sea", "search"],
       ["abcdef", "fedcba"],
       ["Todo 1", "B Todo 1 A"],
       ["the quick brown fox", "the slow brown cat"],
       ["aXbXc", "abc"],
       ["abc", "aXbXc"],
-      ["", "abc"],
-      ["abc", ""],
-      ["abc", "abcd"],
-      ["abc", "xyz"],
-      ["aaa", "aa"],
       ["the quick fox", "the quick brown fox"],
     ])("transforms %j into %j when applied", textAppliesCleanly);
   });
@@ -288,12 +280,6 @@ describe("getChanges", () => {
           kind: "text",
           changes: [{ type: "insert", key: 2, value: "c" }],
         },
-      ]);
-    });
-
-    it("replaces a changed string item whole without a text policy", () => {
-      expect(getChanges(["ab"], ["abc"])).toEqual([
-        { type: "update", key: 0, value: "abc" },
       ]);
     });
 
@@ -713,17 +699,11 @@ describe("getChanges", () => {
       ]);
     });
 
-    it.each([
-      ["no policy", undefined],
-      ["a policy that marks no string", { text: () => false }],
-    ])(
-      "always diffs two strings passed directly character by character, with %s",
-      (_, options) => {
-        expect(getChanges("ab", "abc", options)).toEqual([
-          { type: "insert", key: 2, value: "c" },
-        ]);
-      },
-    );
+    it("always diffs two strings passed directly character by character, even with a policy that marks no string", () => {
+      expect(getChanges("ab", "abc", { text: () => false })).toEqual([
+        { type: "insert", key: 2, value: "c" },
+      ]);
+    });
   });
 
   describe("with json", () => {

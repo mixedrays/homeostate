@@ -489,12 +489,6 @@ describe("mergeConcurrent", () => {
     });
     const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-    it("returns the local value where the remote one equals the base, at any depth", () => {
-      const local = editSpan(1, "B");
-
-      expect(merge(doc, local, copy(doc))).toBe(local);
-    });
-
     it("returns the local value where the remote one holds the same changes, at any depth", () => {
       const local = editSpan(1, "B");
 

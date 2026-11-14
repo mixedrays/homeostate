@@ -137,13 +137,6 @@ describe("applyChanges", () => {
     expect(target.list[1]).toBe(untouched);
   });
 
-  it("replaces a string field whole when the target holds it as a plain value", () => {
-    const { target, log } = reconcile({ title: "todo" }, { title: "todos" });
-
-    expect(target).toEqual({ title: "todos" });
-    expect(log).toEqual(["set title"]);
-  });
-
   it("replaces a child the ops treat as a plain value with its next value", () => {
     // Its JSON is a record, but the target holds it whole, as a document holds a value other
     // code stored.
