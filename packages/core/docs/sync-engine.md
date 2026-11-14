@@ -371,13 +371,11 @@ engine throws a `TypeError` naming the method and what it returned, such as
 or through `onError` once connected.
 
 `onError` also receives a `WriteLoopError`, with the source `"store"`, when the engine stops
-writing back paths the store keeps changing while remote changes are applied: once 6 applies in a
-row find another peer's value at a path the store changed, and the store changes it again. See
-[Store adapters](/docs/concepts#store-adapters) for what counts and what starts the count again.
-Its `keys` names the top-level keys holding the stopped paths, and its message lists the paths,
-each as an array of record keys, such as `["seenBy","p2"]`. Each set of top-level keys is reported
-once, in every build. Without `onError`, the engine warns once in development instead. A stopped
-path is written back again, without a local change, once an apply no longer contradicts it.
+writing back paths the store keeps changing while remote changes are applied; see
+[Write loops](#write-loops). Its `keys` names the top-level keys holding the stopped paths, and
+its message lists the paths, each as an array of record keys, such as `["seenBy","p2"]`. Each set
+of top-level keys is reported once, in every build. Without `onError`, the engine warns once in
+development instead.
 
 However an error is reported, the engine sends an [`"error"`](#when-error-is-sent) sync event,
 and [`getStatus()`](#sync-status) keeps it until the engine recovers.
@@ -582,7 +580,7 @@ interface StoreAdapter<S extends object> {
 | Member                | Contract                                                                                                                                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `getState()`          | Returns the current store state, as an object.                                                                                                                                                                            |
-| `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection.                                                                                                    |
+| `setState(state)`     | Replaces the state with the engine's reconciled state. Called for backend changes and, when needed, during connection. What the store changes meanwhile is written back; see [Write loops](#write-loops).                 |
 | `subscribe(callback)` | Calls the callback synchronously when the store changes; returns a function that removes that subscription.                                                                                                               |
 | `batchWrites`         | `true` for a store that notifies once per property set, so that one change notifies several times. The engine then writes once per microtask, and a wrapping adapter must keep it; see [Batched writes](#batched-writes). |
 
@@ -593,6 +591,33 @@ Update the synced state immutably, with a new object for every container that ch
 engine diffs each write against the state it last wrote, and a container that is the same
 object in both is taken as unchanged, so an array or object changed in place is not written.
 Adapters whose `getState()` returns a fresh copy, such as the MobX adapter, meet this anyway.
+
+### Write loops
+
+What the store changes while a remote change is applied is written back once `setState`
+returns. It must not change again when the same state is applied a second time, and every peer
+must agree on it. A store that breaks this, such as one that stamps the time on every
+`setState`, or two app versions that normalise a key in contradicting ways, would make the peers
+re-write each other's changes forever. The engine stops such a loop by watching the paths the
+store changes: the record keys from the root, such as `seenBy.p2`, where a change inside an array
+or a string counts as a change of that array or string.
+
+- An apply contradicts a path when the store changes it, and the remote state holds another value
+  there than the store held after the apply before. If the store also changes a path that is not
+  contradicted, such as a key it derives from a new edit, the apply contradicts none of them.
+- Once 6 applies in a row contradict the same path, the engine stops writing that path back. The
+  store keeps its value there, which differs from the backend's, and the engine still writes every
+  other path the store changes.
+- The count starts again with an apply that changes the path without contradicting it, an apply
+  in which the store keeps another peer's new value there, or a written local change. An apply
+  that changes the path on neither side leaves the count as it is.
+- A stopped path is written back again, without a local change, as soon as an apply no longer
+  contradicts it, such as when another peer writes the value this store holds.
+
+So a concurrent write that wins over a write back, as when two peers append to a list a third
+counts, is written over again and not reported, while a loop contradicts the path on every apply
+and stops after a few round trips. The engine reports a stop as a `WriteLoopError`; see
+[Reporting errors](#reporting-errors).
 
 ## scopeAdapter
 
