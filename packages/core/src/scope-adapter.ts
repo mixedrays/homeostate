@@ -46,7 +46,7 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  *
  * Each slice needs a synced subtree of its own: on one subtree, each slice's engine would hand it
  * the keys the other writes. A key the backend holds reaches the slice even if `T` does not
- * declare it, unless `keys` leaves it out, in which case it stays in the backend as it is.
+ * declare it, unless `keys` leaves it out; see `SyncEngineConfig`.
  *
  * @param adapter - The store adapter of the whole store
  * @param scope - How to read the slice from the store's state and put it back
