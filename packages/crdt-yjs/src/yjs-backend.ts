@@ -21,14 +21,6 @@ export interface YjsBackendOptions {
    * one of them whole. Defaults to none.
    */
   text?: TextPolicy;
-  /**
-   * Called once when the synced map is removed from its document, as when a peer replaces it,
-   * or a map holding it, with a new map. No peer would see a write to the removed map, so from
-   * then on `read` and `write` throw; create a backend over the map that replaced it. Only a
-   * nested map can be removed, and a backend calls this only while subscribed. Defaults to
-   * logging the error with `console.error`.
-   */
-  onRemoved?: (error: Error) => void;
 }
 
 /** The `CrdtBackend` `createYjsBackend` returns, with the Yjs objects it works on. */
@@ -41,13 +33,6 @@ export interface YjsBackend extends CrdtBackend {
    */
   readonly origin: unknown;
 }
-
-// Declared here so that this package needs no Node types; the ES libs have no `console`.
-declare const console: { error: (...data: unknown[]) => void };
-
-const reportRemoved = (error: Error): void => {
-  console.error("[homeostate] Yjs backend lost its map:", error);
-};
 
 /**
  * Whether `map` was deleted from its document. Deleting a map also deletes every type it holds,
@@ -136,6 +121,11 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * another key, and a gap anywhere in the document, since Yjs tracks waiting updates per
  * document.
  *
+ * Once a peer removes the map, as by replacing it or a map holding it with a new map, `read` and
+ * `write` throw, since no peer would see a write to it. A subscribed backend then reports one
+ * change at once, even while an update waits, so that the engine reads and reports the error.
+ * Create a backend over the map that replaced it.
+ *
  * @example
  * ```typescript
  * const doc = new Y.Doc();
@@ -173,7 +163,7 @@ export function createYjsBackend(
     throw new TypeError(
       "createYjsBackend needs a Y.Doc and a name, or a Y.Map that is part of a Y.Doc",
     );
-  const { onRemoved = reportRemoved, text } = options;
+  const { text } = options;
   // Unique to this backend, since `subscribe` skips every transaction with it.
   const origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`);
   const transactions = countTransactions(doc);
@@ -181,7 +171,6 @@ export function createYjsBackend(
   if (!transactions.changes.has(map)) transactions.changes.set(map, 0);
   const changes = (): number => transactions.changes.get(map) ?? 0;
   const hold = createHold(map, doc, changes);
-  let reported = false;
 
   const ops = createYjsOps(text);
 
@@ -227,24 +216,34 @@ export function createYjsBackend(
         closing = null;
         onChange(false);
       };
-      // Yjs sends a deleted map no event, so look for the removal after every transaction.
-      const watchRemoval = (): void => {
-        if (reported || !isRemoved(map)) return;
-        reported = true;
-        onRemoved(removedError());
-      };
-      map.observeDeep(handler);
-      doc.on("beforeObserverCalls", watchGap);
-      doc.on("afterTransaction", reportClosed);
       const nested = map._item !== null;
-      if (nested) doc.on("afterTransaction", watchRemoval);
-      return () => {
+      let watching = true;
+      const unwatch = (): void => {
+        if (!watching) return;
+        watching = false;
+        // A transaction already calling its listeners still calls `reportClosed`, removed or not.
+        closing = null;
         map.unobserveDeep(handler);
         doc.off("beforeObserverCalls", watchGap);
         doc.off("afterTransaction", reportClosed);
         if (nested) doc.off("afterTransaction", watchRemoval);
         untrack();
       };
+      // Yjs sends a deleted map no event, so look for the removal after every transaction. A
+      // removed map never changes again, so the watch ends, and reports once, before a gap that
+      // closes later could: the engine then reads, `read` throws, and the engine reports that.
+      const watchRemoval = (): void => {
+        if (!isRemoved(map)) return;
+        unwatch();
+        onChange(false);
+      };
+      map.observeDeep(handler);
+      doc.on("beforeObserverCalls", watchGap);
+      // Before `reportClosed`, so that a transaction that removes the map and closes a gap is
+      // reported once.
+      if (nested) doc.on("afterTransaction", watchRemoval);
+      doc.on("afterTransaction", reportClosed);
+      return unwatch;
     },
 
     // How many transactions have changed the map, not the rest of the document, so that a change

@@ -58,12 +58,15 @@ The map must already be part of a document, or `createYjsBackend` throws a `Type
 Create a nested map once, such as in the document's initial state: two peers that each set a
 new map under the same key keep only one of them.
 
-When a peer replaces the synced map, or a map holding it, the backend calls `onRemoved` once,
-with an `Error`; by default it logs the error with `console.error`. No peer would see a write
-to the removed map, so from then on the backend's `read` and `write` throw: the engine reports
-the store's next change as a failure with the source `'backend'`, and the store keeps its state.
-To keep syncing, disconnect the engine and connect a new one over the map that replaced it. A backend notices the removal only while subscribed, as it is while its engine is
-connected.
+When a peer replaces the synced map, or a map holding it, no peer would see a write to the
+removed map, so from then on the backend's `read` and `write` throw an `Error` whose message
+says the synced `Y.Map` was removed. A subscribed backend notices the removal at once, as it is
+while its engine is connected: the engine reads, and reports the error as a failure with the
+source `'backend'`, to `onError` and in `getStatus().failure`. Without `onError`, the error
+propagates from the Yjs update that removed the map, as for any backend failure in a remote
+change. Each later store change fails the same way, and the store keeps its state. An engine
+connected after the removal throws from `connect()`. To keep syncing, disconnect the engine and
+connect a new one over the map that replaced it.
 
 ## Undo and redo
 

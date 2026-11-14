@@ -61,10 +61,10 @@ const undoManager = new Y.UndoManager(backend.map, {
 
 To sync into a map you already have, such as one nested in another map, pass it instead of a
 document and a name: `createYjsBackend(map, options)`. It must already be part of a document.
-If a peer later replaces it, or a map holding it, the backend calls `onRemoved` (by default it
-logs with `console.error`). No peer would see a write to the removed map, so from then on the
-backend's reads and writes throw: the engine reports the store's next change as a failure with
-the source `'backend'`, and the store keeps its state. Connect a new engine over the map that
+If a peer later replaces it, or a map holding it, no peer would see a write to the removed map,
+so from then on the backend's reads and writes throw. The engine reports the removal at once as
+a failure with the source `'backend'`, to `onError` and in `getStatus().failure`, and again for
+each later store change; the store keeps its state. Connect a new engine over the map that
 replaced it.
 
 A provider can deliver a peer's update before an earlier one it depends on, as y-websocket can

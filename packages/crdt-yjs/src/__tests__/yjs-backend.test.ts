@@ -199,10 +199,12 @@ describe("a removed map", () => {
     return Y.encodeStateAsUpdate(doc);
   })();
 
-  /** A connected backend over the nested map, and a peer that replaces the map under `key`. */
+  /**
+   * A connected backend over the nested map, whose engine takes `onError`, and a peer that
+   * replaces the map under `key`.
+   */
   const replacedBy = (
     key: "todos" | "section",
-    options?: YjsBackendOptions,
     onError?: SyncEngineOptions["onError"],
   ) => {
     const deep = key === "section";
@@ -214,7 +216,7 @@ describe("a removed map", () => {
           "todos",
         ) as Y.Map<unknown>)
       : nestedMap(doc);
-    const backend = createYjsBackend(synced, options);
+    const backend = createYjsBackend(synced);
     const store = createTestStore(threeTodos());
     const engine = createSyncEngine({
       backend,
@@ -228,50 +230,64 @@ describe("a removed map", () => {
       peer.getMap("app").set(key, new Y.Map());
       replication.exchange(doc, peer);
     };
-    return { doc, backend, engine, store, replace };
+    return { doc, peer, backend, engine, store, replace };
   };
 
-  it("reports once when a peer replaces the synced map", () => {
-    const onRemoved = vi.fn();
-    const { doc, replace } = replacedBy("todos", { onRemoved });
+  it("reports the removal at once, and once, as a backend failure", () => {
+    const onError = vi.fn();
+    const { doc, engine, store, replace } = replacedBy("todos", onError);
 
     replace();
     doc.getMap("app").set("title", "Mine");
 
-    expect(onRemoved).toHaveBeenCalledTimes(1);
-    expect(onRemoved).toHaveBeenCalledWith(expect.any(Error));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringMatching(/removed/) }),
+      "backend",
+    );
+    expect(engine.getStatus().failure).toEqual({
+      error: onError.mock.calls[0]?.[0],
+      source: "backend",
+    });
+    expect(store.getState()).toEqual(threeTodos());
   });
 
-  it("reports when a peer replaces a map holding the synced map", () => {
-    const onRemoved = vi.fn();
-    const { replace } = replacedBy("section", { onRemoved });
+  it("reports the removal of a map holding the synced map", () => {
+    const onError = vi.fn();
+    const { replace } = replacedBy("section", onError);
 
     replace();
 
-    expect(onRemoved).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
   });
 
-  it("keeps the store's state after the removal, and reports a store change as a backend failure", () => {
+  it("keeps the store's state after the removal, and reports each store change as a backend failure", () => {
     const onError = vi.fn();
-    const { engine, store, replace } = replacedBy(
-      "todos",
-      { onRemoved: () => {} },
-      onError,
-    );
+    const { engine, store, replace } = replacedBy("todos", onError);
 
     replace();
     store.update((s) => toggleTodo(s, "1"));
+    store.update((s) => toggleTodo(s, "2"));
 
-    expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
+    expect(store.getState()).toEqual(
+      toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+    );
+    expect(onError).toHaveBeenCalledTimes(3);
+    for (const [error, source] of onError.mock.calls) {
+      expect(error).toEqual(
+        expect.objectContaining({ message: expect.stringMatching(/removed/) }),
+      );
+      expect(source).toBe("backend");
+    }
     expect(engine.getStatus().failure).toEqual({
-      error: expect.any(Error),
+      error: onError.mock.calls[2]?.[0],
       source: "backend",
     });
   });
 
   it("throws from read and write once the map is removed", () => {
-    const { backend, replace } = replacedBy("todos", { onRemoved: () => {} });
+    const { backend, replace } = replacedBy("todos", () => {});
 
     replace();
 
@@ -279,35 +295,94 @@ describe("a removed map", () => {
     expect(() => backend.write(threeTodos(), {})).toThrow(/removed/);
   });
 
-  it("logs the removal with console.error by default", () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    try {
-      replacedBy("todos").replace();
+  it("throws the removal from the update that brought it, without onError", () => {
+    const { engine, store, replace } = replacedBy("todos");
 
-      expect(consoleError).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Error),
-      );
-    } finally {
-      consoleError.mockRestore();
-    }
+    expect(replace).toThrow(/removed/);
+    expect(engine.getStatus().failure).toEqual({
+      error: expect.any(Error),
+      source: "backend",
+    });
+    expect(store.getState()).toEqual(threeTodos());
   });
 
   it("stops watching for the removal once unsubscribed", () => {
     const doc = replica();
     const peer = replica();
-    const onRemoved = vi.fn();
-    const unsubscribe = createYjsBackend(nestedMap(doc), {
-      onRemoved,
-    }).subscribe(() => {});
+    const onChange = vi.fn();
+    const unsubscribe = createYjsBackend(nestedMap(doc)).subscribe(onChange);
 
     unsubscribe();
     peer.getMap("app").set("todos", new Y.Map());
     replication.exchange(doc, peer);
 
-    expect(onRemoved).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("fails the next connect() after a removal while disconnected", () => {
+    const onError = vi.fn();
+    const { engine, store, replace } = replacedBy("todos", onError);
+
+    engine.disconnect();
+    replace();
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(() => engine.connect()).toThrow(/removed/);
+    expect(engine.getStatus()).toMatchObject({
+      connected: false,
+      failure: { error: expect.any(Error), source: "backend" },
+    });
+    expect(store.getState()).toEqual(threeTodos());
+  });
+
+  describe("with an update waiting for an earlier one", () => {
+    /** Two updates from a third replica to another shared type, the second depending on the first. */
+    const twoUpdates = (doc: Y.Doc): [Uint8Array, Uint8Array] => {
+      const other = replica();
+      other.clientID = 3;
+      replication.exchange(doc, other);
+      const updates: Uint8Array[] = [];
+      other.on("update", (update: Uint8Array) => updates.push(update));
+      other.getText("notes").insert(0, "a");
+      other.getText("notes").insert(1, "b");
+      return [updates[0] as Uint8Array, updates[1] as Uint8Array];
+    };
+
+    it("reports a removal while the gap is open at once, and not again when it closes", () => {
+      const onError = vi.fn();
+      const { doc, store, replace } = replacedBy("todos", onError);
+      const [u0, u1] = twoUpdates(doc);
+
+      Y.applyUpdate(doc, u1);
+      replace();
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
+      Y.applyUpdate(doc, u0);
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toEqual(threeTodos());
+    });
+
+    it("reports once a removal in the transaction that closes a gap the watch began with", () => {
+      const onError = vi.fn();
+      const { doc, peer, engine, store } = replacedBy("todos", onError);
+      const updates: Uint8Array[] = [];
+      peer.on("update", (update: Uint8Array) => updates.push(update));
+      peer.transact(() => {
+        peer.getText("notes").insert(0, "a");
+        peer.getMap("app").set("todos", new Y.Map());
+      });
+      peer.getText("notes").insert(1, "b");
+      engine.disconnect();
+      Y.applyUpdate(doc, updates[1] as Uint8Array);
+      engine.connect();
+
+      Y.applyUpdate(doc, updates[0] as Uint8Array);
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
+      expect(store.getState()).toEqual(threeTodos());
+    });
   });
 
   it("throws a TypeError for a map already removed from its document", () => {
