@@ -76,7 +76,7 @@ const align = (
  */
 const DIFF: DiffOptions = { json: true };
 
-/** The options that align the array at `path`, its strings that `text` marks diffed as text. */
+/** The options that align the array at `path`, diffing the strings `text` marks in it as text. */
 const diffOptions = (text: TextPolicy | undefined, path: Path): DiffOptions =>
   text === undefined
     ? DIFF
@@ -206,10 +206,11 @@ interface Owners {
 
 /**
  * The pairs of a base record, among `base[start]` to `base[end - 1]`, and a side record, among
- * `side[from]` to `side[to - 1]`, that share a primitive entry no other record of either array
- * holds, as `owners` counts them, where no other such entry points either record elsewhere,
- * even outside the run; the most of them that keep their order. Linear in the primitive
- * entries of the run's records, plus O(k log k) for its k pairs.
+ * `side[from]` to `side[to - 1]`, that share a primitive entry that no other record of either
+ * array holds, as `owners` counts them. A pair is left out when another such entry points
+ * either record elsewhere, even outside the run. Of the pairs left, it returns the most that
+ * keep their order. Linear in the primitive entries of the run's records, plus O(k log k) for
+ * its k pairs.
  */
 const uniquePairs = (
   start: number,
@@ -271,9 +272,9 @@ const uniquePairs = (
  * and a side record are paired first when they share a primitive entry, such as `id: "r1"`,
  * that no other record of either array holds. An entry several records hold, such as
  * `done: false`, pairs none, so a record still pairs with itself when this side also changed
- * another of its entries. A record that two such entries point to different records is left
- * unpaired, and of pairs that cross, as a moved record's would, the most that keep their order
- * are kept. The items between two such pairs are paired by position, as `getChanges` pairs
+ * another of its entries. A record whose unique entries point to different records is left
+ * unpaired. Of pairs that cross, as a moved record's would, the most that keep their order are
+ * kept. The items between two such pairs are paired by position, as `getChanges` pairs
  * them, and those left over are deleted or inserted.
  *
  * A run of one item on each side is left as it is: `getChanges` paired the two, and a pair
@@ -360,8 +361,8 @@ const alignItems = (
  * and to `remote`. Each position takes the items both sides inserted there, the remote ones
  * first, then each item as `both` merges it, unless a side deleted it. An item the remote side
  * deleted and the local side replaced takes the local value, as a CRDT keeps a new item beside
- * a deleted one; one it changed in place stays deleted, as an edit inside a deleted container is
- * lost. `both` takes the item's index in the sequence, in `local`, in `remote`, and in the
+ * a deleted one. An item the remote side deleted and the local side changed in place stays
+ * deleted, as an edit inside a deleted container is lost. `both` takes the item's index in the sequence, in `local`, in `remote`, and in the
  * merged sequence.
  */
 const mergeSequence = <T>(
@@ -482,8 +483,8 @@ const mergeRecords = (
  * Merges arrays item by item, each item read as JSON would store it, where `base` and `local`
  * differ. The merge needs each side's script from `base` anyway, and they tell how the arrays
  * compare: `remote` equals `base` when its script is empty, and `local` when the two scripts are
- * equal. An item a side's alignment keeps is equal to the base item, and one it changes is not,
- * so an item only one side changed merges without comparing it again.
+ * equal. An item that a side's alignment keeps is equal to the base item, and an item it changes
+ * is not, so an item only one side changed merges without comparing it again.
  */
 const mergeArrays = (
   base: unknown[],
@@ -580,8 +581,8 @@ const merge = (
 
 /**
  * Merges `local` and `remote`, two JSON values that both descend from `base`, so that each keeps
- * its own changes from `base`. `undefined` stands for an absent value, and is returned for one
- * the merge leaves absent. Values compare as `JSON.stringify` would store them; see
+ * its own changes from `base`. `undefined` stands for an absent value, and is returned when the
+ * merge leaves the value absent. Values compare as `JSON.stringify` would store them; see
  * `toJsonValue`. No input is mutated.
  *
  * - Records merge key by key. `__proto__` keys are ignored.
@@ -597,8 +598,9 @@ const merge = (
  *   Every other string, and every other value, is replaced whole.
  * - Where both sides changed one value differently, the local value wins, as its write would.
  * - A value the remote side deleted stays deleted where the local side changed it in place, as
- *   a CRDT loses an edit inside a deleted container: a record, an array or a text. One the local
- *   side replaced takes the local value. A value the local side deleted stays deleted.
+ *   a CRDT loses an edit inside a deleted container: a record, an array or a text. A value the
+ *   remote side deleted and the local side replaced takes the local value. A value the local
+ *   side deleted stays deleted.
  *
  * What only one side changed is that side's value, by identity. Where both sides are equal, at
  * any level, the merge returns the local value, so an item both sides inserted at one place is
