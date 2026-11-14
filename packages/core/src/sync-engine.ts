@@ -301,10 +301,11 @@ export function createSyncEngine<S extends object>(
    */
   let lastApplied: Plain | null = null;
   /**
-   * By path id, on how many applies in a row that changed the path the remote state held another
-   * value there than the store had, and the store changed it again; see `countContradictions`.
+   * By path id, the path and on how many applies in a row that changed it the remote state held
+   * another value there than the store had, and the store changed it again; see
+   * `countContradictions`.
    */
-  const contradictions = new Map<string, number>();
+  const contradictions = new Map<string, { path: string[]; count: number }>();
   /** The loops already reported, by their key lists, so each is reported once. */
   const reportedLoops = new Map<string, SyncFailure>();
   /** The side whose call threw the error now on its way out of the engine; see `call`. */
@@ -605,7 +606,8 @@ export function createSyncEngine<S extends object>(
     recordStoreObjects(held, keptObjects(patched, applied, paths));
     if (paths.length === 0) return;
     const stopped = paths.filter(
-      (path) => (contradictions.get(pathId(path)) ?? 0) >= LOOP_THRESHOLD,
+      (path) =>
+        (contradictions.get(pathId(path))?.count ?? 0) >= LOOP_THRESHOLD,
     );
     // Writing these would only make the peer change them again, and so on forever. The store
     // keeps its values for them, which differ from the backend's.
@@ -658,22 +660,21 @@ export function createSyncEngine<S extends object>(
       return;
     }
     const changed = new Set(paths.map(pathId));
-    for (const id of [...contradictions.keys()]) {
-      const path = JSON.parse(id) as string[];
+    for (const [id, { path }] of contradictions)
       if (
         !changed.has(id) &&
         !jsonEqual(valueAt(previous, path), valueAt(remote, path))
       )
         contradictions.delete(id);
-    }
     const contradicted = paths.every(
       (path) => !jsonEqual(valueAt(previous, path), valueAt(remote, path)),
     );
     for (const path of paths) {
       const id = pathId(path);
-      if (contradicted)
-        contradictions.set(id, (contradictions.get(id) ?? 0) + 1);
-      else contradictions.delete(id);
+      const counted = contradictions.get(id);
+      if (!contradicted) contradictions.delete(id);
+      else if (counted !== undefined) counted.count++;
+      else contradictions.set(id, { path, count: 1 });
     }
   };
 
