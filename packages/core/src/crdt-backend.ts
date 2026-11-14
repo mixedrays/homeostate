@@ -24,7 +24,7 @@ export interface CrdtBackendParts {
   ) => void;
   /**
    * Calls `onChange` after every change to the synced subtree, with `own` set when the change
-   * carries this backend's tag, as `transact` gives it. Returns the cleanup.
+   * carries this backend's tag, as `transact` gives it.
    */
   watch: (onChange: (own: boolean) => void) => Unsubscribe;
   /**
