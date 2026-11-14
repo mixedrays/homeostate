@@ -49,10 +49,6 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  * engine would hand its slice the keys the other slice writes. A key the backend holds reaches the slice even if `T` does not
  * declare it, unless `keys` leaves it out; see `SyncEngineConfig`.
  *
- * @param adapter - The store adapter of the whole store
- * @param scope - How to read the slice from the store's state and put it back
- * @returns StoreAdapter instance for the slice
- *
  * @example
  * ```typescript
  * const adapter = createZustandAdapter(store);
