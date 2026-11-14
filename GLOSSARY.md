@@ -151,7 +151,7 @@ The `SyncStatus` that `getStatus()` returns: whether the sync engine is connecte
 _Avoid_: Connection status, sync state
 
 **Sync failure**:
-The `SyncFailure` a sync status holds: what went wrong in the sync engine, and its source, until the engine recovers. The next completed write, apply or connect clears it, unless that apply stops a write loop, and `disconnect()` keeps it.
+The `SyncFailure` a sync status holds: what went wrong in the sync engine, and its source, until the engine recovers. The next local change, apply or connect the engine completes clears it, unless that apply stops a write loop, and `disconnect()` keeps it.
 A sync failure records an error; it does not replace `onError` or stop the error propagating.
 _Avoid_: Sync error, last error
 
