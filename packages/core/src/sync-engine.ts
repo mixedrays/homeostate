@@ -21,8 +21,9 @@ import {
 } from "./json.js";
 
 /**
- * A state, the store's or the backend's, or a slice of one. The same type as `JsonObject`, but
- * not named so: the store's may hold values JSON cannot, such as functions.
+ * A state, the store's or the backend's, or a slice of one. It is the same type as `JsonObject`,
+ * but named differently, because the store's state may hold values JSON cannot, such as
+ * functions.
  */
 type Plain = Record<string, unknown>;
 
@@ -83,11 +84,12 @@ const withValuesAt = (
 };
 
 /**
- * `patched`, the synced state given to the store, with the store's own value, from `applied`, at
- * each key `applied` holds and no path of `paths` starts at, since the two are equal as JSON there.
- * So it equals `patched` as JSON, and holds the very objects of `applied` wherever the store left a
- * key as it was given, even for a store whose `getState` returns copies. At every other key it
- * holds `patched`'s value, which shares every object the store kept.
+ * A copy of `patched`, the synced state given to the store, that takes the store's own value from
+ * `applied` at each key that `applied` holds and no path in `paths` starts at; the two are equal
+ * as JSON at those keys. The result equals `patched` as JSON. Wherever the store left a key as it
+ * was given, the result holds the very objects of `applied`, even for a store whose `getState`
+ * returns copies. At every other key it holds `patched`'s value, which shares every object the
+ * store kept.
  */
 const keptObjects = (
   patched: Plain,
@@ -148,10 +150,11 @@ const CONNECTED: SyncStatus = Object.freeze({
 
 /**
  * How many applies in a row must contradict what the store changed at a path before the engine
- * stops writing it back; see `countContradictions`. Concurrent writes by other peers contradict it
- * now and then, until the other peers' own writes back end the contradiction; a loop contradicts
- * it on every apply. Peers that kept appending concurrently to a log a subscriber counts
- * contradicted the count up to 5 times in a row, so a loop costs a few more round trips to stop.
+ * stops writing it back; see `countContradictions`. Concurrent writes by other peers contradict a
+ * path now and then, until those peers' own write-backs end the contradiction; a loop contradicts
+ * it on every apply. When peers kept appending concurrently to a log whose length a subscriber
+ * stores in another key, that key was contradicted up to 5 times in a row, so the threshold makes
+ * a loop cost a few more round trips before it stops.
  */
 const LOOP_THRESHOLD = 6;
 
@@ -170,8 +173,8 @@ const loopMessage = (paths: string[][]): string =>
  * peers do not re-write each other's changes forever. What a store changes while a remote change
  * is applied must not change again when the same state is applied a second time, and every peer
  * must agree on it. Its message lists the paths, from the root of the synced state, each as an
- * array of keys. Reported once per set of top-level keys holding them. The engine stays
- * connected. See
+ * array of keys. It is reported once for each set of top-level keys that hold those paths. The
+ * engine stays connected. See
  * {@link https://homeostate.pages.dev/docs/core/sync-engine#write-loops | Write loops}.
  */
 export class WriteLoopError extends Error {
@@ -244,8 +247,8 @@ export function createSyncEngine<S extends object>(
   let lastSynced: Plain | undefined;
   /**
    * The synced keys the store held when the engine last wrote it or applied a remote change to
-   * it. A key that leaves them is one the store removed, and the next write deletes it from the
-   * backend; any other key the backend holds and the store lacks is left as it is.
+   * it. A key that leaves this set is one the store removed, and the next write deletes it from
+   * the backend. Any other key that the backend holds and the store lacks is left as it is.
    */
   let heldKeys: ReadonlySet<string> = new Set();
   /** The backend's revision when `lastSynced` was recorded. */
@@ -254,7 +257,7 @@ export function createSyncEngine<S extends object>(
   let remoteReads = 0;
   /** Whether a remote change waits for the scheduled flush. */
   let applyPending = false;
-  /** The flush handed to `schedule` and not run yet; a flush that is no longer it does nothing. */
+  /** The flush handed to `schedule` and not run yet; any earlier flush does nothing when called. */
   let scheduledFlush: (() => void) | null = null;
   /**
    * Queues the write of a local change, when the adapter batches its writes; see
@@ -264,7 +267,7 @@ export function createSyncEngine<S extends object>(
     adapter.batchWrites === true ? queueMicrotask : undefined;
   /**
    * The flush queued with `scheduleWrite` and not run yet, while the store holds a local change
-   * the engine has not written; a flush that is no longer it does nothing.
+   * the engine has not written. Any other flush does nothing when called.
    */
   let queuedWrite: (() => void) | null = null;
   /**
@@ -273,9 +276,9 @@ export function createSyncEngine<S extends object>(
    */
   let lastApplied: Plain | null = null;
   /**
-   * By path id, the path and on how many applies in a row that changed it the remote state held
-   * another value there than the store had, and the store changed it again; see
-   * `countContradictions`.
+   * Each counted path, by path id, with its count: on how many applies in a row the remote state
+   * held a different value at the path than the store had held after the previous apply, and the
+   * store changed it again. See `countContradictions`.
    */
   const contradictions = new Map<string, { path: string[]; count: number }>();
   /** The loops already reported, by their key lists, so each is reported once. */
@@ -290,8 +293,8 @@ export function createSyncEngine<S extends object>(
   /** Whether the apply in progress stopped a write loop, which leaves `failure` standing. */
   let stoppedLoop = false;
   /**
-   * A failure the work in progress recorded and carries on after, as a stopped write loop does:
-   * `'error'` tells of it once the work's own event has been sent.
+   * A failure that the work in progress recorded and then carried on, such as a stopped write
+   * loop. `emit` sends `'error'` for it after the work's own event.
    */
   let untold: SyncFailure | null = null;
   /** What `getStatus` returned last with a failure. */
@@ -309,8 +312,8 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Tells every listener that the engine has handled `event`, and then of the failure in
-   * `untold`, if any, with `'error'`. A listener runs inside a store's or a document's
+   * Tells every listener that the engine has handled `event`, then sends `'error'` for the failure
+   * in `untold`, if any. A listener runs inside a store's or a document's
    * notification loop, which may stop at the first throw, as Zustand's does, so what it throws is
    * logged and the other listeners still run.
    */
@@ -323,7 +326,7 @@ export function createSyncEngine<S extends object>(
     const recorded = untold;
     untold = null;
     for (const listener of [...listeners]) {
-      // One unsubscribed by an earlier listener hears nothing more.
+      // A listener that an earlier listener unsubscribed hears nothing more.
       if (!listeners.has(listener)) continue;
       try {
         listener(event);
@@ -331,7 +334,7 @@ export function createSyncEngine<S extends object>(
         logError("a sync event listener threw:", error);
       }
     }
-    // Unless a listener has cleared or replaced it since.
+    // Only if no listener has cleared or replaced the failure since.
     if (recorded !== null && failure === recorded) emit("error");
   };
 
@@ -465,7 +468,7 @@ export function createSyncEngine<S extends object>(
     const held = previous ?? readBackend();
     const next = { ...withoutKeys(held, removed), ...synced };
     const reads = remoteReads;
-    // Unknown should the write throw.
+    // Cleared first, so that `lastSynced` stays unknown if the write throws.
     lastSynced = undefined;
     call("backend", () => backend.write(next, previous));
     // A remote change applied during the write has already recorded what it read.
@@ -475,12 +478,12 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Merges `synced`, the store's synced state, which holds a change the engine has not written,
-   * with `remote`, what the store reads from the backend's whole state, against `base`, the
-   * backend's whole state when the two last agreed, read as `remote` was. So a key the store keeps
-   * local is merged on neither side. A key the store lacks and did not hold then, such as one it
-   * cannot hold, is unchanged on the store's side rather than removed. See `mergeConcurrent` for
-   * the rules.
+   * Merges `synced` with `remote` against `base`. `synced` is the store's synced state, which holds
+   * a change the engine has not written. `remote` is what the store reads from the backend's whole
+   * state. `base` is the backend's whole state when the two last agreed, read the same way as
+   * `remote`, so a key the store keeps local is merged on neither side. A key the store lacks and
+   * did not hold then, such as a key it cannot hold, counts as unchanged on the store's side
+   * rather than removed. See `mergeConcurrent` for the rules.
    */
   const mergeLocalChange = (
     base: Plain,
@@ -499,9 +502,9 @@ export function createSyncEngine<S extends object>(
    * Records `held`, the backend's whole state an apply read, as `lastSynced`, with the store's
    * objects in place of the backend's, so that the next write skips what is unchanged by identity,
    * as after a local write. `state`, which holds the store's objects, must equal the apply's
-   * target as JSON, so it equals `held` at each key both hold; a key only `state` holds, which the
-   * backend lacks, is left out. Does nothing when a newer read has been recorded meanwhile, by a
-   * remote change applied while the store took this one.
+   * target as JSON, so it equals `held` at each key both hold. A key that only `state` holds is
+   * left out, since the backend lacks it. Does nothing when a newer read has been recorded
+   * meanwhile, by a remote change applied while the store was taking this one.
    */
   const recordStoreObjects = (held: Plain, state: Plain): void => {
     if (lastSynced !== held) return;
@@ -515,13 +518,14 @@ export function createSyncEngine<S extends object>(
    * Makes the store's synced state what it reads from `held`, the backend's whole state, then
    * writes what the store changed in response; see `readRemote`. With `keepLocalOnly`, a synced
    * key the backend does not hold is left in place instead of being deleted; that is the
-   * connect-time reconciliation. Otherwise what it reads is the whole synced state. `lastSynced`
-   * must already be what the backend holds.
+   * connect-time reconciliation. Otherwise the store's synced state becomes exactly what it
+   * reads. `lastSynced` must already be what the backend holds.
    *
-   * With `base`, the store may hold a local change the engine has not written, made since the
-   * backend held `base`, its whole state then. The store's synced state is then merged with what
-   * it reads, against `base`, instead of being replaced, and when the merge keeps some of the
-   * local change, the store's state after the apply is written as a local change.
+   * `base`, when given, is the backend's whole state at an earlier point, and the store may hold a
+   * local change made since then that the engine has not written. The store's synced state is
+   * then merged with what it reads, against `base`, instead of being replaced. When the merge
+   * keeps some of the local change, the store's state after the apply is written as a local
+   * change.
    */
   const applyRemote = (
     held: Plain,
@@ -630,14 +634,15 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Counts, for each of the `paths` at which the store changed `remote`, whether `remote` holds
-   * another value there than the store held after the apply before: another peer changed what
-   * this store had there, and this store changed it again. Peers that keep doing so only re-write
-   * each other's changes. When the store changed some path anew, such as a key it derives from an
-   * edit, the apply contradicts none of them, and their counts restart. A path the store left as
-   * `remote` holds it restarts too when `remote` changed it, since the store kept another peer's
-   * value; one that neither changed keeps its count, so a loop over one path still counts while
-   * remote changes to other paths come in between. A written local change restarts every count
+   * For each of the `paths` at which the store changed `remote`, counts whether `remote` holds a
+   * different value there than the store held after the previous apply. If it does, another peer
+   * changed what this store had there, and this store changed it again. Peers that keep doing so
+   * only re-write each other's changes. When the store changed some path anew, such as a key it
+   * derives from an edit, the apply contradicts none of the paths, and their counts restart. A
+   * counted path that the store left as `remote` holds it also restarts when `remote` changed it,
+   * since the store kept another peer's value. A counted path that neither side changed keeps its
+   * count, so a loop over one path is still counted while remote changes to other paths come in
+   * between. A written local change restarts every count
    * (`restartLoopCounts`). `applyRemote` stops writing back a path whose count reaches
    * `LOOP_THRESHOLD`, until an apply no longer contradicts it.
    */
@@ -669,8 +674,8 @@ export function createSyncEngine<S extends object>(
   /**
    * Keeps a stopped loop as the status's failure, each time it comes back, and reports it once per
    * set of top-level keys: to `onError` in every build, and otherwise with a warning in
-   * development. A loop new to the status is told with `'error'` after the `'remote'` that ends
-   * the apply.
+   * development. A loop that is not already the status's failure is announced with `'error'`
+   * after the `'remote'` that ends the apply.
    */
   const reportLoop = (paths: string[][]): void => {
     const keys = [...new Set(paths.map(([key]) => key))];
@@ -698,7 +703,7 @@ export function createSyncEngine<S extends object>(
     // `applyUnseenRemote`.
     const merging = queuedWrite !== null && base !== undefined;
     queuedWrite = null;
-    // Unknown should the read throw.
+    // Cleared first, so that `lastSynced` stays unknown if the read throws.
     lastSynced = undefined;
     lastRevision = readRevision();
     // What was read, not the store's state after the apply: `setState` may reject or transform it.
@@ -740,10 +745,10 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Applies the remote changes the store has not been given before a local change is written,
-   * and returns whether it did: those waiting for the scheduled flush, and those the backend holds
-   * before the engine's own listener hears of them, as when another listener of the backend
-   * changes the store first. Reads the backend unless its revision shows it unchanged, and applies
+   * Before a local change is written, applies the remote changes the store has not been given
+   * yet, and returns whether it applied any. These are the changes waiting for the scheduled
+   * flush, and those the backend holds before the engine's own listener hears of them, as when
+   * another listener of the backend changes the store first. Reads the backend unless its revision shows it unchanged, and applies
    * only what differs from what the engine last synced, so a notification for a change already
    * applied does not touch the local change. The local change is merged into the apply against
    * what the engine last synced, and written with it; see `applyRemote`.
@@ -752,9 +757,9 @@ export function createSyncEngine<S extends object>(
     const pending = applyPending;
     applyPending = false;
     const synced = lastSynced;
-    // Without a base, after a read or a write that threw, nothing tells a remote change apart,
-    // nor which side changed what, so only a pending apply runs, and the remote changes replace
-    // the store's synced state, local change included. Writing the store's state instead would
+    // Without a base, after a read or a write threw, the engine cannot tell whether the backend
+    // changed, nor which side changed what. So only a pending apply runs, and the remote changes
+    // replace the store's synced state, local change included. Writing the store's state instead would
     // revert them for every peer.
     if (synced === undefined) {
       if (pending) syncToStore();
@@ -762,7 +767,7 @@ export function createSyncEngine<S extends object>(
     }
     const revision = readRevision();
     if (isUnchanged(revision)) return false;
-    // Unknown should the read throw.
+    // Cleared first, so that `lastSynced` stays unknown if the read throws.
     lastSynced = undefined;
     const held = readBackend();
     if (jsonEqual(held, synced)) {
@@ -778,9 +783,10 @@ export function createSyncEngine<S extends object>(
   };
 
   const syncToBackend = (): void => {
-    // Otherwise the write would revert those remote changes. Applying them merges the local
-    // change in and writes what it kept, so there is nothing left to write. A store that ignored
-    // the apply keeps its stale state out of the backend this way too.
+    // Remote changes the store has not been given are applied first, or the write would revert
+    // them. Applying them merges the local change in and writes what the merge kept, so there is
+    // nothing left to write. A store that ignored the apply keeps its stale state out of the
+    // backend this way too.
     if (applyUnseenRemote()) return;
     restartLoopCounts();
     const synced = filterState(readStore());
@@ -795,8 +801,8 @@ export function createSyncEngine<S extends object>(
   };
 
   /**
-   * Hears a store notification: writes the local change at once, or, with `scheduleWrite`, queues
-   * one write for every notification until it runs. An echo of `setState` is ignored, so it queues
+   * Handles a store notification: writes the local change at once or, with `scheduleWrite`,
+   * queues one write that covers every notification until it runs. An echo of `setState` is ignored, so it queues
    * no write.
    */
   const onStoreChange = (): void => {
