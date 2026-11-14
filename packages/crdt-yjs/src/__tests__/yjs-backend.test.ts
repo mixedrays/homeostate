@@ -147,6 +147,38 @@ describe("createYjsBackend", () => {
 
     expect(backend.revision()).toBe(before);
   });
+
+  it("keeps its revision for a change elsewhere in the document", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    backend.write({ count: 1 });
+    const before = backend.revision();
+
+    doc.getText("editor").insert(0, "typed");
+    createYjsBackend(doc, "other").write({ count: 2 });
+
+    expect(backend.revision()).toBe(before);
+  });
+
+  it("has a new revision for an edit deep inside the map once its observers are called", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME, {
+      text: (path) => path.at(-1) === "title",
+    });
+    backend.write({ todos: [{ id: "1", title: "Todo" }] });
+    const before = backend.revision();
+    const title = at(doc, ["todos", 0, "title"]) as Y.Text;
+    let observed: unknown;
+    title.observe(() => {
+      observed = backend.revision();
+    });
+
+    title.insert(4, "!");
+
+    expect(observed).toBeDefined();
+    expect(observed).not.toBe(before);
+    expect(backend.revision()).toBe(observed);
+  });
 });
 
 describe("a removed map", () => {

@@ -77,22 +77,29 @@ const assertPresent = (map: Y.Map<unknown>): void => {
 interface Transactions {
   /** Started, whose observers have not been called yet. */
   open: number;
-  /** Whose observers have been called, and that changed a shared type. */
-  done: number;
+  /**
+   * For each synced map, how many transactions changed it or a type inside it, counted when their
+   * observers are about to be called, so before any observer hears of a change.
+   */
+  changes: WeakMap<object, number>;
 }
+
+/** A shared type, as far as finding its parent goes. */
+type Parent = { _item: Y.Item | null };
 
 /** One count per document, however many backends work on it. */
 const counts = new WeakMap<Y.Doc, Transactions>();
 
 /**
- * Counts `doc`'s transactions. Their changes reach observers only once they end, and a
- * transaction an observer starts ends before the observers still running return, so until a
- * transaction's observers are called, what it changed is unknown.
+ * Counts `doc`'s transactions, and those that changed each synced map. Their changes reach
+ * observers only once they end, and a transaction an observer starts ends before the observers
+ * still running return, so until a transaction's observers are called, what it changed is
+ * unknown. A map is counted from the moment its first backend is created, subscribed or not.
  */
 const countTransactions = (doc: Y.Doc): Transactions => {
   const known = counts.get(doc);
   if (known) return known;
-  const transactions: Transactions = { open: 0, done: 0 };
+  const transactions: Transactions = { open: 0, changes: new WeakMap() };
   doc.on("beforeTransaction", () => {
     transactions.open++;
   });
@@ -100,7 +107,18 @@ const countTransactions = (doc: Y.Doc): Transactions => {
     // Not below zero, for a transaction already open when the count began.
     transactions.open = Math.max(0, transactions.open - 1);
     // An update the document already held changes nothing.
-    if (transaction.changed.size > 0) transactions.done++;
+    if (transaction.changed.size === 0) return;
+    // Each changed type and every type holding it, once.
+    const touched = new Set<object>();
+    for (let at of transaction.changed.keys() as Iterable<Parent | null>) {
+      while (at !== null && !touched.has(at)) {
+        touched.add(at);
+        const count = transactions.changes.get(at);
+        if (count !== undefined) transactions.changes.set(at, count + 1);
+        // An integrated item's parent is a type.
+        at = (at._item?.parent ?? null) as Parent | null;
+      }
+    }
   });
   counts.set(doc, transactions);
   return transactions;
@@ -166,7 +184,10 @@ export function createYjsBackend(
     text,
   } = options;
   const transactions = countTransactions(doc);
-  const hold = createHold(map, doc, () => transactions.done);
+  // Backends over one map share its count.
+  if (!transactions.changes.has(map)) transactions.changes.set(map, 0);
+  const changes = (): number => transactions.changes.get(map) ?? 0;
+  const hold = createHold(map, doc, changes);
   let reported = false;
 
   const ops = createYjsOps(text);
@@ -233,11 +254,12 @@ export function createYjsBackend(
       };
     },
 
-    // Every change in the document, since telling which ones changed the map takes more, but
-    // while a gap is open, only the changes `read` shows.
+    // How many transactions have changed the map, not the rest of the document, so that a change
+    // elsewhere does not make the engine read the map; while a gap is open, only the changes
+    // `read` shows.
     revision: () => {
       if (transactions.open > 0) return undefined;
-      return hold.held()?.revision ?? transactions.done;
+      return hold.held()?.revision ?? changes();
     },
 
     text,

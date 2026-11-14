@@ -27,22 +27,6 @@ export const copyJson = (value: JsonObjectInput): JsonObject =>
     key === "__proto__" ? undefined : item,
   ) as JsonObject;
 
-/** A shared type, as far as finding its parent goes. */
-type Parent = { _item: Y.Item | null };
-
-/** Whether `transaction` changed `map` or a type inside it. */
-const touches = (map: Y.Map<unknown>, transaction: Y.Transaction): boolean => {
-  for (const type of transaction.changed.keys()) {
-    let at: Parent | null = type;
-    while (at !== null) {
-      if (at === map) return true;
-      // An integrated item's parent is a type.
-      at = (at._item?.parent ?? null) as Parent | null;
-    }
-  }
-  return false;
-};
-
 /**
  * What `map` held before its document's gap, while one is open. Captures the map's content at
  * the start of every transaction that begins with no gap, and keeps the capture once a
@@ -55,34 +39,28 @@ const touches = (map: Y.Map<unknown>, transaction: Y.Transaction): boolean => {
 export const createHold = (
   map: Y.Map<unknown>,
   doc: Y.Doc,
-  /** The document's revision, as it is before a transaction starts. */
-  revision: () => unknown,
+  /** How many transactions have changed the map, as before a transaction starts. */
+  changes: () => number,
 ) => {
   let tracked = 0;
-  /** How many transactions have changed the map since tracking began. */
-  let changes = 0;
   /** The map's content when it had seen `changes` changes. */
   let known: { value: JsonObjectInput; changes: number } | undefined;
   /** What the map held before the transaction that left the gap, or before the current one. */
   let held: Held | undefined;
 
   const remember = (value: JsonObjectInput): void => {
-    if (tracked > 0) known = { value, changes };
+    if (tracked > 0) known = { value, changes: changes() };
   };
 
   const content = (): JsonObjectInput => {
-    if (known?.changes === changes) return known.value;
+    if (known?.changes === changes()) return known.value;
     const value = toPlainMap(map);
     remember(value);
     return value;
   };
 
   const capture = (): void => {
-    if (!hasGap(doc)) held = { value: content(), revision: revision() };
-  };
-
-  const count = (transaction: Y.Transaction): void => {
-    if (touches(map, transaction)) changes++;
+    if (!hasGap(doc)) held = { value: content(), revision: changes() };
   };
 
   return {
@@ -98,10 +76,9 @@ export const createHold = (
       if (tracked++ === 0) {
         // Opened before tracking began, so only what the map holds now is known.
         held = hasGap(doc)
-          ? { value: toPlainMap(map), revision: revision() }
+          ? { value: toPlainMap(map), revision: changes() }
           : undefined;
         doc.on("beforeTransaction", capture);
-        doc.on("beforeObserverCalls", count);
       }
       let stopped = false;
       return () => {
@@ -109,7 +86,6 @@ export const createHold = (
         stopped = true;
         if (--tracked > 0) return;
         doc.off("beforeTransaction", capture);
-        doc.off("beforeObserverCalls", count);
         known = undefined;
         held = undefined;
       };
