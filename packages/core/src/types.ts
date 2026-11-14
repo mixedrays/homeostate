@@ -48,17 +48,18 @@ export interface StoreAdapter<S extends object> {
   /**
    * Replace the store state. Called only for changes coming from the backend; the
    * engine ignores store notifications raised while it runs, so the adapter needs no
-   * echo suppression of its own. When it returns, the engine writes the store's synced
-   * state once if it differs from what was applied, such as a key the store normalised or
-   * derived meanwhile, so the backend ends up equal to it. A key the store was given but
-   * holds neither before nor after the call, such as one a class does not declare, is taken as
-   * one it cannot hold and stays in the backend; one it held before and drops, it removed, and
-   * the engine deletes it from the backend. If `getState()` then returns the
-   * same object as before the call, the store is taken to have ignored the change, and nothing
-   * is written.
+   * echo suppression of its own. When it returns, the engine compares the store's synced state
+   * with what it applied. If they differ, for example because the store normalised a key or
+   * derived one during the call, the engine writes the store's synced state once, so the backend
+   * ends up equal to it. If the store was given a key that it holds neither before nor after the
+   * call, such as a key its class does not declare, the engine takes it as a key the store cannot
+   * hold and leaves it in the backend. If the store held a key before the call and dropped it,
+   * the store removed it, and the engine deletes it from the backend. If `getState()` returns the
+   * same object as before the call, the engine concludes that the store ignored the change, and
+   * writes nothing.
    *
-   * What the store changes meanwhile must not change again when the same state is applied a
-   * second time, and every peer must agree on it. Otherwise the engine stops writing back the
+   * What the store changes during the call must not change again when the same state is applied
+   * a second time, and every peer must agree on it. Otherwise the engine stops writing back the
    * paths the store keeps changing and reports a `WriteLoopError`; see
    * {@link https://homeostate.pages.dev/docs/core/sync-engine#write-loops | Write loops}.
    */
@@ -72,26 +73,27 @@ export interface StoreAdapter<S extends object> {
 
   /**
    * Set to `true` for a store that notifies once per property set rather than once per change,
-   * such as a Valtio proxy, on which one array method like `splice`, `unshift`, `shift`, `sort` or
-   * `reverse` notifies several times, with an intermediate state each time. Written one by one,
-   * those states make every shifted item look replaced, so a peer's concurrent edit lands on the
-   * wrong item and its concurrent insert duplicates items.
+   * such as a Valtio proxy. On such a store, one array method like `splice`, `unshift`, `shift`,
+   * `sort` or `reverse` notifies several times, each time with an intermediate state. Written one
+   * by one, those states make every shifted item look replaced, so a peer's concurrent edit lands
+   * on the wrong item and its concurrent insert duplicates items.
    *
-   * The engine then batches its writes of local changes into one per microtask: the first
-   * notification queues one write, later ones add nothing until it runs, and it writes the store's
-   * synced state as it is then, with one `'local'` sync event. `subscribe` must still notify
-   * synchronously, so that the engine ignores the echoes of `setState` as it does without it. A
-   * remote change applied while the write waits is merged with the waiting local change, as a
-   * local change is merged into a pending apply (see `SyncEngineConfig.schedule`), and the merged
-   * state is written at once, in place of the queued write. `disconnect()` writes a waiting local
-   * change before it unsubscribes. Without it, every notification is written synchronously. The
-   * engine reads it once, when it is created.
+   * With the flag, the engine batches its writes of local changes into one write per microtask.
+   * The first notification queues a write, and later notifications add nothing until it runs.
+   * The queued write writes the store's synced state as it is when it runs, and sends one
+   * `'local'` sync event. `subscribe` must still notify synchronously, so that the engine ignores
+   * the echoes of `setState` as it does without batching. A remote change applied while the write
+   * waits is merged with the waiting local change, as a local change is merged into a pending
+   * apply (see `SyncEngineConfig.schedule`), and the merged state is written at once, in place of
+   * the queued write. `disconnect()` writes a waiting local change before it unsubscribes.
+   * Without the flag, every notification is written synchronously. The engine reads the flag
+   * once, when the engine is created.
    *
    * A queued write that throws goes to `onError`. Without `onError` it is thrown from the
    * microtask, where nothing catches it, so the runtime reports it as an uncaught error.
    *
-   * An adapter that wraps one with this flag must keep it, as `scopeAdapter` does. Otherwise the
-   * engine writes every intermediate state again.
+   * An adapter that wraps an adapter with this flag must keep the flag, as `scopeAdapter` does.
+   * Otherwise the engine writes every intermediate state again.
    */
   batchWrites?: boolean;
 }
@@ -118,12 +120,12 @@ export interface CrdtBackend {
    * The sync engine passes the whole subtree as `next`: the store's synced keys, and every
    * other key as the backend holds it, so that a write deletes only what the store removed.
    *
-   * `previous`, when given, is what the synced subtree holds now, before it is turned into JSON:
-   * like `next`, it may hold values that `toJsonValue` leaves out or turns into `null`.
-   * The sync engine passes the whole state it last wrote or read, once `revision` or a read
-   * shows that the backend still holds it, so a backend can diff against it with `json: true`
-   * instead of reading its document, and unchanged subtrees of `next` match it by identity.
-   * A backend may ignore it.
+   * `previous`, when given, is what the synced subtree holds now, not yet turned into JSON: like
+   * `next`, it may hold values that `toJsonValue` leaves out or turns into `null`. The sync engine
+   * passes the whole state it last wrote or read, when `revision` or a read shows that the backend
+   * still holds that state. A backend can then diff `next` against `previous` with `json: true`
+   * instead of reading its document, and the unchanged subtrees of `next` match `previous` by
+   * identity. A backend may ignore `previous`.
    */
   write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
 
@@ -133,9 +135,9 @@ export interface CrdtBackend {
    * without the subtree changing, and is `undefined` while the backend cannot tell, as inside a
    * transaction. Must be cheap: the engine calls it around every write.
    *
-   * Before writing a local change, the sync engine reads the backend unless the revision is the
-   * one it recorded with what it last wrote or read, so that a remote change another listener
-   * heard first is applied before the local change instead of being written over.
+   * Before writing a local change, the sync engine reads the backend unless the revision equals
+   * the one it recorded when it last wrote or read the backend. So a remote change that another
+   * listener heard first is applied before the local change, instead of being written over.
    */
   revision: () => unknown;
 
@@ -160,13 +162,13 @@ export interface CrdtBackend {
  */
 export type SyncEngineConfig<S extends object = JsonObject> = {
   /**
-   * Decides by name whether a top-level key is synced: return true to sync it. By default every
-   * key `keys` and `omit` leave is synced. It is called only for those keys, and with keys the
-   * backend holds that `S` does not declare, such as those an older or newer peer writes.
+   * Decides by name whether a top-level key is synced: return true to sync it. Without it, every
+   * key that `keys` and `omit` allow is synced. It is called only for those keys, including keys
+   * the backend holds that `S` does not declare, such as keys an older or newer peer writes.
    *
    * A key the store holds as a function, such as an action, is never synced, whatever `filter`
-   * returns: the engine neither writes it nor reads the backend's value into it, which stays in the
-   * backend. Once the store makes a synced key a function, its next write deletes the key from the
+   * returns: the engine does not write it, and does not read the backend's value into it, so the
+   * backend keeps its value. Once the store makes a synced key a function, its next write deletes the key from the
    * backend; once the store makes it a JSON value again, the key is synced again.
    */
   filter?: (key: keyof S & string) => boolean;
@@ -179,14 +181,15 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    */
   seed?: boolean;
   /**
-   * Coalesces remote changes: the first one hands `schedule` a `flush` to call later, such as
-   * `(flush) => queueMicrotask(flush)`, and every remote change before that call is applied
-   * with one read of the backend and one `setState`. Without it, each remote change is applied
-   * synchronously, so `getState()` sees it at once.
+   * Coalesces remote changes. The first remote change hands `schedule` a `flush` to call later,
+   * such as `(flush) => queueMicrotask(flush)`, and every remote change before that call is
+   * applied with one read of the backend and one `setState`. Without it, each remote change is
+   * applied synchronously, so `getState()` sees it at once.
    *
-   * Local changes are still written synchronously. One made while an apply is pending runs that
-   * apply first, merged with the local change by `mergeConcurrent` against what the backend held
-   * before the pending changes, and writes the result, so neither side's change is lost; see
+   * Local changes are still written synchronously. A local change made while an apply is pending
+   * runs that apply first: `mergeConcurrent` merges the local change into it, against what the
+   * backend held before the pending changes, and the engine writes the result, so neither side's
+   * change is lost; see
    * {@link https://homeostate.pages.dev/docs/core/sync-engine#coalescing-remote-changes | Coalescing remote changes}.
    * After a backend read or write threw, nothing tells which side changed what, so the remote
    * changes replace what the local change did to synced keys.
@@ -195,10 +198,10 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    */
   schedule?: (flush: () => void) => void;
   /**
-   * Called with what the store adapter or the backend threw once the engine is connected, while
-   * it applies a remote change or writes a local one, instead of letting the error reach the
-   * other side's notifier. Without it, the error propagates to whoever triggered the work.
-   * `connect()` always throws what it runs into itself. See `SyncErrorSource`.
+   * Called with what the store adapter or the backend threw while the connected engine applies a
+   * remote change or writes a local one, so that the error does not reach the other side's
+   * notifier. Without it, the error propagates to whoever triggered the work. `connect()` always
+   * throws the errors it runs into. See `SyncErrorSource`.
    */
   onError?: (error: unknown, source: SyncErrorSource) => void;
 } & (
@@ -218,8 +221,8 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
 );
 
 /**
- * What `createSyncEngine` takes, typed by the store's state `S`, which it takes from `adapter`:
- * the backend, the store adapter and the sync engine's config.
+ * The options `createSyncEngine` takes: the backend, the store adapter and the sync engine's
+ * config. `S` is the store's state, which `createSyncEngine` takes from `adapter`.
  */
 export type SyncEngineOptions<S extends object = JsonObject> =
   SyncEngineConfig<S> & {
@@ -233,7 +236,7 @@ export type SyncEngineOptions<S extends object = JsonObject> =
  * The options every setup helper takes, typed by the store's state `S`: the backend, the
  * connect mode and the sync engine's config. A setup helper is the one call in a `store-*`
  * package, such as the Zustand `homeostate` middleware, that creates the store adapter and the
- * sync engine for one store; its options add their own to these.
+ * sync engine for one store; each helper adds options of its own to these.
  */
 export type SetupOptions<S extends object = JsonObject> =
   SyncEngineConfig<S> & {
@@ -260,13 +263,13 @@ export type SyncErrorSource = "store" | "backend";
 
 /**
  * What the sync engine has just handled, as `SyncEngine.subscribe` reports it:
- * - `'local'`: a store notification while connected, once its write to the backend returned,
- *   even when it changed only local keys, which writes nothing. An echo raised while a remote
- *   change is applied sends none.
- * - `'remote'`: an apply of the backend's state, once `setState` and the write of what the store
- *   changed meanwhile returned; once per flush with `schedule`, even when the store is unchanged.
- *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`, once
- *   the write of the merged state returned.
+ * - `'local'`: a store notification while connected, sent once its write to the backend has
+ *   returned. It is sent even when the notification changed only local keys, so that nothing was
+ *   written. An echo raised while a remote change is applied sends none.
+ * - `'remote'`: an apply of the backend's state, sent once `setState` has returned and the engine
+ *   has written what the store changed during it. With `schedule`, it is sent once per flush,
+ *   even when the store is unchanged. A local change that first runs a pending apply sends
+ *   `'remote'` instead of `'local'`, once the merged state is written.
  * - `'connect'`: a `connect()` that connected, once reconciliation and both subscriptions are
  *   done. It covers seeding and the values adopted from the backend, which send nothing else.
  * - `'disconnect'`: a `disconnect()` that disconnected, once both subscriptions are removed. A
@@ -288,8 +291,9 @@ export interface SyncFailure {
   /** What was thrown. It may be anything, `undefined` included. */
   readonly error: unknown;
   /**
-   * What the error came from, as `onError` is told. Missing for what comes from none of those
-   * sources, such as an error thrown by `filter`, `schedule` or `onError` itself.
+   * What the error came from, as `onError` is told. Missing when the error came from neither the
+   * store adapter nor the backend, such as an error thrown by `filter`, `schedule` or `onError`
+   * itself.
    */
   readonly source?: SyncErrorSource;
 }
@@ -326,12 +330,12 @@ export interface SyncEngine {
   /** Stop synchronization and cleanup */
   disconnect: () => void;
   /**
-   * The engine's status: whether it is connected, and what failed. It is current
-   * whenever it is read, also from a store or sync event listener. It returns one object until a
-   * field changes, frozen, and the same object whenever the fields are those of an earlier status
-   * without a failure, so comparing by identity tells whether it changed. Every change comes with
-   * a sync event, whose listeners already read the new status, so `subscribe` tells when to read
-   * it again. See `SyncStatus`.
+   * The engine's status: whether it is connected, and what failed. It is up to date whenever it
+   * is read, including from a store listener or a sync event listener. The returned object is
+   * frozen, and `getStatus` returns the same object until a field changes. A status without a
+   * failure is always the same object for the same `connected` value, so comparing by identity
+   * tells whether the status changed. Every change comes with a sync event, whose listeners
+   * already see the new status, so `subscribe` tells when to read it again. See `SyncStatus`.
    */
   getStatus: () => SyncStatus;
   /**
@@ -369,7 +373,7 @@ export interface PersistableDoc {
   /**
    * Report every change to the document, local or from a peer, as an update `apply`
    * accepts. Changes made by `apply` itself are not reported, but a change made in response
-   * while it runs, such as a sync engine's write, is.
+   * while `apply` runs, such as a sync engine's write, is reported.
    * @returns Unsubscribe function
    */
   subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;
@@ -396,7 +400,7 @@ export interface PersistenceAdapter {
 
   /**
    * In one atomic step, remove the updates under `key` up to and including `version`, and
-   * store `snapshot`. Updates appended after that `load` must be kept.
+   * store `snapshot`. Updates appended after the `load` that returned `version` must be kept.
    */
   compact: (
     key: string,
@@ -414,7 +418,8 @@ export interface PersistenceConfig {
   key: string;
   /**
    * Number of appended updates after which the stored log is merged into one snapshot;
-   * defaults to 100. `Infinity` only compacts on load and to repair a failed write.
+   * defaults to 100. With `Infinity`, the log is compacted only on load and to repair a failed
+   * write.
    */
   compactAfter?: number;
   /**
@@ -440,9 +445,9 @@ export interface PersistenceStats {
  * - `'empty'`: nothing is stored under the key, as on a first visit. The document may still
  *   hold state of its own, which the initial snapshot then stores.
  * - `'loaded'`: every stored update was applied.
- * - `'partial'`: the log was read, but at least one stored update could not be applied, maybe
- *   none could. `errors` holds what `apply` threw for each, in log order. The document holds
- *   the others, and the log is kept for recovery.
+ * - `'partial'`: the log was read, but at least one stored update could not be applied, and
+ *   possibly none could. `errors` holds what `apply` threw for each, in log order. The document
+ *   holds the updates that could be applied, and the log is kept for recovery.
  * - `'failed'`: storage could not be read, and `error` is what the adapter's `load` rejected
  *   with. The document holds only what it held before.
  *
@@ -469,19 +474,20 @@ export interface Persistence {
   whenLoaded: Promise<PersistenceLoadResult>;
   /**
    * Resolves once the work queued so far is done and every update reported so far is stored.
-   * A failed write not repaired since, also one that failed before this call, makes it compact
-   * once first, to store the whole document again. When that fails too, which goes to
-   * `onError`, it rejects with the error of the earliest unrepaired write: an append, the
-   * initial load or the initial snapshot. Any later snapshot, or `clear()`, repairs it too.
-   * Updates reported after the call need another one.
+   * If a write failed and has not been repaired since, even one that failed before this call,
+   * `flush` first compacts once, to store the whole document again. If that compaction fails
+   * too, its error goes to `onError`, and `flush` rejects with the error of the earliest
+   * unrepaired write: an append, the initial load or the initial snapshot. Any later snapshot,
+   * or `clear()`, also repairs a failed write. Updates reported after the call need another
+   * `flush()`.
    */
   flush: () => Promise<void>;
   /**
-   * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
-   * once it is written, and rejects with the storage error when it fails; does nothing once
-   * storing has stopped. Keeps the log, after `onError`, when one of its updates cannot be
-   * applied, and still resolves; it appends the snapshot then while a failed write is
-   * unrepaired.
+   * Merge the stored log into one snapshot now, as happens after every `compactAfter` appends.
+   * Resolves once the snapshot is written, and rejects with the storage error when that fails.
+   * Does nothing once storing has stopped. When a stored update cannot be applied, its error goes
+   * to `onError`, the log is kept as it is, and the promise still resolves. If a failed write is
+   * unrepaired at that point, the snapshot is appended to the log instead.
    */
   compact: () => Promise<void>;
   /**
@@ -490,15 +496,15 @@ export interface Persistence {
    */
   stats: () => Promise<PersistenceStats>;
   /**
-   * Stop storing updates; stored data is kept. Settles once pending writes finish, as `flush()`
-   * does, after the same repair of a failed write; storing stops even when it rejects, and
-   * later calls, or `flush()`, repair nothing more.
+   * Stop storing updates; stored data is kept. Like `flush()`, it settles once pending writes
+   * finish, after the same repair of a failed write. Storing stops even when it rejects, and later
+   * calls to `destroy()` or `flush()` repair nothing more.
    */
   destroy: () => Promise<void>;
   /**
-   * Stop storing updates and remove the stored document, also a log holding updates that
-   * cannot be applied. Resolves once it is removed, even after earlier writes failed, and
-   * rejects with the storage error when it cannot be.
+   * Stop storing updates and remove the stored document, including a log that holds updates
+   * that cannot be applied. Resolves once the document is removed, even after earlier writes
+   * failed, and rejects with the storage error when it cannot be removed.
    */
   clear: () => Promise<void>;
 }
