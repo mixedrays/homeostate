@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import type { ApplyOps, TextPolicy } from "@homeostate/core";
-import { toSharedType } from "./mapping.js";
+import { childPath, toSharedType } from "./mapping.js";
 
 /**
  * How `applyChanges` writes into Yjs shared types. Every value it writes becomes its shared
@@ -26,7 +26,7 @@ export const createYjsOps = (text?: TextPolicy): ApplyOps => ({
       : (container as Y.Array<unknown>).get(key as number),
 
   set: (container, key, value, path) => {
-    const shared = toSharedType(value, [...path, key], text);
+    const shared = toSharedType(value, childPath(path, key, text), text);
     if (container instanceof Y.Map) container.set(key as string, shared);
     else {
       const array = container as Y.Array<unknown>;
@@ -46,7 +46,7 @@ export const createYjsOps = (text?: TextPolicy): ApplyOps => ({
       array.insert(
         index,
         inserted.map((value, i) =>
-          toSharedType(value, [...path, index + i], text),
+          toSharedType(value, childPath(path, index + i, text), text),
         ),
       );
   },
