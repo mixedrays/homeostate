@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { createSyncEngine } from "@homeostate/core";
+import { createSyncEngine, type SyncEngineOptions } from "@homeostate/core";
 import {
   addTodo,
   createTestStore,
@@ -189,6 +189,7 @@ describe("a removed map", () => {
   const replacedBy = (
     key: "todos" | "section",
     options?: YjsBackendOptions,
+    onError?: SyncEngineOptions["onError"],
   ) => {
     const deep = key === "section";
     const update = deep ? deepLayout : layout;
@@ -201,14 +202,19 @@ describe("a removed map", () => {
       : nestedMap(doc);
     const backend = createYjsBackend(synced, options);
     const store = createTestStore(threeTodos());
-    createSyncEngine({ backend, adapter: store.adapter }).connect();
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
+      onError,
+    });
+    engine.connect();
     replication.exchange(doc, peer);
 
     const replace = (): void => {
       peer.getMap("app").set(key, new Y.Map());
       replication.exchange(doc, peer);
     };
-    return { doc, backend, store, replace };
+    return { doc, backend, engine, store, replace };
   };
 
   it("reports once when a peer replaces the synced map", () => {
@@ -231,15 +237,32 @@ describe("a removed map", () => {
     expect(onRemoved).toHaveBeenCalledTimes(1);
   });
 
-  it("only reports the removal: reads and store changes after it do not throw", () => {
-    const { backend, store, replace } = replacedBy("todos", {
-      onRemoved: () => {},
+  it("keeps the store's state after the removal, and reports a store change as a backend failure", () => {
+    const onError = vi.fn();
+    const { engine, store, replace } = replacedBy(
+      "todos",
+      { onRemoved: () => {} },
+      onError,
+    );
+
+    replace();
+    store.update((s) => toggleTodo(s, "1"));
+
+    expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), "backend");
+    expect(engine.getStatus().failure).toEqual({
+      error: expect.any(Error),
+      source: "backend",
     });
+  });
+
+  it("throws from read and write once the map is removed", () => {
+    const { backend, replace } = replacedBy("todos", { onRemoved: () => {} });
 
     replace();
 
-    expect(() => backend.read()).not.toThrow();
-    expect(() => store.update((s) => toggleTodo(s, "1"))).not.toThrow();
+    expect(() => backend.read()).toThrow(/removed/);
+    expect(() => backend.write(threeTodos(), {})).toThrow(/removed/);
   });
 
   it("logs the removal with console.error by default", () => {

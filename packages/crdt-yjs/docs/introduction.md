@@ -58,9 +58,10 @@ Create a nested map once, such as in the document's initial state: two peers tha
 new map under the same key keep only one of them.
 
 When a peer replaces the synced map, or a map holding it, the backend calls `onRemoved` once,
-with an `Error`; by default it logs the error with `console.error`. No peer sees a write to the
-removed map, so to keep syncing, disconnect the engine and connect a new one over the map that
-replaced it. A backend notices the removal only while subscribed, as it is while its engine is
+with an `Error`; by default it logs the error with `console.error`. No peer would see a write
+to the removed map, so from then on the backend's `read` and `write` throw: the engine reports
+the store's next change as a failure with the source `'backend'`, and the store keeps its state.
+To keep syncing, disconnect the engine and connect a new one over the map that replaced it. A backend notices the removal only while subscribed, as it is while its engine is
 connected.
 
 ## Undo and redo

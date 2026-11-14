@@ -28,9 +28,10 @@ export interface YjsBackendOptions {
   origin?: unknown;
   /**
    * Called once when the synced map is removed from its document, as when a peer replaces it,
-   * or a map holding it, with a new map. No peer sees a write to the removed map, so create a
-   * backend over the map that replaced it. Only a nested map can be removed, and a backend
-   * notices only while subscribed. Defaults to logging the error with `console.error`.
+   * or a map holding it, with a new map. No peer would see a write to the removed map, so from
+   * then on `read` and `write` throw; create a backend over the map that replaced it. Only a
+   * nested map can be removed, and a backend calls this only while subscribed. Defaults to
+   * logging the error with `console.error`.
    */
   onRemoved?: (error: Error) => void;
 }
@@ -63,6 +64,14 @@ const removedError = (): Error =>
   new Error(
     "The synced Y.Map was removed from its document, as when a peer replaces it with a new map",
   );
+
+/**
+ * Throws once `map` is removed. A removed map reads as empty and takes writes no peer sees, so
+ * the engine would take a read for a remote change that deleted every key.
+ */
+const assertPresent = (map: Y.Map<unknown>): void => {
+  if (isRemoved(map)) throw removedError();
+};
 
 /** A document's transactions, as far as its events tell, for the `revision` of its backends. */
 interface Transactions {
@@ -164,6 +173,7 @@ export function createYjsBackend(
 
   const backend = createCrdtBackend({
     read: () => {
+      assertPresent(map);
       const held = hold.held();
       if (held !== undefined) return copyJson(held.value);
       const value = toPlainMap(map);
@@ -234,6 +244,7 @@ export function createYjsBackend(
   });
 
   const write = (next: JsonObjectInput, previous?: JsonObjectInput): void => {
+    assertPresent(map);
     const held = hold.held();
     if (held === undefined) {
       backend.write(next, previous);
