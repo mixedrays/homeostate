@@ -8,7 +8,6 @@ import type {
   SyncStatus,
   Unsubscribe,
 } from "./types.js";
-import { defaultSyncFilter } from "./types.js";
 import { keepIdentity } from "./patching.js";
 import { mergeConcurrent } from "./merge.js";
 import {
@@ -105,12 +104,9 @@ const keptObjects = (
 /** Identifies a path in a set. */
 const pathId = (path: string[]): string => JSON.stringify(path);
 
-/**
- * Whether `state` holds `key`: `undefined` reads as absent, as in JSON, while a function, which
- * JSON drops too, is held, so that `filter` can judge it.
- */
-const holds = (state: object, key: string): boolean =>
-  hasOwn(state, key) && (state as Plain)[key] !== undefined;
+/** Whether `state` holds a function at `key`, such as an action, which stays local. */
+const holdsFunction = (state: object, key: string): boolean =>
+  hasOwn(state, key) && typeof (state as Plain)[key] === "function";
 
 /** Whether `held` holds every entry of `state`, each the same value or object. */
 const holdsAll = (held: Plain | undefined, state: Plain): boolean => {
@@ -213,21 +209,22 @@ const isProduction = (): boolean => {
 };
 
 /**
- * The one test of whether a top-level key is synced, in both directions: `keys` and `omit` by
- * name, then `filter`, which defaults to `defaultSyncFilter`.
+ * The one test of whether a top-level entry is synced, in both directions: never `__proto__` or a
+ * function, then `keys` and `omit` by name, then `filter`.
  */
 const syncPredicate = ({
-  filter = defaultSyncFilter,
+  filter,
   keys,
   omit,
 }: SyncEngineConfig): ((key: string, value: unknown) => boolean) => {
-  if (keys === undefined && omit === undefined) return filter;
   const listed = keys === undefined ? undefined : new Set<string>(keys);
   const omitted = new Set<string>(omit);
   return (key, value) =>
+    key !== PROTO_KEY &&
+    typeof value !== "function" &&
     (listed === undefined || listed.has(key)) &&
     !omitted.has(key) &&
-    filter(key, value);
+    (filter === undefined || filter(key));
 };
 
 /**
@@ -238,10 +235,8 @@ const syncPredicate = ({
  * CRDT-library agnostic.
  *
  * The options are typed by the adapter's state, so `keys` and `omit` take only its key names:
- * `{ omit: ['draft'] }` keeps one key local, `{ keys: ['todos'] }` syncs one alone. A key is
- * synced when `filter`, by default `defaultSyncFilter`, keeps it too. The store's value decides
- * what is written, and a backend value is read only when `filter` keeps it and the store's value
- * of the key, if the store holds one, so that a peer's value never replaces an action.
+ * `{ omit: ['draft'] }` keeps one key local, `{ keys: ['todos'] }` syncs one alone. See
+ * `SyncEngineConfig` for which keys are synced.
  *
  * On `connect()` the two sides are reconciled per key over the filtered view: a key the
  * backend holds wins over the store's value, and a synced key the backend lacks stays in
@@ -280,8 +275,8 @@ export function createSyncEngine<S extends object>(
   options: SyncEngineOptions<S>,
 ): SyncEngine {
   const { backend, adapter, seed = true, schedule, onError } = options;
-  // Untyped: the engine also judges keys the backend holds that `S` does not declare.
-  const filter = syncPredicate(options as SyncEngineConfig);
+  // Untyped: the engine also tests keys the backend holds that `S` does not declare.
+  const isSynced = syncPredicate(options as SyncEngineConfig);
 
   let connected = false;
   let storeUnsubscribe: Unsubscribe | null = null;
@@ -425,26 +420,20 @@ export function createSyncEngine<S extends object>(
   const filterState = (state: object): Plain => {
     const filtered: Plain = {};
     for (const [key, value] of Object.entries(state)) {
-      if (key !== PROTO_KEY && filter(key, value)) filtered[key] = value;
+      if (isSynced(key, value)) filtered[key] = value;
     }
     return filtered;
   };
 
   /**
    * The synced state the store takes from `held`, the backend's whole state, given the store's
-   * state `current` and its synced part `synced`. A key the store holds is read only when `filter`
-   * keeps both its value and the backend's: one whose store value it rejects, such as an action,
-   * is left alone, and one the store syncs keeps the store's value when `filter` rejects the
-   * backend's. A key the store does not hold is judged by the backend's value alone.
+   * state `current`: every synced key but one `current` holds as a function, which stays local.
    */
-  const readRemote = (held: Plain, current: S, synced: Plain): Plain => {
+  const readRemote = (held: Plain, current: S): Plain => {
     const remote: Plain = {};
-    for (const [key, value] of Object.entries(held)) {
-      if (key === PROTO_KEY) continue;
-      const kept = filter(key, value);
-      if (hasOwn(synced, key)) remote[key] = kept ? value : synced[key];
-      else if (kept && !holds(current, key)) remote[key] = value;
-    }
+    for (const [key, value] of Object.entries(held))
+      if (isSynced(key, value) && !holdsFunction(current, key))
+        remote[key] = value;
     return remote;
   };
 
@@ -524,9 +513,9 @@ export function createSyncEngine<S extends object>(
    * Merges `synced`, the store's synced state, which holds a change the engine has not written,
    * with `remote`, what the store reads from the backend's whole state, against `base`, the
    * backend's whole state when the two last agreed, read as `remote` was. So a key the store keeps
-   * local is merged on neither side, and one whose backend value `filter` rejects keeps the
-   * store's value. A key the store lacks and did not hold then, such as one it cannot hold, is
-   * unchanged on the store's side rather than removed. See `mergeConcurrent` for the rules.
+   * local is merged on neither side. A key the store lacks and did not hold then, such as one it
+   * cannot hold, is unchanged on the store's side rather than removed. See `mergeConcurrent` for
+   * the rules.
    */
   const mergeLocalChange = (
     base: Plain,
@@ -534,7 +523,7 @@ export function createSyncEngine<S extends object>(
     synced: Plain,
     remote: Plain,
   ): Plain => {
-    const seen = readRemote(base, current, synced);
+    const seen = readRemote(base, current);
     const local = { ...synced };
     for (const key of Object.keys(seen))
       if (!hasOwn(synced, key) && !heldKeys.has(key)) local[key] = seen[key];
@@ -544,21 +533,16 @@ export function createSyncEngine<S extends object>(
   /**
    * Records `held`, the backend's whole state an apply read, as `lastSynced`, with the store's
    * objects in place of the backend's, so that the next write skips what is unchanged by identity,
-   * as after a local write. `state`, which holds the store's objects, must equal `target` as JSON.
-   * Only a key whose value in `target` came from `held` is taken: one whose backend value `filter`
-   * rejected holds the store's value there, which the backend lacks. Does nothing when a newer
-   * read has been recorded meanwhile, by a remote change applied while the store took this one.
+   * as after a local write. `state`, which holds the store's objects, must equal the apply's
+   * target as JSON, so it equals `held` at each key both hold; a key only `state` holds, which the
+   * backend lacks, is left out. Does nothing when a newer read has been recorded meanwhile, by a
+   * remote change applied while the store took this one.
    */
-  const recordStoreObjects = (
-    held: Plain,
-    target: Plain,
-    state: Plain,
-  ): void => {
+  const recordStoreObjects = (held: Plain, state: Plain): void => {
     if (lastSynced !== held) return;
     const shared = { ...held };
-    for (const key of Object.keys(target))
-      if (hasOwn(held, key) && target[key] === held[key] && hasOwn(state, key))
-        shared[key] = state[key];
+    for (const key of Object.keys(state))
+      if (hasOwn(held, key)) shared[key] = state[key];
     lastSynced = shared;
   };
 
@@ -592,7 +576,7 @@ export function createSyncEngine<S extends object>(
     try {
       current = readStore();
       synced = filterState(current);
-      const remote = readRemote(held, current, synced);
+      const remote = readRemote(held, current);
       if (keepLocalOnly) target = { ...synced, ...remote };
       else if (base === undefined) target = remote;
       else {
@@ -605,7 +589,7 @@ export function createSyncEngine<S extends object>(
       else if (!local) {
         heldKeys = new Set(Object.keys(synced));
         // Nothing changed, so `synced` equals `target`.
-        recordStoreObjects(held, target, synced);
+        recordStoreObjects(held, synced);
         return;
       }
     } finally {
@@ -636,7 +620,7 @@ export function createSyncEngine<S extends object>(
     countContradictions(target, paths);
     lastApplied = applied;
     // The backend still holds `held`, which the write-back below, if any, is diffed against.
-    recordStoreObjects(held, target, keptObjects(patched, applied, paths));
+    recordStoreObjects(held, keptObjects(patched, applied, paths));
     if (paths.length === 0) return;
     const stopped = paths.filter(
       (path) => (contradictions.get(pathId(path)) ?? 0) >= LOOP_THRESHOLD,

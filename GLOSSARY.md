@@ -93,14 +93,14 @@ The plain JSON copy of a synced subtree that `CrdtBackend.read()` returns, which
 _Avoid_: State dump
 
 **Filter**:
-The `filter(key, value)` function in `SyncEngineConfig` that decides, per top-level key and in both directions, which keys are synced keys. It judges the store's value for what the sync engine writes, and both the backend's and the store's for what it reads. `defaultSyncFilter` excludes functions. The `keys` and `omit` options narrow what it keeps by key name.
+The `filter(key)` predicate in `SyncEngineConfig` that decides by name, per top-level key and in both directions, which keys are synced keys, among those the `keys` and `omit` options leave. A key the store holds as a function is never synced, whatever it returns.
 _Avoid_: Sync filter, allowlist, selector
 
 **Synced key**:
-A top-level store key the filter lets through, and `keys` or `omit` allow by name, so the sync engine reads it from and writes it to the CRDT backend.
+A top-level store key that `keys` or `omit` and the filter allow by name, and that the store does not hold as a function, so the sync engine reads it from and writes it to the CRDT backend.
 
 **Local key**:
-A top-level store key the filter keeps out of sync, such as an action or a draft, so it stays on one peer.
+A top-level store key kept out of sync, such as an action or a draft, so it stays on one peer.
 A local key is unrelated to a local change; the devtools mark local keys `local`.
 _Avoid_: Private key, unsynced key
 
@@ -305,7 +305,7 @@ The `@homeostate/tool-devtools` panel, which inspects and edits a store's state,
 _Avoid_: Inspector, debugger
 
 **Devtools source**:
-One store the devtools inspect, given as a `DevtoolsSource`: a name and a store adapter, plus optionally its CRDT backend, sync engine, filter, persistence and network link.
+One store the devtools inspect, given as a `DevtoolsSource`: a name and a store adapter, plus optionally its CRDT backend, sync engine, persistence and network link.
 
 **Key status**:
 How the devtools classify a top-level store key against the CRDT backend: `synced`, `diverged`, `pending`, `local` or `backend-only`.

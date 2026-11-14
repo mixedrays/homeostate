@@ -1,5 +1,4 @@
 import {
-  defaultSyncFilter,
   jsonEqual,
   keepIdentity,
   type CrdtBackend,
@@ -178,11 +177,11 @@ const CONNECTED_LABEL = "Connected: adopted the backend";
 const hasOwn = (object: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(object, key);
 
-/** The keys of `state` the engine would sync with its default filter, for a source without one. */
+/** The keys of `state` an engine with no options would sync, for a source without an engine. */
 const defaultSynced = (state: Plain): Plain => {
   const synced: Plain = {};
   for (const key of Object.keys(state))
-    if (defaultSyncFilter(key, state[key])) synced[key] = state[key];
+    if (typeof state[key] !== "function") synced[key] = state[key];
   return synced;
 };
 

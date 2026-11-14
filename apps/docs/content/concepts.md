@@ -76,7 +76,7 @@ and stops after a few round trips. The engine reports a stop once per set of top
 the paths, or without `onError` with a warning in development.
 
 Synced state must be plain JSON: objects, arrays, strings, numbers, booleans and `null`.
-Functions are dropped by the default filter. Other values such as `Date`, `Map` or `Set` are
+A top-level function, such as an action, stays local. Other values such as `Date`, `Map` or `Set` are
 neither diffed nor synced. The supplied backends store `undefined` and nested functions as
 `JSON.stringify` does: object entries holding them are left out, and such array items become
 `null`. They store `NaN` and infinite numbers as `null`, as it does too.
@@ -161,20 +161,13 @@ createSyncEngine({ backend, adapter, omit: ["draft", "searchTerm"] });
 `keys: ["todos"]` syncs the keys it lists instead, and leaves any other key the backend holds
 alone.
 Both take only the key names of the adapter's state, so a typo fails to compile. For a rule
-that depends on the value, `filter` decides per key: the default, `defaultSyncFilter`, excludes
-functions, and a custom filter replaces it. `keys` and `omit` apply on top of `filter`. To sync
+that `keys` and `omit` cannot list, `filter` decides by name, with a predicate, on top of them. To sync
 a nested slice, or several slices to several rooms, wrap the adapter in
 [`scopeAdapter`](../../../packages/core/docs/sync-engine.md#scopeadapter).
 
 Excluded keys are never read from the backend or written to it, so they stay local to each
-peer. `filter` judges the value on each side:
-
-- The store's value decides what this peer writes.
-- A backend value is read into the store only when `filter` keeps it and, if the store holds the
-  key, the store's value too. A value an older or buggy peer writes under the key of an action
-  never replaces the action, and a value `filter` rejects never replaces a synced one: the
-  store keeps its value, and its next write replaces the backend's.
-- A key the store does not hold, or holds as `undefined`, is judged by the backend's value alone.
+peer. So does a key the store holds as a function, such as an action, whatever the options say:
+a value an older or buggy peer writes under its key never replaces the action.
 
 A peer deletes a key from the backend only when its store removes a key it syncs: a key it
 excludes, or one its store cannot hold, such as a field a newer version of the app adds, stays

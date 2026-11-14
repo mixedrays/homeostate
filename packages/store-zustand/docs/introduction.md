@@ -95,7 +95,7 @@ const engine = createSyncEngine({
 engine.connect();
 ```
 
-Only data is synced: the default filter skips actions and other functions in the state, and
+Only data is synced: the engine never syncs actions and other functions in the state, and
 remote changes leave them in place.
 
 `homeostate` syncs the store's root and cannot take a scoped adapter. To sync a nested slice, or

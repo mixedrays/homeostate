@@ -1,5 +1,5 @@
 ---
-description: Signatures, options, lifecycle methods and adapter contracts for createSyncEngine, defaultSyncFilter and scopeAdapter.
+description: Signatures, options, lifecycle methods and adapter contracts for createSyncEngine and scopeAdapter.
 label: Sync engine API
 order: 1
 ---
@@ -76,7 +76,7 @@ console.log(engine.getStatus().connected); // false
 
 ```ts
 type SyncEngineConfig<S extends object = JsonObject> = {
-  filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
+  filter?: (key: keyof S & string) => boolean;
   seed?: boolean;
   schedule?: (flush: () => void) => void;
   onError?: (error: unknown, source: SyncErrorSource) => void;
@@ -88,14 +88,14 @@ type SyncEngineConfig<S extends object = JsonObject> = {
 type SyncErrorSource = "store" | "backend";
 ```
 
-| Option     | Default             | Behavior                                                                                                           |
-| ---------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `omit`     | none                | Top-level keys to keep local, by name. Every other key `filter` keeps is synced.                                   |
-| `keys`     | none                | The only top-level keys to sync, by name, if `filter` keeps them. Give `keys` or `omit`, not both.                 |
-| `filter`   | `defaultSyncFilter` | Selects top-level keys by value, judging the store's and the backend's. Excluded keys stay local.                  |
-| `seed`     | `true`              | On connection, writes each synced key the backend lacks from the store's value, in one write. `false` writes none. |
-| `schedule` | none                | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.  |
-| `onError`  | none                | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.   |
+| Option     | Default | Behavior                                                                                                           |
+| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `omit`     | none    | Top-level keys to keep local, by name. Every other key `filter` keeps is synced.                                   |
+| `keys`     | none    | The only top-level keys to sync, by name, if `filter` keeps them. Give `keys` or `omit`, not both.                 |
+| `filter`   | none    | Selects top-level keys by name, with a predicate. Excluded keys stay local.                                        |
+| `seed`     | `true`  | On connection, writes each synced key the backend lacks from the store's value, in one write. `false` writes none. |
+| `schedule` | none    | Defers remote changes to the `flush` it schedules, then applies them with one read and one `setState`. See below.  |
+| `onError`  | none    | Receives what the adapter or backend throws once connected, with its source, instead of the notifier. See below.   |
 
 `createSyncEngine` takes `S` from the adapter, so `keys` and `omit` accept only the state's key
 names, and a typo fails to compile. Readonly lists work too, such as an `as const` constant
@@ -111,30 +111,19 @@ createSyncEngine({ backend, adapter, omit: ["draft", "searchTerm"] });
 as if it were a local key, and stays in the backend as it is, while under `omit` a backend key the
 state's type does not declare is synced like any other.
 
-A key is synced when `filter` keeps it and, by name, `keys` lists it or `omit` does not name
-it, so `filter` still runs with either: a function under a key `keys` lists stays local by
-default. A custom filter replaces the default, and `keys` or `omit` narrow what it keeps. Call
-`defaultSyncFilter` within it if you also want to exclude functions. Its parameters are typed
-by `S`, but it is also called with keys the backend holds that `S` does not declare; type its
-`key` as `string` to compare it with such a key. Filtering is top-level; it does not remove
-nested functions or turn non-JSON values into JSON. Use plain JSON for the synced data.
+A key is synced when `keys` lists it or `omit` does not name it, and `filter`, if given, keeps
+it; `filter` is called only for the keys `keys` and `omit` leave. Its `key` is typed by `S`, but it
+is also called with keys the backend holds that `S` does not declare; type it as `string` to
+compare it with such a key. Filtering is top-level; it does not remove nested functions or turn
+non-JSON values into JSON. Use plain JSON for the synced data.
 
-`filter` judges the value on each side. The store's value decides what this peer writes. A
-backend value is read into the store only when `filter` keeps it and, if the store holds the key,
-the store's value too:
-
-| The store holds          | The backend holds        | The store gets         | This peer writes                         |
-| ------------------------ | ------------------------ | ---------------------- | ---------------------------------------- |
-| a value `filter` rejects | any value                | nothing, keeps its own | nothing, the backend's value stays       |
-| a value `filter` keeps   | a value `filter` keeps   | the backend's value    | its value, on its next write             |
-| a value `filter` keeps   | a value `filter` rejects | nothing, keeps its own | its value, on its next write or the seed |
-| no value, or `undefined` | a value `filter` keeps   | the backend's value    | nothing                                  |
-| no value, or `undefined` | a value `filter` rejects | nothing                | nothing, the backend's value stays       |
-
-So a value an older or buggy peer writes under the key of an action never replaces the action.
-A store that gives a synced key a value `filter` rejects still deletes the key from the room
-with its next write; see [Keys this peer does not sync](#keys-this-peer-does-not-sync). `keys`
-and `omit` judge a key by name, the same on both sides.
+A key the store holds as a function, such as an action, is never synced, whatever the options
+say, even under a key `keys` lists. The engine neither writes it nor reads the backend's value
+into it, so a value an older or buggy peer writes under the key of an action never replaces the
+action, and that value stays in the room. A store that makes a synced key a function deletes the
+key from the room with its next write; see
+[Keys this peer does not sync](#keys-this-peer-does-not-sync). Once it makes the key a JSON value
+again, the key is synced again: its next write gives the backend the store's value.
 
 Seeding works per key, even when the backend already holds other keys. With either value, a
 backend key wins over the corresponding store value, and a store-only key remains in the store
@@ -146,7 +135,7 @@ over a room, connect once the document holds the room; see
 ### Keys this peer does not sync
 
 A peer deletes a key from the room only when its store removes a key it syncs: the store drops
-it, or gives it a value `filter` rejects, such as a function. Every other key the room holds stays
+it, or makes it a function. Every other key the room holds stays
 as it is, through connecting, remote changes and local changes:
 
 - a key `keys` does not list, `omit` names or `filter` excludes;
@@ -211,8 +200,7 @@ The merge is [`mergeConcurrent`](./diffing.md#mergeconcurrent), without a text p
 [Matching array items](./diffing.md#matching-array-items) says how it matches the items of a list
 the remote change both moved and changed, and where it falls back to their positions.
 
-Keys the filter keeps local take no part: the merge reads no backend value into them. A key whose
-backend value the filter rejects keeps the store's value, as on every apply. The merged state
+Keys the store keeps local take no part: the merge reads no backend value into them. The merged state
 goes through `setState`, and what the store holds afterwards is written once, as a local change,
 with the backend's state as `previous`; the event it sends is `"remote"`, as for every local
 change that runs a pending apply. After a backend read or write threw, the engine no longer knows
@@ -461,8 +449,8 @@ it applies a pending one; see [Coalescing remote changes](#coalescing-remote-cha
 happens when a listener subscribed
 to the document before `connect()` changes the store as it hears of a remote change, before the
 engine does. Each backend notification, or each
-flush with `schedule`, applies the backend's full synced state to the store, as `filter` judges
-it on both sides, including deletions. Unchanged subtrees keep their identity. Store
+flush with `schedule`, applies the backend's full synced state to the store, including
+deletions. Unchanged subtrees keep their identity. Store
 notifications raised synchronously while the engine applies remote state are ignored to avoid
 echoing that state back.
 
@@ -574,21 +562,11 @@ The status holds only what reaches the engine:
 ### Synced state
 
 `getSyncedState()` returns what the engine would write to the backend now: a new object holding
-the store's keys that `filter`, `keys` and `omit` keep, without `__proto__`. It works while
+the store's keys that `keys`, `omit` and `filter` keep, without `__proto__` and functions. It works while
 disconnected. Its values are the store's own, by identity, and are not turned into JSON, so a
 `Date` stays a `Date`; use it to tell the store's synced keys from its local keys, or compare it with the
 backend's state after `JSON.parse(JSON.stringify(...))`. Like `connect()`, it throws a
 `TypeError` when `getState()` does not return an object.
-
-## defaultSyncFilter
-
-```ts
-declare const defaultSyncFilter: (key: string, value: unknown) => boolean;
-```
-
-Returns `typeof value !== "function"`; the key does not affect the result. This keeps
-top-level actions out of shared state. It is not a JSON validator: values such as `Date`,
-`Map` and `Set` are outside the supported synced-state model.
 
 ## StoreAdapter
 

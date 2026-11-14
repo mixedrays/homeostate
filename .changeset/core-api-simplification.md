@@ -87,3 +87,14 @@
   `createSyncEngine(backend, adapter)` with `createSyncEngine({ backend, adapter })`. The state
   type is still taken from `adapter`. The new `SyncEngineOptions<S>` type names the object. The
   setup helpers' options are unchanged.
+- `filter` takes the key alone, `(key: keyof S & string) => boolean`, and a key the store holds as
+  a function is never synced, whatever `filter` returns: the engine neither writes it nor reads the
+  backend's value into it. A store that makes a synced key a function deletes it from the backend
+  with its next write, as before, and syncs it again once it holds a JSON value. A backend value is
+  no longer judged: a synced key always takes it. `defaultSyncFilter` is removed. Drop
+  `filter: defaultSyncFilter`; replace `(key, value) => defaultSyncFilter(key, value) && key !==
+"draft"` with `(key) => key !== "draft"`, or with `omit: ["draft"]`; elsewhere, replace
+  `defaultSyncFilter(key, value)` with `typeof value !== "function"`. A custom filter no longer
+  syncs functions it keeps, so it need not exclude them. A rule on any other value has no
+  replacement: choose the keys by name, or sync a slice without them with `scopeAdapter`. A filter
+  that takes a second parameter fails to compile; in plain JavaScript, it gets `undefined` there.

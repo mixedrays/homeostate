@@ -30,7 +30,7 @@ const engine = createSyncEngine({
 engine.connect();
 ```
 
-`omit` keeps the keys it names on this device; functions stay local by default. On
+`omit` keeps the keys it names on this device; functions always stay local. On
 `connect()`, keys the backend already holds win over the store's values, so a peer joining
 a populated room adopts it. Keys only the store has are written to the backend (`seed: true`,
 the default) or left for the next local change (`seed: false`). A reconnect

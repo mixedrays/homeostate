@@ -1,7 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   createSyncEngine,
-  defaultSyncFilter,
   scopeAdapter,
   type CrdtBackend,
   type JsonObject,
@@ -22,33 +21,6 @@ interface TodoState {
 const todoState = (): TodoState => ({
   todos: [{ id: "1", title: "a" }],
   length: 1,
-});
-
-describe("defaultSyncFilter", () => {
-  it("excludes functions and classes", () => {
-    expect(defaultSyncFilter("arrow", () => {})).toBe(false);
-    expect(defaultSyncFilter("named", function named() {})).toBe(false);
-    expect(defaultSyncFilter("cls", class {})).toBe(false);
-  });
-
-  it("keeps every other value regardless of the key", () => {
-    for (const value of [
-      0,
-      1,
-      "",
-      "text",
-      false,
-      true,
-      null,
-      undefined,
-      [],
-      [1],
-      {},
-      { a: 1 },
-    ]) {
-      expect(defaultSyncFilter("key", value)).toBe(true);
-    }
-  });
 });
 
 // These checks run when the test files are type-checked, as `pnpm typecheck` does.
@@ -156,34 +128,33 @@ describe("SyncEngineConfig", () => {
     createSyncEngine({ backend, adapter: adapter(), keys: SYNCED });
   });
 
-  it("types the filter by the state, and takes existing string predicates and keys or omit", () => {
+  it("types the filter's key by the state, and takes string predicates and keys or omit", () => {
     const backend = createMemoryBackend();
     createSyncEngine({
       backend,
       adapter: adapter(),
-      filter: (key, value) => {
+      filter: (key) => {
         expectTypeOf(key).toEqualTypeOf<"todos" | "length">();
-        expectTypeOf(value).toEqualTypeOf<TodoState[keyof TodoState]>();
         return key !== "length";
       },
     });
     createSyncEngine({
       backend,
       adapter: adapter(),
-      filter: (key: string, value: unknown) =>
-        defaultSyncFilter(key, value) && key !== "length",
+      filter: (key: string) => key !== "length",
       keys: ["todos"],
     });
     createSyncEngine({
       backend,
       adapter: adapter(),
-      filter: defaultSyncFilter,
+      // @ts-expect-error The filter takes the key alone, not the value.
+      filter: (_key: string, value: unknown) => typeof value !== "function",
     });
   });
 
-  it("types keys as strings and values as unknown without a state type", () => {
+  it("types keys as strings without a state type", () => {
     type Filter = NonNullable<SyncEngineConfig["filter"]>;
-    expectTypeOf<Parameters<Filter>>().toEqualTypeOf<[string, unknown]>();
+    expectTypeOf<Parameters<Filter>>().toEqualTypeOf<[string]>();
     expectTypeOf<{ omit: string[] }>().toExtend<SyncEngineConfig>();
   });
 

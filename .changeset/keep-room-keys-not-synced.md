@@ -8,7 +8,7 @@ for an adapter that holds fixed keys, such as MobX's or the Jotai record form, a
 write under `keys` or `omit`. A client still on an older app version erased what newer peers added.
 
 Now a write sets the store's synced keys and deletes only the synced keys the store removed: keys it
-dropped, or gave a value `filter` rejects. Every other key the backend holds stays as it is, through
+dropped, or made a function. Every other key the backend holds stays as it is, through
 connecting, seeding, remote changes, write backs and local changes. A key the store is given during
 an apply and holds neither before nor after it is taken as one the store cannot hold, so it is not
 written back and no longer trips a `WriteLoopError`.

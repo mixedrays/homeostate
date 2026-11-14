@@ -106,8 +106,8 @@ if (import.meta.hot) {
 }
 ```
 
-The `homeostate` middleware syncs the store with `doc.getMap("shared")`. The default
-filter excludes the `increment` function, so only `count` is shared.
+The `homeostate` middleware syncs the store with `doc.getMap("shared")`. The `increment`
+function stays local, as every function does, so only `count` is shared.
 
 With `connect: "manual"`, the store touches the document only once the app calls
 `useCounter.homeostate.connect()`, here when `synced` resolves, once the provider has received the

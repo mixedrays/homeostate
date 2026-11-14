@@ -33,7 +33,7 @@ export type JsonObjectInput = {
  * Implement this interface to add support for any state manager (Zustand, Redux, MobX, etc.)
  *
  * State must be plain JSON: objects, arrays, strings, numbers, booleans, and null.
- * Functions are dropped by the default filter; other values such as Date, Map, or Set
+ * A top-level function, such as an action, stays local; other values such as Date, Map, or Set
  * are neither diffed nor synced.
  */
 export interface StoreAdapter<S extends object> {
@@ -163,28 +163,25 @@ export interface CrdtBackend {
  * `createSyncEngine` takes from the store adapter. Without `S`, as `SyncEngineConfig`, a key is
  * any string and a value `unknown`.
  *
- * A key is synced, in both directions, when `filter` keeps it and, by name, `keys` lists it or
- * `omit` does not name it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is
- * synced. `filter` judges each side's value: the store's value decides what this peer writes,
- * and a backend value is read into the store only when `filter` keeps it and, if the store holds
- * the key, the store's value too. So a remote value never replaces a key the store keeps local,
- * such as an action, and a remote value `filter` rejects never replaces a synced one: the store
- * keeps its value, and writes it with its next write. A key the store does not hold, or holds as
- * `undefined`, is judged by the backend's value alone.
+ * A key is synced, in both directions, when `keys` lists it or `omit` does not name it, and
+ * `filter` keeps it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is synced.
  *
  * A peer deletes a key from the backend only when its store removes a key it syncs: drops it,
- * or gives it a value `filter` rejects. A key the backend holds that the store does not sync,
- * or cannot hold, stays as it is, so peers on different app versions can share a room.
+ * or makes it a function. A key the backend holds that the store does not sync, or cannot hold,
+ * stays as it is, so peers on different app versions can share a room.
  */
 export type SyncEngineConfig<S extends object = JsonObject> = {
   /**
-   * Decides per top-level key whether it is synced: return true to sync it. Defaults to
-   * `defaultSyncFilter`, which excludes functions; a custom filter replaces it. It is called only
-   * for the keys `keys` and `omit` leave. Its types follow `S`, but it is also called with the
-   * keys and values of a backend holding keys that `S` does not declare, such as those an older
-   * or newer peer writes, and with the backend's value of a key the store holds too.
+   * Decides by name whether a top-level key is synced: return true to sync it. By default every
+   * key `keys` and `omit` leave is synced. It is called only for those keys, and with keys the
+   * backend holds that `S` does not declare, such as those an older or newer peer writes.
+   *
+   * A key the store holds as a function, such as an action, is never synced, whatever `filter`
+   * returns: the engine neither writes it nor reads the backend's value into it, which stays in the
+   * backend. Once the store makes a synced key a function, its next write deletes the key from the
+   * backend; once the store makes it a JSON value again, the key is synced again.
    */
-  filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
+  filter?: (key: keyof S & string) => boolean;
   /**
    * Whether `connect()` seeds the backend: writes, in one write, each synced key the store holds
    * and the backend lacks, from the store's value. Defaults to `true`. With `false`, nothing is
@@ -365,8 +362,8 @@ export interface SyncEngine {
   getStatus: () => SyncStatus;
   /**
    * The store's synced keys with the values the store holds, connected or not: a new object
-   * holding the keys `filter`, `keys` and `omit` keep, without `__proto__`. Its values are the
-   * store's own, by identity, and are not turned into JSON.
+   * holding the keys `keys`, `omit` and `filter` keep, without `__proto__` and functions. Its
+   * values are the store's own, by identity, and are not turned into JSON.
    */
   getSyncedState: () => Record<string, unknown>;
   /**
@@ -377,13 +374,6 @@ export interface SyncEngine {
    */
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
-
-/**
- * Default filter that excludes functions from sync
- */
-export const defaultSyncFilter = (_key: string, value: unknown): boolean => {
-  return typeof value !== "function";
-};
 
 /**
  * A CRDT document seen as binary updates, which is what persistence stores. `crdt-*`

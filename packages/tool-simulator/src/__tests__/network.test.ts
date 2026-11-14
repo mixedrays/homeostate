@@ -528,15 +528,15 @@ describe.each([["a stand-in", createStandIn] as const, ...backends])(
       expect(stores[2].getState()).not.toHaveProperty("meta");
     });
 
-    it("leaves out a key whose value a peer's filter rejects, as its store keeps its own", async () => {
+    it("leaves out a key a peer's filter rejects, as its store keeps its own", async () => {
       network = createNetwork({ seed: 17, latency: 5 });
       const writer = todoPeer(docs, 0);
-      const reader = todoPeer(docs, 1, {
-        config: {
-          filter: (key, value) => key !== "title" || value !== "secret",
-        },
-      });
       network.addPeer(writer.setup);
+      await network.settle();
+      // Without a seed, as the reader's own root would compete with the room's on Automerge.
+      const reader = todoPeer(docs, 1, {
+        config: { filter: (key) => key !== "title", seed: false },
+      });
       const peer = network.addPeer(reader.setup);
       await network.settle();
 

@@ -40,20 +40,20 @@ engine.disconnect();
 ```
 
 Here, `doc` is your Yjs document and `adapter` comes from your state manager's `store-*`
-package. `omit` keeps `draft` on this device, and functions such as actions stay local by
-default. On `connect()` the backend's values win over the store's. Once connected, what the
+package. `omit` keeps `draft` on this device, and functions such as actions always stay
+local. On `connect()` the backend's values win over the store's. Once connected, what the
 store or the backend throws goes to `onError` instead of the other side's notifier. See the
 [sync engine reference](./sync-engine.md) for all options, lifecycle methods and adapter
 contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation model.
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                                                                                                                                                                                                           |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineOptions`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                                     |
-| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                                              |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                                     |
+| Page                            | APIs and types                                                                                                                                                                                                                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineOptions`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                |
+| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                         |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                |
 
 `createPersistence` keeps the document in browser storage through
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or

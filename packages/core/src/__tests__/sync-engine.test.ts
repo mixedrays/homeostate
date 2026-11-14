@@ -1373,45 +1373,40 @@ describe("createSyncEngine", () => {
         expect(backend.read()).toEqual(state);
       });
 
-      it("passes what the backend holds for a key whose remote value the filter rejects", () => {
-        const notLocal = (_key: string, value: unknown) =>
-          !(typeof value === "string" && value.startsWith("local:"));
+      it("passes what the backend holds for a key the store holds as a function", () => {
+        const add = () => {};
         const { backend, previous } = checkedBackend(counted());
-        const store = createTestStore(counted(), withDone);
-        createSyncEngine({
-          backend,
-          adapter: store.adapter,
-          filter: notLocal,
-        }).connect();
+        const store = createTestStore({ ...counted(), add }, (next) => ({
+          ...withDone(next),
+          add,
+        }));
+        createSyncEngine({ backend, adapter: store.adapter }).connect();
 
-        backend.receive({ ...toggledRemotely(), searchTerm: "local:x" });
+        backend.receive({ ...toggledRemotely(), add: "oops" });
 
-        const last = previous.at(-1) as Counted;
-        expect(last.searchTerm).toBe("local:x");
+        const last = previous.at(-1) as Counted & { add: unknown };
+        expect(last.add).toBe("oops");
         expect(last.todos).toBe(store.getState().todos);
-        expect(backend.read()).toEqual(store.getState());
+        expect(backend.read()).toEqual({ ...store.getState(), add: "oops" });
       });
     });
 
-    it("passes what the backend holds for a key whose remote value the filter rejects", () => {
-      const notLocal = (_key: string, value: unknown) =>
-        !(typeof value === "string" && value.startsWith("local:"));
+    it("passes what the backend holds for a key the store holds as a function", () => {
       const { backend, previous } = checkedBackend({
         todos: ["a"],
         view: "list",
       });
-      const store = createTestStore({ todos: ["a"], view: "list" });
-      createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: notLocal,
-      }).connect();
+      const store = createTestStore<{ todos: string[]; view: unknown }>({
+        todos: ["a"],
+        view: () => "list",
+      });
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
-      backend.receive({ todos: ["b"], view: "local:grid" });
+      backend.receive({ todos: ["b"], view: "grid" });
       store.update((s) => ({ ...s, todos: ["c"] }));
 
-      expect(previous.at(-1)).toEqual({ todos: ["b"], view: "local:grid" });
-      expect(backend.read()).toEqual({ todos: ["c"], view: "list" });
+      expect(previous.at(-1)).toEqual({ todos: ["b"], view: "grid" });
+      expect(backend.read()).toEqual({ todos: ["c"], view: "grid" });
     });
 
     it("passes what the backend holds after a remote change applied while the store took another", () => {
@@ -1758,27 +1753,33 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
     });
 
-    /** Keeps every value but a string starting with `local:`, whatever the key. */
-    const notLocal = (_key: string, value: unknown) =>
-      !(typeof value === "string" && value.startsWith("local:"));
-
-    it("keeps a store value a custom filter rejects when a value it keeps arrives", () => {
+    it("keeps a store's function local when a custom filter keeps its key", () => {
+      const addTodo = () => {};
       const backend = createMemoryBackend();
-      const store = createTestStore({
-        todos: [] as string[],
-        view: "local:list",
-      });
-      createSyncEngine({
+      const store = createTestStore({ todos: [] as string[], addTodo });
+      const engine = createSyncEngine({
         backend,
         adapter: store.adapter,
-        filter: notLocal,
-      }).connect();
-      expect(backend.read()).toEqual({ todos: [] });
+        filter: (key: string) => key !== "secret",
+      });
+      engine.connect();
+      expect(engine.getSyncedState()).toEqual({ todos: [] });
 
-      backend.receive({ todos: ["a"], view: "grid" });
+      backend.receive({ todos: ["a"], addTodo: "oops" });
 
-      expect(store.getState()).toEqual({ todos: ["a"], view: "local:list" });
-      expect(backend.read()).toEqual({ todos: ["a"], view: "grid" });
+      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
+      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
+    });
+
+    it("calls filter with the key alone, and not for a function", () => {
+      const backend = createMemoryBackend({ todos: ["a"], extra: 1 });
+      const store = createTestStore({ todos: [] as string[], add: () => {} });
+      const filter = vi.fn((key: string) => key !== "secret");
+      createSyncEngine({ backend, adapter: store.adapter, filter }).connect();
+
+      expect(filter.mock.calls.every((call) => call.length === 1)).toBe(true);
+      expect(filter.mock.calls.map(([key]) => key)).toContain("extra");
+      expect(filter.mock.calls.map(([key]) => key)).not.toContain("add");
     });
 
     it("leaves a key the store does not sync in the room through later local writes", () => {
@@ -1846,68 +1847,33 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("merges no backend value the filter rejects into a key the store syncs", () => {
-      const { backend } = checkedBackend();
-      const store = createTestStore({
-        todos: [] as string[],
-        view: "list",
-        layout: "grid",
-      });
-      createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: notLocal,
-        schedule: () => {},
-      }).connect();
-      backend.receive({
-        todos: ["a"],
-        view: "local:grid",
-        layout: "local:rows",
-      });
-
-      store.update((s) => ({ ...s, todos: [...s.todos, "b"], layout: "rows" }));
-
-      const merged = { todos: ["a", "b"], view: "list", layout: "rows" };
-      expect(store.getState()).toEqual(merged);
-      // The store's value decides what this peer writes, as for every key it syncs.
-      expect(backend.read()).toEqual(merged);
-    });
-
-    it("reads a key the store does not hold by the backend's value alone", () => {
+    it("reads a key the store holds as undefined from the backend", () => {
       const backend = createMemoryBackend();
       const store = createTestStore<{ todos: string[]; view?: string }>({
         todos: [],
         view: undefined,
       });
-      createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: notLocal,
-      }).connect();
-
-      backend.receive({ todos: [], view: "local:list" });
-      expect(store.getState()).toEqual({ todos: [], view: undefined });
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive({ todos: [], view: "grid" });
+
       expect(store.getState()).toEqual({ todos: [], view: "grid" });
     });
 
-    it("keeps a store's synced value when the backend holds one the filter rejects", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({ todos: [] as string[], view: "list" });
-      createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: notLocal,
-      }).connect();
+    it("starts syncing a key whose value stops being a function", () => {
+      const backend = createMemoryBackend({ todos: [], view: "grid" });
+      const store = createTestStore<{ todos: string[]; view: unknown }>({
+        todos: [],
+        view: () => "list",
+      });
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+      expect(store.getState().view).toBeTypeOf("function");
 
-      backend.receive({ todos: ["a"], view: "local:grid" });
-      expect(store.getState()).toEqual({ todos: ["a"], view: "list" });
-      expect(backend.read()).toEqual({ todos: ["a"], view: "local:grid" });
+      store.update((state) => ({ ...state, view: "list" }));
+      expect(backend.read()).toEqual({ todos: [], view: "list" });
 
-      // The store's value decides what this peer writes, as for every key it syncs.
-      store.update((s) => ({ ...s, todos: ["local"] }));
-      expect(backend.read()).toEqual({ todos: ["local"], view: "list" });
+      backend.receive({ todos: [], view: "rows" });
+      expect(store.getState()).toEqual({ todos: [], view: "rows" });
     });
   });
 
@@ -2131,7 +2097,7 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a"] });
     });
 
-    it("deletes a key whose value the filter stops keeping", () => {
+    it("deletes a key whose value becomes a function", () => {
       const backend = createMemoryBackend({ tags: ["x"] });
       const store = createTestStore<{ todos: string[]; view: unknown }>({
         todos: [],
@@ -3217,28 +3183,6 @@ describe("createSyncEngine", () => {
       );
     });
 
-    it("writes the store's value of a key whose backend value the filter rejects", () => {
-      const notLocal = (_key: string, value: unknown) =>
-        !(typeof value === "string" && value.startsWith("local:"));
-      const backend = createMemoryBackend({ todos: ["a"], view: "list" });
-      const store = createTestStore({
-        todos: ["a"],
-        view: "list",
-        draft: "",
-      });
-      createSyncEngine({
-        backend,
-        adapter: store.adapter,
-        filter: notLocal,
-        omit: ["draft"],
-      }).connect();
-      backend.receive({ todos: ["a"], view: "local:grid" });
-
-      store.update((s) => ({ ...s, draft: "x" }));
-
-      expect(backend.read()).toEqual({ todos: ["a"], view: "list" });
-    });
-
     it("deletes a key the store took from the backend without a write, once the store removes it", () => {
       type State = { todos: string[]; extra?: number };
       const withoutExtra = (state: State): State => {
@@ -3649,7 +3593,7 @@ describe("createSyncEngine", () => {
   });
 
   describe("getSyncedState", () => {
-    it("returns the keys the filter keeps, with the store's values, while disconnected", () => {
+    it("returns the keys the filter keeps but functions, with the store's values, while disconnected", () => {
       const backend = createMemoryBackend();
       const addTodoAction = () => {};
       const state = { ...setSearchTerm(threeTodos(), "x"), addTodoAction };
@@ -3657,8 +3601,7 @@ describe("createSyncEngine", () => {
       const engine = createSyncEngine({
         backend,
         adapter: store.adapter,
-        filter: (key, value) =>
-          typeof value !== "function" && key !== "searchTerm",
+        filter: (key) => key !== "searchTerm",
       });
 
       const synced = engine.getSyncedState();

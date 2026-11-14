@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSyncEngine,
-  defaultSyncFilter,
   type CrdtBackend,
   type TextPolicy,
   type Unsubscribe,
@@ -171,8 +170,7 @@ const initialEdited = (): EditedState => ({
   action: onSelect,
 });
 
-const withoutDraft = (key: string, value: unknown): boolean =>
-  defaultSyncFilter(key, value) && key !== "draft";
+const withoutDraft = (key: string): boolean => key !== "draft";
 
 /** A store that does not always hold what it is given: it resets `meta.count` past 3. */
 const resetCount = (state: EditedState): EditedState =>
