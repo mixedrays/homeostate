@@ -148,11 +148,10 @@ const CONNECTED: SyncStatus = Object.freeze({
 
 /**
  * How many applies in a row must contradict what the store changed at a path before the engine
- * stops writing it back. Concurrent writes by other peers contradict it now and then, until the
- * other peers' own writes back end the contradiction; a loop contradicts it on every apply. Peers
- * that kept appending concurrently to a log a subscriber counts contradicted the count up to 5
- * times in a row, so a loop costs a few more round trips to stop. The docs and the contract on
- * `StoreAdapter.setState` name the number.
+ * stops writing it back; see `countContradictions`. Concurrent writes by other peers contradict it
+ * now and then, until the other peers' own writes back end the contradiction; a loop contradicts
+ * it on every apply. Peers that kept appending concurrently to a log a subscriber counts
+ * contradicted the count up to 5 times in a row, so a loop costs a few more round trips to stop.
  */
 const LOOP_THRESHOLD = 6;
 
@@ -168,9 +167,12 @@ const loopMessage = (paths: string[][]): string =>
 /**
  * Reported to `SyncEngineConfig.onError`, with the source `'store'`, when the engine stops
  * writing back paths the store keeps changing while remote changes are applied, so that the
- * peers do not re-write each other's changes forever; see `StoreAdapter.setState`. Its message
- * lists the paths, from the root of the synced state, each as an array of keys. Reported once
- * per set of top-level keys holding them. The engine stays connected.
+ * peers do not re-write each other's changes forever. What a store changes while a remote change
+ * is applied must not change again when the same state is applied a second time, and every peer
+ * must agree on it. Its message lists the paths, from the root of the synced state, each as an
+ * array of keys. Reported once per set of top-level keys holding them. The engine stays
+ * connected. See
+ * {@link https://homeostate.pages.dev/docs/core/sync-engine#write-loops | Write loops}.
  */
 export class WriteLoopError extends Error {
   /**
@@ -635,7 +637,9 @@ export function createSyncEngine<S extends object>(
    * edit, the apply contradicts none of them, and their counts restart. A path the store left as
    * `remote` holds it restarts too when `remote` changed it, since the store kept another peer's
    * value; one that neither changed keeps its count, so a loop over one path still counts while
-   * remote changes to other paths come in between.
+   * remote changes to other paths come in between. A written local change restarts every count
+   * (`restartLoopCounts`). `applyRemote` stops writing back a path whose count reaches
+   * `LOOP_THRESHOLD`, until an apply no longer contradicts it.
    */
   const countContradictions = (remote: Plain, paths: string[][]): void => {
     const previous = lastApplied;
