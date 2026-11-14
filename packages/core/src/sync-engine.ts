@@ -104,7 +104,6 @@ const keptObjects = (
   return kept;
 };
 
-/** Identifies a path in a set. */
 const pathId = (path: string[]): string => JSON.stringify(path);
 
 /** Whether `state` holds a function at `key`, such as an action, which stays local. */
@@ -119,7 +118,6 @@ const holdsAll = (held: Plain | undefined, state: Plain): boolean => {
   return true;
 };
 
-/** A copy of `state` without `keys`. */
 const withoutKeys = (state: Plain, keys: string[]): Plain => {
   const rest = { ...state };
   for (const key of keys) delete rest[key];
@@ -414,12 +412,10 @@ export function createSyncEngine<S extends object>(
     lastSynced = state;
   };
 
-  /** Records the keys of `state`, the store's synced state, as `heldKeys`. */
   const recordHeldKeys = (state: Plain): void => {
     heldKeys = new Set(Object.keys(state));
   };
 
-  /** The store's whole state. */
   const readStore = (): S =>
     call(
       "store",
