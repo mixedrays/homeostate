@@ -28,8 +28,8 @@ export interface CrdtBackendParts {
    */
   watch: (onChange: (own: boolean) => void) => Unsubscribe;
   /**
-   * `CrdtBackend.revision`, which the backend gets as it is; return `undefined` when the library
-   * cannot tell.
+   * `CrdtBackend.revision`, which the backend passes on unchanged; return `undefined` when the
+   * library cannot tell.
    */
   revision: () => unknown;
   /**
@@ -43,10 +43,10 @@ export interface CrdtBackendParts {
 /**
  * Builds a `CrdtBackend` from what varies by CRDT library. The backend:
  *
- * - writes `next` in one `transact`, applying only what differs from `previous` when the engine
- *   gives it, from `{}` when `transact` created the root, and otherwise from `read()`, with
- *   `applyChanges`, `json: true` and the parts' `text`;
- * - reports through `subscribe` only the changes `watch` does not call its own;
+ * - writes `next` in one `transact`, with `applyChanges`, `json: true` and the parts' `text`. It
+ *   applies only what differs from `{}` when `transact` created the root, otherwise from
+ *   `previous` when the engine gives it, and otherwise from `read()`;
+ * - reports through `subscribe` only the changes that `watch` does not mark as its own;
  * - reads with `read`, and has the parts' `revision`.
  *
  * @example
