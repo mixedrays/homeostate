@@ -239,14 +239,16 @@ export function createSyncEngine<S extends object>(
   let applyingRemote = false;
   /**
    * What the backend holds as far as the engine knows: the whole state it last wrote or read,
-   * keys this peer does not sync included. Passed to `backend.write` as `previous`; `undefined`
-   * when unknown.
+   * keys this peer does not sync included, with the store's objects wherever an apply found them
+   * equal; see `recordStoreObjects`. Passed to `backend.write` as `previous`; `undefined` when
+   * unknown.
    */
   let lastSynced: Plain | undefined;
   /**
-   * The synced keys the store held when the engine last wrote it or applied a remote change to
-   * it. A key that leaves this set is one the store removed, and the next write deletes it from
-   * the backend. Any other key that the backend holds and the store lacks is left as it is.
+   * The synced keys the store held when the engine last handled a local change, written or not,
+   * or applied a remote change. A key that leaves this set is one the store removed, and the next
+   * write deletes it from the backend. Any other key that the backend holds and the store lacks
+   * is left as it is.
    */
   let heldKeys: ReadonlySet<string> = new Set();
   /** The backend's revision when `lastSynced` was recorded. */
@@ -269,8 +271,8 @@ export function createSyncEngine<S extends object>(
    */
   let queuedWrite: (() => void) | null = null;
   /**
-   * The store's synced state after the last apply that it did not ignore, unless a local change
-   * was written since; `null` when unknown.
+   * The store's synced state after the last apply that it did not ignore, unless the engine has
+   * handled a local change or disconnected since; `null` when unknown.
    */
   let lastApplied: Plain | null = null;
   /**
@@ -621,7 +623,7 @@ export function createSyncEngine<S extends object>(
   /**
    * Writes `applied`, the store's synced state after an apply that merged a local change into
    * it, and deletes each of the `held` keys it lacks, which the store removed. It is a local
-   * change, so the loop counts start again, as for any written local change.
+   * change, so the loop counts start again, as for any local change.
    */
   const writeLocalChange = (applied: Plain, held: Iterable<string>): void => {
     restartLoopCounts();
@@ -638,8 +640,8 @@ export function createSyncEngine<S extends object>(
    * counted path that the store left as `remote` holds it also restarts when `remote` changed it,
    * since the store kept another peer's value. A counted path that neither side changed keeps its
    * count, so a loop over one path is still counted while remote changes to other paths come in
-   * between. A written local change restarts every count
-   * (`restartLoopCounts`). `applyRemote` stops writing back a path whose count reaches
+   * between. A local change restarts every count, even one that writes nothing; see
+   * `restartLoopCounts`. `applyRemote` stops writing back a path whose count reaches
    * `LOOP_THRESHOLD`, until an apply no longer contradicts it.
    */
   const countContradictions = (remote: Plain, paths: string[][]): void => {
