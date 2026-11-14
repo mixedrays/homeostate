@@ -12,8 +12,8 @@ import { toPlainMap } from "./mapping.js";
 export const hasGap = (doc: Y.Doc): boolean =>
   doc.store.pendingStructs !== null;
 
-/** What a backend shows while its document has a gap. */
-export interface Held {
+/** What a backend shows while its document has a gap: the map's content as it last knew it. */
+interface Held {
   /** The map's content, as `JSON.stringify` would store it; may hold values it would leave out. */
   value: JsonObjectInput;
   /** The `revision` that goes with it. */
@@ -27,91 +27,44 @@ export const copyJson = (value: JsonObjectInput): JsonObject =>
     key === "__proto__" ? undefined : item,
   ) as JsonObject;
 
-/** A shared type, as far as finding its parent goes. */
-type Parent = { _item: Y.Item | null };
-
-/** Whether `transaction` changed `map` or a type inside it. */
-const touches = (map: Y.Map<unknown>, transaction: Y.Transaction): boolean => {
-  for (const type of transaction.changed.keys()) {
-    let at: Parent | null = type;
-    while (at !== null) {
-      if (at === map) return true;
-      // An integrated item's parent is a type.
-      at = (at._item?.parent ?? null) as Parent | null;
-    }
-  }
-  return false;
-};
-
 /**
- * What `map` held before its document's gap, while one is open. Captures the map's content at
- * the start of every transaction that begins with no gap, and keeps the capture once a
- * transaction leaves one. Reads it only when the map has changed since it last knew the
- * content, from a read or a write of its own, so it costs a read only after a change that came
- * neither way.
+ * What `map` held when its backend last read or wrote it, to show while its document has a gap.
+ * It takes no copy of the map when a gap opens, so with the engine's `schedule`, which delays
+ * its read, it lacks the changes that arrived since that read; the store gets them when the gap
+ * closes.
  *
- * It follows the document only while tracked, as while the backend is subscribed.
+ * It shows it only while tracked, as while the backend is subscribed, and reads the map when
+ * tracking starts, unless the last read or write is as recent.
  */
 export const createHold = (
   map: Y.Map<unknown>,
   doc: Y.Doc,
-  /** The document's revision, as it is before a transaction starts. */
-  revision: () => unknown,
+  /** How many transactions have changed the map, as before a transaction starts. */
+  changes: () => number,
 ) => {
   let tracked = 0;
-  /** How many transactions have changed the map since tracking began. */
-  let changes = 0;
-  /** The map's content when it had seen `changes` changes. */
-  let known: { value: JsonObjectInput; changes: number } | undefined;
-  /** What the map held before the transaction that left the gap, or before the current one. */
-  let held: Held | undefined;
+  /** The map's content as last read or written, with `changes` as its revision then. */
+  let known: Held | undefined;
 
   const remember = (value: JsonObjectInput): void => {
-    if (tracked > 0) known = { value, changes };
-  };
-
-  const content = (): JsonObjectInput => {
-    if (known?.changes === changes) return known.value;
-    const value = toPlainMap(map);
-    remember(value);
-    return value;
-  };
-
-  const capture = (): void => {
-    if (!hasGap(doc)) held = { value: content(), revision: revision() };
-  };
-
-  const count = (transaction: Y.Transaction): void => {
-    if (touches(map, transaction)) changes++;
+    known = { value, revision: changes() };
   };
 
   return {
     /** What to show instead of the map, while its document has a gap and the hold is tracked. */
     held: (): Held | undefined =>
-      tracked > 0 && hasGap(doc) ? held : undefined,
+      tracked > 0 && hasGap(doc) ? known : undefined,
 
     /** Records `value` as the map's content, as just read or written. */
     remember,
 
-    /** Starts following the document, until the returned cleanup is called. */
+    /** Shows what the map held while a gap is open, until the returned cleanup is called, once. */
     track: (): (() => void) => {
-      if (tracked++ === 0) {
-        // Opened before tracking began, so only what the map holds now is known.
-        held = hasGap(doc)
-          ? { value: toPlainMap(map), revision: revision() }
-          : undefined;
-        doc.on("beforeTransaction", capture);
-        doc.on("beforeObserverCalls", count);
-      }
-      let stopped = false;
+      // With a gap open already, what the map holds now is all that is known.
+      if (tracked++ === 0 && known?.revision !== changes())
+        remember(toPlainMap(map));
       return () => {
-        if (stopped) return;
-        stopped = true;
-        if (--tracked > 0) return;
-        doc.off("beforeTransaction", capture);
-        doc.off("beforeObserverCalls", count);
-        known = undefined;
-        held = undefined;
+        tracked--;
       };
     },
   };

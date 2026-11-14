@@ -61,18 +61,20 @@ const undoManager = new Y.UndoManager(backend.map, {
 
 To sync into a map you already have, such as one nested in another map, pass it instead of a
 document and a name: `createYjsBackend(map, options)`. It must already be part of a document.
-If a peer later replaces it, or a map holding it, the backend calls `onRemoved` (by default it
-logs with `console.error`): no peer sees its writes from then on, so connect a new engine over
-the map that replaced it.
+If a peer later replaces it, or a map holding it, no peer would see a write to the removed map,
+so from then on the backend's reads and writes throw. The engine reports the removal at once as
+a failure with the source `'backend'`, to `onError` and in `getStatus().failure`, and again for
+each later store change; the store keeps its state. Connect a new engine over the map that
+replaced it.
 
 A provider can deliver a peer's update before an earlier one it depends on, as y-websocket can
 for about one round trip after a reconnect. Yjs then applies the update's deletes and keeps the
 rest waiting, which would hide a value the update replaces. Until the earlier update arrives, a
-subscribed backend shows the state from before it and reports nothing; then it reports one
-change. Local changes still reach the document, merged three ways with what it holds, so they
-never put back hidden values or drop other peers' changes. Every other change waits too, such
-as a peer's change to another key, and so does a backend whose document has an update waiting
-in another shared type. See
+subscribed backend shows the state from before it, as the engine last read or wrote it, and
+reports nothing; then it reports one change. Local changes still reach the document, merged
+three ways with what it holds, so they never put back hidden values or drop other peers'
+changes. Every other change waits too, such as a peer's change to another key, and so does a
+backend whose document has an update waiting in another shared type. See
 [Updates out of order](https://homeostate.pages.dev/docs/crdt-yjs/introduction#updates-out-of-order).
 
 To persist the document, pass `createYjsPersistable(doc)` to `createPersistence`; see the
