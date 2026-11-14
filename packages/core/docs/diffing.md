@@ -411,8 +411,9 @@ child, such as a string held as a plain value or text written under another text
 replaced whole with its next value through `ops.set`, passed through
 [toJsonValue](#tojsonvalue) with `options.json`.
 
-Nothing is written when `ops.kind(target)` is not a record or a list, or when `current` and
-`next` are not both of that kind. Operations run synchronously after the whole diff is
+It throws a `TypeError` naming the three kinds, and writes nothing, when `ops.kind(target)` is
+not a record or a list, or when `current` and `next` are not both of that kind: two records for
+a record, two arrays for a list. Operations run synchronously after the whole diff is
 computed; if one throws, earlier mutations remain, so wrap the call in a transaction when it
 must be atomic.
 

@@ -169,16 +169,43 @@ describe("applyChanges", () => {
     expect(log).toEqual(["set item"]);
   });
 
-  it("leaves a target that is not a record or a list alone", () => {
+  it("throws for a target that is not a record or a list, and writes nothing", () => {
     const { ops, log } = createOps();
     const opaque = new Opaque({ a: 1 });
     const text = new Text("a");
 
-    applyChanges(opaque, { a: 1 }, { a: 2 }, ops);
-    applyChanges(text, {}, { a: 1 }, ops);
-
+    expect(() => applyChanges(opaque, { a: 1 }, { a: 2 }, ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a plain value target, object and object",
+      ),
+    );
+    expect(() => applyChanges(text, {}, { a: 1 }, ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a text target, object and object",
+      ),
+    );
     expect(opaque.json).toEqual({ a: 1 });
     expect(text.value).toBe("a");
+    expect(log).toEqual([]);
+  });
+
+  it("throws when current and next are not the target's kind, and writes nothing", () => {
+    const { ops, log } = createOps();
+    const record = { a: 1 };
+    const list = [1];
+
+    expect(() => applyChanges(record, [1], [2], ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a record target, array and array",
+      ),
+    );
+    expect(() => applyChanges(list, [1], { a: 1 }, ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a list target, array and object",
+      ),
+    );
+    expect(record).toEqual({ a: 1 });
+    expect(list).toEqual([1]);
     expect(log).toEqual([]);
   });
 

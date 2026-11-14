@@ -185,6 +185,30 @@ describe("createCrdtBackend", () => {
     },
   );
 
+  it("reports to the sync engine a root transact hands over that its ops cannot edit as a record", () => {
+    const doc = createDoc(["not a map"]);
+    // A broken backend: it reads its map, but hands `edit` a list in the map's place.
+    const backend = createCrdtBackend(
+      partsOver(doc, {
+        read: () => ({ count: 0 }),
+        transact: (edit) => edit(doc.root as object, plainOps),
+      }),
+    );
+    const store = createTestStore({ count: 0 });
+    const onError = vi.fn();
+    createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
+
+    store.update(() => ({ count: 1 }));
+
+    expect(onError).toHaveBeenCalledWith(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a list target, object and object",
+      ),
+      "backend",
+    );
+    expect(doc.root).toEqual(["not a map"]);
+  });
+
   it("writes as JSON would store it", () => {
     const doc = createDoc({});
     const backend = createCrdtBackend(partsOver(doc));

@@ -6,7 +6,7 @@ import {
   type RecordChange,
 } from "./change.js";
 import { getChanges, type DiffOptions } from "./diff.js";
-import { isRecord, toJsonValue } from "./json.js";
+import { isRecord, kindOf, toJsonValue } from "./json.js";
 
 /**
  * How one store or document writes into its containers. `applyChanges` decides *what* to write;
@@ -164,6 +164,8 @@ const walkList = (
  * @param next What `target` should hold.
  * @param ops How this store or document writes; see {@link ApplyOps}.
  * @param options Passed to `getChanges`.
+ * @throws {TypeError} When `target` is not a record with two records, or a list with two arrays,
+ * as `ops.kind` and `current` and `next` tell. Nothing is written then.
  */
 export const applyChanges = (
   target: object,
@@ -190,5 +192,9 @@ export const applyChanges = (
       [],
       ops,
       options,
+    );
+  else
+    throw new TypeError(
+      `applyChanges needs a record target and two records, or a list target and two arrays, got a ${kind ?? "plain value"} target, ${kindOf(current)} and ${kindOf(next)}`,
     );
 };
