@@ -19,7 +19,7 @@ export const hasOwn = (object: object, key: string): boolean =>
  */
 export const PROTO_KEY = "__proto__";
 
-/** What `value` is, as an error about a broken contract names it. */
+/** The kind of `value`, as an error message about a broken contract names it. */
 export const kindOf = (value: unknown): string =>
   value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 
@@ -39,9 +39,9 @@ export const jsonEntry = (
   hasOwn(record, key) && !isAbsent(record[key]) ? record[key] : undefined;
 
 /**
- * `jsonEqual` with `json`, and `deepEqual` without: entries holding `undefined` or a function are
- * then present and compared by identity, and only `NaN` equals a value that is not `===` to it.
- * The rest of the walk, keys included, is shared.
+ * `jsonEqual` with `json`, and `deepEqual` without. Without `json`, entries holding `undefined`
+ * or a function count as present and compare by identity, and `NaN` is the only value equal to a
+ * value that is not `===` to it. The rest of the walk, keys included, is shared.
  */
 const equal = (a: unknown, b: unknown, json: boolean): boolean => {
   if (a === b) return true;
@@ -104,7 +104,7 @@ export const jsonItemEqual = (a: unknown, b: unknown): boolean =>
 
 /**
  * Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
- * function are left out, such array items, holes included, become `null`, and so do `NaN` and
+ * function are left out; array items holding them, and holes, become `null`, and so do `NaN` and
  * infinite numbers. Own `__proto__` keys are left out too, since the sync engine never syncs
  * them. Only the containers on a path to such a value are copied, so a value that is already
  * JSON is returned as is.
