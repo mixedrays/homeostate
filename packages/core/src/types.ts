@@ -58,20 +58,9 @@ export interface StoreAdapter<S extends object> {
    * is written.
    *
    * What the store changes meanwhile must not change again when the same state is applied a
-   * second time, and every peer must agree on it. A store that breaks this, such as one that
-   * stamps the time on every call, or two peers that enforce contradicting rules, would make
-   * the peers re-write each other's changes forever. The engine compares what the store changes
-   * by path: the record keys from the root, where a change inside an array or a string is a
-   * change of that array or string. An apply contradicts a path when the store changes it, and
-   * the remote state holds another value there than the store held after the apply before; if
-   * the store also changes some path that is not contradicted, such as a key it derives from an
-   * edit, the apply contradicts none. Once 6 applies in a row contradict a path, the engine stops
-   * writing it back, and the store keeps a value there that differs from the backend's. An apply
-   * that changes the path without contradicting it, one in which the store keeps another peer's
-   * new value there, or a written local change starts the count again, and an apply that changes
-   * neither side of the path leaves it as it is. A stopped path is written back again as soon as
-   * an apply no longer contradicts it. The engine reports a stop once per set of top-level keys,
-   * as a `WriteLoopError` to `onError`, or without it with a warning in development.
+   * second time, and every peer must agree on it. Otherwise the engine stops writing back the
+   * paths the store keeps changing and reports a `WriteLoopError`; see
+   * {@link https://homeostate.pages.dev/docs/core/sync-engine#write-loops | Write loops}.
    */
   setState: (state: S) => void;
 
@@ -196,14 +185,11 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    * synchronously, so `getState()` sees it at once.
    *
    * Local changes are still written synchronously. One made while an apply is pending runs that
-   * apply first, merged with the local change against what the backend held before the pending
-   * changes, and writes the result, so neither side's change is lost. Records merge key by key
-   * and arrays item by item, matched as `getChanges` matches them; items both sides inserted at
-   * one place keep the remote ones first. Where both sides changed a value differently, the
-   * local value wins, and a string is one value, never merged as text. A record or array the
-   * store changed inside and the remote side deleted stays deleted, while a value the store
-   * replaced whole is kept. After a backend read or write threw, nothing tells which side changed
-   * what, so the remote changes replace what the local change did to synced keys.
+   * apply first, merged with the local change by `mergeConcurrent` against what the backend held
+   * before the pending changes, and writes the result, so neither side's change is lost; see
+   * {@link https://homeostate.pages.dev/docs/core/sync-engine#coalescing-remote-changes | Coalescing remote changes}.
+   * After a backend read or write threw, nothing tells which side changed what, so the remote
+   * changes replace what the local change did to synced keys.
    *
    * `disconnect()` runs a pending apply too.
    */
@@ -321,19 +307,12 @@ export interface SyncStatus {
    */
   readonly connected: boolean;
   /**
-   * The failure the engine has not recovered from, or `null`. It is set by:
-   * - a failed write, read or `setState` while the engine syncs. The engine stays connected.
-   * - a `connect()` that throws, which leaves it disconnected.
-   * - a `WriteLoopError`, in every build and with or without `onError`. The engine stays connected.
-   *   Unlike `onError`, the status shows a loop each time it comes back.
-   *
-   * Each one sends an `'error'` sync event. A later `'local'`, `'remote'` or `'connect'` sync
-   * event sent while connected clears it, since the store and the backend agree again,
-   * unless the apply that sent it stopped a write loop. `disconnect()` keeps it, to say why the
-   * engine stopped.
-   *
-   * It holds only what the engine has seen. A provider's errors never reach it, and it cannot
-   * clear while the store sends no notification.
+   * The failure the engine has not recovered from, or `null`. A failure while the engine syncs, a
+   * `connect()` that throws, and a `WriteLoopError` set it, each with an `'error'` sync event. A
+   * later `'local'`, `'remote'` or `'connect'` event sent while connected clears it, unless the
+   * apply that sent it stopped a write loop; `disconnect()` keeps it. It holds only what the
+   * engine sees, never a provider's errors; see
+   * {@link https://homeostate.pages.dev/docs/core/sync-engine#what-sets-and-clears-a-failure | What sets and clears a failure}.
    */
   readonly failure: SyncFailure | null;
 }
