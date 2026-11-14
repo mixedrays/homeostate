@@ -210,40 +210,8 @@ const syncPredicate = ({
 };
 
 /**
- * Creates a sync engine that keeps a store (via its adapter) and a CRDT backend
- * in sync in both directions.
- *
- * This is the core abstraction that makes the sync logic state-manager and
- * CRDT-library agnostic.
- *
- * The options are typed by the adapter's state, so `keys` and `omit` take only its key names:
- * `{ omit: ['draft'] }` keeps one key local, `{ keys: ['todos'] }` syncs one alone. See
- * `SyncEngineConfig` for which keys are synced.
- *
- * On `connect()` the two sides are reconciled per key over the filtered view: a key the
- * backend holds wins over the store's value, and a synced key the backend lacks stays in
- * the store and is seeded into the backend unless `seed` is `false`. Afterwards every write
- * gives the backend the store's synced keys and deletes those the store removed, and a key
- * removed from the backend is removed from the store. Any other key the backend holds, such as
- * one a newer peer added that this store cannot hold or one `keys` or `omit` leaves out, stays
- * as it is, so a peer never deletes a key it does not sync. The store's own changes
- * while a remote change is applied, such as a key a reducer normalises or a subscriber derives,
- * are written once the apply ends. Once 6 applies in a row find another peer's value at a path the
- * store changed, and the store changes it again, that path is no longer written, so the peers do
- * not re-write each other's changes forever; see `StoreAdapter.setState`.
- *
- * With `schedule`, remote changes are applied once per scheduled flush instead of one by one.
- * A local change made before the flush applies them first, merged with the local change against
- * what the backend held before them, and writes the result, so neither side's change is lost; see
- * `SyncEngineConfig.schedule`. The same goes for a remote change the backend holds before the
- * engine hears of it, as when a listener subscribed to the document first changes the store as it
- * hears of it; see `CrdtBackend.revision`.
- *
- * `connect()` throws what it runs into, including a `TypeError` for a `read()` or `getState()`
- * that does not return an object. Once connected, what the adapter or the backend throws goes to
- * `onError` when it is given, and otherwise to whoever triggered the work, as before. Whichever
- * way an error goes, the engine sends an `'error'` sync event, and `getStatus()` keeps it until
- * the engine recovers; see `SyncStatus`.
+ * Creates a disconnected sync engine, which keeps a store, through its adapter, and a CRDT
+ * backend in sync in both directions once `connect()` is called.
  *
  * @example
  * ```typescript
@@ -252,6 +220,8 @@ const syncPredicate = ({
  * const engine = createSyncEngine({ backend, adapter, omit: ['draft'] });
  * engine.connect();
  * ```
+ *
+ * @see SyncEngineConfig
  */
 export function createSyncEngine<S extends object>(
   options: SyncEngineOptions<S>,
@@ -478,9 +448,9 @@ export function createSyncEngine<S extends object>(
 
   /**
    * Writes `synced`, the store's synced state, over what the backend holds and deletes the
-   * `removed` keys, which the store removed. Every other key the backend holds stays as it is,
-   * such as one a newer peer added that this store cannot hold. Passes what the backend holds as
-   * `previous`, or nothing when `stale`, so that the backend diffs against its document.
+   * `removed` keys, which the store removed. Every other key the backend holds stays as it is;
+   * see `SyncEngineConfig`. Passes what the backend holds as `previous`, or nothing when `stale`,
+   * so that the backend diffs against its document.
    */
   const writeSynced = (
     synced: Plain,
@@ -603,10 +573,9 @@ export function createSyncEngine<S extends object>(
     // The store's notifications were ignored meanwhile, so a key it normalised or derived from
     // `next` reaches the backend only here. An echo of `next` alone equals `target`.
     recordHeldKeys(applied);
-    // A key the store lacks after the apply and lacked before is one it cannot hold or does not
-    // sync, such as a key a MobX class does not declare, so it stays in the backend. One it held
-    // before, it removed. Compared with `patched` rather than `target`, which is equal as JSON but
-    // shares no object with the store, so that what the apply left alone is skipped by identity.
+    // A key the store lacks after the apply is one it removed only if it held it before; see
+    // `StoreAdapter.setState`. Compared with `patched` rather than `target`, which is equal as JSON
+    // but shares no object with the store, so that what the apply left alone is skipped by identity.
     const paths = changedPaths(patched, applied).filter(
       ([key]) => hasOwn(applied, key) || hasOwn(synced, key),
     );
