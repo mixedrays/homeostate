@@ -465,6 +465,53 @@ describe("mergeConcurrent", () => {
 
       expect(merge({ a: 0 }, local, { a: 1 })).toBe(local);
     });
+
+    // The merge tells whether the remote value equals the base or the local one from merging
+    // their contents, so these check it a few levels down, with the remote value a JSON copy.
+    const doc = {
+      title: "Doc",
+      sections: [
+        { id: "s1", paragraphs: [{ id: "p1", spans: [{ text: "a" }] }] },
+        { id: "s2", paragraphs: [{ id: "p2", spans: [{ text: "b" }] }] },
+      ],
+    };
+    /** `doc` with the span of section `section` holding `text`, sharing the rest. */
+    const editSpan = (section: number, text: string): typeof doc => ({
+      ...doc,
+      sections: doc.sections.map((each, index) =>
+        index === section
+          ? {
+              ...each,
+              paragraphs: [{ ...each.paragraphs[0], spans: [{ text }] }],
+            }
+          : each,
+      ),
+    });
+    const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+    it("returns the local value where the remote one equals the base, at any depth", () => {
+      const local = editSpan(1, "B");
+
+      expect(merge(doc, local, copy(doc))).toBe(local);
+    });
+
+    it("returns the local value where the remote one holds the same changes, at any depth", () => {
+      const local = editSpan(1, "B");
+
+      expect(merge(doc, local, copy(local))).toBe(local);
+      expect(merge(doc.sections, local.sections, copy(local.sections))).toBe(
+        local.sections,
+      );
+    });
+
+    it("keeps by identity each list item only one side changed", () => {
+      const local = editSpan(0, "A");
+      const remote = copy(editSpan(1, "B"));
+      const merged = merge(doc, local, remote) as typeof doc;
+
+      expect(merged.sections[0]).toBe(local.sections[0]);
+      expect(merged.sections[1]).toBe(remote.sections[1]);
+    });
   });
 
   it("returns undefined for a value the merge leaves absent", () => {

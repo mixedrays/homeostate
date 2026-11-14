@@ -339,21 +339,18 @@ const matchByUniqueValues = (
 };
 
 /**
- * Aligns `side` with `base`, two arrays at `path`: as `getChanges` aligns them, with the items
- * it left unmatched re-paired by `matchByUniqueValues`.
+ * Aligns `side` with `base`, two arrays at `path`, by `changes`, the script `getChanges` made
+ * between them, with the items it left unmatched re-paired by `matchByUniqueValues`.
  */
 const alignItems = (
+  changes: readonly ListChange[],
   base: unknown[],
   side: unknown[],
   indexBase: () => EntryIndex,
   text: TextPolicy | undefined,
   path: Path,
 ): Alignment => {
-  const alignment = align(
-    getChanges(base, side, diffOptions(text, path)),
-    base.length,
-    false,
-  );
+  const alignment = align(changes, base.length, false);
   matchByUniqueValues(alignment, base, side, indexBase, text, path);
   return alignment;
 };
@@ -391,58 +388,146 @@ const mergeSequence = <T>(
   return merged;
 };
 
+/**
+ * How the three values of a merge compare as JSON, in the order `merge` checks them:
+ * - `"local unchanged"`: base and local are equal, and the merge is the remote value;
+ * - `"remote unchanged"`: base and remote are equal, and it is the local value;
+ * - `"same change"`: local and remote are equal, and it is the local value;
+ * - `"merged"`: no two are equal.
+ */
+type Comparison =
+  "local unchanged" | "remote unchanged" | "same change" | "merged";
+
+/** Where `merge` tells its caller how its three values compare. */
+interface Report {
+  found: Comparison;
+}
+
+/** Records `comparison` in `report`, if given, and returns `value`. */
+const found = <T>(
+  report: Report | undefined,
+  comparison: Comparison,
+  value: T,
+): T => {
+  if (report !== undefined) report.found = comparison;
+  return value;
+};
+
+/**
+ * Merges records key by key, where `base` and `local` differ. Whether `remote` equals `base` or
+ * `local` follows from how each key's values compare, which each key's merge reports. Only the
+ * remote values of keys `local` left unchanged are compared here, and only when the other keys
+ * leave the question open.
+ */
 const mergeRecords = (
   base: Record<string, unknown>,
   local: Record<string, unknown>,
   remote: Record<string, unknown>,
   text: TextPolicy | undefined,
   path: Path,
-): Record<string, unknown> => {
-  const merged: Record<string, unknown> = {};
+  report: Report | undefined,
+): unknown => {
   const keys = new Set([
     ...Object.keys(remote),
     ...Object.keys(local),
     ...Object.keys(base),
   ]);
   keys.delete(PROTO_KEY);
+  const values: unknown[] = [];
+  // The keys whose base and local values are equal.
+  const unchanged: string[] = [];
+  let remoteUnchanged = true;
+  let sameChange = true;
+  const child: Report = { found: "merged" };
   for (const key of keys) {
-    const value = merge(
-      jsonEntry(base, key),
-      jsonEntry(local, key),
-      jsonEntry(remote, key),
-      text,
-      [...path, key],
+    values.push(
+      merge(
+        jsonEntry(base, key),
+        jsonEntry(local, key),
+        jsonEntry(remote, key),
+        text,
+        [...path, key],
+        child,
+      ),
     );
+    if (child.found === "local unchanged") unchanged.push(key);
+    else {
+      // A remote value equal to the base value differs from the local one, and the reverse.
+      if (child.found !== "remote unchanged") remoteUnchanged = false;
+      if (child.found !== "same change") sameChange = false;
+    }
+  }
+  // Where the base and local values are equal, the remote one equals both or neither.
+  if (
+    (remoteUnchanged || sameChange) &&
+    unchanged.every((key) =>
+      jsonEqual(jsonEntry(base, key), jsonEntry(remote, key)),
+    )
+  )
+    return found(
+      report,
+      remoteUnchanged ? "remote unchanged" : "same change",
+      local,
+    );
+  const merged: Record<string, unknown> = {};
+  let index = 0;
+  for (const key of keys) {
+    const value = values[index++];
     if (value !== undefined) merged[key] = value;
   }
-  return merged;
+  return found(report, "merged", merged);
 };
 
-/** Merges arrays item by item, each item read as JSON would store it. */
+/**
+ * Merges arrays item by item, each item read as JSON would store it, where `base` and `local`
+ * differ. The merge needs each side's script from `base` anyway, and they tell how the arrays
+ * compare: `remote` equals `base` when its script is empty, and `local` when the two scripts are
+ * equal. An item a side's alignment keeps is equal to the base item, and one it changes is not,
+ * so an item only one side changed merges without comparing it again.
+ */
 const mergeArrays = (
   base: unknown[],
   local: unknown[],
   remote: unknown[],
   text: TextPolicy | undefined,
   path: Path,
-): unknown[] => {
+  report: Report | undefined,
+): unknown => {
+  const options = diffOptions(text, path);
+  const remoteChanges = getChanges(base, remote, options);
+  if (remoteChanges.length === 0)
+    return found(report, "remote unchanged", local);
+  const localChanges = getChanges(base, local, options);
+  // A script turns `base` into its side, as JSON would store it.
+  if (jsonEqual(localChanges, remoteChanges))
+    return found(report, "same change", local);
   // Built at most once, for both sides, and only if a side needs it.
   let baseIndex: EntryIndex | undefined;
   const indexBase = (): EntryIndex => (baseIndex ??= indexEntries(base));
-  return mergeSequence(
-    base.length,
-    alignItems(base, local, indexBase, text, path),
-    alignItems(base, remote, indexBase, text, path),
-    local,
-    remote,
-    (item, inLocal, inRemote, at) =>
-      merge(
-        jsonItem(base[item]),
-        jsonItem(local[inLocal]),
-        jsonItem(remote[inRemote]),
-        text,
-        [...path, at],
-      ),
+  const ours = alignItems(localChanges, base, local, indexBase, text, path);
+  const theirs = alignItems(remoteChanges, base, remote, indexBase, text, path);
+  return found(
+    report,
+    "merged",
+    mergeSequence(
+      base.length,
+      ours,
+      theirs,
+      local,
+      remote,
+      (item, inLocal, inRemote, at) => {
+        // An item a side kept is equal to the base item, so the merge is the other side's.
+        if (ours.fates[item] === "kept") return jsonItem(remote[inRemote]);
+        if (theirs.fates[item] === "kept") return jsonItem(local[inLocal]);
+        return merge(
+          jsonItem(base[item]),
+          jsonItem(local[inLocal]),
+          jsonItem(remote[inRemote]),
+          text,
+          [...path, at],
+        );
+      },
+    ),
   );
 };
 
@@ -458,29 +543,39 @@ const mergeText = (base: string, local: string, remote: string): string =>
     (_item, _inLocal, inRemote) => remote[inRemote],
   ).join("");
 
-/** `mergeConcurrent` for the value at `path`, with the strings `text` marks as text. */
+/**
+ * `mergeConcurrent` for the value at `path`, with the strings `text` marks as text, telling
+ * `report` how its three values compare. Where all three are records, or all three arrays, it
+ * tells whether `remote` equals `base` or `local` from merging their contents, rather than
+ * comparing the whole values first and then each of their contents again.
+ */
 const merge = (
   base: unknown,
   local: unknown,
   remote: unknown,
   text: TextPolicy | undefined,
   path: Path,
+  report?: Report,
 ): unknown => {
-  if (jsonEqual(base, local)) return remote;
-  if (jsonEqual(base, remote) || jsonEqual(local, remote)) return local;
-  if (remote === undefined && editedInPlace(base, local, text, path))
-    return undefined;
+  if (jsonEqual(base, local)) return found(report, "local unchanged", remote);
+  // A side that has not changed may share its values with `base`.
+  if (base === remote) return found(report, "remote unchanged", local);
+  if (local === remote) return found(report, "same change", local);
   if (isRecord(base) && isRecord(local) && isRecord(remote))
-    return mergeRecords(base, local, remote, text, path);
+    return mergeRecords(base, local, remote, text, path, report);
   if (Array.isArray(base) && Array.isArray(local) && Array.isArray(remote))
-    return mergeArrays(base, local, remote, text, path);
+    return mergeArrays(base, local, remote, text, path, report);
+  if (jsonEqual(base, remote)) return found(report, "remote unchanged", local);
+  if (jsonEqual(local, remote)) return found(report, "same change", local);
+  if (remote === undefined && editedInPlace(base, local, text, path))
+    return found(report, "merged", undefined);
   if (
     typeof local === "string" &&
     typeof remote === "string" &&
     isText(base, text, path)
   )
-    return mergeText(base, local, remote);
-  return local;
+    return found(report, "merged", mergeText(base, local, remote));
+  return found(report, "merged", local);
 };
 
 /**
