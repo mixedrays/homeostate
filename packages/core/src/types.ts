@@ -1,11 +1,3 @@
-/**
- * Core types for the state-manager and CRDT-backend agnostic sync engine.
- * These interfaces let any store be kept in sync through any replicated backend.
- */
-
-/**
- * Unsubscribe function returned by subscribe
- */
 export type Unsubscribe = () => void;
 
 /**
@@ -65,10 +57,7 @@ export interface StoreAdapter<S extends object> {
    */
   setState: (state: S) => void;
 
-  /**
-   * Subscribe to store changes that should be written to the backend.
-   * @returns Unsubscribe function
-   */
+  /** Subscribe to store changes that should be written to the backend. */
   subscribe: (onStoreChange: () => void) => Unsubscribe;
 
   /**
@@ -141,10 +130,7 @@ export interface CrdtBackend {
    */
   revision: () => unknown;
 
-  /**
-   * Notify about changes that did not come through this backend's own `write`.
-   * @returns Unsubscribe function
-   */
+  /** Notify about changes that did not come through this backend's own `write`. */
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
 
@@ -226,9 +212,7 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
  */
 export type SyncEngineOptions<S extends object = JsonObject> =
   SyncEngineConfig<S> & {
-    /** The CRDT backend the store syncs with */
     backend: CrdtBackend;
-    /** The store adapter of the store to sync */
     adapter: StoreAdapter<S>;
   };
 
@@ -240,7 +224,6 @@ export type SyncEngineOptions<S extends object = JsonObject> =
  */
 export type SetupOptions<S extends object = JsonObject> =
   SyncEngineConfig<S> & {
-    /** The CRDT backend the store syncs with */
     backend: CrdtBackend;
     /**
      * Who connects the engine:
@@ -321,13 +304,11 @@ export interface SyncStatus {
   readonly failure: SyncFailure | null;
 }
 
-/**
- * The sync engine interface - manages bidirectional sync between a store and a backend
- */
+/** Keeps a store and a backend in sync, both ways, while connected; see `createSyncEngine`. */
 export interface SyncEngine {
-  /** Start synchronization */
+  /** Reconciles the store with the backend, then syncs both ways; does nothing while connected. */
   connect: () => void;
-  /** Stop synchronization and cleanup */
+  /** Stops syncing after a pending apply or queued write runs; does nothing while disconnected. */
   disconnect: () => void;
   /**
    * The engine's status: whether it is connected, and what failed. It is up to date whenever it
@@ -374,7 +355,6 @@ export interface PersistableDoc {
    * Report every change to the document, local or from a peer, as an update `apply`
    * accepts. Changes made by `apply` itself are not reported, but a change made in response
    * while `apply` runs, such as a sync engine's write, is reported.
-   * @returns Unsubscribe function
    */
   subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;
 }
@@ -412,7 +392,6 @@ export interface PersistenceAdapter {
   clear: (key: string) => Promise<void>;
 }
 
-/** Configuration options for `createPersistence` */
 export interface PersistenceConfig {
   /** Name the document is stored under, such as its room name. */
   key: string;
