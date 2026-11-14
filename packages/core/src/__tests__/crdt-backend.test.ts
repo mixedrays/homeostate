@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createCrdtBackend,
+  createSyncEngine,
   type ApplyOps,
   type CrdtBackendParts,
   type JsonObject,
   type TextPolicy,
 } from "../index.js";
+import { createTestStore, threeTodos, todo } from "./helpers.js";
 
 type Plain = Record<string, unknown>;
 
@@ -55,51 +57,66 @@ const createDoc = (root?: unknown) => {
 
 type Doc = ReturnType<typeof createDoc>;
 
-const partsOver =
-  (doc: Doc, extra: Partial<CrdtBackendParts> = {}) =>
-  (): CrdtBackendParts => ({
-    read: () => {
-      doc.reads++;
-      return structuredClone((doc.root as JsonObject | undefined) ?? {});
-    },
-    transact: (edit) => {
-      const created =
-        doc.root === null ||
-        typeof doc.root !== "object" ||
-        Array.isArray(doc.root);
-      if (created) doc.root = {};
-      edit(doc.root as object, plainOps, created);
-      doc.changes++;
-      doc.listeners.forEach((listener) => listener(true));
-    },
-    watch: (onChange) => {
-      doc.listeners.add(onChange);
-      return () => {
-        doc.listeners.delete(onChange);
-      };
-    },
-    ...extra,
-  });
+const partsOver = (
+  doc: Doc,
+  extra: Partial<CrdtBackendParts> = {},
+  ops: ApplyOps = plainOps,
+): CrdtBackendParts => ({
+  read: () => {
+    doc.reads++;
+    return structuredClone((doc.root as JsonObject | undefined) ?? {});
+  },
+  transact: (edit) => {
+    const created =
+      doc.root === null ||
+      typeof doc.root !== "object" ||
+      Array.isArray(doc.root);
+    if (created) doc.root = {};
+    edit(doc.root as object, ops, created);
+    doc.changes++;
+    doc.listeners.forEach((listener) => listener(true));
+  },
+  watch: (onChange) => {
+    doc.listeners.add(onChange);
+    return () => {
+      doc.listeners.delete(onChange);
+    };
+  },
+  revision: () => undefined,
+  ...extra,
+});
+
+/** `plainOps` with every string a text, whose edits `editText` records instead of making. */
+const textOps = () => ({
+  ...plainOps,
+  kind: (value: unknown) =>
+    typeof value === "string" ? ("text" as const) : plainOps.kind(value),
+  editText: vi.fn(),
+});
 
 describe("createCrdtBackend", () => {
-  it("builds its parts once, for a policy that marks no string as text by default", () => {
-    const build = vi.fn((text: TextPolicy) => {
-      expect(text(["title"])).toBe(false);
-      return partsOver(createDoc({}))();
-    });
+  it("replaces every changed string whole without a text policy", () => {
+    const doc = createDoc({ title: "a", note: "a" });
+    const ops = textOps();
+    const backend = createCrdtBackend(partsOver(doc, {}, ops));
 
-    createCrdtBackend(build);
+    backend.write({ title: "ab", note: "ab" }, { title: "a", note: "a" });
 
-    expect(build).toHaveBeenCalledTimes(1);
+    expect(ops.editText).not.toHaveBeenCalled();
+    expect(doc.root).toEqual({ title: "ab", note: "ab" });
   });
 
-  it("builds its parts for the text policy it is given", () => {
-    const policy: TextPolicy = (path) => path[0] === "title";
-    const build = vi.fn(partsOver(createDoc({})));
+  it("edits the strings its text policy marks in place, and replaces the others whole", () => {
+    const doc = createDoc({ title: "a", note: "a" });
+    const ops = textOps();
+    const text: TextPolicy = (path) => path[0] === "title";
+    const backend = createCrdtBackend({ ...partsOver(doc, {}, ops), text });
 
-    createCrdtBackend(build, { text: policy });
+    backend.write({ title: "ab", note: "ab" }, { title: "a", note: "a" });
 
-    expect(build).toHaveBeenCalledWith(policy);
+    expect(ops.editText).toHaveBeenCalledTimes(1);
+    expect(ops.editText).toHaveBeenCalledWith("a", 1, 0, "b", ["title"]);
+    expect(doc.root).toEqual({ title: "a", note: "ab" });
   });
 
   it("writes through transact, so that read() matches", () => {
@@ -123,6 +140,17 @@ describe("createCrdtBackend", () => {
 
     expect(doc.reads).toBe(0);
     expect(doc.root).toEqual({ count: 2, label: "b" });
+  });
+
+  it("reads its document once when the sync engine seeds the keys it lacks", () => {
+    const doc = createDoc({ todos: [todo("remote")] });
+    const backend = createCrdtBackend(partsOver(doc));
+    const store = createTestStore(threeTodos());
+
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
+
+    expect(doc.reads).toBe(1);
+    expect(doc.root).toEqual({ ...threeTodos(), todos: [todo("remote")] });
   });
 
   it("diffs against its document without previous", () => {
@@ -156,6 +184,30 @@ describe("createCrdtBackend", () => {
       expect(doc.root).toEqual({ count: 1 });
     },
   );
+
+  it("reports to the sync engine a root transact hands over that its ops cannot edit as a record", () => {
+    const doc = createDoc(["not a map"]);
+    // A broken backend: it reads its map, but hands `edit` a list in the map's place.
+    const backend = createCrdtBackend(
+      partsOver(doc, {
+        read: () => ({ count: 0 }),
+        transact: (edit) => edit(doc.root as object, plainOps),
+      }),
+    );
+    const store = createTestStore({ count: 0 });
+    const onError = vi.fn();
+    createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
+
+    store.update(() => ({ count: 1 }));
+
+    expect(onError).toHaveBeenCalledWith(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a list target, object and object",
+      ),
+      "backend",
+    );
+    expect(doc.root).toEqual(["not a map"]);
+  });
 
   it("writes as JSON would store it", () => {
     const doc = createDoc({});
@@ -194,15 +246,14 @@ describe("createCrdtBackend", () => {
     expect(doc.listeners.size).toBe(0);
   });
 
-  it("has the revision its parts give, and none without one", () => {
+  it("has the revision its parts give", () => {
     const doc = createDoc({});
     const backend = createCrdtBackend(
       partsOver(doc, { revision: () => doc.changes }),
     );
 
-    expect(backend.revision?.()).toBe(0);
+    expect(backend.revision()).toBe(0);
     backend.write({ count: 1 });
-    expect(backend.revision?.()).toBe(1);
-    expect("revision" in createCrdtBackend(partsOver(doc))).toBe(false);
+    expect(backend.revision()).toBe(1);
   });
 });

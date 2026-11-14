@@ -235,6 +235,7 @@ export const createStandIn = (
         held = update;
       } else emit(update);
     },
+    revision: () => undefined,
     subscribe: (onRemoteChange) => {
       remoteListeners.add(onRemoteChange);
       return () => {

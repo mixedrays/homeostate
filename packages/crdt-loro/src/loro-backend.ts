@@ -28,25 +28,26 @@ export const createLoroBackend = (
   const map = doc.getMap(name);
   const origin = `homeostate:${name}#${instances++}`;
 
-  return createCrdtBackend((text) => {
-    const ops = createLoroOps(text);
-    return {
-      // `toJSON` builds objects by assignment, so a peer's `__proto__` entry becomes a
-      // prototype; the sync engine copies such objects into plain ones before they reach the
-      // store.
-      read: (): JsonObject => map.toJSON(),
+  const ops = createLoroOps(options.text);
 
-      transact: (edit) => {
-        edit(map, ops);
-        doc.commit({ origin });
-      },
+  return createCrdtBackend({
+    // `toJSON` builds objects by assignment, so a peer's `__proto__` entry becomes a
+    // prototype; the sync engine copies such objects into plain ones before they reach the
+    // store.
+    read: (): JsonObject => map.toJSON(),
 
-      watch: (onChange) =>
-        map.subscribe((event) => onChange(event.origin === origin)),
+    transact: (edit) => {
+      edit(map, ops);
+      doc.commit({ origin });
+    },
 
-      // The document counts every op, committed or not. A checkout changes the state without
-      // one.
-      revision: () => (doc.isDetached() ? undefined : doc.opCount()),
-    };
-  }, options);
+    watch: (onChange) =>
+      map.subscribe((event) => onChange(event.origin === origin)),
+
+    // The document counts every op, committed or not. A checkout changes the state without
+    // one.
+    revision: () => (doc.isDetached() ? undefined : doc.opCount()),
+
+    text: options.text,
+  });
 };

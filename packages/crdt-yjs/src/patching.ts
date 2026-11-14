@@ -8,9 +8,9 @@ import { toSharedType } from "./mapping.js";
  * character by character, and any other string is a plain value. A string held as the other
  * kind becomes the configured one when it next changes.
  *
- * @param text Which strings, by path from the synced map, are Y.Texts.
+ * @param text Which strings, by path from the synced map, are Y.Texts. Defaults to none.
  */
-export const createYjsOps = (text: TextPolicy): ApplyOps => ({
+export const createYjsOps = (text?: TextPolicy): ApplyOps => ({
   kind: (value) =>
     value instanceof Y.Map
       ? "record"

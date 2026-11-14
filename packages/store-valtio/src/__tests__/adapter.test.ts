@@ -34,7 +34,10 @@ describe("ValtioAdapter", () => {
   it("seeds the backend, writes proxy mutations, and applies remote changes", async () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createValtioAdapter(state));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    });
 
     engine.connect();
     expect(backend.read()).toEqual(plain(state));
@@ -61,7 +64,10 @@ describe("ValtioAdapter", () => {
     const state = createTodos();
     const backend = createMemoryBackend({ todos: [], filter: "active" });
 
-    createSyncEngine(backend, createValtioAdapter(state)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    }).connect();
 
     expect(plain(state)).toEqual({ todos: [], filter: "active" });
   });
@@ -69,7 +75,10 @@ describe("ValtioAdapter", () => {
   it("keeps the proxy mutable after remote changes and syncs those mutations back", async () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createValtioAdapter(state)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    }).connect();
 
     backend.receive({ todos: [{ id: "9", done: false }], filter: "all" });
     state.toggle("9");
@@ -85,7 +94,10 @@ describe("ValtioAdapter", () => {
   it("preserves the identity of unchanged subtrees when applying remote changes", () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createValtioAdapter(state)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    }).connect();
     const untouched = snapshot(state).todos[1];
 
     backend.receive({
@@ -103,7 +115,10 @@ describe("ValtioAdapter", () => {
   it("stops both directions after disconnect", async () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createValtioAdapter(state));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    });
     engine.connect();
 
     engine.disconnect();
@@ -118,7 +133,10 @@ describe("ValtioAdapter", () => {
   it("writes a mutation after a microtask", async () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createValtioAdapter(state)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    }).connect();
 
     state.filter = "done";
     expect((backend.read() as { filter: string }).filter).toBe("all");
@@ -129,7 +147,10 @@ describe("ValtioAdapter", () => {
   it("writes a mutation made just before disconnect", () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createValtioAdapter(state));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    });
     engine.connect();
 
     state.filter = "done";
@@ -167,7 +188,10 @@ describe("ValtioAdapter", () => {
       async (_, method, result) => {
         const state = proxy({ log: ["a", "b", "c"] });
         const backend = createMemoryBackend();
-        createSyncEngine(backend, createValtioAdapter(state)).connect();
+        createSyncEngine({
+          backend,
+          adapter: createValtioAdapter(state),
+        }).connect();
         const write = vi.spyOn(backend, "write");
 
         method(state.log);
@@ -183,7 +207,10 @@ describe("ValtioAdapter", () => {
   it("writes nothing back and sends no local event for a remote change", async () => {
     const state = createTodos();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createValtioAdapter(state));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    });
     engine.connect();
     const write = vi.spyOn(backend, "write");
     const events: SyncEvent[] = [];
@@ -205,7 +232,10 @@ describe("ValtioAdapter", () => {
   it("keeps a mutation a remote change arrives before, merged with it", async () => {
     const state = proxy({ log: [] as string[], title: "" });
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createValtioAdapter(state)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createValtioAdapter(state),
+    }).connect();
 
     state.log.push("local");
     backend.receive({ log: [], title: "remote" });

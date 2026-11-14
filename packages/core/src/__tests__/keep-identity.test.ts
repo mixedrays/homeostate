@@ -173,6 +173,26 @@ describe("keepIdentity", () => {
     expect(result.todos[1]).toBe(item);
   });
 
+  it("takes changed strings from next, in records, in arrays and at the root, sharing the rest", () => {
+    const previous = {
+      doc: { body: "Plan the trip", title: "Trip" },
+      tags: ["one", "two", "three"],
+      notes: [{ text: "pack" }, { text: "book" }],
+    };
+    const next = {
+      doc: { body: "Plan the long trip 🚗", title: "Trip" },
+      tags: ["one", "2", "three", "four"],
+      notes: [{ text: "pack" }, { text: "book 🏨" }],
+    };
+
+    const result = keepIdentity(previous, next);
+
+    expect(result).toEqual(next);
+    expect(result.notes[0]).toBe(previous.notes[0]);
+    expect(keepIdentity("Plan", "Plan 🚗")).toBe("Plan 🚗");
+    expect(keepIdentity("Plan", "Plan")).toBe("Plan");
+  });
+
   it("edits nested arrays inside objects inside arrays", () => {
     const oldState = { todos: [{ id: "1", tags: ["a"] }] };
     const newState = {

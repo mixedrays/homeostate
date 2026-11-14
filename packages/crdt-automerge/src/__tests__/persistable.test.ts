@@ -178,8 +178,14 @@ describe("two peers relaying through createAutomergePersistable", () => {
 
       relay(0);
       if (relayFirst) relay(1);
-      createSyncEngine(backends[0], stores[0].adapter).connect();
-      createSyncEngine(backends[1], stores[1].adapter).connect();
+      createSyncEngine({
+        backend: backends[0],
+        adapter: stores[0].adapter,
+      }).connect();
+      createSyncEngine({
+        backend: backends[1],
+        adapter: stores[1].adapter,
+      }).connect();
       if (!relayFirst) relay(1);
 
       stores[0].setState({ todos: ["a", "b"], count: 0 });

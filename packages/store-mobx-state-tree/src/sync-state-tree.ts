@@ -23,14 +23,14 @@ export type SyncStateTreeOptions<S extends object = JsonObject> =
  * takes the node, a root instance or a subtree, and its options: the `backend`, any `CrdtBackend`
  * such as `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
  * `connect` mode, and the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
- * `onError`, `ready`). It creates the store adapter and the sync engine and returns the engine, so
+ * `onError`). It creates the store adapter and the sync engine and returns the engine, so
  * `engine.disconnect()` stops syncing and `engine.connect()` syncs again.
  *
  * The node connects before the helper returns. With `connect: "manual"`, nothing reads or writes
  * the node's state or the backend until the app calls `engine.connect()`, for example once its
- * provider has synced. With `ready`, the node connects as usual, adopts remote changes, and writes
- * nothing until `ready` resolves. The node's snapshot must be an object, as a model's or a map's is: an array
- * node makes `connect()` throw a `TypeError`.
+ * provider has synced or `persistence.whenLoaded` has resolved, so that the node does not seed its
+ * initial state over the room's. The node's snapshot must be an object, as a model's or a map's
+ * is: an array node makes `connect()` throw a `TypeError`.
  *
  * Destroying the node disconnects the engine, whether `destroy` is called on the node or on an
  * ancestor, or a change to its parent removes it from the tree. This writes nothing to the backend.
@@ -79,9 +79,10 @@ export function syncStateTree<S extends object>(
   const { backend, connect = "auto", ...config } = options;
   let alive = isAlive(node);
   const adapter = createMobxStateTreeAdapter<S>(node);
-  const engine = createSyncEngine(
+  const engine = createSyncEngine({
+    ...config,
     backend,
-    {
+    adapter: {
       getState: () => adapter.getState(),
       // `disconnect()` runs a pending apply. On a dying node, it would run `beforeDestroy` hooks
       // again, and abort the destroy if the remote state does not fit the model.
@@ -90,8 +91,7 @@ export function syncStateTree<S extends object>(
       },
       subscribe: (onStoreChange) => adapter.subscribe(onStoreChange),
     },
-    config,
-  );
+  });
   addDisposer(node, () => {
     alive = false;
     engine.disconnect();

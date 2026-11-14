@@ -36,10 +36,10 @@ describe("scopeAdapter over a Valtio proxy", () => {
   it("reconciles a remote change into the slice, leaving the rest of the proxy untouched", async () => {
     const state = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createValtioAdapter(state), docScope),
-    ).connect();
+      adapter: scopeAdapter(createValtioAdapter(state), docScope),
+    }).connect();
     const { notes, ui } = state;
     const item = state.doc.items[0];
 
@@ -59,10 +59,10 @@ describe("scopeAdapter over a Valtio proxy", () => {
   it("adds no write for a change outside the slice", async () => {
     const state = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createValtioAdapter(state), docScope),
-    ).connect();
+      adapter: scopeAdapter(createValtioAdapter(state), docScope),
+    }).connect();
     const write = vi.spyOn(backend, "write");
 
     state.ui.open = true;
@@ -77,8 +77,14 @@ describe("scopeAdapter over a Valtio proxy", () => {
     const docBackend = createMemoryBackend();
     const notesBackend = createMemoryBackend();
     const adapter = createValtioAdapter(state);
-    createSyncEngine(docBackend, scopeAdapter(adapter, docScope)).connect();
-    createSyncEngine(notesBackend, scopeAdapter(adapter, notesScope)).connect();
+    createSyncEngine({
+      backend: docBackend,
+      adapter: scopeAdapter(adapter, docScope),
+    }).connect();
+    createSyncEngine({
+      backend: notesBackend,
+      adapter: scopeAdapter(adapter, notesScope),
+    }).connect();
     const notesWrite = vi.spyOn(notesBackend, "write");
 
     docBackend.receive({ title: "remote", items: [] });
@@ -91,10 +97,10 @@ describe("scopeAdapter over a Valtio proxy", () => {
   it("keeps syncing when the app replaces the slice's object", async () => {
     const state = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createValtioAdapter(state), docScope),
-    ).connect();
+      adapter: scopeAdapter(createValtioAdapter(state), docScope),
+    }).connect();
 
     state.doc = { title: "replaced", items: [] };
     await Promise.resolve();

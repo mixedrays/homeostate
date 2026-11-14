@@ -122,7 +122,7 @@ describe("homeostate enhancer", () => {
     store.dispatch(toggledDark());
 
     expect(store.getState()).toEqual({ todos: [], ui: { dark: true } });
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
 
     store.homeostate.connect();
@@ -134,13 +134,13 @@ describe("homeostate enhancer", () => {
   it("stops syncing on disconnect() and syncs again on connect()", () => {
     const backend = createMemoryBackend();
     const store = legacy_createStore(rootReducer, homeostate({ backend }));
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
 
     store.homeostate.disconnect();
     store.dispatch(added(milk));
     backend.receive({ todos: [], ui: { dark: true } });
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(store.getState()).toEqual({ todos: [milk], ui: { dark: false } });
     expect(backend.read()).toEqual({ todos: [], ui: { dark: true } });
 
@@ -158,7 +158,7 @@ describe("homeostate enhancer", () => {
       homeostate<RootState>({
         backend,
         keys: ["todos"],
-        seed: "never",
+        seed: false,
         onError: (_error, source) => errors.push(source),
       }),
     );
@@ -240,7 +240,7 @@ describe("homeostate enhancer", () => {
         applyMiddleware(middleware),
       ) as StoreEnhancer<{ homeostate: SyncEngine }>,
     );
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
 
     backend.receive({ todos: [milk], ui: { dark: false } });
 
@@ -256,7 +256,7 @@ describe("homeostate enhancer", () => {
       middleware: (getDefault) => getDefault().concat(middleware),
       enhancers: (getDefault) => getDefault().concat(homeostate({ backend })),
     });
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
 
     store.dispatch(added(milk));
     backend.receive({ todos: [milk], ui: { dark: true } });
@@ -285,53 +285,5 @@ describe("homeostate enhancer", () => {
     expectTypeOf(prepended.dispatch).toExtend<
       ThunkDispatch<RootState, undefined, UnknownAction>
     >();
-  });
-});
-
-describe("homeostate enhancer with ready", () => {
-  const settled = (): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve));
-
-  const createCounter = (options: Parameters<typeof homeostate>[0]) =>
-    configureStore({
-      reducer: { ui: ui.reducer },
-      enhancers: (getDefaultEnhancers) =>
-        getDefaultEnhancers().prepend(homeostate(options)),
-    });
-
-  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
-    const backend = createMemoryBackend();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-
-    const store = createCounter({ backend, ready });
-
-    expect(store.homeostate.isConnected()).toBe(true);
-    expect(store.homeostate.isReady()).toBe(false);
-    expect(backend.read()).toEqual({});
-
-    backend.receive({ ui: { dark: true } });
-    expect(store.getState().ui.dark).toBe(true);
-
-    resolve();
-    await settled();
-    expect(store.homeostate.isReady()).toBe(true);
-  });
-
-  it("does nothing when ready settles after a disconnect", async () => {
-    const backend = createMemoryBackend();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-    const store = createCounter({ backend, ready });
-
-    store.homeostate.disconnect();
-    resolve();
-    await settled();
-
-    expect(backend.read()).toEqual({});
   });
 });

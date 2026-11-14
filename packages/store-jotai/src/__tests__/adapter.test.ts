@@ -15,10 +15,10 @@ describe("JotaiAdapter", () => {
     const counterAtom = atom<Counter>({ count: 0, label: "a" });
     const store = createStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      createJotaiAdapter(counterAtom, store),
-    );
+      adapter: createJotaiAdapter(counterAtom, store),
+    });
 
     engine.connect();
     expect(backend.read()).toEqual({ count: 0, label: "a" });
@@ -35,7 +35,10 @@ describe("JotaiAdapter", () => {
     const store = createStore();
     const backend = createMemoryBackend({ count: 7, label: "z" });
 
-    createSyncEngine(backend, createJotaiAdapter(counterAtom, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(counterAtom, store),
+    }).connect();
 
     expect(store.get(counterAtom)).toEqual({ count: 7, label: "z" });
   });
@@ -44,7 +47,10 @@ describe("JotaiAdapter", () => {
     const counterAtom = atom<Counter>({ count: 0, label: "a" });
     const backend = createMemoryBackend();
 
-    createSyncEngine(backend, createJotaiAdapter(counterAtom)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(counterAtom),
+    }).connect();
     getDefaultStore().set(counterAtom, { count: 3, label: "a" });
 
     expect(backend.read()).toEqual({ count: 3, label: "a" });
@@ -63,7 +69,10 @@ describe("JotaiAdapter", () => {
     const store = createStore();
     const backend = createMemoryBackend();
 
-    createSyncEngine(backend, createJotaiAdapter(rootAtom, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(rootAtom, store),
+    }).connect();
     store.set(countAtom, 2);
     expect(backend.read()).toEqual({ count: 2, label: "a" });
 
@@ -84,7 +93,10 @@ describe("JotaiAdapter", () => {
     );
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(rootAtom, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(rootAtom, store),
+    }).connect();
 
     backend.receive({ count: 50, label: "a" });
 
@@ -96,10 +108,10 @@ describe("JotaiAdapter", () => {
     const counterAtom = atom<Counter>({ count: 0, label: "a" });
     const store = createStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      createJotaiAdapter(counterAtom, store),
-    );
+      adapter: createJotaiAdapter(counterAtom, store),
+    });
     engine.connect();
 
     engine.disconnect();
@@ -180,7 +192,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = todoAtoms();
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(atoms, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(atoms, store),
+    }).connect();
     expect(backend.read()).toEqual({
       todos: [],
       searchTerm: "",
@@ -206,7 +221,7 @@ describe("JotaiAdapter of a record of atoms", () => {
     const store = createStore();
     const backend = createMemoryBackend();
     const adapter = createJotaiAdapter(atoms, store);
-    createSyncEngine(backend, adapter).connect();
+    createSyncEngine({ backend, adapter }).connect();
     const notified = vi.fn();
     adapter.subscribe(notified);
     const write = vi.spyOn(backend, "write");
@@ -237,7 +252,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = { ...todoAtoms(), todos };
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(atoms, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(atoms, store),
+    }).connect();
     const before = store.get(todos);
     const notified = { todos: vi.fn(), filterStatus: vi.fn() };
     store.sub(todos, notified.todos);
@@ -255,7 +273,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = todoAtoms();
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(atoms, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(atoms, store),
+    }).connect();
     store.set(atoms.searchTerm, "milk");
 
     backend.receive({ todos: [], filterStatus: "active" });
@@ -274,7 +295,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = { ...todoAtoms(), selectedId };
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(atoms, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(atoms, store),
+    }).connect();
     store.set(selectedId, "1");
     expect(backend.read()).toMatchObject({ selectedId: "1" });
     const write = vi.spyOn(backend, "write");
@@ -300,7 +324,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = { ...todoAtoms(), searchTerm };
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createJotaiAdapter(atoms, store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(atoms, store),
+    }).connect();
     store.set(searchTerm, "milk");
 
     backend.receive({ todos: [], filterStatus: "active" });
@@ -324,7 +351,9 @@ describe("JotaiAdapter of a record of atoms", () => {
       const store = createStore();
       const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
       const onError = vi.fn();
-      createSyncEngine(backend, createJotaiAdapter({ todos }, store), {
+      createSyncEngine({
+        backend,
+        adapter: createJotaiAdapter({ todos }, store),
         ...config,
         onError,
       }).connect();
@@ -346,10 +375,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const draft = atomWithReset({ title: "" });
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      createJotaiAdapter({ ...todoAtoms(), draft }, store),
-    ).connect();
+      adapter: createJotaiAdapter({ ...todoAtoms(), draft }, store),
+    }).connect();
     store.set(draft, { title: "Milk" });
 
     backend.receive({ todos: [], searchTerm: "", filterStatus: "all" });
@@ -362,7 +391,7 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = todoAtoms();
     const backend = createMemoryBackend();
 
-    createSyncEngine(backend, createJotaiAdapter(atoms)).connect();
+    createSyncEngine({ backend, adapter: createJotaiAdapter(atoms) }).connect();
     getDefaultStore().set(atoms.searchTerm, "milk");
 
     expect(backend.read()).toMatchObject({ searchTerm: "milk" });
@@ -372,7 +401,10 @@ describe("JotaiAdapter of a record of atoms", () => {
     const atoms = todoAtoms();
     const store = createStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createJotaiAdapter(atoms, store));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createJotaiAdapter(atoms, store),
+    });
     engine.connect();
 
     engine.disconnect();

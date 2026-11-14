@@ -7,6 +7,7 @@ import {
   createSyncEngine,
   type StoreAdapter,
   type SyncEngine,
+  type SyncEvent,
   type SyncStatus,
 } from "@homeostate/core";
 import {
@@ -45,11 +46,15 @@ const createStore = () => {
 
 const createEngine = (backend: MemoryBackend = createMemoryBackend()) => {
   const store = createStore();
-  return { backend, store, engine: createSyncEngine(backend, store.adapter) };
+  return {
+    backend,
+    store,
+    engine: createSyncEngine({ backend, adapter: store.adapter }),
+  };
 };
 
-const describeStatus = ({ connected, ready, failure }: SyncStatus): string =>
-  `${connected ? "connected" : "disconnected"}, ${ready ? "ready" : "not ready"}` +
+const describeStatus = ({ connected, failure }: SyncStatus): string =>
+  (connected ? "connected" : "disconnected") +
   (failure === null ? "" : `, ${failure.source}`);
 
 const roots: Root[] = [];
@@ -84,13 +89,13 @@ describe("useSyncStatus", () => {
   it("re-renders as the engine connects and disconnects", async () => {
     const { engine } = createEngine();
     const container = await render(<Badge engine={engine} />);
-    expect(container.textContent).toBe("disconnected, not ready");
+    expect(container.textContent).toBe("disconnected");
 
     await act(async () => engine.connect());
-    expect(container.textContent).toBe("connected, ready");
+    expect(container.textContent).toBe("connected");
 
     await act(async () => engine.disconnect());
-    expect(container.textContent).toBe("disconnected, not ready");
+    expect(container.textContent).toBe("disconnected");
   });
 
   it("does not re-render for local and remote changes", async () => {
@@ -123,10 +128,10 @@ describe("useSyncStatus", () => {
 
     const container = await render(<Badge engine={engine} />);
 
-    expect(container.textContent).toBe("connected, ready, backend");
+    expect(container.textContent).toBe("connected, backend");
   });
 
-  it("shows a failure as it happens, though no sync event tells of it", async () => {
+  it("shows a failure as it happens, and its recovery", async () => {
     const { backend, store, engine } = createEngine();
     engine.connect();
     const container = await render(<Badge engine={engine} />);
@@ -138,32 +143,37 @@ describe("useSyncStatus", () => {
     await act(async () => {
       expect(() => store.set(1)).toThrow("write");
     });
-    expect(container.textContent).toBe("connected, ready, backend");
+    expect(container.textContent).toBe("connected, backend");
 
     backend.write = write;
     await act(async () => store.set(2));
-    expect(container.textContent).toBe("connected, ready");
+    expect(container.textContent).toBe("connected");
   });
 
-  it("renders once for a failed wait, which changes two fields", async () => {
-    let reject: (reason: unknown) => void = () => {};
+  it("renders once for a reconnect that clears a failure, which changes two fields", async () => {
+    const backend = createMemoryBackend();
     const store = createStore();
-    const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
       onError: () => {},
-      ready: () =>
-        new Promise((_resolve, rejectWait) => {
-          reject = rejectWait;
-        }),
     });
     const renders = { count: 0 };
     const container = await render(<Badge engine={engine} renders={renders} />);
     await act(async () => engine.connect());
-    expect(container.textContent).toBe("connected, not ready");
+    const write = backend.write;
+    backend.write = () => {
+      throw new Error("write");
+    };
+    await act(async () => store.set(1));
+    await act(async () => engine.disconnect());
+    backend.write = write;
+    expect(container.textContent).toBe("disconnected, backend");
     const before = renders.count;
 
-    await act(async () => reject(new Error("ready")));
+    await act(async () => engine.connect());
 
-    expect(container.textContent).toBe("disconnected, not ready, ready");
+    expect(container.textContent).toBe("connected");
     expect(renders.count).toBe(before + 1);
   });
 
@@ -172,9 +182,9 @@ describe("useSyncStatus", () => {
     let subscribed = 0;
     const counted: SyncEngine = {
       ...engine,
-      subscribeStatus: (listener) => {
+      subscribe: (listener) => {
         subscribed++;
-        const unsubscribe = engine.subscribeStatus(listener);
+        const unsubscribe = engine.subscribe(listener);
         return () => {
           subscribed--;
           unsubscribe();
@@ -193,7 +203,7 @@ describe("useSyncStatus", () => {
     expect(subscribed).toBe(1);
 
     await act(async () => engine.connect());
-    expect(container.textContent).toBe("connected, ready");
+    expect(container.textContent).toBe("connected");
 
     await act(async () => root.unmount());
     expect(subscribed).toBe(0);
@@ -204,9 +214,9 @@ describe("useSyncStatus", () => {
     let subscriptions = 0;
     const counted: SyncEngine = {
       ...engine,
-      subscribeStatus: (listener) => {
+      subscribe: (listener) => {
         subscriptions++;
-        return engine.subscribeStatus(listener);
+        return engine.subscribe(listener);
       },
     };
     let rerender: (tick: number) => void = () => {};
@@ -242,16 +252,13 @@ describe("useSyncStatus", () => {
     await render(<Switcher />);
 
     await act(async () => show(second));
-    expect(shown).toEqual([
-      "first: disconnected, not ready",
-      "second: connected, ready",
-    ]);
+    expect(shown).toEqual(["first: disconnected", "second: connected"]);
 
     await act(async () => first.connect());
     expect(shown).toHaveLength(2);
 
     await act(async () => second.disconnect());
-    expect(shown[2]).toBe("second: disconnected, not ready");
+    expect(shown[2]).toBe("second: disconnected");
   });
 
   it("catches a change between render and subscribe", async () => {
@@ -268,7 +275,7 @@ describe("useSyncStatus", () => {
       </>,
     );
 
-    expect(container.textContent).toBe("connected, ready");
+    expect(container.textContent).toBe("connected");
   });
 
   it("works with an engine whose methods need it as this", async () => {
@@ -277,8 +284,8 @@ describe("useSyncStatus", () => {
       getStatus() {
         return this.inner.getStatus();
       }
-      subscribeStatus(listener: () => void) {
-        return this.inner.subscribeStatus(listener);
+      subscribe(listener: (event: SyncEvent) => void) {
+        return this.inner.subscribe(listener);
       }
       constructor(private inner: SyncEngine) {}
     }
@@ -289,7 +296,7 @@ describe("useSyncStatus", () => {
     const container = await render(<Shown source={new Wrapped(engine)} />);
     await act(async () => engine.connect());
 
-    expect(container.textContent).toBe("connected, ready");
+    expect(container.textContent).toBe("connected");
   });
 
   describe("hydration", () => {
@@ -316,8 +323,8 @@ describe("useSyncStatus", () => {
         });
       });
 
-      expect(rendered).toEqual(["disconnected, not ready", "connected, ready"]);
-      expect(container.textContent).toBe("connected, ready");
+      expect(rendered).toEqual(["disconnected", "connected"]);
+      expect(container.textContent).toBe("connected");
       expect(recoverable).toEqual([]);
       expect(consoleError).not.toHaveBeenCalled();
       consoleError.mockRestore();

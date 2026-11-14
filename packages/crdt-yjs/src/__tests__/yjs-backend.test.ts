@@ -121,20 +121,20 @@ describe("createYjsBackend", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     backend.write({ count: 1 });
-    const before = backend.revision?.();
+    const before = backend.revision();
     let observed: unknown;
     doc.getMap(NAME).observe(() => {
-      observed = backend.revision?.();
+      observed = backend.revision();
     });
 
     doc.transact(() => {
       doc.getMap(NAME).set("count", 2);
-      expect(backend.revision?.()).toBeUndefined();
+      expect(backend.revision()).toBeUndefined();
     });
 
     expect(observed).toBeDefined();
     expect(observed).not.toBe(before);
-    expect(backend.revision?.()).toBe(observed);
+    expect(backend.revision()).toBe(observed);
   });
 
   it("has no revision while a transaction an observer started waits for its observers", () => {
@@ -146,7 +146,7 @@ describe("createYjsBackend", () => {
     map.observe(() => {
       if (!map.has("derived")) map.set("derived", 1);
     });
-    map.observe(() => observed.push(backend.revision?.()));
+    map.observe(() => observed.push(backend.revision()));
 
     map.set("count", 1);
 
@@ -159,11 +159,11 @@ describe("createYjsBackend", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     backend.write({ count: 1 });
-    const before = backend.revision?.();
+    const before = backend.revision();
 
     Y.applyUpdate(doc, Y.encodeStateAsUpdate(doc));
 
-    expect(backend.revision?.()).toBe(before);
+    expect(backend.revision()).toBe(before);
   });
 });
 
@@ -201,7 +201,7 @@ describe("a removed map", () => {
       : nestedMap(doc);
     const backend = createYjsBackend(synced, options);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     replication.exchange(doc, peer);
 
     const replace = (): void => {
@@ -333,10 +333,38 @@ describe("map and origin", () => {
     const store = createTestStore(threeTodos());
 
     const backend = createYjsBackend(todos);
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
 
     expect(backend.map).toBe(todos);
     expect(app.toJSON()).toEqual({ title: "Mine", todos: threeTodos() });
+  });
+
+  it("runs no transaction for a store change to an omitted key, also after a remote change", () => {
+    const doc = new Y.Doc();
+    const backend = createYjsBackend(doc, NAME);
+    const store = createTestStore(threeTodos());
+    createSyncEngine({
+      backend,
+      adapter: store.adapter,
+      omit: ["searchTerm"],
+    }).connect();
+    const revision = backend.revision();
+
+    const origins = originsDuring(doc, () =>
+      store.update((s) => ({ ...s, searchTerm: "x" })),
+    );
+    expect(origins).toEqual([]);
+    expect(backend.revision()).toBe(revision);
+
+    doc.transact(() => backend.map.set("filterStatus", "done"), "editor");
+    const afterRemote = originsDuring(doc, () =>
+      store.update((s) => ({ ...s, searchTerm: "y" })),
+    );
+
+    expect(afterRemote).toEqual([]);
+    const synced: Partial<TodoState> = threeTodos();
+    delete synced.searchTerm;
+    expect(backend.read()).toEqual({ ...synced, filterStatus: "done" });
   });
 
   it("syncs a map in a subdocument, tagging its writes there", () => {
@@ -372,7 +400,7 @@ describe("undo", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     const undo = new Y.UndoManager(backend.map, {
       trackedOrigins: new Set([backend.origin]),
     });
@@ -400,7 +428,7 @@ describe("undo", () => {
     const doc = new Y.Doc();
     const backend = createYjsBackend(doc, NAME);
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     const peerDoc = new Y.Doc();
     replication.exchange(doc, peerDoc);
     const undo = new Y.UndoManager(backend.map, {
@@ -452,7 +480,7 @@ describe("an update that waits for an earlier one", () => {
     Y.applyUpdate(readerDoc, start);
     const backend = createYjsBackend(readerDoc, NAME, options);
     const store = createTestStore<State>({});
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     return {
       writerDoc,
       readerDoc,
@@ -774,17 +802,17 @@ describe("an update that waits for an earlier one", () => {
     const { backend, write, deliver } = gap({ text: "seed", log: "seed" });
     const onChange = vi.fn();
     backend.subscribe(onChange);
-    const revision = backend.revision?.();
+    const revision = backend.revision();
     const u0 = write({ text: "seed", log: "changed" });
     const u1 = write({ text: "changed", log: "changed" });
 
     deliver(u1);
     expect(onChange).not.toHaveBeenCalled();
-    expect(backend.revision?.()).toBe(revision);
+    expect(backend.revision()).toBe(revision);
     expect(backend.read()).toEqual({ text: "seed", log: "seed" });
     deliver(u0);
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(backend.revision?.()).not.toBe(revision);
+    expect(backend.revision()).not.toBe(revision);
     expect(backend.read()).toEqual({ text: "changed", log: "changed" });
   });
 

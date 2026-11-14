@@ -35,7 +35,9 @@ afterEach(() => {
 const setup = (options: { filter?: (key: string) => boolean } = {}) => {
   const store = createTestStore<State>(initial());
   const backend = createMemoryBackend();
-  const engine = createSyncEngine(backend, store.adapter, {
+  const engine = createSyncEngine({
+    backend,
+    adapter: store.adapter,
     filter: options.filter,
   });
   engine.connect();
@@ -69,7 +71,9 @@ describe("createInspector", () => {
       name: "counter",
       adapter: store.adapter,
       // Disconnected, so the store keeps its values; it still says which keys are local.
-      engine: createSyncEngine(backend, store.adapter, {
+      engine: createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key) => key !== "draft",
       }),
       backend: {
@@ -126,34 +130,6 @@ describe("createInspector", () => {
     expect(store.filter).toBe("active");
     expect(log).toHaveLength(2);
     expect(log[1].origin).toBe("remote");
-  });
-
-  it("logs what reconciling after ready adopts as remote, not local", async () => {
-    const store = createTestStore<State>(initial());
-    const backend = createMemoryBackend();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-    const engine = createSyncEngine(backend, store.adapter, { ready });
-    inspector = createInspector({
-      name: "todos",
-      adapter: store.adapter,
-      backend,
-      engine,
-    });
-    inspector.start();
-    engine.connect();
-    await tick();
-    // A write of its own tells no subscriber, so reconciling is what brings it to the store.
-    backend.write({ filter: "active" });
-
-    resolve();
-    await tick();
-
-    const { log, store: inspected } = inspector.getSnapshot();
-    expect(inspected.filter).toBe("active");
-    expect(log.at(-1)?.origin).toBe("remote");
   });
 
   it("writes an edit through the adapter, so the engine syncs it", async () => {
@@ -341,7 +317,9 @@ describe("createInspector", () => {
     inspector = createInspector({
       name: "dates",
       adapter: store.adapter,
-      engine: createSyncEngine(createMemoryBackend(), store.adapter, {
+      engine: createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
         filter: (key) => key !== "cache",
       }),
     });
@@ -406,7 +384,9 @@ describe("sync events", () => {
     const store = createTestStore<State>(initial());
     const backend = createMemoryBackend();
     const scheduler = manualScheduler();
-    const engine = createSyncEngine(backend, store.adapter, {
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
       schedule: scheduler.schedule,
     });
     engine.connect();
@@ -440,7 +420,9 @@ describe("sync events", () => {
     async (_, engineFirst) => {
       const store = createTestStore<State>(initial());
       const backend = createMemoryBackend();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: (flush) => queueMicrotask(flush),
       });
       if (engineFirst) engine.connect();
@@ -462,6 +444,39 @@ describe("sync events", () => {
       expect(log.at(-1)?.origin).toBe("remote");
     },
   );
+
+  it("logs the apply that stops a write loop as remote, though an error event follows it", async () => {
+    const store = createTestStore<State>(initial());
+    // Rewrites every filter it is given, so a peer that keeps setting it makes a write loop.
+    const adapter = {
+      ...store.adapter,
+      setState: (next: State) =>
+        store.set({ ...next, filter: `${next.filter}!` }),
+    };
+    const backend = createMemoryBackend();
+    const engine = createSyncEngine({ backend, adapter, onError: () => {} });
+    engine.connect();
+    const events: string[] = [];
+    engine.subscribe((event) => events.push(event));
+    inspector = createInspector({ name: "todos", adapter, backend, engine });
+    inspector.start();
+    await tick();
+
+    // One batch per apply, so the last one holds the stopping apply's remote and error events.
+    for (let i = 1; !events.includes("error"); i++) {
+      expect(i).toBeLessThan(20);
+      backend.receive({ ...initial(), filter: `peer ${i}` });
+      await tick();
+    }
+    const stopped = events.filter((event) => event === "remote").length;
+
+    expect(events.slice(-2)).toEqual(["remote", "error"]);
+    const { log } = inspector.getSnapshot();
+    expect(log.at(-1)).toMatchObject({
+      origin: "remote",
+      state: { filter: `peer ${stopped}!` },
+    });
+  });
 
   it("updates the connection status when the app connects or disconnects the engine", async () => {
     const { engine, inspector } = setup();

@@ -72,11 +72,11 @@ by dispatching `replaceState`, an action that replaces the whole root state, and
 root reducer in `withHomeostate` to handle it, whatever its shape. It also wraps a reducer
 later passed to `store.replaceReducer`.
 
-| Option                                                           | Default  | Description                                                          |
-| ---------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| `backend`                                                        |          | The `CrdtBackend` the store syncs with                               |
-| `connect`                                                        | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below |
-| `omit`, `keys`, `filter`, `seed`, `schedule`, `onError`, `ready` |          | The engine's `SyncEngineConfig`, typed by the root state             |
+| Option                                                  | Default  | Description                                                          |
+| ------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
+| `backend`                                               |          | The `CrdtBackend` the store syncs with                               |
+| `connect`                                               | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below |
+| `omit`, `keys`, `filter`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the root state             |
 
 Pass the root state type to check the names in `omit` and `keys` against it, so
 `homeostate<RootState>({ backend, omit: ["ui"] })` keeps the `ui` slice on each device, and a
@@ -116,9 +116,9 @@ Until then the store works locally. Connecting then works as on any `connect()`:
 values replace the store's for every key the room holds, edits made meanwhile included, and
 keys the room lacks seed it.
 
-To connect right away and only hold back writes, pass [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room) instead of
-`connect: "manual"`: the store adopts remote changes as they arrive, and nothing is written until
-`ready` resolves.
+Waiting this way keeps the store's initial state from competing with a populated room; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for what to wait
+for, such as `persistence.whenLoaded`.
 
 ### Placing the enhancer
 
@@ -171,7 +171,10 @@ const store = configureStore({
   ),
 });
 
-const engine = createSyncEngine(backend, createReduxAdapter(store));
+const engine = createSyncEngine({
+  backend,
+  adapter: createReduxAdapter(store),
+});
 engine.connect();
 ```
 

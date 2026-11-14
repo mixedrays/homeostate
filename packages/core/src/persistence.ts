@@ -5,12 +5,10 @@ import type {
   PersistenceConfig,
   PersistenceLoadResult,
 } from "./types.js";
-
-// Declared here so that core needs no Node types; the ES libs have no `console`.
-declare const console: { error: (...data: unknown[]) => void };
+import { logError } from "./env.js";
 
 const reportError = (error: unknown): void => {
-  console.error("[homeostate] persistence failed:", error);
+  logError("persistence failed:", error);
 };
 
 const ignore = (): void => {};
@@ -31,8 +29,8 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  *
  * Stored updates are applied to the document asynchronously; connect the sync engine
  * after `whenLoaded`, so `connect()` sees the restored keys instead of seeding the store's
- * defaults over them. It resolves with a `PersistenceLoadResult`, which tells a first start
- * from a restored document, and both from a log that could not be read or applied in full.
+ * defaults over them. `whenLoaded` resolves with a `PersistenceLoadResult`, which tells apart a
+ * first start, a restored document, and a log that could not be read or applied in full.
  * The provider can connect at any time.
  *
  * Updates are appended one by one, and every `compactAfter` appends the stored log is
@@ -41,9 +39,10 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  * When a stored update cannot be applied, the log is not compacted, so its bytes stay
  * available for recovery until `clear()`.
  *
- * Every failure goes to `onError` once, and the queue moves on. Later updates may depend on
- * one a failed write lost, so the next append that succeeds compacts once to store the whole
- * document again, as `flush()` and `destroy()` do first while it is missing. `compact()` and
+ * Every failure goes to `onError` once, and the queue moves on. Later updates may depend on an
+ * update that a failed write lost, so the next append that succeeds compacts once to store the
+ * whole document again. While that update is missing, `flush()` and `destroy()` also compact
+ * first. `compact()` and
  * `clear()` reject with their own storage error; `flush()` and `destroy()` reject while an
  * update the document reported may still be missing from storage, until a snapshot or
  * `clear()` succeeds.
@@ -59,7 +58,7 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  * new WebsocketProvider(url, 'todos', doc);
  * const loaded = await persistence.whenLoaded;
  * if (loaded.status === 'empty' || loaded.status === 'loaded') {
- *   createSyncEngine(createYjsBackend(doc, 'shared'), adapter).connect();
+ *   createSyncEngine({ backend: createYjsBackend(doc, 'shared'), adapter }).connect();
  * } else {
  *   showRecovery(loaded);
  * }
@@ -77,7 +76,7 @@ export function createPersistence(
     try {
       onError(error);
     } catch (thrown) {
-      console.error("[homeostate] persistence onError threw:", thrown);
+      logError("persistence onError threw:", thrown);
     }
   };
 
@@ -85,13 +84,15 @@ export function createPersistence(
   let appended = 0;
   let queue: Promise<void> = Promise.resolve();
   /**
-   * The earliest write failure storage may still be missing the document's content for, until
-   * a full snapshot or `clear()` succeeds; barriers reject with its error until then.
+   * The earliest write failure after which storage may still be missing some of the document's
+   * content. It stays until a full snapshot or `clear()` succeeds, and barriers reject with its
+   * error until then.
    */
   let unresolved: { error: unknown } | undefined;
   /**
-   * A write failed since the last compaction started. Later updates may depend on what it
-   * lost, so the next successful append compacts, once, to store the whole document again.
+   * Whether a write failed since the last compaction started. Later updates may depend on what
+   * the write lost, so the next successful append compacts, once, to store the whole document
+   * again.
    */
   let repairDue = false;
 
@@ -149,8 +150,9 @@ export function createPersistence(
             : { status: "partial", errors },
       );
     appended = 0;
-    // The first snapshot also stores whatever the document held before it was persisted, and
-    // a later one what a failed write lost, so a compaction that keeps the log then appends it.
+    // The first snapshot also stores whatever the document held before it was persisted, and a
+    // later snapshot stores what a failed write lost. So in those two cases, a compaction that
+    // keeps the log appends the snapshot to it.
     if (complete) await adapter.compact(key, doc.encode(), version);
     else if (initial || unresolved) await adapter.append(key, doc.encode());
     else return;
@@ -170,16 +172,16 @@ export function createPersistence(
   // Until the first snapshot is written, storage may lack what the document held before.
   const initialLoad = enqueue(() => compact(true).catch(unstored));
   // Only reading the log can fail before `whenLoaded` resolves, and the queue reports that to
-  // `onError` first. A failed initial snapshot rejects too, once `whenLoaded` has resolved, so
-  // it leaves the result as it was.
+  // `onError` first. A failed initial snapshot rejects too, but only after `whenLoaded` has
+  // resolved, so the result stays as it was.
   void initialLoad.catch((error: unknown) => {
     markLoaded({ status: "failed", error });
   });
 
   /**
-   * Wait for the work queued so far. While a write failure is unresolved, compact once to
-   * store the whole document again, unless storing stopped before the call, and reject with
-   * the failure's error if it is still unresolved.
+   * Wait for the work queued so far. With `repair`, which callers pass unless storing stopped
+   * before the call, compact once while a write failure is unresolved, to store the whole
+   * document again. Then reject with the failure's error if it is still unresolved.
    */
   const barrier = (repair: boolean): Promise<void> => {
     const run = queue.then(async () => {

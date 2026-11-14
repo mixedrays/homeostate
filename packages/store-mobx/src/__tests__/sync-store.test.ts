@@ -36,7 +36,7 @@ describe("syncMobxStore", () => {
 
     const engine = syncMobxStore(store, { backend });
 
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(backend.read()).toEqual({ todos: [], filter: "all", draft: "" });
 
     store.add("Milk");
@@ -72,12 +72,12 @@ describe("syncMobxStore", () => {
       store.filter = "done";
     });
 
-    expect(engine.isConnected()).toBe(false);
+    expect(engine.getStatus().connected).toBe(false);
     expect(store.todos).toEqual([]);
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
 
     engine.connect();
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(store.todos).toEqual([milk]);
     expect(backend.read()).toEqual({
       todos: [milk],
@@ -95,13 +95,13 @@ describe("syncMobxStore", () => {
     store.add("Milk");
     backend.receive({ todos: [], filter: "done", draft: "" });
 
-    expect(engine.isConnected()).toBe(false);
+    expect(engine.getStatus().connected).toBe(false);
     expect(backend.read()).toEqual({ todos: [], filter: "done", draft: "" });
     expect(store.todos).toEqual([milk]);
     expect(store.filter).toBe("all");
 
     engine.connect();
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(store.todos).toEqual([]);
     expect(store.filter).toBe("done");
 
@@ -145,7 +145,7 @@ describe("syncMobxStore", () => {
 
     syncMobxStore(store, {
       backend,
-      seed: "never",
+      seed: false,
       filter: (key) => key !== "filter",
     });
     expect(backend.read()).toEqual({ todos: [milk] });
@@ -316,52 +316,5 @@ describe("syncMobxStore", () => {
         syncMobxStore(store, backend, { omit: ["draft"] }),
       ).toThrow(TypeError);
     });
-  });
-});
-
-describe("syncMobxStore with ready", () => {
-  const settled = (): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve));
-
-  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
-    const backend = createMemoryBackend();
-    const store = new TodoStore();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-
-    const engine = syncMobxStore(store, {
-      backend,
-      ready,
-      omit: ["draft"],
-    });
-
-    expect(engine.isConnected()).toBe(true);
-    expect(engine.isReady()).toBe(false);
-    expect(backend.read()).toEqual({});
-
-    backend.receive({ todos: [milk] });
-    expect(store.todos).toEqual([milk]);
-
-    resolve();
-    await settled();
-    expect(engine.isReady()).toBe(true);
-    expect(backend.read()).toEqual({ todos: [milk], filter: "all" });
-  });
-
-  it("does nothing when ready settles after a disconnect", async () => {
-    const backend = createMemoryBackend();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-    const engine = syncMobxStore(new TodoStore(), { backend, ready });
-
-    engine.disconnect();
-    resolve();
-    await settled();
-
-    expect(backend.read()).toEqual({});
   });
 });

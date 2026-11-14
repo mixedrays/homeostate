@@ -28,7 +28,10 @@ describe("TanStackStoreAdapter", () => {
   it("seeds the backend, writes store changes, and applies remote changes", () => {
     const store = new Store<Counter>({ count: 0, label: "a" });
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createTanStackStoreAdapter(store));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createTanStackStoreAdapter(store),
+    });
 
     engine.connect();
     expect(backend.read()).toEqual({ count: 0, label: "a" });
@@ -44,7 +47,10 @@ describe("TanStackStoreAdapter", () => {
     const store = new Store<Counter>({ count: 0, label: "a" });
     const backend = createMemoryBackend({ count: 7, label: "z" });
 
-    createSyncEngine(backend, createTanStackStoreAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createTanStackStoreAdapter(store),
+    }).connect();
 
     expect(store.state).toEqual({ count: 7, label: "z" });
   });
@@ -55,7 +61,10 @@ describe("TanStackStoreAdapter", () => {
     }));
     const backend = createMemoryBackend();
 
-    createSyncEngine(backend, createTanStackStoreAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createTanStackStoreAdapter(store),
+    }).connect();
     store.actions.increment();
 
     expect(backend.read()).toEqual({ count: 1, label: "a" });
@@ -64,7 +73,10 @@ describe("TanStackStoreAdapter", () => {
   it("writes once for a batch of updates", () => {
     const store = new Store<Counter>({ count: 0, label: "a" });
     const { backend, writes } = countingWrites(createMemoryBackend());
-    createSyncEngine(backend, createTanStackStoreAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createTanStackStoreAdapter(store),
+    }).connect();
     expect(writes).toHaveLength(1);
 
     batch(() => {
@@ -79,7 +91,10 @@ describe("TanStackStoreAdapter", () => {
   it("stops both directions after disconnect", () => {
     const store = new Store<Counter>({ count: 0, label: "a" });
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createTanStackStoreAdapter(store));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createTanStackStoreAdapter(store),
+    });
     engine.connect();
 
     engine.disconnect();

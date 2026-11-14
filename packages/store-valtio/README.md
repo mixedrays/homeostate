@@ -31,10 +31,10 @@ const state = proxy({
   filter: "all",
 });
 
-const engine = createSyncEngine(
-  createYjsBackend(new Y.Doc(), "shared"),
-  createValtioAdapter(state),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+  adapter: createValtioAdapter(state),
+});
 engine.connect();
 
 state.todos.push({ id: crypto.randomUUID(), title: "Write docs", done: false });

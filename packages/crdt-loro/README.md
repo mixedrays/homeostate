@@ -28,7 +28,10 @@ import { createSyncEngine } from "@homeostate/core";
 import { createLoroBackend } from "@homeostate/crdt-loro";
 
 const doc = new LoroDoc();
-const engine = createSyncEngine(createLoroBackend(doc, "shared"), adapter);
+const engine = createSyncEngine({
+  backend: createLoroBackend(doc, "shared"),
+  adapter,
+});
 engine.connect();
 ```
 

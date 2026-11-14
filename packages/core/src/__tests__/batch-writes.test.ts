@@ -48,7 +48,11 @@ const setup = (
 ) => {
   const backend = createMemoryBackend(initial);
   const store = createPerSetStore(initial);
-  const engine = createSyncEngine(backend, store.adapter, config);
+  const engine = createSyncEngine({
+    backend,
+    adapter: store.adapter,
+    ...config,
+  });
   const events: SyncEvent[] = [];
   engine.subscribe((event) => events.push(event));
   engine.connect();
@@ -178,9 +182,12 @@ describe("an adapter with batchWrites", () => {
     it("writes nothing when the store ignores the apply", async () => {
       const backend = createMemoryBackend(threeTodos());
       const store = createPerSetStore();
-      createSyncEngine(backend, {
-        ...store.adapter,
-        setState: () => {},
+      createSyncEngine({
+        backend,
+        adapter: {
+          ...store.adapter,
+          setState: () => {},
+        },
       }).connect();
       const write = vi.spyOn(backend, "write");
 
@@ -267,8 +274,8 @@ describe("an adapter with batchWrites", () => {
       expect(() => engine.disconnect()).not.toThrow();
 
       expect(onError).toHaveBeenCalledWith(offline, "backend");
-      expect(engine.isConnected()).toBe(false);
-      expect(events).toEqual(["disconnect"]);
+      expect(engine.getStatus().connected).toBe(false);
+      expect(events).toEqual(["error", "disconnect"]);
       expect(engine.getStatus().failure).toEqual({
         error: offline,
         source: "backend",
@@ -285,7 +292,7 @@ describe("an adapter with batchWrites", () => {
       store.mutate((s) => toggleTodo(s, "1"));
 
       expect(() => engine.disconnect()).toThrow(offline);
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("leaves nothing for a flush handed out before disconnect", async () => {
@@ -351,7 +358,7 @@ describe("an adapter with batchWrites", () => {
       expect(() => store.mutate((s) => toggleTodo(s, "1"))).not.toThrow();
       expect(queued).toHaveLength(1);
       expect(() => queued[0]()).toThrow(offline);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(engine.getStatus().failure).toEqual({
         error: offline,
         source: "backend",
@@ -360,41 +367,13 @@ describe("an adapter with batchWrites", () => {
       vi.unstubAllGlobals();
     }
   });
-
-  it("writes a change made while waiting for ready once ready resolves", async () => {
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => (resolve = r));
-    const backend = createMemoryBackend({ todos: [] });
-    const store = createPerSetStore();
-    const engine = createSyncEngine(backend, store.adapter, {
-      seed: "never",
-      ready,
-    });
-    engine.connect();
-    const write = vi.spyOn(backend, "write");
-
-    store.mutate((s) => setSearchTerm(s, "x"));
-    await microtask();
-    expect(write).not.toHaveBeenCalled();
-    resolve();
-    await ready;
-    await microtask();
-
-    expect(engine.isReady()).toBe(true);
-    expect(backend.read()).toEqual({
-      ...threeTodos(),
-      todos: [],
-      searchTerm: "x",
-    });
-    expect(write).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("an adapter without batchWrites", () => {
   it("writes each notification synchronously", () => {
     const backend = createMemoryBackend(threeTodos());
     const store = createTestStore(threeTodos());
-    createSyncEngine(backend, store.adapter).connect();
+    createSyncEngine({ backend, adapter: store.adapter }).connect();
     const write = vi.spyOn(backend, "write");
 
     store.update((s) => toggleTodo(s, "1"));

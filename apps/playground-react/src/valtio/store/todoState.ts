@@ -48,7 +48,7 @@ export const todoActions = {
 const { ydoc, wsProvider, persistence, network } = connectSharedDoc();
 const adapter = createValtioAdapter(todoState);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
-const syncEngine = createSyncEngine(backend, adapter);
+const syncEngine = createSyncEngine({ backend, adapter });
 
 syncEngine.connect();
 

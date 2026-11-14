@@ -219,7 +219,8 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
  *
  * const store = new TodoStore();
  * const adapter = createMobxAdapter(store, { omit: ['draft'] });
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * ```
  */

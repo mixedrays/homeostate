@@ -105,14 +105,14 @@ describe("createAutomergeBackend with DocHandles of two repos", () => {
       const bobHandle = await bob.find<Root>(aliceHandle.url);
       const aliceStore = createTestStore({ count: 0 });
       const bobStore = createTestStore({ count: 0 });
-      createSyncEngine(
-        createAutomergeBackend(aliceHandle, NAME),
-        aliceStore.adapter,
-      ).connect();
-      createSyncEngine(
-        createAutomergeBackend(bobHandle, NAME),
-        bobStore.adapter,
-      ).connect();
+      createSyncEngine({
+        backend: createAutomergeBackend(aliceHandle, NAME),
+        adapter: aliceStore.adapter,
+      }).connect();
+      createSyncEngine({
+        backend: createAutomergeBackend(bobHandle, NAME),
+        adapter: bobStore.adapter,
+      }).connect();
 
       aliceStore.setState({ count: 1 });
       await vi.waitFor(() => expect(bobStore.getState()).toEqual({ count: 1 }));

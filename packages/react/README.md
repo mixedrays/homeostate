@@ -24,12 +24,12 @@ import { useSyncStatus } from "@homeostate/react";
 import { useTodoStore } from "./store";
 
 function Editor() {
-  const { ready, failure } = useSyncStatus(useTodoStore.homeostate);
+  const { connected, failure } = useSyncStatus(useTodoStore.homeostate);
 
   return (
     <>
       {failure && <p role="alert">The last change did not sync.</p>}
-      <textarea disabled={!ready} />
+      <textarea disabled={!connected} />
     </>
   );
 }
@@ -38,7 +38,6 @@ function Editor() {
 The component re-renders when the status changes, not on every local or remote change.
 
 The status describes the engine and says nothing about the network: `connected` stays `true` while
-the sync server is down, and without the `ready` option `ready` says no more than `connected`. Read
-the provider's own state to show whether a peer is online. See the
+the sync server is down. Read the provider's own state to show whether a peer is online. See the
 [docs](https://homeostate.pages.dev/docs/react/introduction) for what each field means, and which
 engines you can pass.

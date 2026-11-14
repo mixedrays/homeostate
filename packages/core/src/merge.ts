@@ -1,16 +1,14 @@
-import { ChangeType, type ListChange, type TextChange } from "./change.js";
+import type { ListChange, Path, TextChange } from "./change.js";
 import { getChanges, type DiffOptions, type TextPolicy } from "./diff.js";
 import {
-  hasOwn,
-  isAbsent,
   isRecord,
+  jsonEntry,
   jsonEqual,
   jsonItem,
   jsonItemEqual,
   PROTO_KEY,
 } from "./json.js";
 
-/** Options for `mergeConcurrent`. */
 export interface MergeOptions {
   /**
    * Which strings are text, merged by UTF-16 unit, by their path from the root of the merged
@@ -18,9 +16,6 @@ export interface MergeOptions {
    */
   text?: TextPolicy;
 }
-
-/** A value's path from the root of the merged value: record keys and array indices. */
-type Path = readonly (string | number)[];
 
 /**
  * What an edit script did to one item of the sequence it edits: left it as it was, replaced it
@@ -59,14 +54,14 @@ const align = (
   };
   for (const change of changes) {
     keepUntil(change.key);
-    if (change.type === ChangeType.INSERT) {
+    if (change.type === "insert") {
       const count = units ? (change.value as string).length : 1;
       for (let i = 0; i < count; i++) inserted[item].push(index++);
-    } else if (change.type === ChangeType.DELETE) {
-      const end = item + (change.count ?? 1);
+    } else if (change.type === "delete") {
+      const end = item + change.count;
       while (item < end) fates[item++] = "deleted";
     } else {
-      fates[item] = change.type === ChangeType.UPDATE ? "replaced" : "edited";
+      fates[item] = change.type === "update" ? "replaced" : "edited";
       at[item++] = index++;
     }
   }
@@ -78,17 +73,13 @@ const align = (
  * Aligns arrays as a backend's `write` diffs them: as JSON would store them, with every string a
  * value replaced whole, so the merge and the write agree on which item is which.
  */
-const DIFF = { json: true, text: () => false } as const;
+const DIFF: DiffOptions = { json: true };
 
-/** The options that align the array at `path`, its strings that `text` marks diffed as text. */
+/** The options that align the array at `path`, diffing the strings `text` marks in it as text. */
 const diffOptions = (text: TextPolicy | undefined, path: Path): DiffOptions =>
   text === undefined
     ? DIFF
     : { json: true, text: (at) => text([...path, ...at]) };
-
-/** The entry of `record` at `key` as JSON would store it; `undefined` when it would be left out. */
-const entry = (record: Record<string, unknown>, key: string): unknown =>
-  hasOwn(record, key) && !isAbsent(record[key]) ? record[key] : undefined;
 
 /** Whether `value` is a string that `text` marks as text at `path`. */
 const isText = (
@@ -137,17 +128,25 @@ const primitiveEntries = (item: unknown): string[] => {
   return entries;
 };
 
-/**
- * For each primitive entry of the records in `items`, the index of the one record that holds
- * it, or `-1` where several do.
- */
-const entryOwners = (items: readonly unknown[]): Map<string, number> => {
+/** The primitive entries of an array's records, by index, and which record holds each entry. */
+interface EntryIndex {
+  /** Each item's primitive entries, as `primitiveEntries` names them. */
+  entries: string[][];
+  /** For each entry, the index of the one record that holds it, or `-1` where several do. */
+  owners: Map<string, number>;
+}
+
+/** Indexes the primitive entries of the records in `items`; see `EntryIndex`. */
+const indexEntries = (items: readonly unknown[]): EntryIndex => {
+  const entries: string[][] = [];
   const owners = new Map<string, number>();
-  items.forEach((item, index) => {
-    for (const entry of primitiveEntries(item))
+  // A loop, since `forEach` skips holes.
+  for (let index = 0; index < items.length; index++) {
+    entries.push(primitiveEntries(items[index]));
+    for (const entry of entries[index])
       owners.set(entry, owners.has(entry) ? -1 : index);
-  });
-  return owners;
+  }
+  return { entries, owners };
 };
 
 /**
@@ -198,39 +197,35 @@ const pairedFate = (
     : "replaced";
 };
 
-/** Which record of `base`, and which of `side`, holds each primitive entry: `entryOwners`. */
+/** The primitive entries of `base` and of `side`, and which record of each holds them. */
 interface Owners {
-  base: Map<string, number>;
-  side: Map<string, number>;
+  base: EntryIndex;
+  side: EntryIndex;
 }
 
 /**
- * The pairs of a base record, among `base[start]` to `base[end - 1]`, and a side record, among
- * `side[from]` to `side[to - 1]`, that share a primitive entry no other record of either array
- * holds, as `owners` counts them, where no other such entry points either record elsewhere,
- * even outside the run; the most of them that keep their order. Linear in the primitive
- * entries of the run's records, plus O(k log k) for its k pairs.
+ * The pairs `matchByUniqueValues` makes between the base records `base[start]` to
+ * `base[end - 1]` and the side records `side[from]` to `side[to - 1]`, by the entries `owners`
+ * indexes, in order.
  */
 const uniquePairs = (
-  base: readonly unknown[],
   start: number,
   end: number,
-  side: readonly unknown[],
   from: number,
   to: number,
   owners: Owners,
 ): (readonly [number, number])[] => {
   /**
-   * The record of the other array that every unique entry of `item` points to: `undefined`
-   * where none does, and `-1` where they point to several.
+   * The record of the other array that every unique entry of the record holding `entries`
+   * points to: `undefined` where none does, and `-1` where they point to several.
    */
   const partner = (
-    item: unknown,
+    entries: readonly string[],
     own: Map<string, number>,
     other: Map<string, number>,
   ): number | undefined => {
     let found: number | undefined;
-    for (const entry of primitiveEntries(item)) {
+    for (const entry of entries) {
       const there = other.get(entry) ?? -1;
       if (there === -1 || own.get(entry) === -1) continue;
       if (found !== undefined && found !== there) return -1;
@@ -238,16 +233,20 @@ const uniquePairs = (
     }
     return found;
   };
+  const { base, side } = owners;
   // Each side record's partner, found once however many base records point to it.
   const sidePartners = new Map<number, number | undefined>();
   const sidePartner = (index: number): number | undefined => {
     if (!sidePartners.has(index))
-      sidePartners.set(index, partner(side[index], owners.side, owners.base));
+      sidePartners.set(
+        index,
+        partner(side.entries[index], side.owners, base.owners),
+      );
     return sidePartners.get(index);
   };
   const pairs: (readonly [number, number])[] = [];
   for (let item = start; item < end; item++) {
-    const index = partner(base[item], owners.base, owners.side);
+    const index = partner(base.entries[item], base.owners, side.owners);
     if (
       index !== undefined &&
       index >= from &&
@@ -269,19 +268,24 @@ const uniquePairs = (
  * and a side record are paired first when they share a primitive entry, such as `id: "r1"`,
  * that no other record of either array holds. An entry several records hold, such as
  * `done: false`, pairs none, so a record still pairs with itself when this side also changed
- * another of its entries. A record that two such entries point to different records is left
- * unpaired, and of pairs that cross, as a moved record's would, the most that keep their order
- * are kept. The items between two such pairs are paired by position, as `getChanges` pairs
+ * another of its entries. A record whose unique entries point to different records is left
+ * unpaired. Of pairs that cross, as a moved record's would, the most that keep their order are
+ * kept. The items between two such pairs are paired by position, as `getChanges` pairs
  * them, and those left over are deleted or inserted.
  *
- * The owners of each entry are counted once, on the first run with items on both sides, in
- * time linear in the arrays' primitive entries. Each run then costs time linear in its
- * records' primitive entries, plus O(k log k) for its k pairs.
+ * A run of one item on each side is left as it is: `getChanges` paired the two, and a pair
+ * by a unique value, which never leaves the run, could only pair them again.
+ *
+ * The entries of each array are indexed once, on the first run that needs them, in time linear
+ * in the array's primitive entries; `indexBase` returns the base's index, which both sides
+ * share. Each run then costs time linear in its records' primitive entries, plus O(k log k) for
+ * its k pairs.
  */
 const matchByUniqueValues = (
   alignment: Alignment,
   base: readonly unknown[],
   side: readonly unknown[],
+  indexBase: () => EntryIndex,
   text: TextPolicy | undefined,
   path: Path,
 ): void => {
@@ -299,12 +303,12 @@ const matchByUniqueValues = (
     while (end < length && fates[end] !== "kept") end++;
     const from = start === 0 ? 0 : at[start - 1] + 1;
     const to = end === length ? side.length : at[end];
-    if (to === from) {
+    if (to === from || (end - start === 1 && to - from === 1)) {
       start = end;
       continue;
     }
-    owners ??= { base: entryOwners(base), side: entryOwners(side) };
-    const pairs = uniquePairs(base, start, end, side, from, to, owners);
+    owners ??= { base: indexBase(), side: indexEntries(side) };
+    const pairs = uniquePairs(start, end, from, to, owners);
     if (pairs.length > 0) {
       for (let item = start; item <= end; item++) inserted[item] = [];
       let item = start;
@@ -332,32 +336,28 @@ const matchByUniqueValues = (
 };
 
 /**
- * Aligns `side` with `base`, two arrays at `path`: as `getChanges` aligns them, with the items
- * it left unmatched re-paired by `matchByUniqueValues`.
+ * Aligns `side` with `base`, two arrays at `path`, by `changes`, the script `getChanges` made
+ * between them, with the items it left unmatched re-paired by `matchByUniqueValues`.
  */
 const alignItems = (
+  changes: readonly ListChange[],
   base: unknown[],
   side: unknown[],
+  indexBase: () => EntryIndex,
   text: TextPolicy | undefined,
   path: Path,
 ): Alignment => {
-  const alignment = align(
-    getChanges(base, side, diffOptions(text, path)),
-    base.length,
-    false,
-  );
-  matchByUniqueValues(alignment, base, side, text, path);
+  const alignment = align(changes, base.length, false);
+  matchByUniqueValues(alignment, base, side, indexBase, text, path);
   return alignment;
 };
 
 /**
- * Merges `ours` and `theirs`, two scripts that edit a sequence of `length` items, to `local`
- * and to `remote`. Each position takes the items both sides inserted there, the remote ones
- * first, then each item as `both` merges it, unless a side deleted it. An item the remote side
- * deleted and the local side replaced takes the local value, as a CRDT keeps a new item beside
- * a deleted one; one it changed in place stays deleted, as an edit inside a deleted container is
- * lost. `both` takes the item's index in the sequence, in `local`, in `remote`, and in the
- * merged sequence.
+ * Merges `ours` and `theirs`, the alignments of two scripts that edit a sequence of `length`
+ * items, to `local` and to `remote`. Each position takes the items both sides inserted there,
+ * the remote ones first, then each item as `both` merges it. An item a side deleted is dropped
+ * or kept as `mergeConcurrent` sets out. `both` takes the item's index in the sequence, in
+ * `local`, in `remote`, and in the merged sequence.
  */
 const mergeSequence = <T>(
   length: number,
@@ -383,56 +383,146 @@ const mergeSequence = <T>(
   return merged;
 };
 
+/**
+ * How the three values of a merge compare as JSON, in the order `merge` checks them:
+ * - `"local unchanged"`: base and local are equal, and the merge is the remote value;
+ * - `"remote unchanged"`: base and remote are equal, and it is the local value;
+ * - `"same change"`: local and remote are equal, and it is the local value;
+ * - `"merged"`: no two are equal.
+ */
+type Comparison =
+  "local unchanged" | "remote unchanged" | "same change" | "merged";
+
+/** Where `merge` tells its caller how its three values compare. */
+interface Report {
+  found: Comparison;
+}
+
+const found = <T>(
+  report: Report | undefined,
+  comparison: Comparison,
+  value: T,
+): T => {
+  if (report !== undefined) report.found = comparison;
+  return value;
+};
+
+/**
+ * Merges records key by key, where `base` and `local` differ. Whether `remote` equals `base` or
+ * `local` follows from how each key's values compare, which each key's merge reports. Only the
+ * remote values of keys `local` left unchanged are compared here, and only when the other keys
+ * leave the question open.
+ */
 const mergeRecords = (
   base: Record<string, unknown>,
   local: Record<string, unknown>,
   remote: Record<string, unknown>,
   text: TextPolicy | undefined,
   path: Path,
-): Record<string, unknown> => {
-  const merged: Record<string, unknown> = {};
+  report: Report | undefined,
+): unknown => {
   const keys = new Set([
     ...Object.keys(remote),
     ...Object.keys(local),
     ...Object.keys(base),
   ]);
   keys.delete(PROTO_KEY);
+  const values: unknown[] = [];
+  // The keys whose base and local values are equal.
+  const unchanged: string[] = [];
+  let remoteUnchanged = true;
+  let sameChange = true;
+  const child: Report = { found: "merged" };
   for (const key of keys) {
-    const value = merge(
-      entry(base, key),
-      entry(local, key),
-      entry(remote, key),
-      text,
-      [...path, key],
+    values.push(
+      merge(
+        jsonEntry(base, key),
+        jsonEntry(local, key),
+        jsonEntry(remote, key),
+        text,
+        [...path, key],
+        child,
+      ),
     );
+    if (child.found === "local unchanged") unchanged.push(key);
+    else {
+      // A remote value equal to the base value differs from the local one, and the reverse.
+      if (child.found !== "remote unchanged") remoteUnchanged = false;
+      if (child.found !== "same change") sameChange = false;
+    }
+  }
+  // Where the base and local values are equal, the remote one equals both or neither.
+  if (
+    (remoteUnchanged || sameChange) &&
+    unchanged.every((key) =>
+      jsonEqual(jsonEntry(base, key), jsonEntry(remote, key)),
+    )
+  )
+    return found(
+      report,
+      remoteUnchanged ? "remote unchanged" : "same change",
+      local,
+    );
+  const merged: Record<string, unknown> = {};
+  let index = 0;
+  for (const key of keys) {
+    const value = values[index++];
     if (value !== undefined) merged[key] = value;
   }
-  return merged;
+  return found(report, "merged", merged);
 };
 
-/** Merges arrays item by item, each item read as JSON would store it. */
+/**
+ * Merges arrays item by item, each item read as JSON would store it, where `base` and `local`
+ * differ. The merge needs each side's script from `base` anyway, and they tell how the arrays
+ * compare: `remote` equals `base` when its script is empty, and `local` when the two scripts are
+ * equal.
+ */
 const mergeArrays = (
   base: unknown[],
   local: unknown[],
   remote: unknown[],
   text: TextPolicy | undefined,
   path: Path,
-): unknown[] =>
-  mergeSequence(
-    base.length,
-    alignItems(base, local, text, path),
-    alignItems(base, remote, text, path),
-    local,
-    remote,
-    (item, inLocal, inRemote, at) =>
-      merge(
-        jsonItem(base[item]),
-        jsonItem(local[inLocal]),
-        jsonItem(remote[inRemote]),
-        text,
-        [...path, at],
-      ),
+  report: Report | undefined,
+): unknown => {
+  const options = diffOptions(text, path);
+  const remoteChanges = getChanges(base, remote, options);
+  if (remoteChanges.length === 0)
+    return found(report, "remote unchanged", local);
+  const localChanges = getChanges(base, local, options);
+  // A script turns `base` into its side, as JSON would store it.
+  if (jsonEqual(localChanges, remoteChanges))
+    return found(report, "same change", local);
+  // Built at most once, for both sides, and only if a side needs it.
+  let baseIndex: EntryIndex | undefined;
+  const indexBase = (): EntryIndex => (baseIndex ??= indexEntries(base));
+  const ours = alignItems(localChanges, base, local, indexBase, text, path);
+  const theirs = alignItems(remoteChanges, base, remote, indexBase, text, path);
+  return found(
+    report,
+    "merged",
+    mergeSequence(
+      base.length,
+      ours,
+      theirs,
+      local,
+      remote,
+      (item, inLocal, inRemote, at) => {
+        // An item a side kept is equal to the base item, so the merge is the other side's.
+        if (ours.fates[item] === "kept") return jsonItem(remote[inRemote]);
+        if (theirs.fates[item] === "kept") return jsonItem(local[inLocal]);
+        return merge(
+          jsonItem(base[item]),
+          jsonItem(local[inLocal]),
+          jsonItem(remote[inRemote]),
+          text,
+          [...path, at],
+        );
+      },
+    ),
   );
+};
 
 /** Merges text by UTF-16 unit, as arrays merge item by item. */
 const mergeText = (base: string, local: string, remote: string): string =>
@@ -446,52 +536,59 @@ const mergeText = (base: string, local: string, remote: string): string =>
     (_item, _inLocal, inRemote) => remote[inRemote],
   ).join("");
 
-/** `mergeConcurrent` for the value at `path`, with the strings `text` marks as text. */
+/**
+ * `mergeConcurrent` for the value at `path`, with the strings `text` marks as text, telling
+ * `report` how its three values compare. Where all three are records, or all three arrays, it
+ * tells whether `remote` equals `base` or `local` from merging their contents, rather than
+ * comparing the whole values first and then each of their contents again.
+ */
 const merge = (
   base: unknown,
   local: unknown,
   remote: unknown,
   text: TextPolicy | undefined,
   path: Path,
+  report?: Report,
 ): unknown => {
-  if (jsonEqual(base, local)) return remote;
-  if (jsonEqual(base, remote) || jsonEqual(local, remote)) return local;
-  if (remote === undefined && editedInPlace(base, local, text, path))
-    return undefined;
+  if (jsonEqual(base, local)) return found(report, "local unchanged", remote);
+  // A side that has not changed may share its values with `base`.
+  if (base === remote) return found(report, "remote unchanged", local);
+  if (local === remote) return found(report, "same change", local);
   if (isRecord(base) && isRecord(local) && isRecord(remote))
-    return mergeRecords(base, local, remote, text, path);
+    return mergeRecords(base, local, remote, text, path, report);
   if (Array.isArray(base) && Array.isArray(local) && Array.isArray(remote))
-    return mergeArrays(base, local, remote, text, path);
+    return mergeArrays(base, local, remote, text, path, report);
+  if (jsonEqual(base, remote)) return found(report, "remote unchanged", local);
+  if (jsonEqual(local, remote)) return found(report, "same change", local);
+  if (remote === undefined && editedInPlace(base, local, text, path))
+    return found(report, "merged", undefined);
   if (
     typeof local === "string" &&
     typeof remote === "string" &&
     isText(base, text, path)
   )
-    return mergeText(base, local, remote);
-  return local;
+    return found(report, "merged", mergeText(base, local, remote));
+  return found(report, "merged", local);
 };
 
 /**
  * Merges `local` and `remote`, two JSON values that both descend from `base`, so that each keeps
- * its own changes from `base`. `undefined` stands for an absent value, and is returned for one
- * the merge leaves absent. Entries holding `undefined` or a function are absent, and such array
- * items are `null`, as JSON would store them. No input is mutated.
+ * its own changes from `base`. `undefined` stands for an absent value, and is returned when the
+ * merge leaves the value absent. Values compare as `JSON.stringify` would store them; see
+ * `toJsonValue`. No input is mutated.
  *
  * - Records merge key by key. `__proto__` keys are ignored.
- * - Arrays merge item by item, each side's items matched with `base`'s. Items equal as JSON
- *   match first, as `getChanges` matches them. Between two of those, a base record and a side
- *   record match next when they share a string, number or boolean entry, such as `id: "r1"`,
- *   that no other record of either array holds, unless another such entry points one of them
- *   to a different record, or the match would cross another. The rest pair by position.
- *   So an item changed on one side, and moved and changed by the other, still merges with
- *   itself when it holds such an entry. Items both sides inserted at one place keep the remote
- *   ones first.
+ * - Arrays merge item by item, each side's items matched with `base`'s by value, then by an
+ *   entry exactly one record of each array holds, such as `id: "r1"`, then by position; see
+ *   {@link https://homeostate.pages.dev/docs/core/diffing#matching-array-items | Matching array items}.
+ *   Items both sides inserted at one place keep the remote ones first.
  * - Strings `options.text` marks as text merge by UTF-16 unit, as arrays merge item by item.
  *   Every other string, and every other value, is replaced whole.
  * - Where both sides changed one value differently, the local value wins, as its write would.
  * - A value the remote side deleted stays deleted where the local side changed it in place, as
- *   a CRDT loses an edit inside a deleted container: a record, an array or a text. One the local
- *   side replaced takes the local value. A value the local side deleted stays deleted.
+ *   a CRDT loses an edit inside a deleted container: a record, an array or a text. A value the
+ *   remote side deleted and the local side replaced takes the local value. A value the local
+ *   side deleted stays deleted.
  *
  * What only one side changed is that side's value, by identity. Where both sides are equal, at
  * any level, the merge returns the local value, so an item both sides inserted at one place is

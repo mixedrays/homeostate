@@ -80,18 +80,16 @@ describe("two peers that each create the synced map", () => {
     expect(createAutomergeBackend(high, NAME).read()).toEqual(merged);
   });
 
-  it("lose the keys only the room holds when a peer seeds an empty document first", async () => {
+  it("lose the keys only the room holds when a peer seeds an empty document first", () => {
     const room = createHandle(1);
     createAutomergeBackend(room, NAME).write({ count: 7, roomOnly: true });
     const late = createHandle(2);
     const store = createTestStore<Root>({ count: 0 });
-    const engine = createSyncEngine(
-      createAutomergeBackend(late, NAME),
-      store.adapter,
-      { ready: Promise.resolve() },
-    );
+    const engine = createSyncEngine({
+      backend: createAutomergeBackend(late, NAME),
+      adapter: store.adapter,
+    });
     engine.connect();
-    await new Promise((resolve) => setTimeout(resolve));
 
     exchange(room, late);
 
@@ -100,7 +98,7 @@ describe("two peers that each create the synced map", () => {
     engine.disconnect();
   });
 
-  it("keep every key when the document already holds the map", async () => {
+  it("keep every key when the document already holds the map", () => {
     const room = createHandle(1);
     const roomBackend = createAutomergeBackend(room, NAME);
     roomBackend.write({ count: 7 });
@@ -108,13 +106,11 @@ describe("two peers that each create the synced map", () => {
     exchange(room, late);
     roomBackend.write({ count: 7, roomOnly: true });
     const store = createTestStore<Root>({ count: 0, mine: true });
-    const engine = createSyncEngine(
-      createAutomergeBackend(late, NAME),
-      store.adapter,
-      { ready: Promise.resolve() },
-    );
+    const engine = createSyncEngine({
+      backend: createAutomergeBackend(late, NAME),
+      adapter: store.adapter,
+    });
     engine.connect();
-    await new Promise((resolve) => setTimeout(resolve));
 
     exchange(room, late);
 
@@ -165,10 +161,10 @@ describe("createAutomergeBackend", () => {
 
       expect(() => backend.read()).toThrow(error);
       expect(() =>
-        createSyncEngine(
+        createSyncEngine({
           backend,
-          createTestStore(threeTodos()).adapter,
-        ).connect(),
+          adapter: createTestStore(threeTodos()).adapter,
+        }).connect(),
       ).toThrow(error);
 
       backend.write({ count: 1 });
@@ -254,10 +250,10 @@ describe("createAutomergeBackend", () => {
     const handle = createHandle();
     const { doc, change, subscribe } = handle;
     const store = createTestStore({ count: 0 });
-    createSyncEngine(
-      createAutomergeBackend({ doc, change, subscribe }, NAME),
-      store.adapter,
-    ).connect();
+    createSyncEngine({
+      backend: createAutomergeBackend({ doc, change, subscribe }, NAME),
+      adapter: store.adapter,
+    }).connect();
 
     expect(doc()[NAME]).toEqual({ count: 0 });
     handle.update((current) =>
@@ -281,10 +277,10 @@ describe("createAutomergeBackend", () => {
       on: () => {},
     };
     const store = createTestStore({ count: 0 });
-    createSyncEngine(
-      createAutomergeBackend(source, NAME),
-      store.adapter,
-    ).connect();
+    createSyncEngine({
+      backend: createAutomergeBackend(source, NAME),
+      adapter: store.adapter,
+    }).connect();
 
     handle.change((draft) => {
       (draft[NAME] as { count: number }).count = 1;
@@ -387,7 +383,7 @@ describe("a delete and a concurrent update with an insert after it, merged at on
     const handle = createAutomergeHandle<Root>(edits.fork(4));
     const backend = createAutomergeBackend(handle, NAME);
     const store = createTestStore<Root>({});
-    const engine = createSyncEngine(backend, store.adapter);
+    const engine = createSyncEngine({ backend, adapter: store.adapter });
     engine.connect();
     createAutomergePersistable(handle).apply(edits.update);
     return { ...edits, handle, backend, store, engine };

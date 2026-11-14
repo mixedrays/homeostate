@@ -1,7 +1,6 @@
 import { deepStrictEqual } from "node:assert";
 import { Bench } from "tinybench";
 import {
-  ChangeType,
   getChanges,
   type DiffOptions,
   type JsonObject,
@@ -17,8 +16,6 @@ interface Fixture {
   expected: RecordChange[];
 }
 
-const { UPDATE, PENDING } = ChangeType;
-
 /** Build every input before timing, keeping the identity of unchanged todos. */
 const fixtures = (size: number): Fixture[] => {
   const todos = makeTodos(size);
@@ -31,7 +28,7 @@ const fixtures = (size: number): Fixture[] => {
       name: "unchanged record",
       before: { entities, count: 0 },
       after: { entities, count: 1 },
-      expected: [{ type: UPDATE, key: "count", value: 1 }],
+      expected: [{ type: "update", key: "count", value: 1 }],
     },
     {
       name: "normalized toggle",
@@ -39,15 +36,15 @@ const fixtures = (size: number): Fixture[] => {
       after: { entities: { ...entities, [changed.id]: changed } },
       expected: [
         {
-          type: PENDING,
+          type: "edit",
           key: "entities",
           kind: "record",
           changes: [
             {
-              type: PENDING,
+              type: "edit",
               key: changed.id,
               kind: "record",
-              changes: [{ type: UPDATE, key: "completed", value: true }],
+              changes: [{ type: "update", key: "completed", value: true }],
             },
           ],
         },
@@ -57,7 +54,7 @@ const fixtures = (size: number): Fixture[] => {
       name: "unchanged array",
       before: { todos, count: 0 },
       after: { todos, count: 1 },
-      expected: [{ type: UPDATE, key: "count", value: 1 }],
+      expected: [{ type: "update", key: "count", value: 1 }],
     },
     {
       name: "array toggle",
@@ -65,15 +62,15 @@ const fixtures = (size: number): Fixture[] => {
       after: { todos: todos.map((todo, i) => (i === index ? changed : todo)) },
       expected: [
         {
-          type: PENDING,
+          type: "edit",
           key: "todos",
           kind: "list",
           changes: [
             {
-              type: PENDING,
+              type: "edit",
               key: index,
               kind: "record",
-              changes: [{ type: UPDATE, key: "completed", value: true }],
+              changes: [{ type: "update", key: "completed", value: true }],
             },
           ],
         },
@@ -97,7 +94,7 @@ const main = async (): Promise<void> => {
   const rows: string[][] = [];
   for (const size of [100, 1000, 10_000]) {
     for (const json of [false, true]) {
-      const options: DiffOptions = { json, text: () => false };
+      const options: DiffOptions = { json };
       const inputs = fixtures(size);
       const bench = new Bench({ time: 250, iterations: 10, throws: true });
       for (const { name, before, after, expected } of inputs) {

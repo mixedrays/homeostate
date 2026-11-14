@@ -63,10 +63,10 @@ describe("scopeAdapter over a Redux store", () => {
   it("syncs a slice, leaving the rest of the store to its reducers", () => {
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createReduxAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createReduxAdapter(store), docScope),
+    }).connect();
     const { notes: notesBefore, ui: uiBefore } = store.getState();
 
     backend.receive({ title: "remote" });
@@ -83,10 +83,10 @@ describe("scopeAdapter over a Redux store", () => {
   it("adds no write for a dispatch to an unrelated slice", () => {
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createReduxAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createReduxAdapter(store), docScope),
+    }).connect();
     const write = vi.spyOn(backend, "write");
 
     store.dispatch(ui.actions.toggled());
@@ -100,8 +100,14 @@ describe("scopeAdapter over a Redux store", () => {
     const docBackend = createMemoryBackend();
     const notesBackend = createMemoryBackend();
     const adapter = createReduxAdapter(store);
-    createSyncEngine(docBackend, scopeAdapter(adapter, docScope)).connect();
-    createSyncEngine(notesBackend, scopeAdapter(adapter, notesScope)).connect();
+    createSyncEngine({
+      backend: docBackend,
+      adapter: scopeAdapter(adapter, docScope),
+    }).connect();
+    createSyncEngine({
+      backend: notesBackend,
+      adapter: scopeAdapter(adapter, notesScope),
+    }).connect();
     const docWrite = vi.spyOn(docBackend, "write");
     const notesWrite = vi.spyOn(notesBackend, "write");
 
@@ -129,10 +135,10 @@ describe("scopeAdapter over a Redux store", () => {
       },
     });
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createReduxAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createReduxAdapter(store), docScope),
+    }).connect();
 
     backend.receive({ title: "  spaced  " });
 
@@ -143,13 +149,13 @@ describe("scopeAdapter over a Redux store", () => {
   it("keeps the room when the store has no case for the replace action", () => {
     const store = configureStore({ reducer: rootReducer });
     const backend = createMemoryBackend({ title: "room" });
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createReduxAdapter(store), {
+      adapter: scopeAdapter(createReduxAdapter(store), {
         get: (state: Root) => ({ title: state.doc.title }),
         set: (state: Root, next: Doc) => ({ ...state, doc: next }),
       }),
-    ).connect();
+    }).connect();
 
     expect(store.getState().doc).toEqual({ title: "doc" });
     expect(backend.read()).toEqual({ title: "room" });

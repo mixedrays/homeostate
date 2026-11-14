@@ -46,14 +46,14 @@ export const createPair = (
 
   const writer = createStore(makeState(size));
   const engines: SyncEngine[] = [
-    createSyncEngine(
-      createYjsBackend(docA, "shared", { text: isTitle }),
-      writer.adapter,
-    ),
-    createSyncEngine(
-      createYjsBackend(docB, "shared", { text: isTitle }),
-      reader,
-    ),
+    createSyncEngine({
+      backend: createYjsBackend(docA, "shared", { text: isTitle }),
+      adapter: writer.adapter,
+    }),
+    createSyncEngine({
+      backend: createYjsBackend(docB, "shared", { text: isTitle }),
+      adapter: reader,
+    }),
   ];
   engines.forEach((engine) => engine.connect());
 

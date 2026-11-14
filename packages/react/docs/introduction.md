@@ -1,5 +1,5 @@
 ---
-description: A React hook for the status of a sync engine, which re-renders a component when the engine connects, becomes ready or fails.
+description: A React hook for the status of a sync engine, which re-renders a component when the engine connects, disconnects or fails.
 label: Introduction
 ---
 
@@ -24,19 +24,19 @@ import { useSyncStatus } from "@homeostate/react";
 import { useTodoStore } from "./store";
 
 function Editor() {
-  const { ready, failure } = useSyncStatus(useTodoStore.homeostate);
+  const { connected, failure } = useSyncStatus(useTodoStore.homeostate);
 
   return (
     <>
       {failure && <p role="alert">The last change did not sync.</p>}
-      <textarea disabled={!ready} />
+      <textarea disabled={!connected} />
     </>
   );
 }
 ```
 
 `useSyncStatus(engine)` returns `getStatus()`, described in
-[Sync status](../../core/docs/sync-engine.md#sync-status): `connected`, `ready` and `failure`.
+[Sync status](../../core/docs/sync-engine.md#sync-status): `connected` and `failure`.
 The component re-renders when the status changes, not on every local or remote change. A failure
 that came before the component mounted shows too, as the engine keeps it.
 
@@ -52,33 +52,22 @@ that came before the component mounted shows too, as the engine keeps it.
 | [Jotai `atomWithSync`](../../store-jotai/docs/introduction.md)              | Nothing: it exposes no engine |
 
 For Jotai, build the engine yourself and pass that:
-`createSyncEngine(backend, createJotaiAdapter(atom, store))`. A new engine prop is followed in the
+`createSyncEngine({ backend, adapter: createJotaiAdapter(atom, store) })`. A new engine prop is followed in the
 same render.
 
 ## What the status does not tell
 
 > [!WARNING]
 > The status describes the engine and says nothing about the network. `connected` means the engine
-> is subscribed to the store and the backend. Without the `ready` option, `ready` equals `connected`
-> and says no more. Neither means a peer is online or that the room has arrived.
+> is done reconciling and subscribed to the store and the backend. It does not mean a peer is
+> online or that the room has arrived.
 
-So the hook sits next to a status built on the provider and does not replace it. The table shows
-what the engine reports for a y-websocket provider, with `ready: synced` as in
-[What a provider's sync tells](../../core/docs/sync-engine.md#what-a-providers-sync-tells). It comes
-from running y-websocket 2.1.0 and its server by hand, not from an automated test, so it holds for
-that setup only.
-
-| Situation                      | Engine without `ready` | Engine with `ready: synced` |
-| ------------------------------ | ---------------------- | --------------------------- |
-| Sync server unreachable        | connected, ready       | connected, not ready        |
-| Provider has synced            | connected, ready       | connected, ready            |
-| `provider.disconnect()`        | connected, ready       | connected, ready            |
-| Sync server stops after a sync | connected, ready       | connected, ready            |
-| Engine reconnects, server down | connected, ready       | connected, not ready        |
-
-`failure` stayed `null` in all of them. A `ready` that races a timeout makes `ready` `true` once the
-timeout expires, with the server still down. A `ready` that rejects on a timeout leaves the engine
-disconnected with a failure.
+So the hook sits next to a status built on the provider and does not replace it. With a
+y-websocket provider, the engine reported `connected` with no `failure` whether the sync server
+was unreachable, the provider had synced, `provider.disconnect()` had been called, or the server
+had stopped after a sync. That comes from running y-websocket 2.1.0 and its server by hand, not
+from an automated test, so it holds for that setup only. To wait for the room before connecting,
+see [Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room).
 
 ## Server rendering
 

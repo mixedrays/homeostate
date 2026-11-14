@@ -36,10 +36,10 @@ describe("scopeAdapter over a MobX store", () => {
   it("reconciles a remote change into the slice, leaving the rest of the store untouched", () => {
     const store = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createMobxAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createMobxAdapter(store), docScope),
+    }).connect();
     const { notes, ui } = store;
     const item = store.doc.items[0];
 
@@ -60,10 +60,10 @@ describe("scopeAdapter over a MobX store", () => {
   it("adds no write for a change outside the slice, though every snapshot is a fresh copy", () => {
     const store = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createMobxAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createMobxAdapter(store), docScope),
+    }).connect();
     const write = vi.spyOn(backend, "write");
 
     runInAction(() => {
@@ -81,8 +81,14 @@ describe("scopeAdapter over a MobX store", () => {
     const docBackend = createMemoryBackend();
     const notesBackend = createMemoryBackend();
     const adapter = createMobxAdapter(store);
-    createSyncEngine(docBackend, scopeAdapter(adapter, docScope)).connect();
-    createSyncEngine(notesBackend, scopeAdapter(adapter, notesScope)).connect();
+    createSyncEngine({
+      backend: docBackend,
+      adapter: scopeAdapter(adapter, docScope),
+    }).connect();
+    createSyncEngine({
+      backend: notesBackend,
+      adapter: scopeAdapter(adapter, notesScope),
+    }).connect();
     const notesWrite = vi.spyOn(notesBackend, "write");
 
     docBackend.receive({ title: "remote", items: [] });
@@ -94,10 +100,10 @@ describe("scopeAdapter over a MobX store", () => {
   it("keeps syncing when the app replaces the slice's object", () => {
     const store = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createMobxAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createMobxAdapter(store), docScope),
+    }).connect();
 
     runInAction(() => {
       store.doc = { title: "replaced", items: [] };

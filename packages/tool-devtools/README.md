@@ -32,7 +32,7 @@ import { HomeostateDevtools } from "@homeostate/tool-devtools";
 
 const adapter = createZustandAdapter(useTodoStore);
 const backend = createYjsBackend(new Y.Doc(), "shared");
-const engine = createSyncEngine(backend, adapter);
+const engine = createSyncEngine({ backend, adapter });
 engine.connect();
 
 export function App() {

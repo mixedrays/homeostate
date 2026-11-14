@@ -53,13 +53,13 @@ engine.connect(); // sync again
 ```
 
 The node connects before the helper returns: a key the room holds replaces the node's value, and
-the keys the room lacks are seeded from the node unless `seed` is `"never"`.
+the keys the room lacks are seeded from the node unless `seed` is `false`.
 
-| Option                                                           | Default  | Description                                                   |
-| ---------------------------------------------------------------- | -------- | ------------------------------------------------------------- |
-| `backend`                                                        |          | The `CrdtBackend` the node syncs with                         |
-| `connect`                                                        | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below    |
-| `filter`, `keys`, `omit`, `seed`, `schedule`, `onError`, `ready` |          | The engine's `SyncEngineConfig`, typed by the node's snapshot |
+| Option                                                  | Default  | Description                                                   |
+| ------------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `backend`                                               |          | The `CrdtBackend` the node syncs with                         |
+| `connect`                                               | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below    |
+| `filter`, `keys`, `omit`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the node's snapshot |
 
 The helper syncs the node's snapshot: local changes go to the backend once per action, and remote
 changes are applied with `applySnapshot`, so instances with an identifier are reconciled in place
@@ -106,9 +106,9 @@ provider.once("sync", () => engine.connect());
 
 A deferred `connect()` like this one throws from its callback if it fires after `destroy(node)`.
 
-To connect right away and only hold back writes, pass [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room) instead of
-`connect: "manual"`: the node adopts remote changes as they arrive, and nothing is written until
-`ready` resolves.
+Waiting this way keeps the node's initial state from competing with a populated room; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for what to wait
+for, such as `persistence.whenLoaded`.
 
 ### Without the helper
 
@@ -122,7 +122,10 @@ import { addDisposer } from "mobx-state-tree";
 import { createSyncEngine } from "@homeostate/core";
 import { createMobxStateTreeAdapter } from "@homeostate/store-mobx-state-tree";
 
-const engine = createSyncEngine(backend, createMobxStateTreeAdapter(store));
+const engine = createSyncEngine({
+  backend,
+  adapter: createMobxStateTreeAdapter(store),
+});
 addDisposer(store, () => engine.disconnect());
 engine.connect();
 ```

@@ -21,17 +21,19 @@ npm install @homeostate/core @homeostate/crdt-yjs yjs
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
   omit: ["draft"],
-  seed: "if-empty",
+  seed: true,
 });
 engine.connect();
 ```
 
-`omit` keeps the keys it names on this device; functions stay local by default. On
+`omit` keeps the keys it names on this device; functions always stay local. On
 `connect()`, keys the backend already holds win over the store's values, so a peer joining
-a populated room adopts it. Keys only the store has are written to the backend (`seed:
-"if-empty"`, the default) or left for the next local change (`seed: "never"`). A reconnect
+a populated room adopts it. Keys only the store has are written to the backend (`seed: true`,
+the default) or left for the next local change (`seed: false`). A reconnect
 adopts the backend again, so edits made while disconnected to keys it holds are dropped.
 
 `scopeAdapter` turns a store adapter into one for a slice of the store, to sync a nested slice,
@@ -40,9 +42,9 @@ or several slices to several rooms.
 Remote changes are applied to the store as they arrive. Pass
 `schedule: (flush) => queueMicrotask(flush)` to apply a burst of them with one store update.
 
-A provider delivers the room's state after `connect()`. Pass `ready`, a promise or a function
-returning one, to write nothing until it resolves, so a joining peer does not seed over the room;
-see [Waiting for the room](https://homeostate.pages.dev/docs/core/sync-engine#waiting-for-the-room).
+A provider delivers the room's state some time after it starts. Call `connect()` once the document
+holds it, such as after `await persistence.whenLoaded`, so a joining peer does not seed over the
+room; see [Waiting for the room](https://homeostate.pages.dev/docs/core/sync-engine#waiting-for-the-room).
 
 `createPersistence` keeps the CRDT document in browser storage so it survives reloads; see
 the [persistence guide](https://homeostate.pages.dev/docs/persistence).

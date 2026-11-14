@@ -1,5 +1,4 @@
 import {
-  defaultSyncFilter,
   jsonEqual,
   keepIdentity,
   type CrdtBackend,
@@ -101,7 +100,7 @@ export interface InspectorSnapshot {
   backend: JsonObject | null;
   /** Why the backend could not be read; comparisons are unavailable while set. */
   backendError: string | null;
-  /** `engine.isConnected()`, or `null` without an engine. */
+  /** `engine.getStatus().connected`, or `null` without an engine. */
   connected: boolean | null;
   keyStatus: Readonly<Record<string, KeyStatus>>;
   /** Values in synced keys that are not plain JSON, so the engine does not sync them as they are. */
@@ -178,11 +177,11 @@ const CONNECTED_LABEL = "Connected: adopted the backend";
 const hasOwn = (object: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(object, key);
 
-/** The keys of `state` the engine would sync with its default filter, for a source without one. */
+/** The keys of `state` an engine with no options would sync, for a source without an engine. */
 const defaultSynced = (state: Plain): Plain => {
   const synced: Plain = {};
   for (const key of Object.keys(state))
-    if (defaultSyncFilter(key, state[key])) synced[key] = state[key];
+    if (typeof state[key] !== "function") synced[key] = state[key];
   return synced;
 };
 
@@ -269,7 +268,7 @@ export function createInspector(
       warnings,
       backend,
       backendError,
-      connected: source.engine ? source.engine.isConnected() : null,
+      connected: source.engine ? source.engine.getStatus().connected : null,
       keyStatus: keyStatusOf(
         store,
         localKeys,
@@ -363,13 +362,15 @@ export function createInspector(
     commit(next, label);
   };
 
-  /** What a sync event says about the batch it falls in; `local` only refreshes the view. */
+  /**
+   * What a sync event says about the batch it falls in. `local`, `disconnect` and `error` only
+   * refresh the view: a failure changes no store value, and the `error` that follows an apply
+   * leaves its change logged as remote.
+   */
   const onSyncEvent = (event: SyncEvent): void => {
     if (event === "remote") schedule("remote");
-    // Connecting adopts the backend's values, which is a remote change to the store, and so does
-    // reconciling once `ready` settles.
-    else if (event === "connect" || event === "ready")
-      schedule("remote", CONNECTED_LABEL);
+    // Connecting adopts the backend's values, which is a remote change to the store.
+    else if (event === "connect") schedule("remote", CONNECTED_LABEL);
     else schedule("local");
   };
 

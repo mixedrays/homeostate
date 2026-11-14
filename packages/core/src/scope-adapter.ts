@@ -10,7 +10,7 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
    */
   get: (state: S) => T;
   /**
-   * Returns the store's next state with `slice` in place of the slice, whole: a key `slice`
+   * Returns the store's next state with `slice` replacing the whole slice: a key that `slice`
    * lacks has been removed by a peer. Called with the state the store holds at that moment.
    */
   set: (state: S, slice: T) => S;
@@ -20,37 +20,11 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  * Turns a store adapter into one for a slice of the store, so that the sync engine treats the
  * slice as the store's whole state: `keys`, `omit` and `filter` apply to the slice's keys, and
  * the backend holds those keys at its root. Use it for a nested slice, which `keys` and `omit`
- * cannot reach, and to sync several slices of one store to several rooms, with one engine and one
- * backend each. It creates no engine, and the slice must be plain JSON like any synced state.
- *
- * A store change reaches the engine only when the slice differs as JSON, by identity first and
- * then with `jsonEqual`. So a change elsewhere in the store causes no write and no `'local'` sync
- * event, also with a `get` that builds a new object and an adapter whose `getState` returns a
- * fresh copy, such as the MobX adapter's.
- *
- * `get` must return an object, as `getState` must. If it does not, `connect()` throws a
- * `TypeError`, and once connected the error goes to `onError` when it is given and otherwise to
- * whoever changed the store. The engine writes nothing meanwhile, and applies no remote change, so
- * a slice that returns overwrites what the backend holds, remote changes made meanwhile included.
- * With a `get` that falls back to an empty object, such as `(state) => state.doc ?? {}`, nothing
- * throws, but the store removing the slice is then a local change that empties the backend.
- *
- * It keeps the adapter's `batchWrites`, so the engine batches the writes of the slice's changes
- * when it would batch the store's.
- *
- * When `get` returns the same object after `setState` as before it, the engine takes the store to
- * have ignored the change, as `StoreAdapter.setState` describes, and writes nothing. That holds
- * for a store that keeps the slice's object in a new root state to reject a remote change: the
- * backend and the store then disagree until the store's next change to the slice. An unscoped
- * adapter returns the new root state there, so the engine writes the store's values back.
- *
- * Each slice needs a synced subtree of its own: on one subtree, each slice's engine would hand it
- * the keys the other writes. A key the backend holds reaches the slice even if `T` does not
- * declare it, unless `keys` leaves it out, in which case it stays in the backend as it is.
- *
- * @param adapter - The store adapter of the whole store
- * @param scope - How to read the slice from the store's state and put it back
- * @returns StoreAdapter instance for the slice
+ * cannot reach, and to sync several slices of one store to several rooms, each with an engine, a
+ * backend and a synced subtree of its own. A store change outside the slice causes no write and
+ * no `'local'` sync event. For an absent slice, a store that ignores a change, and keys `T` does
+ * not declare, see
+ * {@link https://homeostate.pages.dev/docs/core/sync-engine#scopeadapter | scopeAdapter}.
  *
  * @example
  * ```typescript
@@ -59,7 +33,10 @@ export interface AdapterScope<S extends object, T extends JsonObjectInput> {
  *   get: (state) => state.doc,
  *   set: (state, doc) => ({ ...state, doc }),
  * });
- * createSyncEngine(createYjsBackend(new Y.Doc(), 'doc'), docAdapter).connect();
+ * createSyncEngine({
+ *   backend: createYjsBackend(new Y.Doc(), 'doc'),
+ *   adapter: docAdapter,
+ * }).connect();
  * ```
  */
 export function scopeAdapter<S extends object, T extends JsonObjectInput>(
@@ -67,9 +44,9 @@ export function scopeAdapter<S extends object, T extends JsonObjectInput>(
   scope: AdapterScope<S, T>,
 ): StoreAdapter<T> {
   /**
-   * The root state last read and its slice. One root state gives one object even when `get` builds
-   * a new one, or the engine would not see that a store ignored a change, and would write the
-   * store's old state over the backend.
+   * The root state last read and its slice, so that one root state gives one slice object even
+   * when `get` builds a new one. Otherwise the engine would not see that a store ignored a
+   * change, and would write the store's old state over the backend.
    */
   let root: S | undefined;
   let slice: T;

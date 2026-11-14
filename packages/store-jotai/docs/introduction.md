@@ -34,10 +34,10 @@ import { createJotaiAdapter } from "@homeostate/store-jotai";
 const counterAtom = atom({ count: 0 });
 const store = createStore();
 
-const engine = createSyncEngine(
-  createYjsBackend(new Y.Doc(), "shared"),
-  createJotaiAdapter(counterAtom, store),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+  adapter: createJotaiAdapter(counterAtom, store),
+});
 engine.connect();
 ```
 
@@ -166,12 +166,11 @@ keep the atom mounted and disconnect the CRDT library's provider instead.
 If connecting throws, the error reaches whoever mounted the atom, and that store stays unsynced
 until it is discarded.
 
-With [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), the atom connects on mount and
-writes nothing until `ready` resolves, and a function is called on every mount, so a timer it
-starts runs from then. A rejected `ready` disconnects the engine and goes to `onError`, and the next
-mount tries again. `atomWithSync` exposes no engine, so `isReady()` and
+To keep the atoms' initial values from competing with a populated room, mount the atom once the
+document holds what it should adopt, such as after `persistence.whenLoaded` has resolved; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room). `atomWithSync` exposes no engine, so `getStatus()` and
 [`useSyncStatus`](../../react/docs/introduction.md) are out of reach here; use
-`createSyncEngine(backend, createJotaiAdapter(atom, store))` to show that status.
+`createSyncEngine({ backend, adapter: createJotaiAdapter(atom, store) })` to show that status.
 
 Given a record of atoms, a key the room holds that the record does not list stays in the room, as
 with the record form of `createJotaiAdapter`.

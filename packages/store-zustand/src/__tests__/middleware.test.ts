@@ -89,7 +89,7 @@ describe("homeostate middleware", () => {
   it("exposes the engine so the store can disconnect from the backend", () => {
     const backend = createMemoryBackend();
     const store = createCounter(backend);
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
 
     store.homeostate.disconnect();
     store.getState().increment();
@@ -97,7 +97,7 @@ describe("homeostate middleware", () => {
 
     backend.receive({ count: 9 });
     expect(store.getState().count).toBe(1);
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
   });
 
   it("forwards the engine's status", () => {
@@ -111,17 +111,16 @@ describe("homeostate middleware", () => {
       ),
     );
     const listener = vi.fn();
-    const unsubscribe = store.homeostate.subscribeStatus(listener);
+    const unsubscribe = store.homeostate.subscribe(listener);
     expect(store.homeostate.getStatus().connected).toBe(false);
 
     store.homeostate.connect();
 
     expect(store.homeostate.getStatus()).toEqual({
       connected: true,
-      ready: true,
       failure: null,
     });
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledExactlyOnceWith("connect");
     unsubscribe();
   });
 
@@ -170,7 +169,7 @@ describe("homeostate middleware", () => {
     store.getState().increment();
 
     expect(store.getState().count).toBe(1);
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
 
     store.homeostate.connect();
@@ -313,7 +312,7 @@ describe("homeostate middleware with persist", () => {
     expect(store.getState().count).toBe(42);
     expect(room.read()).toEqual({ count: 42 });
     expect(storedCount("c")).toBe(42);
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(store.persist.hasHydrated()).toBe(true);
   });
 
@@ -349,11 +348,11 @@ describe("homeostate middleware with persist", () => {
         { backend: room },
       ),
     );
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(room.read()).toEqual({});
     await tick();
 
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(store.getState().count).toBe(42);
     expect(room.read()).toEqual({ count: 42 });
     expect(storedCount("c")).toBe(42);
@@ -375,7 +374,7 @@ describe("homeostate middleware with persist", () => {
     store.homeostate.disconnect();
     await tick();
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(store.getState().count).toBe(42);
     expect(room.read()).toEqual({ count: 7 });
   });
@@ -396,12 +395,12 @@ describe("homeostate middleware with persist", () => {
       ),
     );
     await tick();
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
 
     storage.getItem = getItem;
     await store.persist.rehydrate();
 
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(store.getState().count).toBe(7);
   });
 
@@ -419,10 +418,10 @@ describe("homeostate middleware with persist", () => {
       ),
     );
     store.homeostate.connect();
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     await tick();
 
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(room.read()).toEqual({ count: 7 });
     expect(store.getState().count).toBe(7);
     expect(storedCount("c")).toBe(7);
@@ -443,7 +442,7 @@ describe("homeostate middleware with persist", () => {
     );
     await tick();
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(store.getState().count).toBe(42);
     expect(room.read()).toEqual({});
   });
@@ -460,132 +459,6 @@ describe("homeostate middleware with persist", () => {
         ),
       ),
     ).toThrow("homeostate(persist(creator, options), { backend })");
-  });
-});
-
-describe("homeostate middleware with ready", () => {
-  const deferred = () => {
-    let resolve!: () => void;
-    const promise = new Promise<void>((r) => {
-      resolve = r;
-    });
-    return { promise, resolve };
-  };
-
-  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
-    const room = createMemoryBackend();
-    const ready = deferred();
-
-    const store = createStore<Count & { label: string }>()(
-      homeostate(() => ({ count: 0, label: "mine" }), {
-        backend: room,
-        ready: ready.promise,
-      }),
-    );
-
-    expect(store.homeostate.isConnected()).toBe(true);
-    expect(store.homeostate.isReady()).toBe(false);
-    expect(room.read()).toEqual({});
-
-    room.receive({ count: 7 });
-    expect(store.getState()).toEqual({ count: 7, label: "mine" });
-
-    ready.resolve();
-    await tick();
-    expect(store.homeostate.isReady()).toBe(true);
-    expect(room.read()).toEqual({ count: 7, label: "mine" });
-  });
-
-  it("takes a function, called when the app connects", async () => {
-    const room = createMemoryBackend();
-    const ready = vi.fn(() => Promise.resolve());
-
-    const store = createStore<Count>()(
-      homeostate(() => ({ count: 0 }), {
-        backend: room,
-        connect: "manual",
-        ready,
-      }),
-    );
-    expect(ready).not.toHaveBeenCalled();
-
-    store.homeostate.connect();
-    await tick();
-
-    expect(ready).toHaveBeenCalledOnce();
-    expect(room.read()).toEqual({ count: 0 });
-  });
-
-  it("does nothing when ready settles after a disconnect", async () => {
-    const room = createMemoryBackend();
-    const ready = deferred();
-    const store = createStore<Count>()(
-      homeostate(() => ({ count: 0 }), { backend: room, ready: ready.promise }),
-    );
-
-    store.homeostate.disconnect();
-    ready.resolve();
-    await tick();
-
-    expect(room.read()).toEqual({});
-    expect(store.homeostate.isConnected()).toBe(false);
-  });
-
-  describe("with persist hydrating from async storage", () => {
-    const createHydrating = (room: MemoryBackend, ready: Promise<void>) => {
-      const { storage } = createStorage({ c: persisted(42) }, true);
-      return createStore<Count>()(
-        homeostate(
-          persist(() => ({ count: 0 }), {
-            name: "c",
-            storage: createJSONStorage(() => storage),
-          }),
-          { backend: room, ready },
-        ),
-      );
-    };
-
-    it("seeds hydrated state once both have finished, ready first", async () => {
-      const room = createMemoryBackend();
-      const store = createHydrating(room, Promise.resolve());
-      expect(store.homeostate.isConnected()).toBe(false);
-
-      await tick();
-
-      expect(store.getState().count).toBe(42);
-      expect(store.homeostate.isReady()).toBe(true);
-      expect(room.read()).toEqual({ count: 42 });
-    });
-
-    it("waits for ready after hydrating, and lets the room win", async () => {
-      const room = createMemoryBackend();
-      const ready = deferred();
-      const store = createHydrating(room, ready.promise);
-
-      await tick();
-      expect(store.homeostate.isConnected()).toBe(true);
-      expect(store.homeostate.isReady()).toBe(false);
-      expect(store.getState().count).toBe(42);
-      expect(room.read()).toEqual({});
-
-      room.receive({ count: 7 });
-      ready.resolve();
-      await tick();
-
-      expect(store.getState().count).toBe(7);
-      expect(room.read()).toEqual({ count: 7 });
-    });
-
-    it("stays disconnected when disconnected during hydration", async () => {
-      const room = createMemoryBackend();
-      const store = createHydrating(room, Promise.resolve());
-
-      store.homeostate.disconnect();
-      await tick();
-
-      expect(store.homeostate.isConnected()).toBe(false);
-      expect(room.read()).toEqual({});
-    });
   });
 });
 
@@ -629,7 +502,7 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
 
     expect(room.read()).toEqual({ count: 7 });
     expect(store.getState().count).toBe(7);
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
   });
 
   it("lets the room win over state rehydrated from async storage", async () => {
@@ -639,10 +512,10 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
     await storage.setItem("c", persisted(42));
 
     const rehydrated = store.persist.rehydrate();
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     await rehydrated;
 
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(room.read()).toEqual({ count: 7 });
     expect(store.getState().count).toBe(7);
   });
@@ -667,7 +540,7 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
 
     await store.persist.rehydrate();
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(store.getState().count).toBe(42);
     expect(room.read()).toEqual({ count: 7 });
   });
@@ -682,7 +555,7 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
     store.homeostate.disconnect();
     await rehydrated;
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(store.getState().count).toBe(42);
     expect(room.read()).toEqual({ count: 7 });
   });
@@ -697,7 +570,7 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
     await store.persist.rehydrate();
 
     expect(store.persist.hasHydrated()).toBe(false);
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(store.getState().count).toBe(7);
     room.receive({ count: 9 });
     expect(store.getState().count).toBe(9);
@@ -712,11 +585,11 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
     await storage.setItem("c", persistedV1(42));
 
     const rehydrated = store.persist.rehydrate();
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     await rehydrated;
 
     expect(store.persist.hasHydrated()).toBe(false);
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(room.read()).toEqual({ count: 7 });
     expect(store.getState().count).toBe(7);
     store.setState({ count: 10 });
@@ -733,7 +606,7 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
     store.homeostate.disconnect();
     await rehydrated;
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     store.setState({ count: 10 });
     expect(room.read()).toEqual({ count: 7 });
   });
@@ -748,7 +621,7 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
 
     await store.persist.rehydrate();
 
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     expect(room.read()).toEqual({ count: 7 });
   });
 
@@ -766,11 +639,11 @@ describe("homeostate middleware with persist rehydrating a connected store", () 
     const latest = store.persist.rehydrate();
 
     await failed;
-    expect(store.homeostate.isConnected()).toBe(false);
+    expect(store.homeostate.getStatus().connected).toBe(false);
     finishRead(persisted(42));
     await latest;
 
-    expect(store.homeostate.isConnected()).toBe(true);
+    expect(store.homeostate.getStatus().connected).toBe(true);
     expect(room.read()).toEqual({ count: 7 });
     expect(store.getState().count).toBe(7);
   });

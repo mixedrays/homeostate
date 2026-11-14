@@ -147,9 +147,9 @@ the `key`, and the virtual time `at` which it was found:
 peer-1 lost the synced key title at 412.5 ms (seed 11), on an update from peer-0: its store and document both lack it, and no peer deleted it.
 ```
 
-A key keeps the store's own value when the peer's `filter` rejects the value another peer wrote,
-and a key that a store has but its document never held is not held, so neither is
-reported. A peer whose engine is disconnected keeps its store as it is, so it loses nothing. A
+A key keeps the store's own value when the peer does not sync it, such as one its `filter`
+rejects or one its store holds as a function, and a key that a store has but its document never
+held is not held, so neither is reported. A peer whose engine is disconnected keeps its store as it is, so it loses nothing. A
 store that notifies asynchronously, or an engine with `schedule`, can apply a change after its
 delivery's check: a loss is then found at a later check, or missed if your test changes the
 store first, but never reported wrongly.
@@ -285,16 +285,6 @@ await network.settle();
 peer.engine.connect();
 ```
 
-Or model [`ready`](../../core/docs/sync-engine.md#waiting-for-the-room), which connects the engine
-as the peer joins and holds back its writes, by passing a promise in its config:
-
-```ts
-network.addPeer({ ...setup, config: { ready } });
-await network.settle();
-resolveReady();
-await ready;
-await network.settle();
-```
-
-Until then `expectConverged()` throws if the store holds a key its document lacks: the peer has
-not written it, so it has not converged.
+See [Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for the app's
+side. Until the peer connects, `expectConverged()` throws if the store holds a key its document
+lacks: the peer has not written it, so it has not converged.

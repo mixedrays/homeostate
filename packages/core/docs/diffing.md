@@ -12,9 +12,7 @@ turn a JSON snapshot into small edits that keep unchanged containers in place.
 ## getChanges
 
 ```ts
-type JsonObject = Record<string, unknown>;
 type JsonObjectInput = { [key: string]: any; [Symbol.iterator]?: never };
-type Diffable = JsonObject | unknown[] | string;
 type TextPolicy = (path: readonly (string | number)[]) => boolean;
 
 interface DiffOptions {
@@ -41,21 +39,21 @@ declare function getChanges(
 
 Returns an ordered edit script that transforms `a` into `b`, without mutating either input. Two
 values of one kind return the script of that kind. Records are taken as `JsonObjectInput`, so
-two states typed with an `interface` diff as records. `Diffable` names the kinds it accepts, but
-both values must be of one of them: passing values of different kinds, or values typed only as
-`Diffable`, fails to compile, so narrow them first.
+two states typed with an `interface` diff as records. Both values must be of one kind: passing
+values of different kinds, or values typed as a union of kinds, such as `string | unknown[]`,
+fails to compile, so narrow them first.
 
-| Parameter      | Description                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `a`            | The current plain record, array or string.                                                                         |
-| `b`            | The desired value, with the same root kind as `a`.                                                                 |
-| `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to every string. |
-| `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`.       |
+| Parameter      | Description                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `a`            | The current plain record, array or string.                                                                   |
+| `b`            | The desired value, with the same root kind as `a`.                                                           |
+| `options.text` | Which nested strings are diffed character by character; see [Text policy](#text-policy). Defaults to none.   |
+| `options.json` | Diff `a` and `b` as `JSON.stringify` would store them; see [toJsonValue](#tojsonvalue). Defaults to `false`. |
 
 Equal values produce `[]`. An edit script cannot replace its root, so values of different root
 kinds throw a `TypeError` naming both kinds, such as
 `getChanges needs two strings, two arrays or two records, got array and string`; so does
-anything else, such as a number. Nested values that change kind produce an `UPDATE`.
+anything else, such as a number. Nested values that change kind produce an `"update"` step.
 
 Steps are applied in order: each array index or string offset addresses the value as revised by
 the steps before it, and string offsets and counts are UTF-16 code units. See
@@ -86,57 +84,48 @@ console.log(getChanges({ value: [1] }, { value: "one" }));
 getChanges([1], "one"); // throws a TypeError
 ```
 
-## Change and ChangeType
+## Change
 
 ```ts
-const ChangeType = {
-  INSERT: "insert",
-  UPDATE: "update",
-  DELETE: "delete",
-  PENDING: "pending",
-} as const;
-type ChangeType = (typeof ChangeType)[keyof typeof ChangeType];
-
 type ContainerKind = "record" | "list" | "text";
 
 type RecordChange =
   | { type: "insert" | "update"; key: string; value: unknown }
   | { type: "delete"; key: string; count?: never }
-  | PendingChange<string>;
+  | EditChange<string>;
 
 type ListChange =
   | { type: "insert" | "update"; key: number; value: unknown }
-  | { type: "delete"; key: number; count?: number }
-  | PendingChange<number>;
+  | { type: "delete"; key: number; count: number }
+  | EditChange<number>;
 
 type TextChange =
   | { type: "insert"; key: number; value: string }
-  | { type: "delete"; key: number; count?: number };
+  | { type: "delete"; key: number; count: number };
 
-// Not exported: a pending step names the kind of its nested script.
-type PendingChange<K> =
-  | { type: "pending"; key: K; kind: "record"; changes: RecordChange[] }
-  | { type: "pending"; key: K; kind: "list"; changes: ListChange[] }
-  | { type: "pending"; key: K; kind: "text"; changes: TextChange[] };
+// Not exported: an edit step names the kind of its nested script.
+type EditChange<K> =
+  | { type: "edit"; key: K; kind: "record"; changes: RecordChange[] }
+  | { type: "edit"; key: K; kind: "list"; changes: ListChange[] }
+  | { type: "edit"; key: K; kind: "text"; changes: TextChange[] };
 
 type Change = RecordChange | ListChange | TextChange;
-type EditScript = RecordChange[] | ListChange[] | TextChange[];
 ```
 
 A script holds the steps of one kind of container: `RecordChange`s for a record, keyed by
 property name, and `ListChange`s or `TextChange`s for an array or a string, keyed by position.
-Narrow a step by `type`, and a pending step's nested script by `kind`; the payload then needs no
-cast.
+Narrow a step by `type`, and an edit step's nested script by `kind`; the payload then needs no
+cast. `Change["type"]` is the union of the four types.
 
-| Type      | Meaning                                                                   | Payload                                                                                      |
-| --------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `INSERT`  | Adds a record key, array item or run of text.                             | `value`: the inserted value, or a string of one or more characters.                          |
-| `UPDATE`  | Replaces an existing record property or array item.                       | `value`: the replacement value.                                                              |
-| `DELETE`  | Removes a record key, a run of array items or part of a string.           | `count`: how many items or UTF-16 units, on every array and string delete; none for records. |
-| `PENDING` | Applies a nested script to the existing object, array or string at `key`. | `kind`: the container the script edits; `changes`: its script.                               |
+| Type       | Meaning                                                                   | Payload                                                                                      |
+| ---------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `"insert"` | Adds a record key, array item or run of text.                             | `value`: the inserted value, or a string of one or more characters.                          |
+| `"update"` | Replaces an existing record property or array item.                       | `value`: the replacement value.                                                              |
+| `"delete"` | Removes a record key, a run of array items or part of a string.           | `count`: how many items or UTF-16 units, on every array and string delete; none for records. |
+| `"edit"`   | Applies a nested script to the existing object, array or string at `key`. | `kind`: the container the script edits; `changes`: its script.                               |
 
-`getChanges` sets `count` on every array and string delete, `1` included. An applier treats an
-absent `count` as `1`, so a script written by hand may leave it out.
+`count` is required, so a script written by hand sets it on every array and string delete, `1`
+included.
 
 Inserted and replacement values may be objects from `b`; clone or convert them when your
 store needs to own them.
@@ -176,8 +165,9 @@ counts.
 A `TextPolicy` receives the path of a nested string from the root of `a`: record keys and
 array indices, such as `["todos", 0, "title"]`. An index is the item's position in `b`. A
 string at a path where it returns `true` is diffed character by character. Any other changed
-string is replaced whole by one `UPDATE`. Two strings passed directly to `getChanges` are
-always diffed character by character.
+string is replaced whole by one `"update"` step, and so is every changed nested string when
+`options.text` is left out. Two strings passed directly to `getChanges` are always diffed
+character by character, with or without a policy.
 
 The supplied backends pass their `text` option here, so a string outside it reaches the CRDT
 as one value, and concurrent writes keep one of them instead of merging their characters.
@@ -193,7 +183,7 @@ console.log(getChanges(before, after, { text: isTitle }));
 // [
 //   { type: "update", key: "status", value: "done" },
 //   {
-//     type: "pending",
+//     type: "edit",
 //     key: "title",
 //     kind: "text",
 //     changes: [{ type: "insert", key: 4, value: " it" }],
@@ -201,26 +191,11 @@ console.log(getChanges(before, after, { text: isTitle }));
 // ]
 
 console.log(getChanges(before, after));
-// Without a policy, "status" is edited character by character too.
-```
-
-## applyStringChanges
-
-```ts
-declare const applyStringChanges: (
-  value: string,
-  changes: TextChange[],
-) => string;
-```
-
-Returns `value` revised by a string edit script: what `getChanges` returns for two strings,
-or the script of a `PENDING` step whose `kind` is `"text"`.
-
-```ts title="apply-string-changes-example.ts"
-import { applyStringChanges, getChanges } from "@homeostate/core";
-
-console.log(applyStringChanges("Plan", getChanges("Plan", "Plan it")));
-// "Plan it"
+// Without a policy, "title" is replaced whole too:
+// [
+//   { type: "update", key: "status", value: "done" },
+//   { type: "update", key: "title", value: "Plan it" },
+// ]
 ```
 
 ## toJsonValue
@@ -230,8 +205,8 @@ declare const toJsonValue: (value: unknown) => unknown;
 ```
 
 Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
-function are left out, such array items, holes included, become `null`, so do `NaN` and
-infinite numbers, and own `__proto__` keys are dropped. Only the containers on a path to a changed value are copied, and a value
+function are left out; array items holding them, and holes, become `null`, and so do `NaN` and
+infinite numbers; own `__proto__` keys are dropped. Only the containers on a path to a changed value are copied, and a value
 that is already JSON is returned as is.
 
 `getChanges` with `json: true` applies the same rule to both sides as it diffs, and passes only
@@ -254,8 +229,8 @@ declare const jsonEqual: (a: unknown, b: unknown) => boolean;
 ```
 
 Returns whether `a` and `b` are equal as `JSON.stringify` would store them: object entries
-holding `undefined` or a function are absent, such array items, holes included, equal `null`,
-and so do `NaN` and infinite numbers. Records compare their own keys only, so a key named after
+holding `undefined` or a function are absent; array items holding them, and holes, equal
+`null`, and so do `NaN` and infinite numbers. Records compare their own keys only, so a key named after
 an `Object.prototype` member, such as `constructor` or `toString`, is never found on an object
 that lacks it, and `__proto__` keys are ignored on both sides. It is the equality the sync
 engine uses to tell whether a key changed. Pass it JSON values: any other object, such as a
@@ -282,7 +257,8 @@ Returns `next`, reusing every subtree of `previous` it leaves unchanged. It appl
 script `getChanges` finds between them to copies of `previous`'s containers, so only the
 containers along a changed path are new, and an item that shifts in a list, such as after an
 insert at the top, keeps its identity. Neither input is mutated. When nothing changed, it
-returns `previous` itself; when the two are of different kinds, `next`.
+returns `previous` itself; when the two are of different kinds, `next`. A string that changed
+is taken from `next` whole, since a string has no identity to keep.
 
 Every value it takes from `next` is plain: own `__proto__` keys are left out at any depth, and
 an object whose prototype is neither `Object.prototype` nor `null` is replaced by a plain object
@@ -401,7 +377,9 @@ Between the records paired this way, items still pair by position, as `getChange
 A paired item that changed is merged inside when both values are records or arrays, and
 replaced whole otherwise. `getChanges` itself, and so a backend's write, still pairs by
 position. Matching costs time linear in the primitive entries of the arrays' records, plus
-O(k log k) for each run's k pairs.
+O(k log k) for each run's k pairs. A run of one item on each side, such as an item changed in
+place, is left as `getChanges` paired it, so a merge whose runs are all like that does no
+matching.
 
 ## applyChanges
 
@@ -427,14 +405,15 @@ untouched containers keep their identity.
 | `ops`     | How to read and write your containers; see [ApplyOps](#applyops).                       |
 | `options` | Passed to `getChanges`. A CRDT backend passes its `text` policy and `json: true`.       |
 
-A `PENDING` step edits the child in place when `ops.kind` reports the step's `kind`: a record
+An `"edit"` step edits the child in place when `ops.kind` reports the step's `kind`: a record
 for a record, a list for an array, and text for a string. Any other
 child, such as a string held as a plain value or text written under another text policy, is
 replaced whole with its next value through `ops.set`, passed through
 [toJsonValue](#tojsonvalue) with `options.json`.
 
-Nothing is written when `ops.kind(target)` is not a record or a list, or when `current` and
-`next` are not both of that kind. Operations run synchronously after the whole diff is
+It throws a `TypeError` naming the three kinds, and writes nothing, when `ops.kind(target)` is
+not a record or a list, or when `current` and `next` are not both of that kind: two records for
+a record, two arrays for a list. Operations run synchronously after the whole diff is
 computed; if one throws, earlier mutations remain, so wrap the call in a transaction when it
 must be atomic.
 

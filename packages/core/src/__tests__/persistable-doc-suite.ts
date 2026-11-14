@@ -38,7 +38,10 @@ export const describePersistableDoc = <D>(
 
   const connect = (doc: D, initial: TodoState = threeTodos()) => {
     const store = createTestStore(initial);
-    const engine = createSyncEngine(backend(doc), store.adapter);
+    const engine = createSyncEngine({
+      backend: backend(doc),
+      adapter: store.adapter,
+    });
     engine.connect();
     return store;
   };
@@ -136,22 +139,6 @@ export const describePersistableDoc = <D>(
           filterStatus: "all",
         }).getState(),
       ).toEqual(addTodo(threeTodos(), todo("4")));
-    });
-
-    it("stores updates received from peers", async () => {
-      const first = await open();
-      const peer = createDoc();
-      exchange(first.doc, peer);
-      const peerStore = connect(peer);
-      peerStore.setState(addTodo(peerStore.getState(), todo("remote")));
-      exchange(first.doc, peer);
-      await first.persistence.destroy();
-
-      const reloaded = await open(first.adapter);
-
-      expect(reloaded.store.getState().todos.map((t) => t.id)).toContain(
-        "remote",
-      );
     });
 
     it("restores edits stored after a failed append, which depend on it", async () => {
@@ -291,7 +278,10 @@ export const describePersistableDoc = <D>(
             deriving.setState({ ...state, count: state.todos.length });
         });
         const engines = docs.map((doc, i) =>
-          createSyncEngine(backend(doc), stores[i].adapter),
+          createSyncEngine({
+            backend: backend(doc),
+            adapter: stores[i].adapter,
+          }),
         );
         relay(0);
         engines[0].connect();

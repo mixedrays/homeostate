@@ -87,13 +87,13 @@ describe("getting started", () => {
     );
     await act(async () => first.button.click());
     expect(first.container.textContent).toContain("Count: 1");
-    expect(first.useCounter.homeostate.isReady()).toBe(false);
+    expect(first.useCounter.homeostate.getStatus().connected).toBe(false);
     expect(first.doc.getMap("shared").toJSON()).toEqual({});
 
     await act(async () => {
       first.provider.synced = true;
     });
-    expect(first.useCounter.homeostate.isReady()).toBe(true);
+    expect(first.useCounter.homeostate.getStatus().connected).toBe(true);
     expect(first.doc.getMap("shared").toJSON()).toEqual({ count: 1 });
 
     const second = await openTab();

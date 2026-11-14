@@ -25,33 +25,35 @@ npm install @homeostate/core @homeostate/crdt-yjs yjs
 import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter, {
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
   omit: ["draft"],
-  seed: "if-empty",
+  seed: true,
   onError: (error, source) =>
     console.error(`Sync failed in the ${source}`, error),
 });
 
 engine.connect();
-engine.isConnected(); // true
+engine.getStatus().connected; // true
 engine.disconnect();
 ```
 
 Here, `doc` is your Yjs document and `adapter` comes from your state manager's `store-*`
-package. `omit` keeps `draft` on this device, and functions such as actions stay local by
-default. On `connect()` the backend's values win over the store's. Once connected, what the
+package. `omit` keeps `draft` on this device, and functions such as actions always stay
+local. On `connect()` the backend's values win over the store's. Once connected, what the
 store or the backend throws goes to `onError` instead of the other side's notifier. See the
 [sync engine reference](./sync-engine.md) for all options, lifecycle methods and adapter
 contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation model.
 
 ## API reference
 
-| Page                            | APIs and types                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineConfig`, `SeedStrategy`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `defaultSyncFilter`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `CrdtBackendOptions`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
-| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                                                      |
-| [Diff and apply](./diffing.md)  | `getChanges`, `Diffable`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `EditScript`, `ChangeType`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `applyStringChanges`, `ApplyOps`, `ContainerKind`                                                 |
-| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                                                      |
+| Page                            | APIs and types                                                                                                                                                                                                                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Sync engine](./sync-engine.md) | `createSyncEngine`, `SyncEngineOptions`, `SyncEngineConfig`, `SetupOptions`, `SyncErrorSource`, `WriteLoopError`, `SyncEngine`, `SyncEvent`, `StoreAdapter`, `scopeAdapter`, `AdapterScope`, `CrdtBackend`, `createCrdtBackend`, `CrdtBackendParts`, `JsonObject`, `JsonObjectInput`, `Unsubscribe` |
+| [Persistence](./persistence.md) | `createPersistence`, `PersistenceConfig`, `Persistence`, `PersistenceStats`, `PersistableDoc`, `PersistenceAdapter`, `StoredUpdates`                                                                                                                                                                |
+| [Diff and apply](./diffing.md)  | `getChanges`, `DiffOptions`, `TextPolicy`, `Change`, `RecordChange`, `ListChange`, `TextChange`, `toJsonValue`, `jsonEqual`, `keepIdentity`, `mergeConcurrent`, `MergeOptions`, `applyChanges`, `ApplyOps`, `ContainerKind`                                                                         |
+| [Testing](./testing.md)         | `createMemoryBackend`, `MemoryBackend`, `createMemoryPersistenceAdapter`, `MemoryPersistenceAdapter` from `@homeostate/core/testing`                                                                                                                                                                |
 
 `createPersistence` keeps the document in browser storage through
 [`@homeostate/persist-indexeddb`](../../persist-indexeddb/docs/introduction.md) or
@@ -63,18 +65,19 @@ contracts, or [Connecting](/docs/concepts#connecting) for the reconciliation mod
 Build it with [`createCrdtBackend`](./sync-engine.md#createcrdtbackend), from the parts that
 differ by CRDT library: `read` for the synced subtree as plain JSON, `transact` to run one edit
 tagged as the backend's own, `watch` to hear of every change and say whether it was its own,
-and `revision`. Core does the rest: it applies the default text policy, diffs each write against
-`previous` or the document with `applyChanges` and `json: true`, and leaves the backend's own
+`revision`, and the `text` policy. Core does the rest: it diffs each write against `previous` or
+the document with `applyChanges`, `json: true` and that policy, and leaves the backend's own
 writes out of `subscribe`.
 
 - `transact` hands its edit your [`ApplyOps`](./diffing.md), which read and write your
-  library's maps, lists and texts. `createCrdtBackend` gives `build` the text policy: in `set`
-  and `splice`, store the strings it marks in your library's text type and every other string
-  as a plain value; text is then edited through `editText`.
+  library's maps, lists and texts. Build them from the same `text` policy you pass in the
+  parts, which may be `undefined` for none: in `set` and `splice`, store the strings it marks in
+  your library's text type and every other string as a plain value; text is then edited through
+  `editText`.
 - Implement `revision()` from something your library updates with every change, reported or
-  not, such as a version vector or an op count, and return `undefined` while it cannot tell.
-  Without it, the engine reads your document before every local change to check that
-  `previous` is still current.
+  not, such as a version vector or an op count, and return `undefined` while it cannot tell. A
+  library with nothing of the kind returns `undefined` always; the engine then reads your
+  document before every local change to check that `previous` is still current.
 - Delete in `splice` and `editText` with one library call for the whole `deleteCount`, such as
   `Y.Text.delete(index, length)`: clearing a list or deleting a paragraph arrives as one run.
 

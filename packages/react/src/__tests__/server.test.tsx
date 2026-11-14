@@ -7,22 +7,25 @@ import { useSyncStatus } from "../index";
 describe("useSyncStatus on the server", () => {
   it("renders disconnected, whatever the engine holds", () => {
     let state = { count: 0 };
-    const engine = createSyncEngine(createMemoryBackend(), {
-      getState: () => state,
-      setState: (next) => {
-        state = next;
+    const engine = createSyncEngine({
+      backend: createMemoryBackend(),
+      adapter: {
+        getState: () => state,
+        setState: (next) => {
+          state = next;
+        },
+        subscribe: () => () => {},
       },
-      subscribe: () => () => {},
     });
     engine.connect();
     const Badge = () => {
-      const { connected, ready, failure } = useSyncStatus(engine);
-      return <p>{[connected, ready, failure].join()}</p>;
+      const { connected, failure } = useSyncStatus(engine);
+      return <p>{[connected, failure].join()}</p>;
     };
 
     const html = renderToString(<Badge />);
 
     expect(typeof document).toBe("undefined");
-    expect(html).toBe("<p>false,false,</p>");
+    expect(html).toBe("<p>false,</p>");
   });
 });

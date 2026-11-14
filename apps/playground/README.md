@@ -67,9 +67,9 @@ does not produce the same CRDT history, so joining tabs would lose edits. If the
 encoding changes in [`shared/sync.ts`](shared/sync.ts), bump `TODO_SEED_VERSION` there; that
 starts a fresh room.
 
-The playgrounds keep this seed instead of passing the sync engine's `ready` option. It shows the
-todos at once, also with the server down and without a timeout to wait for. `ready` would also
-need more than the provider's sync: the provider syncs a second document, which the devtools
+The playgrounds keep this seed instead of connecting the sync engine once the room's state has
+arrived. It shows the todos at once, also with the server down and without a timeout to wait
+for. Waiting would also need more than the provider's sync: the provider syncs a second document, which the devtools
 network link relays to the room's, so with latency the provider has synced before the room's
 document holds the state.
 

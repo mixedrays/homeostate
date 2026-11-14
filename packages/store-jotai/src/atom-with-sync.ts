@@ -70,12 +70,13 @@ const SECOND_STORE_MESSAGE =
  *
  * Each mount is a reconnect: it adopts the backend, so edits made while unmounted are dropped
  * for every key the backend holds. If connecting throws, the error reaches whoever mounted the
- * atom, and that store stays unsynced until it is discarded. A rejected `ready` comes after the
- * mount, so it goes to `onError`, and the next mount tries again.
+ * atom, and that store stays unsynced until it is discarded. To keep a store from seeding its
+ * initial state over the room's, mount the atom once the document holds it, such as after
+ * `persistence.whenLoaded` has resolved.
  *
  * @param target - Writable atom holding the synced state
  * @param options - The `backend`, any `CrdtBackend` such as `@homeostate/crdt-yjs`, and the sync
- * engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`, `onError`, `ready`)
+ * engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`, `onError`)
  * @returns An atom that reads and writes `target` and syncs while it is mounted
  *
  * @example
@@ -162,14 +163,14 @@ export function atomWithSync(
   syncedAtom.onMount = (setAtom) => {
     const slot = setAtom(READ_SLOT) as StoreSlot;
     if (slot.store === undefined) throw new Error(NO_STORE_MESSAGE);
-    if (current?.isConnected() === true) {
+    if (current?.getStatus().connected === true) {
       throw new Error(SECOND_STORE_MESSAGE);
     }
-    slot.engine ??= createSyncEngine(
+    slot.engine ??= createSyncEngine({
+      ...(config as SyncEngineConfig<object>),
       backend,
-      createJotaiAdapter(root, slot.store),
-      config as SyncEngineConfig<object>,
-    );
+      adapter: createJotaiAdapter(root, slot.store),
+    });
     const { engine } = slot;
     current = engine;
     engine.connect();

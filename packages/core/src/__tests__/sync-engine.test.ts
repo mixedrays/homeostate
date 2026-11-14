@@ -56,16 +56,20 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ ...threeTodos(), addTodo: () => {} });
 
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       expect(backend.read()).toEqual(threeTodos());
     });
 
-    it("leaves an empty backend alone with seed 'never'", () => {
+    it("leaves an empty backend alone with seed false", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
 
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        seed: false,
+      }).connect();
 
       expect(backend.read()).toEqual({});
       expect(store.getState()).toEqual(threeTodos());
@@ -81,7 +85,7 @@ describe("createSyncEngine", () => {
         increment,
       });
 
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       expect(store.getState()).toEqual({ ...threeTodos(), increment });
       expect(store.getState().increment).toBe(increment);
@@ -91,7 +95,7 @@ describe("createSyncEngine", () => {
     it("subscribes once even when called twice", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       engine.connect();
       engine.connect();
       const write = vi.spyOn(backend, "write");
@@ -99,7 +103,7 @@ describe("createSyncEngine", () => {
       store.update((s) => toggleTodo(s, "1"));
 
       expect(write).toHaveBeenCalledTimes(1);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     it("keeps synced keys the backend lacks and seeds them in one write", () => {
@@ -107,7 +111,7 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos());
       const write = vi.spyOn(backend, "write");
 
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       const expected = { ...threeTodos(), todos: [todo("remote")] };
       expect(store.getState()).toEqual(expected);
@@ -115,11 +119,15 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(expected);
     });
 
-    it("keeps synced keys the backend lacks without writing them with seed 'never'", () => {
+    it("keeps synced keys the backend lacks without writing them with seed false", () => {
       const backend = createMemoryBackend({ todos: [todo("remote")] });
       const store = createTestStore(threeTodos());
 
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        seed: false,
+      }).connect();
 
       expect(store.getState()).toEqual({
         ...threeTodos(),
@@ -132,24 +140,14 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend({ secret: "remote" });
       const store = createTestStore(threeTodos());
 
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key: string) => key !== "secret",
       }).connect();
 
       expect(store.getState()).toEqual(threeTodos());
       expect(backend.read()).toEqual({ ...threeTodos(), secret: "remote" });
-    });
-
-    it("leaves the store object untouched when every backend key already matches", () => {
-      const backend = createMemoryBackend({ todos: threeTodos().todos });
-      const store = createTestStore(threeTodos());
-      const before = store.getState();
-      const setState = vi.spyOn(store.adapter, "setState");
-
-      createSyncEngine(backend, store.adapter).connect();
-
-      expect(setState).not.toHaveBeenCalled();
-      expect(store.getState()).toBe(before);
     });
 
     it("leaves the store object untouched when it holds NaN", () => {
@@ -158,7 +156,7 @@ describe("createSyncEngine", () => {
       const before = store.getState();
       const setState = vi.spyOn(store.adapter, "setState");
 
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       expect(setState).not.toHaveBeenCalled();
       expect(store.getState()).toBe(before);
@@ -167,7 +165,7 @@ describe("createSyncEngine", () => {
     it("seeds an empty backend with what the store holds at connect time", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       store.update((s) => toggleTodo(s, "1"));
 
       engine.connect();
@@ -180,7 +178,7 @@ describe("createSyncEngine", () => {
     it("writes store changes to the backend", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       store.update((s) => addTodo(toggleTodo(s, "1"), todo("4")));
 
@@ -192,7 +190,7 @@ describe("createSyncEngine", () => {
     it("excludes functions from every write by default", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ ...threeTodos(), addTodo: () => {} });
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       store.update((s) => ({ ...s, searchTerm: "x", later: () => {} }));
 
@@ -202,7 +200,7 @@ describe("createSyncEngine", () => {
     it("does not echo a remote change back into the backend", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const write = vi.spyOn(backend, "write");
 
       backend.receive(toggleTodo(threeTodos(), "1"));
@@ -215,7 +213,7 @@ describe("createSyncEngine", () => {
     it("applies remote changes with new containers along the changed path only", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const before = store.getState();
       const beforeSnapshot = snapshot(before);
 
@@ -234,7 +232,7 @@ describe("createSyncEngine", () => {
     it("removes keys deleted remotely and adds new ones", () => {
       const backend = createMemoryBackend();
       const store = createTestStore<Record<string, unknown>>({ a: 1, b: 2 });
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive({ b: 2, c: 3 });
 
@@ -245,7 +243,7 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const setState = vi.spyOn(store.adapter, "setState");
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive(threeTodos());
 
@@ -255,7 +253,7 @@ describe("createSyncEngine", () => {
     it("works with deeply frozen store state", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos(), deepFreeze);
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       store.update((s) => toggleTodo(s, "2"));
       expect(backend.read()).toEqual(toggleTodo(threeTodos(), "2"));
@@ -297,7 +295,7 @@ describe("createSyncEngine", () => {
     ])("writes a key the store changes when %s it", (_, createStore) => {
       const backend = createMemoryBackend();
       const store = createStore();
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive({ todos: ["a", "b"], count: 0 });
 
@@ -305,35 +303,11 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
     });
 
-    it("writes once, passing what it read as the previous state", () => {
-      const { backend, previous } = checkedBackend();
-      const store = subscriberStore();
-      createSyncEngine(backend, store.adapter).connect();
-      const write = vi.spyOn(backend, "write");
-
-      backend.receive({ todos: ["a", "b"], count: 0 });
-
-      expect(write).toHaveBeenCalledTimes(1);
-      expect(previous.at(-1)).toEqual({ todos: ["a", "b"], count: 0 });
-    });
-
-    it("writes nothing back when the remote change needs no derived write", () => {
-      const backend = createMemoryBackend();
-      const store = subscriberStore();
-      createSyncEngine(backend, store.adapter).connect();
-      const write = vi.spyOn(backend, "write");
-
-      backend.receive({ todos: ["a", "b"], count: 2 });
-
-      expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
-      expect(write).not.toHaveBeenCalled();
-    });
-
     it("writes nothing when the store ignores the remote change", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ todos: [] as string[], count: 0 });
       const adapter = { ...store.adapter, setState: () => {} };
-      createSyncEngine(backend, adapter).connect();
+      createSyncEngine({ backend, adapter }).connect();
       const write = vi.spyOn(backend, "write");
 
       backend.receive({ todos: ["a", "b"], count: 2 });
@@ -343,11 +317,106 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
     });
 
+    describe("in a part the remote change left alone", () => {
+      type Card = { title: string; done: boolean };
+      interface Board {
+        cards: Record<string, Card>;
+      }
+
+      const board = (): Board => ({
+        cards: {
+          a: { title: "a", done: false },
+          b: { title: "b", done: false },
+          c: { title: "c", done: false },
+        },
+      });
+
+      const withCard = (state: Board, id: string, card: Partial<Card>) => ({
+        ...state,
+        cards: { ...state.cards, [id]: { ...state.cards[id]!, ...card } },
+      });
+
+      it("writes back a card the store changes when a remote change marks another one done", () => {
+        const { backend } = checkedBackend(board());
+        // Card `c` follows card `a`.
+        const store = createTestStore(board(), (next) =>
+          next.cards.c!.done === next.cards.a!.done
+            ? next
+            : withCard(next, "c", { done: next.cards.a!.done }),
+        );
+        const before = store.getState();
+        createSyncEngine({ backend, adapter: store.adapter }).connect();
+        const write = vi.spyOn(backend, "write");
+
+        backend.receive(withCard(board(), "a", { done: true }));
+
+        const marked = withCard(withCard(board(), "a", { done: true }), "c", {
+          done: true,
+        });
+        expect(store.getState()).toEqual(marked);
+        expect(store.getState().cards.b).toBe(before.cards.b);
+        expect(write).toHaveBeenCalledTimes(1);
+        expect(backend.read()).toEqual(marked);
+      });
+
+      it("stops writing back the one path a peer keeps re-writing", () => {
+        const onError = vi.fn();
+        const { backend } = checkedBackend(board());
+        // Card `c`'s title is kept in upper case.
+        const store = createTestStore(board(), (next) =>
+          withCard(next, "c", { title: next.cards.c!.title.toUpperCase() }),
+        );
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          onError,
+        }).connect();
+
+        // Each remote change toggles card `a` and holds card `c`'s title in lower case again.
+        for (let i = 1; i <= 7; i++)
+          backend.receive(withCard(board(), "a", { done: i % 2 === 1 }));
+
+        expect(onError).toHaveBeenCalledTimes(1);
+        const [error] = onError.mock.calls[0]!;
+        expect(error).toBeInstanceOf(WriteLoopError);
+        expect((error as Error).message).toContain(
+          'stopped writing back ["cards","c","title"]:',
+        );
+        expect(store.getState()).toEqual(
+          withCard(withCard(board(), "a", { done: true }), "c", { title: "C" }),
+        );
+      });
+
+      it("shares the store's cards with the next local write once that path is stopped", () => {
+        const { backend, previous } = checkedBackend(board());
+        const store = createTestStore(board(), (next) =>
+          withCard(next, "c", { title: next.cards.c!.title.toUpperCase() }),
+        );
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          onError: () => {},
+        }).connect();
+        for (let i = 1; i <= 7; i++)
+          backend.receive(withCard(board(), "a", { done: i % 2 === 1 }));
+        // The last apply wrote nothing back.
+        expect(backend.read()).toEqual(withCard(board(), "a", { done: true }));
+        const applied = store.getState();
+
+        store.update((s) => withCard(s, "b", { done: true }));
+
+        const last = previous.at(-1) as Board;
+        expect(last.cards.a).toBe(applied.cards.a);
+        expect(last.cards.a).toBe(store.getState().cards.a);
+        expect(backend.read()).toEqual(store.getState());
+      });
+    });
+
     it("writes what the store derives when connecting to a non-empty backend", () => {
       const backend = createMemoryBackend({ todos: ["a", "b"], count: 0 });
       const store = subscriberStore();
 
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       expect(store.getState()).toEqual({ todos: ["a", "b"], count: 2 });
       expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
@@ -360,7 +429,7 @@ describe("createSyncEngine", () => {
         (next) => ({ ...next, count: next.todos.length }),
       );
 
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       const expected = { todos: ["a", "b"], count: 2, searchTerm: "local" };
       expect(store.getState()).toEqual(expected);
@@ -386,7 +455,11 @@ describe("createSyncEngine", () => {
       });
       const write = vi.spyOn(backend, "write");
 
-      createSyncEngine(backend, store.adapter, { seed: "never" }).connect();
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        seed: false,
+      }).connect();
 
       expect(store.getState()).toEqual({
         todos: ["a", "b"],
@@ -402,7 +475,9 @@ describe("createSyncEngine", () => {
         store: TestStore<Counted> = subscriberStore(),
       ) => {
         const flushes: (() => void)[] = [];
-        const engine = createSyncEngine(backend, store.adapter, {
+        const engine = createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: (flush) => {
             flushes.push(flush);
           },
@@ -516,7 +591,7 @@ describe("createSyncEngine", () => {
         writes: { count: number },
       ) => {
         backends.forEach((backend, i) =>
-          createSyncEngine(backend, stores[i]!.adapter).connect(),
+          createSyncEngine({ backend, adapter: stores[i]!.adapter }).connect(),
         );
         await ticks(10);
         writes.count = 0;
@@ -575,7 +650,11 @@ describe("createSyncEngine", () => {
         rulesOn = true;
         const backend = createMemoryBackend();
         const store = stampingStore();
-        createSyncEngine(backend, store.adapter, config).connect();
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          ...config,
+        }).connect();
         const write = vi.spyOn(backend, "write");
 
         backend.receive({ count: 1, updatedAt: 0 });
@@ -605,7 +684,9 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend();
         const store = stampingStore();
         const flushes: (() => void)[] = [];
-        createSyncEngine(backend, store.adapter, {
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: (flush) => flushes.push(flush),
         }).connect();
         const receive = (state: Stamped) => {
@@ -803,7 +884,11 @@ describe("createSyncEngine", () => {
           const backend = createMemoryBackend();
           const store = seeingStore("p2", { items: [], seenBy: { p2: 0 } });
           const onError = vi.fn();
-          createSyncEngine(backend, store.adapter, { onError }).connect();
+          createSyncEngine({
+            backend,
+            adapter: store.adapter,
+            onError,
+          }).connect();
 
           backend.receive({ items: [1], seenBy: { p0: 1, p2: 0 } }); // p2 writes back p2: 1
           // p0 has received that write back, appends, and updates its own entry.
@@ -819,12 +904,14 @@ describe("createSyncEngine", () => {
           const backend = createMemoryBackend();
           const store = loggingStore({ log: ["a"], logSize: 1 });
           const onError = vi.fn();
-          const engine = createSyncEngine(backend, store.adapter, { onError });
+          const engine = createSyncEngine({
+            backend,
+            adapter: store.adapter,
+            onError,
+          });
           engine.connect();
           const failures: unknown[] = [];
-          engine.subscribeStatus(() =>
-            failures.push(engine.getStatus().failure),
-          );
+          engine.subscribe(() => failures.push(engine.getStatus().failure));
 
           backend.receive({ log: ["a", "b"], logSize: 1 }); // B's append; A writes back logSize: 2
           // C appended concurrently and wrote logSize: 1, which wins over A's 2.
@@ -840,7 +927,11 @@ describe("createSyncEngine", () => {
           const backend = createMemoryBackend();
           const store = loggingStore({ log: [], logSize: 0 });
           const onError = vi.fn();
-          const engine = createSyncEngine(backend, store.adapter, { onError });
+          const engine = createSyncEngine({
+            backend,
+            adapter: store.adapter,
+            onError,
+          });
           engine.connect();
 
           // Another peer keeps appending and putting back logSize: 0, as a stuck peer would.
@@ -868,7 +959,11 @@ describe("createSyncEngine", () => {
           const backend = createMemoryBackend();
           const store = seeingStore("p1", { items: [], seenBy: {} });
           const onError = vi.fn();
-          createSyncEngine(backend, store.adapter, { onError }).connect();
+          createSyncEngine({
+            backend,
+            adapter: store.adapter,
+            onError,
+          }).connect();
 
           for (let i = 1; i <= 6; i++) {
             const items = Array.from({ length: i }, (_, j) => j);
@@ -942,7 +1037,9 @@ describe("createSyncEngine", () => {
           );
           const onError = vi.fn();
           backends.forEach((backend, i) =>
-            createSyncEngine(backend, stores[i]!.adapter, {
+            createSyncEngine({
+              backend,
+              adapter: stores[i]!.adapter,
               onError,
             }).connect(),
           );
@@ -993,7 +1090,7 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos());
       listenFirst(backend, () => store.update((s) => toggleTodo(s, "3")));
       const onError = vi.fn();
-      createSyncEngine(backend, store.adapter, { onError }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
       const remote = deleteTodo(threeTodos(), "3");
 
       backend.receive(remote);
@@ -1012,7 +1109,11 @@ describe("createSyncEngine", () => {
         const { backend, previous } = checkedBackend(threeTodos());
         const store = createTestStore(threeTodos());
         listenFirst(backend, () => store.update((s) => toggleTodo(s, "1")));
-        createSyncEngine(backend, store.adapter, config).connect();
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          ...config,
+        }).connect();
         const write = vi.spyOn(backend, "write");
         const remote = deleteTodo(threeTodos(), "3");
 
@@ -1032,7 +1133,9 @@ describe("createSyncEngine", () => {
       listenFirst(backend, () =>
         store.update((s) => setSearchTerm(toggleTodo(s, "3"), "x")),
       );
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key) => key !== "searchTerm",
       }).connect();
       const remote = {
@@ -1050,7 +1153,7 @@ describe("createSyncEngine", () => {
       const { backend } = checkedBackend(threeTodos());
       const store = createTestStore(threeTodos());
       listenFirst(backend, () => store.update((s) => toggleTodo(s, "1")));
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive(threeTodos());
 
@@ -1061,7 +1164,7 @@ describe("createSyncEngine", () => {
     it("reads the backend before a local change only when its revision moved", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const read = vi.spyOn(backend, "read");
 
       store.update((s) => toggleTodo(s, "1"));
@@ -1078,16 +1181,17 @@ describe("createSyncEngine", () => {
       );
     });
 
-    it("reads a backend without a revision before every local change", () => {
+    it("reads a backend whose revision cannot tell before every local change", () => {
       const memory = createMemoryBackend(threeTodos());
       const backend: CrdtBackend = {
         read: () => memory.read(),
         write: (next, previous) => memory.write(next, previous),
+        revision: () => undefined,
         subscribe: (onRemoteChange) => memory.subscribe(onRemoteChange),
       };
       const store = createTestStore(threeTodos());
       listenFirst(backend, () => store.update((s) => toggleTodo(s, "3")));
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const read = vi.spyOn(memory, "read");
 
       store.update((s) => toggleTodo(s, "1"));
@@ -1106,7 +1210,7 @@ describe("createSyncEngine", () => {
     it("passes the synced state it last wrote, so unchanged todos match by identity", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const written = store.getState();
 
       store.update((s) => toggleTodo(s, "1"));
@@ -1117,13 +1221,199 @@ describe("createSyncEngine", () => {
       expect(last.todos[1]).toBe(store.getState().todos[1]);
     });
 
+    it("passes the store's unchanged todos after a remote change, so they match by identity", () => {
+      const { backend, previous } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      const applied = store.getState();
+      store.update((s) => toggleTodo(s, "2"));
+
+      const last = previous.at(-1) as TodoState;
+      expect(last.todos[0]).toBe(applied.todos[0]);
+      expect(last.todos[2]).toBe(applied.todos[2]);
+      expect(last.todos[2]).toBe(store.getState().todos[2]);
+      expect(backend.read()).toEqual(
+        toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+      );
+    });
+
+    it("passes the store's todos after a remote change the store already held", () => {
+      const { backend, previous } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+      const held = store.getState();
+
+      backend.receive(threeTodos());
+      store.update((s) => toggleTodo(s, "2"));
+
+      const last = previous.at(-1) as TodoState;
+      expect(last.todos[0]).toBe(held.todos[0]);
+      expect(last.todos[2]).toBe(store.getState().todos[2]);
+    });
+
+    describe("to the write-back of a key the store changes during a remote change", () => {
+      type Counted = TodoState & { done: number };
+
+      const counted = (): Counted => ({ ...threeTodos(), done: 0 });
+
+      /** `state` with `done` counting its completed todos. */
+      const withDone = (state: Counted): Counted => ({
+        ...state,
+        done: state.todos.filter((t) => t.completed).length,
+      });
+
+      /** A remote change that toggles todo `1` and leaves `done` as the backend holds it. */
+      const toggledRemotely = (): Counted => ({
+        ...toggleTodo(counted(), "1"),
+        done: 0,
+      });
+
+      /** A store with a subscriber that keeps `done` in step with `todos`. */
+      const subscriberStore = () => {
+        const store = createTestStore(counted());
+        store.adapter.subscribe(() => {
+          const state = store.getState();
+          const next = withDone(state);
+          if (next.done !== state.done) store.setState(next);
+        });
+        return store;
+      };
+
+      it.each([
+        ["setState derives", () => createTestStore(counted(), withDone)],
+        ["a subscriber derives", subscriberStore],
+      ])(
+        "shares the todos the store kept when %s the key",
+        (_, createStore) => {
+          const { backend, previous } = checkedBackend(counted());
+          const store = createStore();
+          createSyncEngine({ backend, adapter: store.adapter }).connect();
+          const write = vi.spyOn(backend, "write");
+
+          backend.receive(toggledRemotely());
+
+          expect(write).toHaveBeenCalledTimes(1);
+          const last = previous.at(-1) as Counted;
+          expect(last.todos).toBe(store.getState().todos);
+          expect(store.getState().done).toBe(1);
+          expect(backend.read()).toEqual(store.getState());
+        },
+      );
+
+      it("shares the store's copies when setState keeps copies of what it is given", () => {
+        const { backend, previous } = checkedBackend(counted());
+        const store = createTestStore(counted(), (next) =>
+          withDone(snapshot(next)),
+        );
+        createSyncEngine({ backend, adapter: store.adapter }).connect();
+
+        backend.receive(toggledRemotely());
+
+        const last = previous.at(-1) as Counted;
+        expect(last.todos).toBe(store.getState().todos);
+        expect(backend.read()).toEqual(store.getState());
+      });
+
+      it("shares the todos the store kept in the key it changed", () => {
+        const { backend, previous } = checkedBackend(threeTodos());
+        // Trims a title only when it needs trimming, keeping every other todo.
+        const store = createTestStore(threeTodos(), (next) => ({
+          ...next,
+          todos: next.todos.map((t) =>
+            t.title === t.title.trim() ? t : { ...t, title: t.title.trim() },
+          ),
+        }));
+        createSyncEngine({ backend, adapter: store.adapter }).connect();
+
+        backend.receive(addTodo(threeTodos(), todo("4", " Todo 4 ")));
+
+        const last = previous.at(-1) as TodoState;
+        const state = store.getState();
+        expect(state).toEqual(addTodo(threeTodos(), todo("4")));
+        expect(last.todos[0]).toBe(state.todos[0]);
+        expect(last.todos[2]).toBe(state.todos[2]);
+        expect(backend.read()).toEqual(state);
+      });
+
+      it("passes what the backend holds for a key the store holds as a function", () => {
+        const add = () => {};
+        const { backend, previous } = checkedBackend(counted());
+        const store = createTestStore({ ...counted(), add }, (next) => ({
+          ...withDone(next),
+          add,
+        }));
+        createSyncEngine({ backend, adapter: store.adapter }).connect();
+
+        backend.receive({ ...toggledRemotely(), add: "oops" });
+
+        const last = previous.at(-1) as Counted & { add: unknown };
+        expect(last.add).toBe("oops");
+        expect(last.todos).toBe(store.getState().todos);
+        expect(backend.read()).toEqual({ ...store.getState(), add: "oops" });
+      });
+    });
+
+    it("passes what the backend holds for a key the store holds as a function", () => {
+      const { backend, previous } = checkedBackend({
+        todos: ["a"],
+        view: "list",
+      });
+      const store = createTestStore<{ todos: string[]; view: unknown }>({
+        todos: ["a"],
+        view: () => "list",
+      });
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+
+      backend.receive({ todos: ["b"], view: "grid" });
+      store.update((s) => ({ ...s, todos: ["c"] }));
+
+      expect(previous.at(-1)).toEqual({ todos: ["b"], view: "grid" });
+      expect(backend.read()).toEqual({ todos: ["c"], view: "grid" });
+    });
+
+    it("passes what the backend holds after a remote change applied while the store took another", () => {
+      const { backend, previous } = checkedBackend({
+        ...threeTodos(),
+        secret: "a",
+      });
+      const store = createTestStore<object>(threeTodos());
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        filter: (key: string) => key !== "secret",
+      }).connect();
+      // A peer changes `secret` as soon as the store takes the next remote change.
+      let peerChanged = false;
+      store.adapter.subscribe(() => {
+        if (peerChanged) return;
+        peerChanged = true;
+        backend.receive({ ...toggleTodo(threeTodos(), "1"), secret: "b" });
+      });
+
+      backend.receive({ ...toggleTodo(threeTodos(), "1"), secret: "a" });
+      store.update((s) => toggleTodo(s as TodoState, "2"));
+
+      expect(previous.at(-1)).toEqual({
+        ...toggleTodo(threeTodos(), "1"),
+        secret: "b",
+      });
+      expect(backend.read()).toEqual({
+        ...toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+        secret: "b",
+      });
+    });
+
     it("keeps local keys the backend holds, and the next write leaves them", () => {
       const { backend, previous } = checkedBackend({
         ...threeTodos(),
         secret: "remote",
       });
       const store = createTestStore<object>(threeTodos());
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key: string) => key !== "secret",
       }).connect();
 
@@ -1138,13 +1428,13 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("passes nothing to the seed write, and what it seeded to the next one", () => {
-      const { backend, previous } = checkedBackend({
-        todos: [todo("remote")],
-        secret: "remote",
-      });
+    it("passes what it read to the seed write, and what it seeded to the next one", () => {
+      const held = { todos: [todo("remote")], secret: "remote" };
+      const { backend, previous } = checkedBackend(held);
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key: string) => key !== "secret",
       }).connect();
       const seeded = {
@@ -1156,13 +1446,15 @@ describe("createSyncEngine", () => {
 
       store.update((s) => setSearchTerm(s, "x"));
 
-      expect(previous).toEqual([undefined, seeded]);
+      expect(previous).toEqual([held, seeded]);
     });
 
     it("passes what it read after a remote change, local keys included", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore<object>(threeTodos());
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key: string) => key !== "secret",
       }).connect();
       const remote = { ...toggleTodo(threeTodos(), "2"), secret: "remote" };
@@ -1186,7 +1478,7 @@ describe("createSyncEngine", () => {
           throw new Error("invalid snapshot");
         },
       };
-      createSyncEngine(backend, adapter).connect();
+      createSyncEngine({ backend, adapter }).connect();
       const remote = addTodo(threeTodos(), todo("4"));
       expect(() => backend.receive(remote)).toThrow("invalid snapshot");
 
@@ -1196,24 +1488,6 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(toggleTodo(threeTodos(), "1"));
     });
 
-    it("passes what it read when the store transforms a remote change", () => {
-      const { backend, previous } = checkedBackend();
-      const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
-        ...s,
-        todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
-      });
-      const store = createTestStore(threeTodos(), trimTitles);
-      createSyncEngine(backend, store.adapter).connect();
-      const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
-
-      backend.receive(remote);
-
-      // The trimmed titles are written back.
-      expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
-      expect(previous.at(-1)).toEqual(remote);
-      expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
-    });
-
     it("passes nothing to the write-back when the backend changed during setState", () => {
       const { backend, previous } = checkedBackend();
       const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
@@ -1221,7 +1495,7 @@ describe("createSyncEngine", () => {
         todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
       });
       const store = createTestStore(threeTodos(), trimTitles);
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       // Other code that changes the backend as the store changes, unheard by the engine so far,
       // as with an uncommitted Loro edit or a Yjs transaction whose observers have not run yet.
       let armed = true;
@@ -1239,10 +1513,27 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
     });
 
+    it("passes nothing to the write-back when the backend's revision cannot tell", () => {
+      const { backend: checked, previous } = checkedBackend();
+      const backend: CrdtBackend = { ...checked, revision: () => undefined };
+      const trimTitles = (s: ReturnType<typeof threeTodos>) => ({
+        ...s,
+        todos: s.todos.map((t) => ({ ...t, title: t.title.trim() })),
+      });
+      const store = createTestStore(threeTodos(), trimTitles);
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+      const remote = addTodo(threeTodos(), todo("4", " Todo 4 "));
+
+      checked.receive(remote);
+
+      expect(previous.at(-1)).toBeUndefined();
+      expect(checked.read()).toEqual(addTodo(threeTodos(), todo("4")));
+    });
+
     it("passes what it read when a remote change arrives during its own write", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const write = backend.write;
       const relayed = addTodo(toggleTodo(threeTodos(), "1"), todo("4"));
       backend.write = (next, held) => {
@@ -1263,7 +1554,7 @@ describe("createSyncEngine", () => {
     it("passes nothing after a write that threw", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       const write = backend.write;
       backend.write = () => {
         backend.write = write;
@@ -1282,7 +1573,7 @@ describe("createSyncEngine", () => {
     it("passes nothing after a read that threw", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       vi.spyOn(backend, "read").mockImplementationOnce(() => {
         throw new Error("boom");
       });
@@ -1306,7 +1597,7 @@ describe("createSyncEngine", () => {
           [key]: "local",
           byName: { [key]: "local", bob: 1 },
         });
-        createSyncEngine(backend, store.adapter).connect();
+        createSyncEngine({ backend, adapter: store.adapter }).connect();
 
         backend.receive({ byName: { bob: 1 } });
 
@@ -1320,7 +1611,7 @@ describe("createSyncEngine", () => {
       const store = createTestStore<Record<string, unknown>>({
         todos: [{ id: "1" }],
       });
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive(
         JSON.parse(
@@ -1354,10 +1645,10 @@ describe("createSyncEngine", () => {
         const store = createTestStore<Record<string, unknown>>({
           todos: [{ id: "1" }],
         });
-        const engine = createSyncEngine(
-          when === "connect" ? { ...backend, read } : backend,
-          store.adapter,
-        );
+        const engine = createSyncEngine({
+          backend: when === "connect" ? { ...backend, read } : backend,
+          adapter: store.adapter,
+        });
         engine.connect();
 
         if (when !== "connect") {
@@ -1379,7 +1670,7 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const filter = (key: string) => key !== "searchTerm";
-      createSyncEngine(backend, store.adapter, { filter }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, filter }).connect();
       const { todos, filterStatus } = threeTodos();
       expect(backend.read()).toEqual({ todos, filterStatus });
 
@@ -1396,42 +1687,65 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("keeps a store's function when a remote value arrives under its key", () => {
-      const addTodo = () => {};
-      const backend = createMemoryBackend();
-      const store = createTestStore({ todos: [] as string[], addTodo });
-      createSyncEngine(backend, store.adapter).connect();
+    it.each([
+      ["no config", {}],
+      [
+        "a custom filter that keeps its key",
+        { filter: (key: string) => key !== "secret" },
+      ],
+      ["omit", { omit: ["searchTerm"] }],
+      ["keys", { keys: ["todos", "addTodo"] }],
+    ] as [
+      string,
+      SyncEngineConfig<{
+        todos: string[];
+        searchTerm: string;
+        addTodo: () => void;
+      }>,
+    ][])(
+      "keeps a store's function when a remote value arrives under its key, with %s",
+      (_, config) => {
+        const addTodo = () => {};
+        const backend = createMemoryBackend();
+        const store = createTestStore({
+          todos: [] as string[],
+          searchTerm: "",
+          addTodo,
+        });
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          ...config,
+        }).connect();
+        const remote = { todos: ["a"], searchTerm: "", addTodo: "oops" };
 
-      backend.receive({ todos: ["a"], addTodo: "oops" });
+        backend.receive(remote);
 
-      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
-      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "oops" });
-    });
+        expect(store.getState()).toEqual({
+          todos: ["a"],
+          searchTerm: "",
+          addTodo,
+        });
+        expect(backend.read()).toEqual(remote);
+      },
+    );
 
-    /** Keeps every value but a string starting with `local:`, whatever the key. */
-    const notLocal = (_key: string, value: unknown) =>
-      !(typeof value === "string" && value.startsWith("local:"));
+    it("calls filter with the key alone, and not for a function", () => {
+      const backend = createMemoryBackend({ todos: ["a"], extra: 1 });
+      const store = createTestStore({ todos: [] as string[], add: () => {} });
+      const filter = vi.fn((key: string) => key !== "secret");
+      createSyncEngine({ backend, adapter: store.adapter, filter }).connect();
 
-    it("keeps a store value a custom filter rejects when a value it keeps arrives", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({
-        todos: [] as string[],
-        view: "local:list",
-      });
-      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
-      expect(backend.read()).toEqual({ todos: [] });
-
-      backend.receive({ todos: ["a"], view: "grid" });
-
-      expect(store.getState()).toEqual({ todos: ["a"], view: "local:list" });
-      expect(backend.read()).toEqual({ todos: ["a"], view: "grid" });
+      expect(filter.mock.calls.every((call) => call.length === 1)).toBe(true);
+      expect(filter.mock.calls.map(([key]) => key)).toContain("extra");
+      expect(filter.mock.calls.map(([key]) => key)).not.toContain("add");
     });
 
     it("leaves a key the store does not sync in the room through later local writes", () => {
       const addTodo = () => {};
       const backend = createMemoryBackend();
       const store = createTestStore({ todos: [] as string[], addTodo });
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       backend.receive({ todos: [], addTodo: "oops" });
       const write = vi.spyOn(backend, "write");
 
@@ -1444,8 +1758,9 @@ describe("createSyncEngine", () => {
     });
 
     it.each([
-      ["seed 'if-empty'", {}],
-      ["seed 'never'", { seed: "never" }],
+      ["the default seed", {}],
+      ["seed true", { seed: true }],
+      ["seed false", { seed: false }],
     ] as [
       string,
       SyncEngineConfig<{ todos: string[]; addTodo: () => void }>,
@@ -1456,41 +1771,28 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend({ addTodo: "oops" });
         const store = createTestStore({ todos: ["a"], addTodo });
 
-        createSyncEngine(backend, store.adapter, config).connect();
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
+          ...config,
+        }).connect();
 
         expect(store.getState()).toEqual({ todos: ["a"], addTodo });
         expect(backend.read()).toEqual(
-          config.seed === "never"
+          config.seed === false
             ? { addTodo: "oops" }
             : { todos: ["a"], addTodo: "oops" },
         );
       },
     );
 
-    it("keeps a store's function while waiting for ready and once it resolves", async () => {
-      const addTodo = () => {};
-      const backend = createMemoryBackend({ addTodo: "oops" });
-      const store = createTestStore({ todos: [] as string[], addTodo });
-      let resolve = (): void => {};
-      const ready = new Promise<void>((done) => (resolve = done));
-      createSyncEngine(backend, store.adapter, { ready }).connect();
-      expect(store.getState()).toEqual({ todos: [], addTodo });
-
-      backend.receive({ todos: ["a"], addTodo: "again" });
-      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
-
-      resolve();
-      await ready;
-      await Promise.resolve();
-      expect(store.getState()).toEqual({ todos: ["a"], addTodo });
-      expect(backend.read()).toEqual({ todos: ["a"], addTodo: "again" });
-    });
-
     it("keeps a store's function out of the merge when a local change applies a scheduled remote change first", () => {
       const addTodo = () => {};
       const backend = createMemoryBackend();
       const store = createTestStore({ todos: [] as string[], addTodo });
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: () => {},
       }).connect();
       backend.receive({ todos: ["a"], addTodo: "oops" });
@@ -1504,72 +1806,33 @@ describe("createSyncEngine", () => {
       });
     });
 
-    it("merges no backend value the filter rejects into a key the store syncs", () => {
-      const { backend } = checkedBackend();
-      const store = createTestStore({
-        todos: [] as string[],
-        view: "list",
-        layout: "grid",
-      });
-      createSyncEngine(backend, store.adapter, {
-        filter: notLocal,
-        schedule: () => {},
-      }).connect();
-      backend.receive({
-        todos: ["a"],
-        view: "local:grid",
-        layout: "local:rows",
-      });
-
-      store.update((s) => ({ ...s, todos: [...s.todos, "b"], layout: "rows" }));
-
-      const merged = { todos: ["a", "b"], view: "list", layout: "rows" };
-      expect(store.getState()).toEqual(merged);
-      // The store's value decides what this peer writes, as for every key it syncs.
-      expect(backend.read()).toEqual(merged);
-    });
-
-    it("reads a key the store does not hold by the backend's value alone", () => {
+    it("reads a key the store holds as undefined from the backend", () => {
       const backend = createMemoryBackend();
       const store = createTestStore<{ todos: string[]; view?: string }>({
         todos: [],
         view: undefined,
       });
-      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
-
-      backend.receive({ todos: [], view: "local:list" });
-      expect(store.getState()).toEqual({ todos: [], view: undefined });
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive({ todos: [], view: "grid" });
+
       expect(store.getState()).toEqual({ todos: [], view: "grid" });
     });
 
-    it("keeps a store's synced value when the backend holds one the filter rejects", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore({ todos: [] as string[], view: "list" });
-      createSyncEngine(backend, store.adapter, { filter: notLocal }).connect();
+    it("starts syncing a key whose value stops being a function", () => {
+      const backend = createMemoryBackend({ todos: [], view: "grid" });
+      const store = createTestStore<{ todos: string[]; view: unknown }>({
+        todos: [],
+        view: () => "list",
+      });
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+      expect(store.getState().view).toBeTypeOf("function");
 
-      backend.receive({ todos: ["a"], view: "local:grid" });
-      expect(store.getState()).toEqual({ todos: ["a"], view: "list" });
-      expect(backend.read()).toEqual({ todos: ["a"], view: "local:grid" });
+      store.update((state) => ({ ...state, view: "list" }));
+      expect(backend.read()).toEqual({ todos: [], view: "list" });
 
-      // The store's value decides what this peer writes, as for every key it syncs.
-      store.update((s) => ({ ...s, todos: ["local"] }));
-      expect(backend.read()).toEqual({ todos: ["local"], view: "list" });
-    });
-
-    it("keeps a store's synced value while waiting for ready when the backend's turns to one the filter rejects", () => {
-      const backend = createMemoryBackend({ view: "grid" });
-      const store = createTestStore({ todos: [] as string[], view: "list" });
-      createSyncEngine(backend, store.adapter, {
-        filter: notLocal,
-        ready: new Promise(() => {}),
-      }).connect();
-      expect(store.getState()).toEqual({ todos: [], view: "grid" });
-
-      backend.receive({ view: "local:grid" });
-
-      expect(store.getState()).toEqual({ todos: [], view: "grid" });
+      backend.receive({ todos: [], view: "rows" });
+      expect(store.getState()).toEqual({ todos: [], view: "rows" });
     });
   });
 
@@ -1580,7 +1843,9 @@ describe("createSyncEngine", () => {
         searchTerm: "room",
       });
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         omit: ["searchTerm"],
       }).connect();
 
@@ -1616,7 +1881,11 @@ describe("createSyncEngine", () => {
         theme: "dark",
       });
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter, { keys: ["todos"] }).connect();
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        keys: ["todos"],
+      }).connect();
 
       expect(store.getState()).toEqual({
         ...threeTodos(),
@@ -1641,7 +1910,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const add = () => {};
       const store = createTestStore({ ...threeTodos(), add });
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         keys: ["todos", "add"],
       });
       engine.connect();
@@ -1654,7 +1925,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const filter = vi.fn((key: string) => key !== "filterStatus");
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter,
         omit: ["searchTerm"],
       }).connect();
@@ -1663,48 +1936,16 @@ describe("createSyncEngine", () => {
       expect(filter.mock.calls.map(([key]) => key)).not.toContain("searchTerm");
     });
 
-    it.each([
-      ["omit", { omit: ["searchTerm"] }],
-      ["keys", { keys: ["todos", "addTodo"] }],
-    ] as [
-      string,
-      SyncEngineConfig<{
-        todos: string[];
-        searchTerm: string;
-        addTodo: () => void;
-      }>,
-    ][])(
-      "keeps a store's function when a remote value arrives under its key, with %s",
-      (_, config) => {
-        const addTodo = () => {};
-        const backend = createMemoryBackend();
-        const store = createTestStore({
-          todos: [] as string[],
-          searchTerm: "",
-          addTodo,
-        });
-        createSyncEngine(backend, store.adapter, config).connect();
-
-        backend.receive({ todos: ["a"], addTodo: "oops" });
-
-        expect(store.getState()).toEqual({
-          todos: ["a"],
-          searchTerm: "",
-          addTodo,
-        });
-      },
-    );
-
     it("syncs the keys listed less those omitted when given both at runtime", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       // A type error, so only a JavaScript caller or a cast gives both.
       const config = { keys: ["todos", "searchTerm"], omit: ["searchTerm"] };
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        store.adapter,
-        config as unknown as SyncEngineConfig<TodoState>,
-      ).connect();
+        adapter: store.adapter,
+        ...(config as unknown as SyncEngineConfig<TodoState>),
+      }).connect();
 
       expect(backend.read()).toEqual({ todos: threeTodos().todos });
     });
@@ -1726,7 +1967,9 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend({ todos: ["a"], tags: ["x"] });
         const store = fixedKeyStore();
         const onError = vi.fn();
-        createSyncEngine(backend, store.adapter, {
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
           ...config,
           onError,
         }).connect();
@@ -1752,7 +1995,7 @@ describe("createSyncEngine", () => {
       const store = createTestStore<{ todos: string[]; tags?: string[] }>({
         todos: [],
       });
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       expect(store.getState()).toEqual({ todos: ["a"], tags: ["x"] });
 
       store.update(({ todos }) => ({ todos }));
@@ -1767,7 +2010,7 @@ describe("createSyncEngine", () => {
         ({ legacy, ...rest }) =>
           legacy === "retired" ? rest : { ...rest, legacy },
       );
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       expect(backend.read()).toEqual({ todos: [], legacy: "kept" });
 
@@ -1777,13 +2020,13 @@ describe("createSyncEngine", () => {
       expect(backend.read()).toEqual({ todos: ["a"] });
     });
 
-    it("deletes a key whose value the filter stops keeping", () => {
+    it("deletes a key whose value becomes a function", () => {
       const backend = createMemoryBackend({ tags: ["x"] });
       const store = createTestStore<{ todos: string[]; view: unknown }>({
         todos: [],
         view: "list",
       });
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
       expect(backend.read()).toEqual({ todos: [], view: "list", tags: ["x"] });
 
       store.update((state) => ({ ...state, view: () => "list" }));
@@ -1805,7 +2048,7 @@ describe("createSyncEngine", () => {
           return { todos, count: todos.length };
         },
       );
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       backend.receive({ todos: ["a"], count: 0, tags: ["x"] });
 
@@ -1817,7 +2060,7 @@ describe("createSyncEngine", () => {
     it("stops syncing in both directions", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       engine.connect();
 
       engine.disconnect();
@@ -1826,13 +2069,13 @@ describe("createSyncEngine", () => {
 
       expect(backend.read()).toEqual(addTodo(threeTodos(), todo("4")));
       expect(store.getState()).toEqual(toggleTodo(threeTodos(), "1"));
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("is safe to call twice and to reconnect afterwards, adopting the backend", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       engine.connect();
       engine.disconnect();
       engine.disconnect();
@@ -1841,7 +2084,7 @@ describe("createSyncEngine", () => {
       backend.receive(addTodo(threeTodos(), todo("4")));
       engine.connect();
 
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(store.getState()).toEqual(addTodo(threeTodos(), todo("4")));
 
       store.update((s) => toggleTodo(s, "2"));
@@ -1868,7 +2111,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       }).connect();
       const read = vi.spyOn(backend, "read");
@@ -1896,7 +2141,9 @@ describe("createSyncEngine", () => {
       const { backend, previous } = checkedBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       }).connect();
       const write = vi.spyOn(backend, "write");
@@ -1918,7 +2165,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key) => key !== "searchTerm",
         schedule: scheduler.schedule,
       }).connect();
@@ -1935,7 +2184,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       }).connect();
       const write = vi.spyOn(backend, "write");
@@ -1951,7 +2202,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       }).connect();
 
@@ -1968,7 +2221,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       }).connect();
 
@@ -1994,7 +2249,9 @@ describe("createSyncEngine", () => {
         armed = false;
         store.update((s) => toggleTodo(s, "3"));
       });
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       }).connect();
       const remote = deleteTodo(threeTodos(), "3");
@@ -2024,7 +2281,9 @@ describe("createSyncEngine", () => {
         const { backend, previous } = checkedBackend(initial);
         const store = createTestStore(initial);
         const scheduler = manualScheduler();
-        createSyncEngine(backend, store.adapter, {
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         }).connect();
 
@@ -2222,7 +2481,9 @@ describe("createSyncEngine", () => {
           ({ todos }) => ({ todos }),
         );
         const scheduler = manualScheduler();
-        createSyncEngine(backend, store.adapter, {
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         }).connect();
 
@@ -2245,7 +2506,9 @@ describe("createSyncEngine", () => {
             legacy === "ok" ? { ...rest, legacy } : rest,
         );
         const scheduler = manualScheduler();
-        createSyncEngine(backend, store.adapter, {
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         }).connect();
         expect(store.getState()).toEqual({ todos: [] });
@@ -2262,7 +2525,9 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend();
         const store = createTestStore(threeTodos());
         const scheduler = manualScheduler();
-        const engine = createSyncEngine(backend, store.adapter, {
+        const engine = createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         });
         engine.connect();
@@ -2290,7 +2555,9 @@ describe("createSyncEngine", () => {
         const store = createTestStore(threeTodos());
         const scheduler = manualScheduler();
         const onError = vi.fn();
-        createSyncEngine(backend, store.adapter, {
+        createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
           onError,
         }).connect();
@@ -2310,7 +2577,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: scheduler.schedule,
       });
       engine.connect();
@@ -2328,22 +2597,22 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const scheduler = manualScheduler();
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        {
+        adapter: {
           ...store.adapter,
           setState: () => {
             throw new Error("invalid snapshot");
           },
         },
-        { schedule: scheduler.schedule },
-      );
+        schedule: scheduler.schedule,
+      });
       engine.connect();
       backend.receive(toggleTodo(threeTodos(), "1"));
 
       expect(() => engine.disconnect()).toThrow("invalid snapshot");
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       const write = vi.spyOn(backend, "write");
       store.update((s) => toggleTodo(s, "2"));
       expect(write).not.toHaveBeenCalled();
@@ -2356,7 +2625,7 @@ describe("createSyncEngine", () => {
       const schedule = vi.fn(scheduler.schedule).mockImplementationOnce(() => {
         throw new Error("boom");
       });
-      createSyncEngine(backend, store.adapter, { schedule }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, schedule }).connect();
       expect(() => backend.receive(toggleTodo(threeTodos(), "1"))).toThrow(
         "boom",
       );
@@ -2372,7 +2641,9 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const flushes: (() => void)[] = [];
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: (flush) => {
           flushes.push(flush);
         },
@@ -2393,7 +2664,9 @@ describe("createSyncEngine", () => {
     it("applies each remote change at once when schedule runs the flush synchronously", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter, {
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
         schedule: (flush) => flush(),
       }).connect();
 
@@ -2410,16 +2683,16 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos());
       const invalid = new Error("invalid snapshot");
       const onError = vi.fn();
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        {
+        adapter: {
           ...store.adapter,
           setState: () => {
             throw invalid;
           },
         },
-        { onError },
-      );
+        onError,
+      });
       engine.connect();
 
       expect(() =>
@@ -2428,14 +2701,14 @@ describe("createSyncEngine", () => {
 
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError).toHaveBeenCalledWith(invalid, "store");
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     it("reports a write that throws on a local change, instead of throwing to the store's notifier", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const onError = vi.fn();
-      createSyncEngine(backend, store.adapter, { onError }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
       const offline = new Error("offline");
       vi.spyOn(backend, "write").mockImplementationOnce(() => {
         throw offline;
@@ -2455,7 +2728,7 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const onError = vi.fn();
-      createSyncEngine(backend, store.adapter, { onError }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
       vi.spyOn(store.adapter, "setState").mockImplementationOnce(() => {
         throw new Error("invalid snapshot");
       });
@@ -2477,7 +2750,7 @@ describe("createSyncEngine", () => {
         }),
       );
       const onError = vi.fn();
-      createSyncEngine(backend, store.adapter, { onError }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
       const offline = new Error("offline");
       vi.spyOn(backend, "write").mockImplementationOnce(() => {
         throw offline;
@@ -2493,7 +2766,7 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const onError = vi.fn();
-      createSyncEngine(backend, store.adapter, { onError }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
       const corrupt = new Error("corrupt document");
       vi.spyOn(backend, "read").mockImplementationOnce(() => {
         throw corrupt;
@@ -2508,30 +2781,33 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend(toggleTodo(threeTodos(), "1"));
       const store = createTestStore(threeTodos());
       const onError = vi.fn();
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        {
+        adapter: {
           ...store.adapter,
           setState: () => {
             throw new Error("invalid snapshot");
           },
         },
-        { onError },
-      );
+        onError,
+      });
 
       expect(() => engine.connect()).toThrow("invalid snapshot");
 
       expect(onError).not.toHaveBeenCalled();
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("throws to the backend's notifier without onError, and stays connected", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, {
-        ...store.adapter,
-        setState: () => {
-          throw new Error("invalid snapshot");
+      const engine = createSyncEngine({
+        backend,
+        adapter: {
+          ...store.adapter,
+          setState: () => {
+            throw new Error("invalid snapshot");
+          },
         },
       });
       engine.connect();
@@ -2540,7 +2816,7 @@ describe("createSyncEngine", () => {
         "invalid snapshot",
       );
 
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     describe("with schedule", () => {
@@ -2549,21 +2825,19 @@ describe("createSyncEngine", () => {
         const store = createTestStore(threeTodos());
         const flushes: (() => void)[] = [];
         const invalid = new Error("invalid snapshot");
-        const engine = createSyncEngine(
+        const engine = createSyncEngine({
           backend,
-          {
+          adapter: {
             ...store.adapter,
             setState: () => {
               throw invalid;
             },
           },
-          {
-            onError,
-            schedule: (flush) => {
-              flushes.push(flush);
-            },
+          onError,
+          schedule: (flush) => {
+            flushes.push(flush);
           },
-        );
+        });
         engine.connect();
         backend.receive(toggleTodo(threeTodos(), "1"));
         return { engine, flushes, invalid };
@@ -2585,7 +2859,7 @@ describe("createSyncEngine", () => {
         expect(() => engine.disconnect()).not.toThrow();
 
         expect(onError).toHaveBeenCalledWith(invalid, "store");
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       });
     });
   });
@@ -2604,7 +2878,7 @@ describe("createSyncEngine", () => {
         vi.spyOn(backend, "read").mockReturnValue(held as never);
         const write = vi.spyOn(backend, "write");
         const store = createTestStore(threeTodos());
-        const engine = createSyncEngine(backend, store.adapter);
+        const engine = createSyncEngine({ backend, adapter: store.adapter });
 
         expect(() => engine.connect()).toThrow(
           new TypeError(
@@ -2613,16 +2887,19 @@ describe("createSyncEngine", () => {
         );
 
         expect(write).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
       },
     );
 
     it("throws from connect when getState() returns undefined", () => {
       const backend = createMemoryBackend();
-      const engine = createSyncEngine(backend, {
-        getState: () => undefined as unknown as object,
-        setState: () => {},
-        subscribe: () => () => {},
+      const engine = createSyncEngine({
+        backend,
+        adapter: {
+          getState: () => undefined as unknown as object,
+          setState: () => {},
+          subscribe: () => () => {},
+        },
       });
 
       expect(() => engine.connect()).toThrow(
@@ -2640,7 +2917,7 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       const onError = vi.fn();
-      createSyncEngine(backend, store.adapter, { onError }).connect();
+      createSyncEngine({ backend, adapter: store.adapter, onError }).connect();
 
       backend.receive(null as never);
 
@@ -2651,7 +2928,7 @@ describe("createSyncEngine", () => {
     it("throws to the backend's notifier when it comes to hold no object without onError", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      createSyncEngine(backend, store.adapter).connect();
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
 
       expect(() => backend.receive(null as never)).toThrow(noObject);
 
@@ -2663,15 +2940,15 @@ describe("createSyncEngine", () => {
       const store = createTestStore(threeTodos());
       let broken = false;
       const onError = vi.fn();
-      createSyncEngine(
+      createSyncEngine({
         backend,
-        {
+        adapter: {
           ...store.adapter,
           getState: () =>
             broken ? (undefined as unknown as TodoState) : store.getState(),
         },
-        { onError },
-      ).connect();
+        onError,
+      }).connect();
       broken = true;
 
       store.update((s) => toggleTodo(s, "1"));
@@ -2708,11 +2985,14 @@ describe("createSyncEngine", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ a: 1 });
       const setState = vi.fn();
-      const engine = createSyncEngine(backend, {
-        ...store.adapter,
-        setState,
-        subscribe: () => {
-          throw new Error("boom");
+      const engine = createSyncEngine({
+        backend,
+        adapter: {
+          ...store.adapter,
+          setState,
+          subscribe: () => {
+            throw new Error("boom");
+          },
         },
       });
 
@@ -2721,7 +3001,7 @@ describe("createSyncEngine", () => {
       backend.receive({ a: 2 });
 
       expect(setState).not.toHaveBeenCalled();
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("leaves no adapter subscription when the backend subscription throws", () => {
@@ -2731,12 +3011,12 @@ describe("createSyncEngine", () => {
       backend.subscribe = () => {
         throw new Error("boom");
       };
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
 
       expect(() => engine.connect()).toThrow("boom");
 
       expect(storeSubscriptions()).toBe(0);
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("leaves no subscriptions when seeding the backend throws", () => {
@@ -2747,13 +3027,13 @@ describe("createSyncEngine", () => {
       vi.spyOn(backend, "write").mockImplementationOnce(() => {
         throw new Error("boom");
       });
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
 
       expect(() => engine.connect()).toThrow("boom");
 
       expect(backendSubscriptions()).toBe(0);
       expect(storeSubscriptions()).toBe(0);
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("subscribes once to each side when connecting again", () => {
@@ -2764,23 +3044,99 @@ describe("createSyncEngine", () => {
       vi.spyOn(store.adapter, "subscribe").mockImplementationOnce(() => {
         throw new Error("boom");
       });
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
 
       expect(() => engine.connect()).toThrow("boom");
       engine.connect();
 
       expect(backendSubscriptions()).toBe(1);
       expect(storeSubscriptions()).toBe(1);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
+    });
+  });
+
+  describe("store changes that change no synced key", () => {
+    it("writes nothing for a change to a local key, and still sends local", () => {
+      const backend = createMemoryBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        omit: ["searchTerm"],
+      });
+      engine.connect();
+      const write = vi.spyOn(backend, "write");
+      const events: SyncEvent[] = [];
+      engine.subscribe((event) => events.push(event));
+
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(write).not.toHaveBeenCalled();
+      expect(events).toEqual(["local"]);
+    });
+
+    it("writes nothing for a local key changed after a remote change", () => {
+      const backend = createMemoryBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        omit: ["searchTerm"],
+      }).connect();
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      const write = vi.spyOn(backend, "write");
+
+      store.update((s) => setSearchTerm(s, "x"));
+
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it("writes a synced change made right after a remote change", () => {
+      const { backend } = checkedBackend(threeTodos());
+      const store = createTestStore(threeTodos());
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+      backend.receive(toggleTodo(threeTodos(), "1"));
+      const write = vi.spyOn(backend, "write");
+
+      store.update((s) => toggleTodo(s, "2"));
+
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(backend.read()).toEqual(
+        toggleTodo(toggleTodo(threeTodos(), "1"), "2"),
+      );
+    });
+
+    it("deletes a key the store took from the backend without a write, once the store removes it", () => {
+      type State = { todos: string[]; extra?: number };
+      const withoutExtra = (state: State): State => {
+        const rest = { ...state };
+        delete rest.extra;
+        return rest;
+      };
+      let canHoldExtra = false;
+      const backend = createMemoryBackend({ todos: ["a"], extra: 1 });
+      // A store that cannot hold `extra` until it can, as a class that declares it later.
+      const store = createTestStore<State>({ todos: ["a"] }, (next) =>
+        canHoldExtra ? next : withoutExtra(next),
+      );
+      createSyncEngine({ backend, adapter: store.adapter }).connect();
+      expect(store.getState()).toEqual({ todos: ["a"] });
+
+      canHoldExtra = true;
+      // The backend holds this value already.
+      store.update((s) => ({ ...s, extra: 1 }));
+      store.update(withoutExtra);
+
+      expect(backend.read()).toEqual({ todos: ["a"] });
     });
   });
 
   describe("sync events", () => {
-    /** Subscribes to `engine` and records each event with `isConnected()` as it arrives. */
+    /** Subscribes to `engine` and records each event with whether it is connected as it arrives. */
     const record = (engine: SyncEngine) => {
       const events: [SyncEvent, boolean][] = [];
       const unsubscribe = engine.subscribe((event) =>
-        events.push([event, engine.isConnected()]),
+        events.push([event, engine.getStatus().connected]),
       );
       return {
         events: () => events.map(([event]) => event),
@@ -2792,7 +3148,7 @@ describe("createSyncEngine", () => {
     it("sends local once a local change is written", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       engine.connect();
       const recorded = record(engine);
       let held: unknown;
@@ -2804,20 +3160,6 @@ describe("createSyncEngine", () => {
       expect(held).toEqual(toggleTodo(threeTodos(), "1"));
     });
 
-    it("sends local for a store change to local keys only", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter, {
-        filter: (key) => key !== "searchTerm",
-      });
-      engine.connect();
-      const recorded = record(engine);
-
-      store.update((s) => setSearchTerm(s, "x"));
-
-      expect(recorded.events()).toEqual(["local"]);
-    });
-
     it("sends remote once the store holds the remote change and what it derived is written", () => {
       const backend = createMemoryBackend();
       const store = createTestStore({ todos: [] as string[], count: 0 });
@@ -2827,7 +3169,7 @@ describe("createSyncEngine", () => {
         if (state.count !== state.todos.length)
           store.setState({ ...state, count: state.todos.length });
       });
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       engine.connect();
       const recorded = record(engine);
       const seen: unknown[] = [];
@@ -2843,7 +3185,7 @@ describe("createSyncEngine", () => {
     it("sends connect once connected, covering seeding and the adopted values", () => {
       const backend = createMemoryBackend({ todos: threeTodos().todos });
       const store = createTestStore(setSearchTerm(threeTodos(), "x"));
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       const recorded = record(engine);
       vi.spyOn(store.adapter, "setState");
       const write = vi.spyOn(backend, "write");
@@ -2859,7 +3201,7 @@ describe("createSyncEngine", () => {
     it("sends connect for a connect that adopts the backend's values", () => {
       const backend = createMemoryBackend(toggleTodo(threeTodos(), "1"));
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       const recorded = record(engine);
 
       engine.connect();
@@ -2871,7 +3213,7 @@ describe("createSyncEngine", () => {
     it("sends disconnect once disconnected, and nothing for a disconnect that changes nothing", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       const recorded = record(engine);
 
       engine.disconnect();
@@ -2900,7 +3242,9 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend();
         const store = createTestStore(threeTodos());
         const scheduler = manualScheduler();
-        const engine = createSyncEngine(backend, store.adapter, {
+        const engine = createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         });
         engine.connect();
@@ -2921,7 +3265,9 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend();
         const store = createTestStore(threeTodos());
         const scheduler = manualScheduler();
-        const engine = createSyncEngine(backend, store.adapter, {
+        const engine = createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         });
         engine.connect();
@@ -2938,7 +3284,9 @@ describe("createSyncEngine", () => {
         const backend = createMemoryBackend();
         const store = createTestStore(threeTodos());
         const scheduler = manualScheduler();
-        const engine = createSyncEngine(backend, store.adapter, {
+        const engine = createSyncEngine({
+          backend,
+          adapter: store.adapter,
           schedule: scheduler.schedule,
         });
         engine.connect();
@@ -2958,9 +3306,12 @@ describe("createSyncEngine", () => {
     it("sends remote for a remote change the store ignores", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, {
-        ...store.adapter,
-        setState: () => {},
+      const engine = createSyncEngine({
+        backend,
+        adapter: {
+          ...store.adapter,
+          setState: () => {},
+        },
       });
       engine.connect();
       const recorded = record(engine);
@@ -2974,7 +3325,9 @@ describe("createSyncEngine", () => {
     it("sends remote for a remote change to filtered-out keys only", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter, {
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
         filter: (key) => key !== "searchTerm",
       });
       engine.connect();
@@ -2990,21 +3343,21 @@ describe("createSyncEngine", () => {
     it.each([
       ["without onError", undefined],
       ["with onError", () => {}],
-    ])("sends nothing when write or setState throws, %s", (_, onError) => {
+    ])("sends only error when write or setState throws, %s", (_, onError) => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
       let failSetState = false;
-      const engine = createSyncEngine(
+      const engine = createSyncEngine({
         backend,
-        {
+        adapter: {
           ...store.adapter,
           setState: (next) => {
             if (failSetState) throw new Error("invalid");
             store.setState(next);
           },
         },
-        { onError },
-      );
+        onError,
+      });
       engine.connect();
       const recorded = record(engine);
       vi.spyOn(backend, "write").mockImplementationOnce(() => {
@@ -3022,16 +3375,19 @@ describe("createSyncEngine", () => {
         expect(receive).toThrow("invalid");
       }
 
-      expect(recorded.events()).toEqual([]);
+      expect(recorded.events()).toEqual(["error", "error"]);
     });
 
-    it("sends nothing when connect() throws", () => {
+    it("sends only error when connect() throws", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, {
-        ...store.adapter,
-        subscribe: () => {
-          throw new Error("boom");
+      const engine = createSyncEngine({
+        backend,
+        adapter: {
+          ...store.adapter,
+          subscribe: () => {
+            throw new Error("boom");
+          },
         },
       });
       const recorded = record(engine);
@@ -3039,31 +3395,7 @@ describe("createSyncEngine", () => {
       expect(() => engine.connect()).toThrow("boom");
       engine.disconnect();
 
-      expect(recorded.events()).toEqual([]);
-    });
-
-    it("sends disconnect when the pending apply disconnect() runs throws", () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore(threeTodos());
-      let flush = (): void => {};
-      const engine = createSyncEngine(
-        backend,
-        {
-          ...store.adapter,
-          setState: () => {
-            throw new Error("invalid");
-          },
-        },
-        { schedule: (next) => (flush = next) },
-      );
-      engine.connect();
-      const recorded = record(engine);
-
-      backend.receive(toggleTodo(threeTodos(), "1"));
-      expect(() => engine.disconnect()).toThrow("invalid");
-      flush();
-
-      expect(recorded.seen).toEqual([["disconnect", false]]);
+      expect(recorded.seen).toEqual([["error", false]]);
     });
 
     describe("a listener that throws", () => {
@@ -3076,7 +3408,7 @@ describe("createSyncEngine", () => {
       it("is reported, and the other listeners and the store's subscribers still run", () => {
         const backend = createMemoryBackend();
         const store = createTestStore(threeTodos());
-        const engine = createSyncEngine(backend, store.adapter);
+        const engine = createSyncEngine({ backend, adapter: store.adapter });
         engine.connect();
         const failure = new Error("listener failed");
         engine.subscribe(() => {
@@ -3104,7 +3436,7 @@ describe("createSyncEngine", () => {
     it("keeps sending across reconnects, and stops after unsubscribe", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       const recorded = record(engine);
       const other = record(engine);
 
@@ -3128,7 +3460,7 @@ describe("createSyncEngine", () => {
     it("skips a listener another one unsubscribes during the same event", () => {
       const backend = createMemoryBackend();
       const store = createTestStore(threeTodos());
-      const engine = createSyncEngine(backend, store.adapter);
+      const engine = createSyncEngine({ backend, adapter: store.adapter });
       const late = vi.fn();
       let unsubscribeLate = (): void => {};
       engine.subscribe(() => unsubscribeLate());
@@ -3141,14 +3473,15 @@ describe("createSyncEngine", () => {
   });
 
   describe("getSyncedState", () => {
-    it("returns the keys the filter keeps, with the store's values, while disconnected", () => {
+    it("returns the keys the filter keeps but functions, with the store's values, while disconnected", () => {
       const backend = createMemoryBackend();
       const addTodoAction = () => {};
       const state = { ...setSearchTerm(threeTodos(), "x"), addTodoAction };
       const store = createTestStore(state);
-      const engine = createSyncEngine(backend, store.adapter, {
-        filter: (key, value) =>
-          typeof value !== "function" && key !== "searchTerm",
+      const engine = createSyncEngine({
+        backend,
+        adapter: store.adapter,
+        filter: (key) => key !== "searchTerm",
       });
 
       const synced = engine.getSyncedState();
@@ -3169,1419 +3502,16 @@ describe("createSyncEngine", () => {
       ) as Record<string, unknown>;
       state.when = when;
       const store = createTestStore(state);
-      const engine = createSyncEngine(createMemoryBackend(), store.adapter);
+      const engine = createSyncEngine({
+        backend: createMemoryBackend(),
+        adapter: store.adapter,
+      });
       engine.connect();
 
       const synced = engine.getSyncedState();
 
       expect(Object.keys(synced)).toEqual(["count", "when"]);
       expect(synced.when).toBe(when);
-    });
-  });
-
-  describe("ready", () => {
-    /** A promise settled by hand. */
-    const deferred = () => {
-      let resolve!: () => void;
-      let reject!: (reason: unknown) => void;
-      const promise = new Promise<void>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      return { promise, resolve, reject };
-    };
-
-    /** Lets every promise reaction that is due run. */
-    const settled = (): Promise<void> =>
-      new Promise((resolve) => setTimeout(resolve));
-
-    it("seeds the keys the backend lacks only once ready resolves", async () => {
-      const backend = createMemoryBackend();
-      const store = createTestStore(threeTodos());
-      const ready = deferred();
-
-      createSyncEngine(backend, store.adapter, {
-        ready: ready.promise,
-      }).connect();
-      await settled();
-      expect(backend.read()).toEqual({});
-
-      ready.resolve();
-      await settled();
-      expect(backend.read()).toEqual(threeTodos());
-    });
-
-    it("adopts what the backend holds on connect, and writes nothing", async () => {
-      const backend = createMemoryBackend({ count: 7 });
-      const write = vi.spyOn(backend, "write");
-      const store = createTestStore({ count: 0, label: "mine" });
-
-      createSyncEngine(backend, store.adapter, {
-        ready: deferred().promise,
-      }).connect();
-      await settled();
-
-      expect(store.getState()).toEqual({ count: 7, label: "mine" });
-      expect(write).not.toHaveBeenCalled();
-    });
-
-    it("applies remote changes while waiting and keeps the keys only the store holds", async () => {
-      const backend = createMemoryBackend();
-      const write = vi.spyOn(backend, "write");
-      const store = createTestStore({ count: 0, label: "mine" });
-      const ready = deferred();
-      createSyncEngine(backend, store.adapter, {
-        ready: ready.promise,
-      }).connect();
-
-      backend.receive({ count: 7 });
-
-      expect(store.getState()).toEqual({ count: 7, label: "mine" });
-      expect(write).not.toHaveBeenCalled();
-
-      ready.resolve();
-      await settled();
-      expect(backend.read()).toEqual({ count: 7, label: "mine" });
-      expect(store.getState()).toEqual({ count: 7, label: "mine" });
-    });
-
-    it("removes a key the backend held and a peer deleted while waiting", async () => {
-      const backend = createMemoryBackend({ count: 7, stale: true });
-      const store = createTestStore<Record<string, unknown>>({ count: 0 });
-      const ready = deferred();
-      createSyncEngine(backend, store.adapter, {
-        ready: ready.promise,
-      }).connect();
-      expect(store.getState()).toEqual({ count: 7, stale: true });
-
-      backend.receive({ count: 7 });
-      expect(store.getState()).toEqual({ count: 7 });
-
-      ready.resolve();
-      await settled();
-      expect(backend.read()).toEqual({ count: 7 });
-    });
-
-    it("leaves what the store changes during a remote change for reconciliation", async () => {
-      const backend = createMemoryBackend();
-      const write = vi.spyOn(backend, "write");
-      const store = createTestStore({ count: 0, doubled: 0 }, (state) => ({
-        ...state,
-        doubled: state.count * 2,
-      }));
-      const ready = deferred();
-      createSyncEngine(backend, store.adapter, {
-        ready: ready.promise,
-      }).connect();
-
-      backend.receive({ count: 7 });
-      expect(store.getState()).toEqual({ count: 7, doubled: 14 });
-      expect(write).not.toHaveBeenCalled();
-
-      ready.resolve();
-      await settled();
-      expect(backend.read()).toEqual({ count: 7, doubled: 14 });
-    });
-
-    describe("local changes while waiting", () => {
-      it("writes nothing and sends no local event until ready resolves", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-
-        store.setState({ count: 1 });
-
-        expect(write).not.toHaveBeenCalled();
-        expect(events).toEqual(["connect"]);
-        ready.resolve();
-        await settled();
-        expect(backend.read()).toEqual({ count: 1 });
-      });
-
-      it("drops a change to a key the backend holds", async () => {
-        const backend = createMemoryBackend({ held: "room" });
-        const store = createTestStore({ held: "mine", lacked: "mine" });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        }).connect();
-
-        store.update((state) => ({ ...state, held: "edit", lacked: "edit" }));
-        ready.resolve();
-        await settled();
-
-        expect(store.getState()).toEqual({ held: "room", lacked: "edit" });
-        expect(backend.read()).toEqual({ held: "room", lacked: "edit" });
-      });
-
-      it("drops a change to a key that arrives after the change", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ held: "mine" });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        }).connect();
-
-        store.setState({ held: "edit" });
-        backend.receive({ held: "room" });
-        ready.resolve();
-        await settled();
-
-        expect(store.getState()).toEqual({ held: "room" });
-        expect(backend.read()).toEqual({ held: "room" });
-      });
-
-      it("writes the keys the backend lacks with seed 'never' after a local change", async () => {
-        const backend = createMemoryBackend({ held: "room" });
-        const store = createTestStore({ held: "mine", lacked: "mine" });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          seed: "never",
-        }).connect();
-
-        store.update((state) => ({ ...state, lacked: "edit" }));
-        ready.resolve();
-        await settled();
-
-        expect(backend.read()).toEqual({ held: "room", lacked: "edit" });
-      });
-
-      it("writes nothing with seed 'never' and no local change", async () => {
-        const backend = createMemoryBackend({ held: "room" });
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ held: "mine", lacked: "mine" });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          seed: "never",
-        }).connect();
-
-        backend.receive({ held: "room 2" });
-        ready.resolve();
-        await settled();
-
-        expect(write).not.toHaveBeenCalled();
-        expect(store.getState()).toEqual({ held: "room 2", lacked: "mine" });
-      });
-
-      it("forgets a local change of an earlier wait", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: Promise.resolve(),
-          seed: "never",
-        });
-
-        engine.connect();
-        store.setState({ count: 1 });
-        engine.disconnect();
-        engine.connect();
-        await settled();
-
-        expect(write).not.toHaveBeenCalled();
-      });
-
-      it("does not take an apply of a remote change for a local change", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0, label: "mine" });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          seed: "never",
-        }).connect();
-
-        backend.receive({ count: 7 });
-        ready.resolve();
-        await settled();
-
-        expect(write).not.toHaveBeenCalled();
-      });
-
-      it("writes local changes as usual once ready has resolved", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        }).connect();
-        ready.resolve();
-        await settled();
-
-        store.setState({ count: 5 });
-
-        expect(backend.read()).toEqual({ count: 5 });
-      });
-    });
-
-    describe("lifecycle", () => {
-      it("does nothing when ready settles after a disconnect", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-
-        engine.connect();
-        engine.disconnect();
-        ready.resolve();
-        await settled();
-
-        expect(write).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
-        expect(events).toEqual(["connect", "disconnect"]);
-      });
-
-      it("connects once when connect is called twice while waiting", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const create = vi.fn(() => ready.promise);
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: create,
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-
-        engine.connect();
-        engine.connect();
-        ready.resolve();
-        await settled();
-
-        expect(create).toHaveBeenCalledOnce();
-        expect(write).toHaveBeenCalledOnce();
-        expect(events).toEqual(["connect", "ready"]);
-      });
-
-      it("reconciles once when reconnected while waiting on the same promise", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-
-        engine.connect();
-        engine.disconnect();
-        engine.connect();
-        ready.resolve();
-        await settled();
-
-        expect(write).toHaveBeenCalledOnce();
-        expect(events).toEqual(["connect", "disconnect", "connect", "ready"]);
-      });
-
-      it("ignores the promise of an earlier connect", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const first = deferred();
-        const second = deferred();
-        const ready = vi
-          .fn<() => Promise<void>>()
-          .mockReturnValueOnce(first.promise)
-          .mockReturnValueOnce(second.promise);
-        const engine = createSyncEngine(backend, store.adapter, { ready });
-
-        engine.connect();
-        engine.disconnect();
-        engine.connect();
-        first.resolve();
-        await settled();
-        expect(backend.read()).toEqual({});
-
-        second.resolve();
-        await settled();
-        expect(backend.read()).toEqual({ count: 0 });
-      });
-
-      it("leaves the pending flush of a later wait alone when an earlier promise settles", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const first = deferred();
-        const flushes: (() => void)[] = [];
-        const ready = vi
-          .fn<() => Promise<void>>()
-          .mockReturnValueOnce(first.promise)
-          .mockReturnValueOnce(deferred().promise);
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready,
-          schedule: (flush) => flushes.push(flush),
-        });
-        engine.connect();
-        engine.disconnect();
-        engine.connect();
-        backend.receive({ count: 7 });
-
-        first.resolve();
-        await settled();
-        expect(store.getState()).toEqual({ count: 0 });
-
-        flushes[0]();
-        expect(store.getState()).toEqual({ count: 7 });
-      });
-
-      it("calls a ready function on every connect, and reconciles after it settles", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore<Record<string, unknown>>({ count: 0 });
-        const next = deferred();
-        const ready = vi
-          .fn<() => Promise<void>>()
-          .mockResolvedValueOnce(undefined)
-          .mockReturnValueOnce(next.promise);
-        const engine = createSyncEngine(backend, store.adapter, { ready });
-        engine.connect();
-        await settled();
-        engine.disconnect();
-
-        store.setState({ count: 0, gained: true });
-        engine.connect();
-        await settled();
-        expect(backend.read()).toEqual({ count: 0 });
-
-        next.resolve();
-        await settled();
-        expect(ready).toHaveBeenCalledTimes(2);
-        expect(backend.read()).toEqual({ count: 0, gained: true });
-      });
-
-      it("waits a microtask on reconnect with a promise already settled", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore<Record<string, unknown>>({ count: 0 });
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: Promise.resolve(),
-        });
-        engine.connect();
-        await settled();
-        engine.disconnect();
-
-        store.setState({ count: 1 });
-        engine.connect();
-
-        expect(store.getState()).toEqual({ count: 0 });
-        expect(engine.isReady()).toBe(false);
-        await settled();
-        expect(engine.isReady()).toBe(true);
-      });
-
-      it("does not run ready until connect", () => {
-        const ready = vi.fn(() => Promise.resolve());
-
-        createSyncEngine(
-          createMemoryBackend(),
-          createTestStore({ count: 0 }).adapter,
-          { ready },
-        );
-
-        expect(ready).not.toHaveBeenCalled();
-      });
-
-      it("never settling keeps the engine waiting, writing nothing, until a disconnect", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0, label: "mine" });
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: new Promise(() => {}),
-        });
-        engine.connect();
-
-        store.update((state) => ({ ...state, label: "edit" }));
-        backend.receive({ count: 7 });
-        await settled();
-
-        expect(store.getState()).toEqual({ count: 7, label: "edit" });
-        expect(write).not.toHaveBeenCalled();
-        expect(engine.isReady()).toBe(false);
-        engine.disconnect();
-        expect(engine.isConnected()).toBe(false);
-      });
-    });
-
-    describe("status", () => {
-      it("reports connected and not ready while waiting, then ready", async () => {
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
-          ready: ready.promise,
-        });
-        expect(engine.isReady()).toBe(false);
-
-        engine.connect();
-        expect(engine.isConnected()).toBe(true);
-        expect(engine.isReady()).toBe(false);
-
-        ready.resolve();
-        await settled();
-        expect(engine.isReady()).toBe(true);
-
-        engine.disconnect();
-        expect(engine.isReady()).toBe(false);
-      });
-
-      it("reports ready as soon as it connects without the option, and sends no ready event", () => {
-        const store = createTestStore({ count: 0 });
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter);
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        expect(engine.isReady()).toBe(false);
-
-        engine.connect();
-        expect(engine.isReady()).toBe(true);
-        expect(events).toEqual(["connect"]);
-
-        engine.disconnect();
-        expect(engine.isReady()).toBe(false);
-      });
-
-      it("stays not ready for a store subscriber until reconciliation is done", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        });
-        engine.connect();
-        const seen: boolean[] = [];
-        store.adapter.subscribe(() => seen.push(engine.isReady()));
-
-        // A write of its own tells no subscriber, so reconciling is what brings it to the store.
-        backend.write({ count: 2 });
-        ready.resolve();
-        await settled();
-
-        expect(store.getState()).toEqual({ count: 2 });
-        expect(seen).toEqual([false]);
-        expect(engine.isReady()).toBe(true);
-      });
-
-      it("never reports ready when reconciliation fails after changing the store", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0, doubled: 0 }, (state) => ({
-          ...state,
-          doubled: state.count * 2,
-        }));
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          seed: "never",
-          onError: () => {},
-        });
-        engine.connect();
-        const seen: boolean[] = [];
-        engine.subscribe(() => seen.push(engine.isReady()));
-        store.adapter.subscribe(() => seen.push(engine.isReady()));
-
-        backend.write({ count: 2 });
-        vi.spyOn(backend, "write").mockImplementation(() => {
-          throw new Error("write failed");
-        });
-        ready.resolve();
-        await settled();
-
-        expect(engine.isConnected()).toBe(false);
-        expect(seen).not.toContain(true);
-      });
-
-      it("is neither ready nor reports it after a store subscriber disconnects while reconciling", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        });
-        const events: string[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-        store.adapter.subscribe(() => engine.disconnect());
-
-        backend.write({ count: 2 });
-        ready.resolve();
-        await settled();
-
-        expect(engine.isConnected()).toBe(false);
-        expect(engine.isReady()).toBe(false);
-        expect(events).toEqual(["connect", "disconnect"]);
-      });
-
-      it("keeps waiting after a store subscriber reconnects while reconciling", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0 });
-        const first = deferred();
-        const second = deferred();
-        const waits = [first.promise, second.promise];
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: () => waits.shift() as Promise<void>,
-        });
-        const events: string[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-        let reconnected = false;
-        store.adapter.subscribe(() => {
-          if (reconnected) return;
-          reconnected = true;
-          engine.disconnect();
-          engine.connect();
-        });
-
-        backend.write({ count: 2 });
-        first.resolve();
-        await settled();
-
-        expect(engine.isReady()).toBe(false);
-        expect(events).toEqual(["connect", "disconnect", "connect"]);
-
-        second.resolve();
-        await settled();
-
-        expect(engine.isReady()).toBe(true);
-        expect(events).toEqual(["connect", "disconnect", "connect", "ready"]);
-      });
-
-      it("writes back what the store changes while reconciling at settling", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const store = createTestStore({ count: 0, doubled: 0 }, (state) => ({
-          ...state,
-          doubled: state.count * 2,
-        }));
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          seed: "never",
-        }).connect();
-
-        backend.write({ count: 2 });
-        ready.resolve();
-        await settled();
-
-        expect(backend.read()).toEqual({ count: 2, doubled: 4 });
-      });
-
-      it("sends connect, each remote change, then ready once reconciled", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0, label: "mine" });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        });
-        const seen: [SyncEvent, boolean, unknown][] = [];
-        engine.subscribe((event) =>
-          seen.push([event, engine.isReady(), backend.read()]),
-        );
-
-        engine.connect();
-        backend.receive({ count: 7 });
-        ready.resolve();
-        await settled();
-
-        expect(seen).toEqual([
-          ["connect", false, {}],
-          ["remote", false, { count: 7 }],
-          ["ready", true, { count: 7, label: "mine" }],
-        ]);
-      });
-    });
-
-    describe("rejected", () => {
-      it("disconnects and reports to onError without writing", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const failure = new Error("no room");
-        const seen: unknown[] = [];
-        const engine: SyncEngine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          onError: (error, source) =>
-            seen.push([error, source, engine.isConnected()]),
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-
-        ready.reject(failure);
-        await settled();
-
-        expect(seen).toEqual([[failure, "ready", false]]);
-        expect(write).not.toHaveBeenCalled();
-        expect(events).toEqual(["connect", "disconnect"]);
-        expect(engine.isReady()).toBe(false);
-      });
-
-      it("stops hearing both sides and keeps what the store adopted", async () => {
-        const backend = createMemoryBackend({ count: 7 });
-        const store = createTestStore({ count: 0, label: "mine" });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          onError: () => {},
-        });
-        engine.connect();
-
-        ready.reject(new Error("no room"));
-        await settled();
-        backend.receive({ count: 8 });
-        store.update((state) => ({ ...state, label: "edit" }));
-
-        expect(store.getState()).toEqual({ count: 7, label: "edit" });
-        expect(backend.read()).toEqual({ count: 8 });
-      });
-
-      it("connects again with a ready function that resolves", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const ready = vi
-          .fn<() => Promise<void>>()
-          .mockRejectedValueOnce(new Error("no room"))
-          .mockResolvedValueOnce(undefined);
-        const onError = vi.fn();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready,
-          onError,
-        });
-
-        engine.connect();
-        await settled();
-        engine.connect();
-        await settled();
-
-        expect(onError).toHaveBeenCalledOnce();
-        expect(engine.isReady()).toBe(true);
-        expect(backend.read()).toEqual({ count: 0 });
-      });
-
-      it("drops a flush handed out before it rejects", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const flushes: (() => void)[] = [];
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          onError: () => {},
-          schedule: (flush) => flushes.push(flush),
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-        backend.receive({ count: 7 });
-
-        ready.reject(new Error("no room"));
-        await settled();
-        flushes[0]();
-
-        expect(store.getState()).toEqual({ count: 0 });
-        expect(events).toEqual(["connect", "disconnect"]);
-      });
-
-      it("hands out a new flush after a failed wait, and the old one does nothing", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const flushes: (() => void)[] = [];
-        const ready = vi
-          .fn<() => Promise<void>>()
-          .mockRejectedValueOnce(new Error("no room"))
-          .mockReturnValueOnce(deferred().promise);
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready,
-          onError: () => {},
-          schedule: (flush) => flushes.push(flush),
-        });
-        engine.connect();
-        backend.receive({ count: 7 });
-        await settled();
-        engine.connect();
-
-        backend.receive({ count: 8 });
-        expect(flushes).toHaveLength(2);
-        flushes[0]();
-        expect(store.getState()).toEqual({ count: 7 });
-        flushes[1]();
-        expect(store.getState()).toEqual({ count: 8 });
-      });
-
-      it("forgets the pending apply of a failed wait on the next connect", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const ready = vi
-          .fn<() => Promise<void>>()
-          .mockRejectedValueOnce(new Error("no room"))
-          .mockResolvedValueOnce(undefined);
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready,
-          onError: () => {},
-          schedule: () => {},
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-        backend.receive({ count: 7 });
-        await settled();
-
-        engine.connect();
-        await settled();
-
-        expect(events).toEqual(["connect", "disconnect", "connect", "ready"]);
-      });
-
-      it("ignores a rejection after a disconnect", async () => {
-        const store = createTestStore({ count: 0 });
-        const ready = deferred();
-        const onError = vi.fn();
-        const engine = createSyncEngine(createMemoryBackend(), store.adapter, {
-          ready: ready.promise,
-          onError,
-        });
-        engine.connect();
-        engine.disconnect();
-
-        ready.reject(new Error("no room"));
-        await settled();
-
-        expect(onError).not.toHaveBeenCalled();
-      });
-
-      describe("unhandled rejections", () => {
-        const unhandled: unknown[] = [];
-        const onUnhandled = (reason: unknown): void => {
-          unhandled.push(reason);
-        };
-
-        beforeEach(() => {
-          unhandled.length = 0;
-          process.on("unhandledRejection", onUnhandled);
-        });
-
-        afterEach(() => {
-          process.off("unhandledRejection", onUnhandled);
-        });
-
-        it("surfaces a rejection without onError as an unhandled rejection", async () => {
-          const store = createTestStore({ count: 0 });
-          const ready = deferred();
-          const failure = new Error("no room");
-          const engine = createSyncEngine(
-            createMemoryBackend(),
-            store.adapter,
-            { ready: ready.promise },
-          );
-          engine.connect();
-
-          ready.reject(failure);
-          await settled();
-
-          expect(unhandled).toEqual([failure]);
-          expect(engine.isConnected()).toBe(false);
-        });
-
-        it("does not leave a promise rejected before connect unhandled", async () => {
-          const store = createTestStore({ count: 0 });
-          const failure = new Error("no room");
-          const onError = vi.fn();
-          const engine = createSyncEngine(
-            createMemoryBackend(),
-            store.adapter,
-            { ready: Promise.reject(failure), onError },
-          );
-          await settled();
-          expect(unhandled).toEqual([]);
-
-          engine.connect();
-          await settled();
-
-          expect(onError).toHaveBeenCalledWith(failure, "ready");
-          expect(unhandled).toEqual([]);
-        });
-
-        it("surfaces what fails while reconciling without onError", async () => {
-          const backend = createMemoryBackend();
-          const failure = new Error("write failed");
-          vi.spyOn(backend, "write").mockImplementation(() => {
-            throw failure;
-          });
-          const ready = deferred();
-          const engine = createSyncEngine(
-            backend,
-            createTestStore({ count: 0 }).adapter,
-            { ready: ready.promise },
-          );
-          engine.connect();
-
-          ready.resolve();
-          await settled();
-
-          expect(unhandled).toEqual([failure]);
-          expect(engine.isConnected()).toBe(false);
-        });
-
-        it("drops the rejection of a wait a failed connect abandoned", async () => {
-          for (const onError of [vi.fn(), undefined]) {
-            const backend = createMemoryBackend();
-            vi.spyOn(backend, "read").mockReturnValue(
-              "nonsense" as unknown as JsonObject,
-            );
-            const ready = deferred();
-            const engine = createSyncEngine(
-              backend,
-              createTestStore({ count: 0 }).adapter,
-              { ready: () => ready.promise, onError },
-            );
-
-            expect(() => engine.connect()).toThrow(TypeError);
-            ready.reject(new Error("late"));
-            await settled();
-
-            expect(unhandled).toEqual([]);
-            if (onError) expect(onError).not.toHaveBeenCalled();
-          }
-        });
-
-        it("does nothing when a wait a failed connect abandoned resolves", async () => {
-          const backend = createMemoryBackend();
-          const write = vi.spyOn(backend, "write");
-          const store = createTestStore({ count: 0 });
-          const ready = deferred();
-          const engine = createSyncEngine(
-            backend,
-            {
-              ...store.adapter,
-              subscribe: () => {
-                throw new Error("subscribe failed");
-              },
-            },
-            { ready: ready.promise },
-          );
-
-          expect(() => engine.connect()).toThrow("subscribe failed");
-          ready.resolve();
-          await settled();
-
-          expect(write).not.toHaveBeenCalled();
-          expect(engine.isReady()).toBe(false);
-        });
-
-        it("does not blame a filter that throws on an earlier failed connect", async () => {
-          const failure = new Error("filter failed");
-          const store = createTestStore({ count: 0 });
-          let badStore = true;
-          let badFilter = false;
-          const ready = deferred();
-          const onError = vi.fn();
-          const engine = createSyncEngine(
-            createMemoryBackend(),
-            {
-              ...store.adapter,
-              getState: () =>
-                badStore
-                  ? (1 as unknown as { count: number })
-                  : store.getState(),
-            },
-            {
-              ready: ready.promise,
-              onError,
-              filter: () => {
-                if (badFilter) throw failure;
-                return true;
-              },
-            },
-          );
-          expect(() => engine.connect()).toThrow(TypeError);
-
-          badStore = false;
-          engine.connect();
-          badFilter = true;
-          ready.resolve();
-          await settled();
-
-          expect(onError).not.toHaveBeenCalled();
-          expect(unhandled).toEqual([failure]);
-        });
-
-        it("lets a filter that throws while reconciling propagate past onError", async () => {
-          const failure = new Error("filter failed");
-          let failing = false;
-          const ready = deferred();
-          const onError = vi.fn();
-          const engine = createSyncEngine(
-            createMemoryBackend(),
-            createTestStore({ count: 0 }).adapter,
-            {
-              ready: ready.promise,
-              onError,
-              filter: () => {
-                if (failing) throw failure;
-                return true;
-              },
-            },
-          );
-          engine.connect();
-
-          failing = true;
-          ready.resolve();
-          await settled();
-
-          expect(onError).not.toHaveBeenCalled();
-          expect(unhandled).toEqual([failure]);
-          expect(engine.isConnected()).toBe(false);
-        });
-      });
-    });
-
-    describe("failures", () => {
-      it("reports a read that fails while reconciling and disconnects", async () => {
-        const backend = createMemoryBackend();
-        const ready = deferred();
-        const onError = vi.fn();
-        const engine = createSyncEngine(
-          backend,
-          createTestStore({ count: 0 }).adapter,
-          { ready: ready.promise, onError },
-        );
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-
-        vi.spyOn(backend, "read").mockReturnValue(
-          "nonsense" as unknown as JsonObject,
-        );
-        ready.resolve();
-        await settled();
-
-        expect(onError).toHaveBeenCalledWith(expect.any(TypeError), "backend");
-        expect(engine.isConnected()).toBe(false);
-        expect(events).toEqual(["connect", "disconnect"]);
-      });
-
-      it("reports a seed write that fails and disconnects", async () => {
-        const backend = createMemoryBackend();
-        const failure = new Error("write failed");
-        vi.spyOn(backend, "write").mockImplementation(() => {
-          throw failure;
-        });
-        const ready = deferred();
-        const onError = vi.fn();
-        const engine = createSyncEngine(
-          backend,
-          createTestStore({ count: 0 }).adapter,
-          { ready: ready.promise, onError },
-        );
-        engine.connect();
-
-        ready.resolve();
-        await settled();
-
-        expect(onError).toHaveBeenCalledWith(failure, "backend");
-        expect(engine.isConnected()).toBe(false);
-      });
-
-      it("reports a setState that fails while reconciling and disconnects", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const failure = new Error("setState failed");
-        const ready = deferred();
-        const onError = vi.fn();
-        const flushes: (() => void)[] = [];
-        const engine = createSyncEngine(
-          backend,
-          {
-            ...store.adapter,
-            setState: () => {
-              throw failure;
-            },
-          },
-          {
-            ready: ready.promise,
-            onError,
-            schedule: (flush) => flushes.push(flush),
-          },
-        );
-        engine.connect();
-        backend.receive({ count: 7 });
-
-        ready.resolve();
-        await settled();
-
-        expect(onError).toHaveBeenCalledWith(failure, "store");
-        expect(engine.isConnected()).toBe(false);
-      });
-
-      it("reconnects after a failure", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const write = vi.spyOn(backend, "write");
-        write.mockImplementationOnce(() => {
-          throw new Error("write failed");
-        });
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: Promise.resolve(),
-          onError: () => {},
-        });
-
-        engine.connect();
-        await settled();
-        engine.connect();
-        await settled();
-
-        expect(engine.isReady()).toBe(true);
-        expect(backend.read()).toEqual({ count: 0 });
-      });
-
-      it("throws from connect for a bad read or getState, and subscribes to nothing", () => {
-        const backend = createMemoryBackend();
-        vi.spyOn(backend, "read").mockReturnValue(
-          "nonsense" as unknown as JsonObject,
-        );
-        const engine = createSyncEngine(
-          backend,
-          createTestStore({ count: 0 }).adapter,
-          { ready: deferred().promise },
-        );
-        expect(() => engine.connect()).toThrow(TypeError);
-        expect(engine.isConnected()).toBe(false);
-
-        const good = createMemoryBackend();
-        const subscribe = vi.spyOn(good, "subscribe");
-        const badStore = createSyncEngine(
-          good,
-          {
-            ...createTestStore({ count: 0 }).adapter,
-            getState: () => 1 as unknown as { count: number },
-          },
-          { ready: deferred().promise },
-        );
-        expect(() => badStore.connect()).toThrow(TypeError);
-        expect(badStore.isConnected()).toBe(false);
-        expect(subscribe).not.toHaveBeenCalled();
-      });
-
-      it("throws from connect, touching nothing, when a ready function throws", () => {
-        const backend = createMemoryBackend();
-        const read = vi.spyOn(backend, "read");
-        const failure = new Error("no provider");
-        const engine = createSyncEngine(
-          backend,
-          createTestStore({ count: 0 }).adapter,
-          {
-            ready: () => {
-              throw failure;
-            },
-          },
-        );
-
-        expect(() => engine.connect()).toThrow(failure);
-        expect(read).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
-      });
-
-      it("reports a remote change that fails while waiting, and stays waiting", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const failure = new Error("setState failed");
-        let failing = true;
-        const onError = vi.fn();
-        const ready = deferred();
-        const engine = createSyncEngine(
-          backend,
-          {
-            ...store.adapter,
-            setState: (state) => {
-              if (failing) throw failure;
-              store.setState(state);
-            },
-          },
-          { ready: ready.promise, onError },
-        );
-        engine.connect();
-
-        backend.receive({ count: 7 });
-        expect(onError).toHaveBeenCalledWith(failure, "store");
-        expect(engine.isConnected()).toBe(true);
-
-        failing = false;
-        ready.resolve();
-        await settled();
-        expect(store.getState()).toEqual({ count: 7 });
-        expect(engine.isReady()).toBe(true);
-      });
-    });
-
-    describe("with the other options", () => {
-      it("keeps local keys out of what it adopts and writes", async () => {
-        for (const options of [
-          { omit: ["draft"] },
-          { keys: ["count", "label"] },
-          { filter: (key: string) => key !== "draft" },
-        ] as SyncEngineConfig<{
-          count: number;
-          label: string;
-          draft: string;
-        }>[]) {
-          const backend = createMemoryBackend({ count: 7, draft: "room" });
-          const store = createTestStore({
-            count: 0,
-            label: "mine",
-            draft: "local",
-          });
-          const ready = deferred();
-          const engine = createSyncEngine(backend, store.adapter, {
-            ...options,
-            ready: ready.promise,
-          });
-          engine.connect();
-
-          store.update((state) => ({ ...state, draft: "edit" }));
-          backend.receive({ count: 8, draft: "room" });
-          expect(engine.getSyncedState()).toEqual({ count: 8, label: "mine" });
-          ready.resolve();
-          await settled();
-
-          expect(store.getState()).toEqual({
-            count: 8,
-            label: "mine",
-            draft: "edit",
-          });
-          expect(backend.read()).toEqual({
-            count: 8,
-            label: "mine",
-            draft: "room",
-          });
-        }
-      });
-
-      it("applies a flush per key while waiting, and writes nothing", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0, label: "mine" });
-        const flushes: (() => void)[] = [];
-        createSyncEngine(backend, store.adapter, {
-          ready: deferred().promise,
-          schedule: (flush) => flushes.push(flush),
-        }).connect();
-
-        backend.receive({ count: 7 });
-        expect(store.getState().count).toBe(0);
-        flushes[0]();
-
-        expect(store.getState()).toEqual({ count: 7, label: "mine" });
-        expect(write).not.toHaveBeenCalled();
-      });
-
-      it("applies a pending flush before reconciling, and the late flush does nothing", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0, label: "mine" });
-        const setState = vi.spyOn(store.adapter, "setState");
-        const flushes: (() => void)[] = [];
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          schedule: (flush) => flushes.push(flush),
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-        backend.receive({ count: 7 });
-
-        ready.resolve();
-        await settled();
-        flushes[0]();
-
-        expect(setState).toHaveBeenCalledOnce();
-        expect(store.getState()).toEqual({ count: 7, label: "mine" });
-        expect(events).toEqual(["connect", "remote", "ready"]);
-      });
-
-      it("removes a key a peer deleted in a flush pending when ready resolves", async () => {
-        const backend = createMemoryBackend({ a: 1, b: 2 });
-        const store = createTestStore<Record<string, unknown>>({ a: 0 });
-        const flushes: (() => void)[] = [];
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          schedule: (flush) => flushes.push(flush),
-        }).connect();
-        expect(store.getState()).toEqual({ a: 1, b: 2 });
-
-        backend.receive({ a: 1 });
-        ready.resolve();
-        await settled();
-        flushes[0]();
-
-        expect(store.getState()).toEqual({ a: 1 });
-        expect(backend.read()).toEqual({ a: 1 });
-      });
-
-      it("takes the failure path when a flush pending at settling cannot read", async () => {
-        const backend = createMemoryBackend({ a: 1 });
-        const store = createTestStore({ a: 0, label: "mine" });
-        const ready = deferred();
-        const onError = vi.fn();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          onError,
-          schedule: () => {},
-        });
-        const events: SyncEvent[] = [];
-        engine.subscribe((event) => events.push(event));
-        engine.connect();
-        backend.receive({ a: 2 });
-
-        vi.spyOn(backend, "read").mockReturnValue(
-          "nonsense" as unknown as JsonObject,
-        );
-        ready.resolve();
-        await settled();
-
-        expect(onError).toHaveBeenCalledWith(expect.any(TypeError), "backend");
-        expect(engine.isConnected()).toBe(false);
-        expect(events).toEqual(["connect", "disconnect"]);
-      });
-
-      it("stops when applying a pending flush at settling disconnects the engine", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0, label: "mine" });
-        const ready = deferred();
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          schedule: () => {},
-        });
-        engine.subscribe((event) => {
-          if (event === "remote") engine.disconnect();
-        });
-        engine.connect();
-        backend.receive({ count: 7 });
-
-        ready.resolve();
-        await settled();
-
-        expect(write).not.toHaveBeenCalled();
-        expect(engine.isConnected()).toBe(false);
-      });
-
-      it("schedules the next remote change after one covered by reconciliation", async () => {
-        const backend = createMemoryBackend();
-        const store = createTestStore({ count: 0 });
-        const flushes: (() => void)[] = [];
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-          schedule: (flush) => flushes.push(flush),
-        }).connect();
-        backend.receive({ count: 7 });
-        ready.resolve();
-        await settled();
-
-        backend.receive({ count: 8 });
-        flushes[1]();
-
-        expect(store.getState()).toEqual({ count: 8 });
-      });
-
-      it("runs a pending apply per key on disconnect, and writes nothing", () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        const store = createTestStore({ count: 0, label: "mine" });
-        const engine = createSyncEngine(backend, store.adapter, {
-          ready: deferred().promise,
-          schedule: () => {},
-        });
-        engine.connect();
-        backend.receive({ count: 7 });
-
-        engine.disconnect();
-
-        expect(store.getState()).toEqual({ count: 7, label: "mine" });
-        expect(write).not.toHaveBeenCalled();
-      });
-
-      it("reports no write loop while waiting, and guards against one afterwards", async () => {
-        const backend = createMemoryBackend();
-        const write = vi.spyOn(backend, "write");
-        let stamp = 0;
-        const store = createTestStore({ count: 0, stamp: 0 });
-        const onError = vi.fn();
-        const ready = deferred();
-        createSyncEngine(
-          backend,
-          {
-            ...store.adapter,
-            setState: (state) => store.setState({ ...state, stamp: ++stamp }),
-          },
-          { ready: ready.promise, onError },
-        ).connect();
-
-        backend.receive({ count: 1 });
-        backend.receive({ count: 2 });
-        backend.receive({ count: 3 });
-        expect(write).not.toHaveBeenCalled();
-        expect(onError).not.toHaveBeenCalled();
-
-        ready.resolve();
-        await settled();
-        for (let i = 1; i <= 7; i++)
-          backend.receive({ ...backend.read(), stamp: i * 100 });
-
-        expect(onError).toHaveBeenCalledWith(
-          expect.any(WriteLoopError),
-          "store",
-        );
-      });
-
-      it("keeps a remote change a synchronous relay delivers during the seed", async () => {
-        const backend = createMemoryBackend({ count: 1 });
-        const write = backend.write;
-        let relayed = false;
-        backend.write = (next, previous) => {
-          write(next, previous);
-          if (relayed) return;
-          relayed = true;
-          backend.receive({ ...backend.read(), count: 7 });
-        };
-        const store = createTestStore({ count: 0, label: "mine" });
-        const ready = deferred();
-        createSyncEngine(backend, store.adapter, {
-          ready: ready.promise,
-        }).connect();
-
-        ready.resolve();
-        await settled();
-
-        expect(store.getState()).toEqual({ count: 7, label: "mine" });
-        expect(backend.read()).toEqual({ count: 7, label: "mine" });
-      });
-
-      it("takes any thenable", async () => {
-        const backend = createMemoryBackend();
-        const engine = createSyncEngine(
-          backend,
-          createTestStore({ count: 0 }).adapter,
-          {
-            ready: {
-              then: (resolve) =>
-                Promise.resolve().then(() => resolve?.(undefined)) as never,
-            },
-          },
-        );
-
-        engine.connect();
-        await settled();
-
-        expect(backend.read()).toEqual({ count: 0 });
-      });
     });
   });
 });

@@ -282,6 +282,50 @@ describe("mergeConcurrent", () => {
         row("r3", { b: 3 }),
       ]);
     });
+
+    it("pairs a record changed in place by position, even where its id names a record elsewhere", () => {
+      // The local side swaps the ids of x and y in place. Each change is a run of one record on
+      // each side, and the ids point to the other run, so each record pairs with its neighbour
+      // in place, by position.
+      expect(
+        merge(
+          [row("k0"), row("x"), row("k1"), row("y"), row("k2")],
+          [
+            row("k0"),
+            row("y", { a: 1 }),
+            row("k1"),
+            row("x", { a: 2 }),
+            row("k2"),
+          ],
+          [
+            row("k0"),
+            row("x", { b: 1 }),
+            row("k1"),
+            row("y", { b: 2 }),
+            row("k2"),
+          ],
+        ),
+      ).toEqual([
+        row("k0"),
+        row("y", { a: 1, b: 1 }),
+        row("k1"),
+        row("x", { a: 2, b: 2 }),
+        row("k2"),
+      ]);
+    });
+
+    it("matches records by id on both sides, in several runs of one side", () => {
+      // Each run deletes a record and changes the next: the local side does it twice, the
+      // remote side once.
+      const base = ["r0", "r1", "r2", "r3", "r4", "r5"].map((id) => row(id));
+      expect(
+        merge(
+          base,
+          [row("r1", { a: 1 }), row("r2"), row("r4", { a: 4 }), row("r5")],
+          [row("r0"), row("r1"), row("r2"), row("r3"), row("r5", { b: 5 })],
+        ),
+      ).toEqual([row("r1", { a: 1 }), row("r2"), row("r5", { b: 5 })]);
+    });
   });
 
   describe("conflicts", () => {
@@ -420,6 +464,47 @@ describe("mergeConcurrent", () => {
       const local = { a: 1 };
 
       expect(merge({ a: 0 }, local, { a: 1 })).toBe(local);
+    });
+
+    // The merge tells whether the remote value equals the base or the local one from merging
+    // their contents, so these check it a few levels down, with the remote value a JSON copy.
+    const doc = {
+      title: "Doc",
+      sections: [
+        { id: "s1", paragraphs: [{ id: "p1", spans: [{ text: "a" }] }] },
+        { id: "s2", paragraphs: [{ id: "p2", spans: [{ text: "b" }] }] },
+      ],
+    };
+    /** `doc` with the span of section `section` holding `text`, sharing the rest. */
+    const editSpan = (section: number, text: string): typeof doc => ({
+      ...doc,
+      sections: doc.sections.map((each, index) =>
+        index === section
+          ? {
+              ...each,
+              paragraphs: [{ ...each.paragraphs[0], spans: [{ text }] }],
+            }
+          : each,
+      ),
+    });
+    const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+    it("returns the local value where the remote one holds the same changes, at any depth", () => {
+      const local = editSpan(1, "B");
+
+      expect(merge(doc, local, copy(local))).toBe(local);
+      expect(merge(doc.sections, local.sections, copy(local.sections))).toBe(
+        local.sections,
+      );
+    });
+
+    it("keeps by identity each list item only one side changed", () => {
+      const local = editSpan(0, "A");
+      const remote = copy(editSpan(1, "B"));
+      const merged = merge(doc, local, remote) as typeof doc;
+
+      expect(merged.sections[0]).toBe(local.sections[0]);
+      expect(merged.sections[1]).toBe(remote.sections[1]);
     });
   });
 

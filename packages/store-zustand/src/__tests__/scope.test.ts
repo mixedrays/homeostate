@@ -39,10 +39,10 @@ describe("scopeAdapter over a Zustand store", () => {
   it("syncs a slice, leaving the rest of the store and its actions untouched", () => {
     const store = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createZustandAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createZustandAdapter(store), docScope),
+    }).connect();
     const { notes, ui, toggle } = store.getState();
 
     backend.receive({ title: "remote" });
@@ -60,10 +60,10 @@ describe("scopeAdapter over a Zustand store", () => {
   it("adds no write for a change outside the slice", () => {
     const store = createRoot();
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createZustandAdapter(store), docScope),
-    ).connect();
+      adapter: scopeAdapter(createZustandAdapter(store), docScope),
+    }).connect();
     const write = vi.spyOn(backend, "write");
 
     store.getState().toggle();
@@ -77,8 +77,14 @@ describe("scopeAdapter over a Zustand store", () => {
     const docBackend = createMemoryBackend();
     const notesBackend = createMemoryBackend();
     const adapter = createZustandAdapter(store);
-    createSyncEngine(docBackend, scopeAdapter(adapter, docScope)).connect();
-    createSyncEngine(notesBackend, scopeAdapter(adapter, notesScope)).connect();
+    createSyncEngine({
+      backend: docBackend,
+      adapter: scopeAdapter(adapter, docScope),
+    }).connect();
+    createSyncEngine({
+      backend: notesBackend,
+      adapter: scopeAdapter(adapter, notesScope),
+    }).connect();
     const docWrite = vi.spyOn(docBackend, "write");
     const notesWrite = vi.spyOn(notesBackend, "write");
 
@@ -109,13 +115,13 @@ describe("scopeAdapter over a Zustand store", () => {
       }),
     );
     const backend = createMemoryBackend({ title: "room" });
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      scopeAdapter(createZustandAdapter(store), {
+      adapter: scopeAdapter(createZustandAdapter(store), {
         get: (state) => state.doc,
         set: (state, doc) => ({ ...state, doc }),
       }),
-    );
+    });
 
     await new Promise<void>((resolve) =>
       store.persist.onFinishHydration(() => resolve()),
@@ -129,13 +135,13 @@ describe("scopeAdapter over a Zustand store", () => {
   it("syncs an array slice through a wrapper object", () => {
     const store = createStore(() => ({ todos: ["a"], ui: 0 }));
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      scopeAdapter(createZustandAdapter(store), {
+      adapter: scopeAdapter(createZustandAdapter(store), {
         get: (state) => ({ todos: state.todos }),
         set: (state, { todos }) => ({ ...state, todos }),
       }),
-    ).connect();
+    }).connect();
     const write = vi.spyOn(backend, "write");
 
     store.setState({ ui: 1 });

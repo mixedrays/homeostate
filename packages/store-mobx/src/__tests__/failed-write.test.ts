@@ -46,7 +46,10 @@ afterEach(() => {
 
 const connect = (backend: MemoryBackend) => {
   const store = observable({ count: 0 });
-  const engine = createSyncEngine(backend, createMobxAdapter(store));
+  const engine = createSyncEngine({
+    backend,
+    adapter: createMobxAdapter(store),
+  });
   engine.connect();
   disposers.push(() => engine.disconnect());
   const increment = () =>

@@ -87,7 +87,7 @@ describe("syncStateTree", () => {
 
     const engine = syncStateTree(store, { backend });
 
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(backend.read()).toEqual({ todos: [], filter: "all" });
 
     store.add("1", "Milk");
@@ -116,12 +116,12 @@ describe("syncStateTree", () => {
     const engine = syncStateTree(store, { backend, connect: "manual" });
     store.setFilter("done");
 
-    expect(engine.isConnected()).toBe(false);
+    expect(engine.getStatus().connected).toBe(false);
     expect(getSnapshot(store).todos).toEqual([]);
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
 
     engine.connect();
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(backend.read()).toEqual({ todos: [milk], filter: "done" });
   });
 
@@ -134,7 +134,7 @@ describe("syncStateTree", () => {
     store.add("1", "Milk");
     backend.receive({ todos: [], filter: "done" });
 
-    expect(engine.isConnected()).toBe(false);
+    expect(engine.getStatus().connected).toBe(false);
     expect(backend.read()).toEqual({ todos: [], filter: "done" });
     expect(getSnapshot(store)).toEqual({ todos: [milk], filter: "all" });
 
@@ -174,7 +174,7 @@ describe("syncStateTree", () => {
 
       destroy(store);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       backend.receive({ todos: [milk], filter: "done" });
       expect(getSnapshot(store)).toEqual({ todos: [], filter: "all" });
       expect(warn).not.toHaveBeenCalled();
@@ -200,7 +200,7 @@ describe("syncStateTree", () => {
       engine.connect();
       destroy(store);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
 
     it("is safe after disconnect(), and disconnect() is safe after it", () => {
@@ -224,7 +224,7 @@ describe("syncStateTree", () => {
       addDisposer(store, engine.disconnect);
       destroy(store);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(isAlive(store)).toBe(false);
     });
 
@@ -249,7 +249,7 @@ describe("syncStateTree", () => {
 
           expect(() => engine.connect()).toThrow(/destroyed/);
 
-          expect(engine.isConnected()).toBe(false);
+          expect(engine.getStatus().connected).toBe(false);
           expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
         });
 
@@ -276,7 +276,7 @@ describe("syncStateTree", () => {
         connect: "manual",
       });
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(() => engine.connect()).toThrow(/destroyed/);
     });
 
@@ -292,7 +292,7 @@ describe("syncStateTree", () => {
 
       destroy(store);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(consoleError).toHaveBeenCalledOnce();
     });
 
@@ -355,7 +355,7 @@ describe("syncStateTree", () => {
         destroy(store);
 
         expect(isAlive(store)).toBe(false);
-        expect(engine.isConnected()).toBe(false);
+        expect(engine.getStatus().connected).toBe(false);
         expect(earlierDisposer).toHaveBeenCalledOnce();
       });
 
@@ -455,7 +455,7 @@ describe("syncStateTree", () => {
 
       destroy(workspace);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       backend.receive({ count: 5 });
       expect(getSnapshot(counter)).toEqual({ count: 1 });
       expect(warn).not.toHaveBeenCalled();
@@ -469,8 +469,8 @@ describe("syncStateTree", () => {
 
       workspace.remove();
 
-      expect(engine.isConnected()).toBe(false);
-      expect(parent.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(false);
+      expect(parent.getStatus().connected).toBe(true);
       expect(parentBackend.read()).toEqual({ name: "" });
     });
 
@@ -481,7 +481,7 @@ describe("syncStateTree", () => {
 
       workspace.replace();
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
       expect(backend.read()).toEqual({ count: 1 });
     });
 
@@ -493,7 +493,7 @@ describe("syncStateTree", () => {
       applySnapshot(workspace, { counter: { count: 5 }, name: "" });
 
       expect(isAlive(counter)).toBe(true);
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(backend.read()).toEqual({ count: 5 });
     });
 
@@ -529,7 +529,7 @@ describe("syncStateTree", () => {
 
       workspace.take();
 
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(isAlive(counter)).toBe(true);
 
       counter.increment();
@@ -559,7 +559,7 @@ describe("syncStateTree", () => {
       workspace.take();
       destroy(workspace);
 
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
     });
 
     it("stops when the detached node is destroyed", () => {
@@ -569,7 +569,7 @@ describe("syncStateTree", () => {
       workspace.take();
       destroy(counter);
 
-      expect(engine.isConnected()).toBe(false);
+      expect(engine.getStatus().connected).toBe(false);
     });
   });
 
@@ -689,66 +689,17 @@ describe("syncStateTree", () => {
       ).toThrow();
     });
   });
-});
-
-describe("syncStateTree with ready", () => {
-  const settled = (): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve));
-
-  it("waits for ready before it writes, adopting what arrives meanwhile", async () => {
-    const backend = createMemoryBackend();
-    const node = TodoStore.create();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-
-    const engine = syncStateTree(node, { backend, ready });
-
-    expect(engine.isConnected()).toBe(true);
-    expect(engine.isReady()).toBe(false);
-    expect(backend.read()).toEqual({});
-
-    backend.receive({ filter: "done" });
-    expect(node.filter).toBe("done");
-
-    resolve();
-    await settled();
-    expect(engine.isReady()).toBe(true);
-    expect(backend.read()).toEqual({ todos: [], filter: "done" });
-  });
 
   it("forwards the engine's status, which shows the node's destroy", () => {
     const node = TodoStore.create();
     const engine = syncStateTree(node, { backend: createMemoryBackend() });
     const listener = vi.fn();
-    engine.subscribeStatus(listener);
-    expect(engine.getStatus()).toEqual({
-      connected: true,
-      ready: true,
-      failure: null,
-    });
+    engine.subscribe(listener);
+    expect(engine.getStatus()).toEqual({ connected: true, failure: null });
 
     destroy(node);
 
     expect(engine.getStatus().connected).toBe(false);
-    expect(listener).toHaveBeenCalledTimes(1);
-  });
-
-  it("does nothing when ready settles after the node is destroyed", async () => {
-    const backend = createMemoryBackend();
-    const node = TodoStore.create();
-    let resolve!: () => void;
-    const ready = new Promise<void>((r) => {
-      resolve = r;
-    });
-    const engine = syncStateTree(node, { backend, ready });
-
-    destroy(node);
-    resolve();
-    await settled();
-
-    expect(engine.isConnected()).toBe(false);
-    expect(backend.read()).toEqual({});
+    expect(listener).toHaveBeenCalledExactlyOnceWith("disconnect");
   });
 });

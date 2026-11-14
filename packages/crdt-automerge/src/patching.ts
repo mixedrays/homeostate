@@ -16,10 +16,10 @@ export const isRecord = (value: unknown): value is Container =>
 export const toAutomerge = (
   value: unknown,
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): unknown => {
   if (typeof value === "string")
-    return text(path) ? value : new A.ImmutableString(value);
+    return text?.(path) === true ? value : new A.ImmutableString(value);
   if (Array.isArray(value))
     return value.map((item, i) => toAutomerge(item, [...path, i], text));
   if (isRecord(value)) {
@@ -36,12 +36,12 @@ export const toAutomerge = (
  * converted by `toAutomerge`. Text reads as a string and is edited character by character
  * through its object ID, found from its path; an `ImmutableString`, held by a peer
  * with another policy or an older version, is a plain value and is replaced whole. Paths given to
- * the policy start below `root`.
+ * the policy start below `root`; without one, no string is text.
  */
 export const createAutomergeOps = (
   doc: Container,
   root: string,
-  text: TextPolicy,
+  text?: TextPolicy,
 ): ApplyOps => ({
   kind: (value) => {
     if (typeof value === "string") return "text";

@@ -1,11 +1,3 @@
-/**
- * Core types for the state-manager and CRDT-backend agnostic sync engine.
- * These interfaces let any store be kept in sync through any replicated backend.
- */
-
-/**
- * Unsubscribe function returned by subscribe
- */
 export type Unsubscribe = () => void;
 
 /**
@@ -33,7 +25,7 @@ export type JsonObjectInput = {
  * Implement this interface to add support for any state manager (Zustand, Redux, MobX, etc.)
  *
  * State must be plain JSON: objects, arrays, strings, numbers, booleans, and null.
- * Functions are dropped by the default filter; other values such as Date, Map, or Set
+ * A top-level function, such as an action, stays local; other values such as Date, Map, or Set
  * are neither diffed nor synced.
  */
 export interface StoreAdapter<S extends object> {
@@ -48,61 +40,49 @@ export interface StoreAdapter<S extends object> {
   /**
    * Replace the store state. Called only for changes coming from the backend; the
    * engine ignores store notifications raised while it runs, so the adapter needs no
-   * echo suppression of its own. When it returns, the engine writes the store's synced
-   * state once if it differs from what was applied, such as a key the store normalised or
-   * derived meanwhile, so the backend ends up equal to it. A key the store was given but
-   * holds neither before nor after the call, such as one a class does not declare, is taken as
-   * one it cannot hold and stays in the backend; one it held before and drops, it removed, and
-   * the engine deletes it from the backend. If `getState()` then returns the
-   * same object as before the call, the store is taken to have ignored the change, and nothing
-   * is written.
+   * echo suppression of its own. When it returns, the engine compares the store's synced state
+   * with what it applied. If they differ, for example because the store normalised a key or
+   * derived one during the call, the engine writes the store's synced state once, so the backend
+   * ends up equal to it. If the store was given a key that it holds neither before nor after the
+   * call, such as a key its class does not declare, the engine takes it as a key the store cannot
+   * hold and leaves it in the backend. If the store held a key before the call and dropped it,
+   * the store removed it, and the engine deletes it from the backend. If `getState()` returns the
+   * same object as before the call, the engine concludes that the store ignored the change, and
+   * writes nothing.
    *
-   * What the store changes meanwhile must not change again when the same state is applied a
-   * second time, and every peer must agree on it. A store that breaks this, such as one that
-   * stamps the time on every call, or two peers that enforce contradicting rules, would make
-   * the peers re-write each other's changes forever. The engine compares what the store changes
-   * by path: the record keys from the root, where a change inside an array or a string is a
-   * change of that array or string. An apply contradicts a path when the store changes it, and
-   * the remote state holds another value there than the store held after the apply before; if
-   * the store also changes some path that is not contradicted, such as a key it derives from an
-   * edit, the apply contradicts none. Once 6 applies in a row contradict a path, the engine stops
-   * writing it back, and the store keeps a value there that differs from the backend's. An apply
-   * that changes the path without contradicting it, one in which the store keeps another peer's
-   * new value there, or a written local change starts the count again, and an apply that changes
-   * neither side of the path leaves it as it is. A stopped path is written back again as soon as
-   * an apply no longer contradicts it. The engine reports a stop once per set of top-level keys,
-   * as a `WriteLoopError` to `onError`, or without it with a warning in development.
+   * What the store changes during the call must not change again when the same state is applied
+   * a second time, and every peer must agree on it. Otherwise the engine stops writing back the
+   * paths the store keeps changing and reports a `WriteLoopError`; see
+   * {@link https://homeostate.pages.dev/docs/core/sync-engine#write-loops | Write loops}.
    */
   setState: (state: S) => void;
 
-  /**
-   * Subscribe to store changes that should be written to the backend.
-   * @returns Unsubscribe function
-   */
+  /** Subscribe to store changes that should be written to the backend. */
   subscribe: (onStoreChange: () => void) => Unsubscribe;
 
   /**
    * Set to `true` for a store that notifies once per property set rather than once per change,
-   * such as a Valtio proxy, on which one array method like `splice`, `unshift`, `shift`, `sort` or
-   * `reverse` notifies several times, with an intermediate state each time. Written one by one,
-   * those states make every shifted item look replaced, so a peer's concurrent edit lands on the
-   * wrong item and its concurrent insert duplicates items.
+   * such as a Valtio proxy. On such a store, one array method like `splice`, `unshift`, `shift`,
+   * `sort` or `reverse` notifies several times, each time with an intermediate state. Written one
+   * by one, those states make every shifted item look replaced, so a peer's concurrent edit lands
+   * on the wrong item and its concurrent insert duplicates items.
    *
-   * The engine then batches its writes of local changes into one per microtask: the first
-   * notification queues one write, later ones add nothing until it runs, and it writes the store's
-   * synced state as it is then, with one `'local'` sync event. `subscribe` must still notify
-   * synchronously, so that the engine ignores the echoes of `setState` as it does without it. A
-   * remote change applied while the write waits is merged with the waiting local change, as a
-   * local change is merged into a pending apply (see `SyncEngineConfig.schedule`), and the merged
-   * state is written at once, in place of the queued write. `disconnect()` writes a waiting local
-   * change before it unsubscribes. Without it, every notification is written synchronously. The
-   * engine reads it once, when it is created.
+   * With the flag, the engine batches its writes of local changes into one write per microtask.
+   * The first notification queues a write, and later notifications add nothing until it runs.
+   * The queued write writes the store's synced state as it is when it runs, and sends one
+   * `'local'` sync event. `subscribe` must still notify synchronously, so that the engine ignores
+   * the echoes of `setState` as it does without batching. A remote change applied while the write
+   * waits is merged with the waiting local change, as a local change is merged into a pending
+   * apply (see `SyncEngineConfig.schedule`), and the merged state is written at once, in place of
+   * the queued write. `disconnect()` writes a waiting local change before it unsubscribes.
+   * Without the flag, every notification is written synchronously. The engine reads the flag
+   * once, when the engine is created.
    *
    * A queued write that throws goes to `onError`. Without `onError` it is thrown from the
    * microtask, where nothing catches it, so the runtime reports it as an uncaught error.
    *
-   * An adapter that wraps one with this flag must keep it, as `scopeAdapter` does. Otherwise the
-   * engine writes every intermediate state again.
+   * An adapter that wraps an adapter with this flag must keep the flag, as `scopeAdapter` does.
+   * Otherwise the engine writes every intermediate state again.
    */
   batchWrites?: boolean;
 }
@@ -129,13 +109,12 @@ export interface CrdtBackend {
    * The sync engine passes the whole subtree as `next`: the store's synced keys, and every
    * other key as the backend holds it, so that a write deletes only what the store removed.
    *
-   * `previous`, when given, is what the synced subtree holds now, as `JSON.stringify` would
-   * store it: like `next`, it may hold `undefined` and functions where the subtree holds nothing,
-   * and `NaN` or infinite numbers where it holds `null`.
-   * The sync engine passes the whole state it last wrote or read, once `revision` or a read
-   * shows that the backend still holds it, so a backend can diff against it with `json: true`
-   * instead of reading its document, and unchanged subtrees of `next` match it by identity.
-   * A backend may ignore it.
+   * `previous`, when given, is what the synced subtree holds now, not yet turned into JSON: like
+   * `next`, it may hold values that `toJsonValue` leaves out or turns into `null`. The sync engine
+   * passes the whole state it last wrote or read, when `revision` or a read shows that the backend
+   * still holds that state. A backend can then diff `next` against `previous` with `json: true`
+   * instead of reading its document, and the unchanged subtrees of `next` match `previous` by
+   * identity. A backend may ignore `previous`.
    */
   write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
 
@@ -145,124 +124,75 @@ export interface CrdtBackend {
    * without the subtree changing, and is `undefined` while the backend cannot tell, as inside a
    * transaction. Must be cheap: the engine calls it around every write.
    *
-   * Before writing a local change, the sync engine reads the backend unless the revision is the
-   * one it recorded with what it last wrote or read, so that a remote change another listener
-   * heard first is applied before the local change instead of being written over. Without
-   * `revision`, the engine reads the backend before every local change.
+   * Before writing a local change, the sync engine reads the backend unless the revision equals
+   * the one it recorded when it last wrote or read the backend. So a remote change that another
+   * listener heard first is applied before the local change, instead of being written over.
    */
-  revision?: () => unknown;
+  revision: () => unknown;
 
-  /**
-   * Notify about changes that did not come through this backend's own `write`.
-   * @returns Unsubscribe function
-   */
+  /** Notify about changes that did not come through this backend's own `write`. */
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
 }
-
-/**
- * Whether `connect()` may write the store's synced keys that the backend does not hold.
- * Reconciliation is per key over the filtered view: a key the backend holds always wins
- * over the store's value, a key only the store holds always stays in the store.
- * - `'if-empty'`: seed the keys the backend lacks, in one write (default)
- * - `'never'`: leave seeding to the caller; the keys are written on the next local change
- *
- * With `SyncEngineConfig.ready`, seeding happens once `ready` resolves, and a local change made
- * during the wait counts as the next local change for `'never'`.
- */
-export type SeedStrategy = "if-empty" | "never";
 
 /**
  * Configuration options for the sync engine, typed by the store's state `S`, which
  * `createSyncEngine` takes from the store adapter. Without `S`, as `SyncEngineConfig`, a key is
  * any string and a value `unknown`.
  *
- * A key is synced, in both directions, when `filter` keeps it and, by name, `keys` lists it or
- * `omit` does not name it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is
- * synced. `filter` judges each side's value: the store's value decides what this peer writes,
- * and a backend value is read into the store only when `filter` keeps it and, if the store holds
- * the key, the store's value too. So a remote value never replaces a key the store keeps local,
- * such as an action, and a remote value `filter` rejects never replaces a synced one: the store
- * keeps its value, and writes it with its next write. A key the store does not hold, or holds as
- * `undefined`, is judged by the backend's value alone.
+ * A key is synced, in both directions, when `keys` lists it or `omit` does not name it, and
+ * `filter` keeps it. Give `keys` or `omit`, not both; at runtime, `keys` less `omit` is synced.
  *
  * A peer deletes a key from the backend only when its store removes a key it syncs: drops it,
- * or gives it a value `filter` rejects. A key the backend holds that the store does not sync,
- * or cannot hold, stays as it is, so peers on different app versions can share a room.
+ * or makes it a function. A key the backend holds that the store does not sync, or cannot hold,
+ * stays as it is, so peers on different app versions can share a room.
  */
 export type SyncEngineConfig<S extends object = JsonObject> = {
   /**
-   * Decides per top-level key whether it is synced: return true to sync it. Defaults to
-   * `defaultSyncFilter`, which excludes functions; a custom filter replaces it. It is called only
-   * for the keys `keys` and `omit` leave. Its types follow `S`, but it is also called with the
-   * keys and values of a backend holding keys that `S` does not declare, such as those an older
-   * or newer peer writes, and with the backend's value of a key the store holds too.
+   * Decides by name whether a top-level key is synced: return true to sync it. Without it, every
+   * key that `keys` and `omit` allow is synced. It is called only for those keys, including keys
+   * the backend holds that `S` does not declare, such as keys an older or newer peer writes.
+   *
+   * A key the store holds as a function, such as an action, is never synced, whatever `filter`
+   * returns: the engine does not write it, and does not read the backend's value into it, so the
+   * backend keeps its value. Once the store makes a synced key a function, its next write deletes the key from the
+   * backend; once the store makes it a JSON value again, the key is synced again.
    */
-  filter?: (key: keyof S & string, value: S[keyof S]) => boolean;
-  /** Seeding strategy used by `connect()`; defaults to `'if-empty'` */
-  seed?: SeedStrategy;
+  filter?: (key: keyof S & string) => boolean;
   /**
-   * Coalesces remote changes: the first one hands `schedule` a `flush` to call later, such as
-   * `(flush) => queueMicrotask(flush)`, and every remote change before that call is applied
-   * with one read of the backend and one `setState`. Without it, each remote change is applied
-   * synchronously, so `getState()` sees it at once.
+   * Whether `connect()` seeds the backend: writes, in one write, each synced key the store holds
+   * and the backend lacks, from the store's value. Defaults to `true`. With `false`, nothing is
+   * seeded, and those keys are written with the next local change. Reconciliation is per key
+   * either way: a key the backend holds wins over the store's value, and a key only the store
+   * holds stays in the store.
+   */
+  seed?: boolean;
+  /**
+   * Coalesces remote changes. The first remote change hands `schedule` a `flush` to call later,
+   * such as `(flush) => queueMicrotask(flush)`, and every remote change before that call is
+   * applied with one read of the backend and one `setState`. Without it, each remote change is
+   * applied synchronously, so `getState()` sees it at once.
    *
-   * Local changes are still written synchronously. One made while an apply is pending runs that
-   * apply first, merged with the local change against what the backend held before the pending
-   * changes, and writes the result, so neither side's change is lost. Records merge key by key
-   * and arrays item by item, matched as `getChanges` matches them; items both sides inserted at
-   * one place keep the remote ones first. Where both sides changed a value differently, the
-   * local value wins, and a string is one value, never merged as text. A record or array the
-   * store changed inside and the remote side deleted stays deleted, while a value the store
-   * replaced whole is kept. After a backend read or write threw, nothing tells which side changed
-   * what, so the remote changes replace what the local change did to synced keys.
+   * Local changes are still written synchronously. A local change made while an apply is pending
+   * runs that apply first: `mergeConcurrent` merges the local change into it, against what the
+   * backend held before the pending changes, and the engine writes the result, so neither side's
+   * change is lost; see
+   * {@link https://homeostate.pages.dev/docs/core/sync-engine#coalescing-remote-changes | Coalescing remote changes}.
+   * After a backend read or write threw, nothing tells which side changed what, so the remote
+   * changes replace what the local change did to synced keys.
    *
-   * `disconnect()` runs a pending apply too, and so does the end of a wait for `ready`, unless
-   * that wait failed.
+   * `disconnect()` runs a pending apply too.
    */
   schedule?: (flush: () => void) => void;
   /**
-   * Called with what the store adapter or the backend threw once the engine is connected, while
-   * it applies a remote change or writes a local one, instead of letting the error reach the
-   * other side's notifier. Without it, the error propagates to whoever triggered the work.
-   * `connect()` always throws what it runs into itself. With `ready`, a rejection and a failure
-   * while reconciling after it come later, so they go here, and without `onError` they surface as
-   * unhandled rejections. See `SyncErrorSource`.
+   * Called with what the store adapter or the backend threw while the connected engine applies a
+   * remote change or writes a local one, so that the error does not reach the other side's
+   * notifier. Without it, the error propagates to whoever triggered the work. `connect()` always
+   * throws the errors it runs into. See `SyncErrorSource`.
    */
   onError?: (error: unknown, source: SyncErrorSource) => void;
-  /**
-   * What the engine waits for before it writes to the backend: a promise, or a function
-   * returning one that every `connect()` calls. Resolve it once the document holds what the
-   * app wants to adopt, such as when `whenLoaded` resolves or a provider has synced, so that a
-   * peer joining a populated room does not compete with it.
-   *
-   * `connect()` adopts what the backend holds, keeps the keys only the store holds, and
-   * subscribes to both sides. While waiting, remote changes are applied the same way, except that
-   * a key the backend held and no longer holds is removed from the store. Nothing is written: no
-   * seed, no local change, and nothing the store changes during an apply.
-   *
-   * Once `ready` resolves, the engine runs a pending apply, then reconciles per key as `connect()`
-   * does without it. Local changes made meanwhile are provisional: a key the backend holds keeps
-   * the backend's value, and a key it lacks is written then, also with `seed: 'never'`.
-   *
-   * A rejected `ready`, or a failure while reconciling, disconnects the engine: it forgoes a
-   * pending apply, writes nothing more, hears neither side, and reports the error to `onError`. A
-   * later `connect()` tries
-   * again, which only a function can make succeed: a promise stays rejected. A `ready` that never
-   * settles keeps the engine waiting until `disconnect()`.
-   *
-   * Every `connect()` reconciles after waiting, at least a microtask later. A promise made ahead
-   * is already settled on a reconnect, so that wait ends at once; a function can wait anew, and
-   * local changes are then provisional again meanwhile. A promise rejected before `connect()`
-   * is not an unhandled rejection: the engine takes it up when it connects. A `connect()` that
-   * throws abandons its wait, and what the promise does afterwards is ignored.
-   */
-  ready?: PromiseLike<unknown> | (() => PromiseLike<unknown>);
 } & (
   | {
-      /**
-       * The only keys to sync, if `filter` keeps them. A key the backend holds that it does not
-       * list is ignored, like one the store holds: it stays in the backend as it is.
-       */
+      /** The only keys to sync, if `filter` keeps them. */
       keys: readonly (keyof S & string)[];
       omit?: never;
     }
@@ -270,28 +200,38 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
       keys?: never;
       /**
        * Keys to keep local; every other key `filter` keeps is synced, including one the
-       * backend holds that `S` does not declare. One it names that the backend holds, such as
-       * a key another peer syncs, stays in the backend as it is.
+       * backend holds that `S` does not declare.
        */
       omit?: readonly (keyof S & string)[];
     }
 );
 
 /**
+ * The options `createSyncEngine` takes: the backend, the store adapter and the sync engine's
+ * config. `S` is the store's state, which `createSyncEngine` takes from `adapter`.
+ */
+export type SyncEngineOptions<S extends object = JsonObject> =
+  SyncEngineConfig<S> & {
+    backend: CrdtBackend;
+    adapter: StoreAdapter<S>;
+  };
+
+/**
  * The options every setup helper takes, typed by the store's state `S`: the backend, the
  * connect mode and the sync engine's config. A setup helper is the one call in a `store-*`
  * package, such as the Zustand `homeostate` middleware, that creates the store adapter and the
- * sync engine for one store; its options add their own to these.
+ * sync engine for one store; each helper adds options of its own to these.
  */
 export type SetupOptions<S extends object = JsonObject> =
   SyncEngineConfig<S> & {
-    /** The CRDT backend the store syncs with */
     backend: CrdtBackend;
     /**
      * Who connects the engine:
      * - `'auto'`: the helper, once the store is ready, such as when it is created (default)
      * - `'manual'`: the app, by calling `connect()` on the engine the helper exposes; until then
-     *   the engine reads and writes neither the store nor the backend
+     *   the engine reads and writes neither the store nor the backend. Connect once the document
+     *   holds what the app wants to adopt, such as after `await persistence.whenLoaded`, so that
+     *   the store does not compete with a populated room
      */
     connect?: "auto" | "manual";
   };
@@ -301,31 +241,29 @@ export type SetupOptions<S extends object = JsonObject> =
  * - `'store'`: the store adapter's `getState` or `setState`, or a store that keeps changing
  *   what it is given (see `WriteLoopError`)
  * - `'backend'`: the backend's `read` or `write`
- * - `'ready'`: the `ready` promise, which rejected with this error; the engine has disconnected
  */
-export type SyncErrorSource = "store" | "backend" | "ready";
+export type SyncErrorSource = "store" | "backend";
 
 /**
  * What the sync engine has just handled, as `SyncEngine.subscribe` reports it:
- * - `'local'`: a store notification while connected, once its write to the backend returned,
- *   even when it changed only local keys. An echo raised while a remote change is applied sends
- *   none, and neither does a local change while waiting for `ready`, which writes nothing.
- * - `'remote'`: an apply of the backend's state, once `setState` and the write of what the store
- *   changed meanwhile returned; once per flush with `schedule`, even when the store is unchanged.
- *   A local change that first runs a pending apply sends `'remote'` instead of `'local'`, once
- *   the write of the merged state returned.
+ * - `'local'`: a store notification while connected, sent once its write to the backend has
+ *   returned. It is sent even when the notification changed only local keys, so that nothing was
+ *   written. An echo raised while a remote change is applied sends none.
+ * - `'remote'`: an apply of the backend's state, sent once `setState` has returned and the engine
+ *   has written what the store changed during it. With `schedule`, it is sent once per flush,
+ *   even when the store is unchanged. A local change that first runs a pending apply sends
+ *   `'remote'` instead of `'local'`, once the merged state is written.
  * - `'connect'`: a `connect()` that connected, once reconciliation and both subscriptions are
  *   done. It covers seeding and the values adopted from the backend, which send nothing else.
- *   With `ready` it comes before the wait, so it covers only the values adopted, and `'ready'`
- *   covers the rest.
  * - `'disconnect'`: a `disconnect()` that disconnected, once both subscriptions are removed. A
  *   pending apply it runs sends its `'remote'` first, and `'disconnect'` follows even when that
- *   apply throws, since the engine is disconnected all the same. A wait for `ready` that fails
- *   sends it too, before `onError` runs.
- * - `'ready'`: the end of a wait for `ready`, once reconciliation is done. It covers seeding and
- *   the values adopted, and is never sent without the `ready` option.
+ *   apply throws, since the engine is disconnected all the same.
+ * - `'error'`: a failure the engine recorded, which `getStatus().failure` holds; see
+ *   `SyncStatus.failure`. Work that throws sends it alone, before `onError` runs or the error
+ *   propagates. A write loop sends it after the `'remote'` of the apply that stopped it, unless
+ *   the loop is the status's failure already.
  */
-export type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
+export type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "error";
 
 /**
  * What went wrong in the sync engine, as `SyncStatus.failure` holds it. It is kept with or without
@@ -333,11 +271,12 @@ export type SyncEvent = "local" | "remote" | "connect" | "disconnect" | "ready";
  * error still propagates.
  */
 export interface SyncFailure {
-  /** What was thrown or rejected. It may be anything, `undefined` included. */
+  /** What was thrown. It may be anything, `undefined` included. */
   readonly error: unknown;
   /**
-   * What the error came from, as `onError` is told. Missing for what comes from none of those
-   * sources, such as an error thrown by `filter`, `schedule` or `onError` itself.
+   * What the error came from, as `onError` is told. Missing when the error came from neither the
+   * store adapter nor the backend, such as an error thrown by `filter`, `schedule` or `onError`
+   * itself.
    */
   readonly source?: SyncErrorSource;
 }
@@ -349,89 +288,51 @@ export interface SyncFailure {
  */
 export interface SyncStatus {
   /**
-   * What `isConnected()` returns: the engine is subscribed to the store and the backend, also
-   * while it waits for `ready`.
+   * Whether the engine is connected: done reconciling and subscribed to the store and the backend,
+   * so that a local change is written. It says nothing about the room: a peer that has not loaded
+   * or received the room's state yet is connected all the same.
    */
   readonly connected: boolean;
   /**
-   * What `isReady()` returns: a local change is written. Without the `ready` option it equals
-   * `connected`, so it says nothing about the room either.
-   */
-  readonly ready: boolean;
-  /**
-   * The failure the engine has not recovered from, or `null`. It is set by:
-   * - a failed write, read or `setState` while the engine syncs. The engine stays connected.
-   * - a `connect()` that throws, which leaves it disconnected.
-   * - a failed wait for `ready`: a rejection, or a failure while reconciling after it, which
-   *   disconnects it.
-   * - a `WriteLoopError`, in every build and with or without `onError`. The engine stays connected.
-   *   Unlike `onError`, the status shows a loop each time it comes back.
-   *
-   * A later `'local'`, `'remote'`, `'connect'` or `'ready'` sync event sent while connected clears
-   * it, since the store and the backend agree again, unless the apply that sent it stopped a write
-   * loop. `disconnect()` keeps it, to say why the engine stopped.
-   *
-   * It holds only what the engine has seen. A provider's errors never reach it, and it cannot
-   * clear while the store sends no notification.
+   * The failure the engine has not recovered from, or `null`. A failure while the engine syncs, a
+   * `connect()` that throws, and a `WriteLoopError` set it, each with an `'error'` sync event. A
+   * later `'local'`, `'remote'` or `'connect'` event sent while connected clears it, unless the
+   * apply that sent it stopped a write loop; `disconnect()` keeps it. It holds only what the
+   * engine sees, never a provider's errors; see
+   * {@link https://homeostate.pages.dev/docs/core/sync-engine#what-sets-and-clears-a-failure | What sets and clears a failure}.
    */
   readonly failure: SyncFailure | null;
 }
 
-/**
- * The sync engine interface - manages bidirectional sync between a store and a backend
- */
+/** Keeps a store and a backend in sync, both ways, while connected; see `createSyncEngine`. */
 export interface SyncEngine {
-  /** Start synchronization */
+  /** Reconciles the store with the backend, then syncs both ways; does nothing while connected. */
   connect: () => void;
-  /** Stop synchronization and cleanup */
+  /** Stops syncing after a pending apply or queued write runs; does nothing while disconnected. */
   disconnect: () => void;
-  /** Check if engine is connected, which includes waiting for `ready`; see `isReady` */
-  isConnected: () => boolean;
   /**
-   * Whether the engine is connected and done reconciling, so that a local change is written. With
-   * the `ready` option it is false until `ready` has resolved and reconciliation is done, and
-   * false again on every reconnect until the same is true. Without the option it equals
-   * `isConnected()`. Whichever the options, it is false while disconnected.
-   */
-  isReady: () => boolean;
-  /**
-   * The engine's status, which agrees with `isConnected()` and `isReady()` whenever it is read. It
-   * returns one object until a field changes, frozen, and the same object whenever the fields are
-   * those of an earlier status without a failure, so comparing by identity tells whether it
-   * changed. See `SyncStatus`.
+   * The engine's status: whether it is connected, and what failed. It is up to date whenever it
+   * is read, including from a store listener or a sync event listener. The returned object is
+   * frozen, and `getStatus` returns the same object until a field changes. A status without a
+   * failure is always the same object for the same `connected` value, so comparing by identity
+   * tells whether the status changed. Every change comes with a sync event, whose listeners
+   * already see the new status, so `subscribe` tells when to read it again. See `SyncStatus`.
    */
   getStatus: () => SyncStatus;
   /**
-   * Calls `listener` after every change of `getStatus()`, until unsubscribed and across
-   * reconnects, and after the listeners of the sync event that came with the change. A local or
-   * remote change that leaves the status as it was calls nothing. Unlike `subscribe`, it also
-   * hears of a failure, which sends no sync event. A listener that changes
-   * the status tells every listener of the new status, and those it was to tell of the old one
-   * are not called. Each listener runs on its own: what it throws goes to `console.error`, and the
-   * other listeners still run.
-   */
-  subscribeStatus: (listener: () => void) => Unsubscribe;
-  /**
    * The store's synced keys with the values the store holds, connected or not: a new object
-   * holding the keys `filter`, `keys` and `omit` keep, without `__proto__`. Its values are the
-   * store's own, by identity, and are not turned into JSON.
+   * holding the keys `keys`, `omit` and `filter` keep, without `__proto__` and functions. Its
+   * values are the store's own, by identity, and are not turned into JSON.
    */
   getSyncedState: () => Record<string, unknown>;
   /**
    * Calls `listener` after every sync event until unsubscribed, across reconnects. Events are
-   * sent synchronously once the work is done, and not at all when it throws or when `connect()`
-   * or `disconnect()` changes nothing. Each listener runs on its own: what it throws goes to
-   * `console.error`, and the other listeners still run.
+   * sent synchronously once the work is done; see `SyncEvent` for when each one is sent. Each
+   * listener runs on its own: what it throws goes to `console.error`, and the other listeners
+   * still run.
    */
   subscribe: (listener: (event: SyncEvent) => void) => Unsubscribe;
 }
-
-/**
- * Default filter that excludes functions from sync
- */
-export const defaultSyncFilter = (_key: string, value: unknown): boolean => {
-  return typeof value !== "function";
-};
 
 /**
  * A CRDT document seen as binary updates, which is what persistence stores. `crdt-*`
@@ -453,8 +354,7 @@ export interface PersistableDoc {
   /**
    * Report every change to the document, local or from a peer, as an update `apply`
    * accepts. Changes made by `apply` itself are not reported, but a change made in response
-   * while it runs, such as a sync engine's write, is.
-   * @returns Unsubscribe function
+   * while `apply` runs, such as a sync engine's write, is reported.
    */
   subscribe: (onUpdate: (update: Uint8Array) => void) => Unsubscribe;
 }
@@ -480,7 +380,7 @@ export interface PersistenceAdapter {
 
   /**
    * In one atomic step, remove the updates under `key` up to and including `version`, and
-   * store `snapshot`. Updates appended after that `load` must be kept.
+   * store `snapshot`. Updates appended after the `load` that returned `version` must be kept.
    */
   compact: (
     key: string,
@@ -492,13 +392,13 @@ export interface PersistenceAdapter {
   clear: (key: string) => Promise<void>;
 }
 
-/** Configuration options for `createPersistence` */
 export interface PersistenceConfig {
   /** Name the document is stored under, such as its room name. */
   key: string;
   /**
    * Number of appended updates after which the stored log is merged into one snapshot;
-   * defaults to 100. `Infinity` only compacts on load and to repair a failed write.
+   * defaults to 100. With `Infinity`, the log is compacted only on load and to repair a failed
+   * write.
    */
   compactAfter?: number;
   /**
@@ -524,9 +424,9 @@ export interface PersistenceStats {
  * - `'empty'`: nothing is stored under the key, as on a first visit. The document may still
  *   hold state of its own, which the initial snapshot then stores.
  * - `'loaded'`: every stored update was applied.
- * - `'partial'`: the log was read, but at least one stored update could not be applied, maybe
- *   none could. `errors` holds what `apply` threw for each, in log order. The document holds
- *   the others, and the log is kept for recovery.
+ * - `'partial'`: the log was read, but at least one stored update could not be applied, and
+ *   possibly none could. `errors` holds what `apply` threw for each, in log order. The document
+ *   holds the updates that could be applied, and the log is kept for recovery.
  * - `'failed'`: storage could not be read, and `error` is what the adapter's `load` rejected
  *   with. The document holds only what it held before.
  *
@@ -553,19 +453,20 @@ export interface Persistence {
   whenLoaded: Promise<PersistenceLoadResult>;
   /**
    * Resolves once the work queued so far is done and every update reported so far is stored.
-   * A failed write not repaired since, also one that failed before this call, makes it compact
-   * once first, to store the whole document again. When that fails too, which goes to
-   * `onError`, it rejects with the error of the earliest unrepaired write: an append, the
-   * initial load or the initial snapshot. Any later snapshot, or `clear()`, repairs it too.
-   * Updates reported after the call need another one.
+   * If a write failed and has not been repaired since, even one that failed before this call,
+   * `flush` first compacts once, to store the whole document again. If that compaction fails
+   * too, its error goes to `onError`, and `flush` rejects with the error of the earliest
+   * unrepaired write: an append, the initial load or the initial snapshot. Any later snapshot,
+   * or `clear()`, also repairs a failed write. Updates reported after the call need another
+   * `flush()`.
    */
   flush: () => Promise<void>;
   /**
-   * Merge the stored log into one snapshot now, as every `compactAfter` appends do. Resolves
-   * once it is written, and rejects with the storage error when it fails; does nothing once
-   * storing has stopped. Keeps the log, after `onError`, when one of its updates cannot be
-   * applied, and still resolves; it appends the snapshot then while a failed write is
-   * unrepaired.
+   * Merge the stored log into one snapshot now, as happens after every `compactAfter` appends.
+   * Resolves once the snapshot is written, and rejects with the storage error when that fails.
+   * Does nothing once storing has stopped. When a stored update cannot be applied, its error goes
+   * to `onError`, the log is kept as it is, and the promise still resolves. If a failed write is
+   * unrepaired at that point, the snapshot is appended to the log instead.
    */
   compact: () => Promise<void>;
   /**
@@ -574,15 +475,15 @@ export interface Persistence {
    */
   stats: () => Promise<PersistenceStats>;
   /**
-   * Stop storing updates; stored data is kept. Settles once pending writes finish, as `flush()`
-   * does, after the same repair of a failed write; storing stops even when it rejects, and
-   * later calls, or `flush()`, repair nothing more.
+   * Stop storing updates; stored data is kept. Like `flush()`, it settles once pending writes
+   * finish, after the same repair of a failed write. Storing stops even when it rejects, and later
+   * calls to `destroy()` or `flush()` repair nothing more.
    */
   destroy: () => Promise<void>;
   /**
-   * Stop storing updates and remove the stored document, also a log holding updates that
-   * cannot be applied. Resolves once it is removed, even after earlier writes failed, and
-   * rejects with the storage error when it cannot be.
+   * Stop storing updates and remove the stored document, including a log that holds updates
+   * that cannot be applied. Resolves once the document is removed, even after earlier writes
+   * failed, and rejects with the storage error when it cannot be removed.
    */
   clear: () => Promise<void>;
 }

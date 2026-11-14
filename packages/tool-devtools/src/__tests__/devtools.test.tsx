@@ -49,7 +49,7 @@ beforeEach(() => {
     filter: "all",
   });
   backend = createMemoryBackend();
-  engine = createSyncEngine(backend, store.adapter);
+  engine = createSyncEngine({ backend, adapter: store.adapter });
   engine.connect();
   container = document.createElement("div");
   document.body.append(container);
@@ -619,12 +619,12 @@ describe("HomeostateDevtools", () => {
 
     const toggle = byLabel("Sync engine connected");
     await click(toggle);
-    expect(engine.isConnected()).toBe(false);
+    expect(engine.getStatus().connected).toBe(false);
     expect(shadow().textContent).toContain("Disconnected");
     expect(markState()).toBe("disconnected");
 
     await click(byLabel("Sync engine connected"));
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(markState()).toBe("connected");
   });
 
@@ -711,7 +711,7 @@ describe("HomeostateDevtools", () => {
       expect(network.getSnapshot().conditions.offline).toBe(false);
       expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("true");
       await click(statusToggle("Connected"));
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
         "true",
       );
@@ -784,7 +784,7 @@ describe("HomeostateDevtools", () => {
     expect(button().getAttribute("title")).toBe("Todos: disconnected");
 
     await click(statusToggle("Connected"));
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(button().getAttribute("title")).toBeNull();
   });
 

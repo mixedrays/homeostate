@@ -25,7 +25,10 @@ import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const doc = new Y.Doc();
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter);
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
+});
 engine.connect();
 ```
 
@@ -67,7 +70,7 @@ the backend's writes. Track the backend's origin instead:
 
 ```ts
 const backend = createYjsBackend(doc, "shared");
-createSyncEngine(backend, adapter).connect();
+createSyncEngine({ backend, adapter }).connect();
 const undoManager = new Y.UndoManager(backend.map, {
   trackedOrigins: new Set([backend.origin]),
 });
@@ -75,8 +78,7 @@ const undoManager = new Y.UndoManager(backend.map, {
 undoManager.undo();
 ```
 
-Create the undo manager after `connect()`, so seeding is not a step to undo. With `ready`,
-seeding comes later, so create it on the engine's `"ready"` event instead. It undoes only
+Create the undo manager after `connect()`, so seeding is not a step to undo. It undoes only
 this peer's writes; changes from other peers stay. An undo runs with the undo manager as its
 origin, so the backend reports it as a remote change and the store follows. One step covers
 the writes made within `captureTimeout`, 500 ms by default; `undoManager.stopCapturing()`
