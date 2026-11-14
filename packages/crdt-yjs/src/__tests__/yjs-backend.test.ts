@@ -499,7 +499,7 @@ describe("an update that waits for an earlier one", () => {
   };
 
   it("delays a peer's change to another key until the gap closes", () => {
-    const { readerDoc, store, write, deliver } = gap({
+    const { readerDoc, backend, store, write, deliver } = gap({
       text: "seed",
       log: "seed",
     });
@@ -519,6 +519,7 @@ describe("an update that waits for an earlier one", () => {
     deliver(Y.encodeStateAsUpdate(peerDoc, before));
     expect(readerDoc.getMap(NAME).get("other")).toBe(1);
     expect(store.getState()).toEqual({ text: "seed", log: "seed" });
+    expect(backend.read()).toEqual({ text: "seed", log: "seed" });
     deliver(u0);
     expect(store.getState()).toEqual({
       text: "changed",
