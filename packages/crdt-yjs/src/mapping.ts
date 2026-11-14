@@ -1,7 +1,6 @@
 import * as Y from "yjs";
 import type { JsonObject, TextPolicy } from "@homeostate/core";
 
-/** The path of a value, as a text policy reads it. */
 type Path = Parameters<TextPolicy>[0];
 
 /**
