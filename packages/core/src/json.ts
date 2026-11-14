@@ -90,12 +90,11 @@ export const deepEqual = (a: unknown, b: unknown): boolean =>
   equal(a, b, false);
 
 /**
- * Whether `a` and `b` are equal as `JSON.stringify` would store them in an object: entries
- * holding `undefined` or a function are absent, such array items, holes included, equal `null`,
- * and so do `NaN` and infinite numbers. Records compare their own keys only, so a key such as
- * `constructor` is never found on an object that lacks it, and `__proto__` keys are ignored on
- * both sides. Meant for JSON values: any other object, such as a `Date`, compares as a record of
- * its own enumerable entries.
+ * Whether `a` and `b` are equal as `JSON.stringify` would store them in an object; see
+ * `toJsonValue` for what it leaves out or turns into `null`. Records compare their own keys only,
+ * so a key such as `constructor` is never found on an object that lacks it, and `__proto__` keys
+ * are ignored on both sides. Meant for JSON values: any other object, such as a `Date`, compares
+ * as a record of its own enumerable entries.
  */
 export const jsonEqual = (a: unknown, b: unknown): boolean => equal(a, b, true);
 
