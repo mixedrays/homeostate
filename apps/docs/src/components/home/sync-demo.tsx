@@ -186,7 +186,7 @@ export function SyncDemo() {
       <div className="relative @container">
         <div className="mb-6 flex items-center justify-between gap-3">
           <span className="font-mono text-xs text-muted-foreground uppercase">
-            Same state, every client
+            Two stores, one document
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
             <span

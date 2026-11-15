@@ -115,7 +115,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 aria-hidden="true"
                 className="size-1.5 rounded-full bg-primary"
               />
-              Your state. In sync.
+              Sync engine for JS stores
             </p>
             <h1
               id="hero-heading"
@@ -126,8 +126,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <span className="text-primary">Add CRDT sync.</span>
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-pretty text-muted-foreground">
-              Connect the state manager you already use to the CRDT you choose.
-              Homeostate keeps them in sync, so you can keep building your app.
+              Homeostate syncs Zustand, Redux, MobX and other state managers
+              with a Yjs, Loro or Automerge document, in both directions.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button
@@ -136,16 +136,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               >
                 Get started <ArrowRightIcon aria-hidden="true" />
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                render={<a href={site.repo} />}
-              >
+              <Button size="lg" variant="ghost" render={<a href={site.repo} />}>
                 <GithubIcon className="size-4" /> View on GitHub
               </Button>
               <Button
                 size="lg"
-                variant="outline"
+                variant="ghost"
                 render={<a href={site.npmOrg} />}
               >
                 <NpmIcon className="size-4" /> View on npm
@@ -183,17 +179,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
             <div>
               <p className="mb-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                Built for your stack
+                Integrations
               </p>
               <h2
                 id="integrations-heading"
                 className="text-3xl font-semibold tracking-tight"
               >
-                Your tools. Connected.
+                Any store adapter works with any CRDT backend
               </h2>
               <p className="mt-3 max-w-xl text-pretty text-muted-foreground">
-                Pick a store adapter and a CRDT backend. Homeostate handles the
-                sync between them.
+                Pick one of each. Homeostate handles the sync between them.
               </p>
             </div>
             <Link
@@ -210,7 +205,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <PackageColumn
                 step="01"
                 title="Store adapters"
-                hint="Keep the state manager you know."
+                hint="One per state manager."
                 packages={byGroup("store")}
                 columns
               />
