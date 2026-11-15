@@ -1,16 +1,37 @@
 import { cn } from "cn";
 import { DatabaseIcon, LayersIcon, type LucideIcon } from "lucide-react";
+import { useState } from "react";
+import { PauseButton } from "@/components/home/pause-button.tsx";
 import { HomeostateMark } from "@/components/layout/homeostate-mark.tsx";
 
 const orList = new Intl.ListFormat("en", { type: "disjunction" });
 
+/** Names the first few, then counts the rest: "Zustand, Redux, MobX, or 5 more". */
+const someOf = (names: string[], shown = 3) =>
+  orList.format(
+    names.length > shown + 1
+      ? [...names.slice(0, shown), `${names.length - shown} more`]
+      : names,
+  );
+
 /**
  * How a store, Homeostate and a CRDT document connect: vertical on small screens, horizontal from
  * `lg`. A CSS loop in app.css sends a local change out through the links, then a remote one back.
+ * `data-paused` holds the loop.
  */
-export function SyncDiagram({ backends }: { backends: string[] }) {
+export function SyncDiagram({
+  stores,
+  backends,
+}: {
+  stores: string[];
+  backends: string[];
+}) {
+  const [paused, setPaused] = useState(false);
   return (
-    <figure className="hc-diagram relative overflow-hidden rounded-2xl border bg-muted/30 p-6 sm:p-8">
+    <figure
+      data-paused={paused || undefined}
+      className="hc-diagram relative overflow-hidden rounded-2xl border bg-muted/30 p-6 sm:p-8"
+    >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(var(--border)_1px,transparent_1px)] bg-size-[18px_18px] mask-[linear-gradient(to_bottom,black,transparent)]"
@@ -20,15 +41,22 @@ export function SyncDiagram({ backends }: { backends: string[] }) {
           <span className="font-mono text-xs text-muted-foreground uppercase">
             How it connects
           </span>
-          <span className="rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-            Two-way sync
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+              Two-way sync
+            </span>
+            <PauseButton
+              paused={paused}
+              onToggle={() => setPaused((value) => !value)}
+              what="animation"
+            />
+          </div>
         </div>
         <div className="flex flex-col lg:flex-row lg:items-center">
           <Endpoint
             icon={LayersIcon}
             title="Your existing store"
-            detail="Same state. Same actions. Same UI."
+            detail={someOf(stores)}
             glow="hc-glow-store"
           />
           <DiagramLink label="store adapter" packet="hc-packet-store" />
@@ -40,7 +68,7 @@ export function SyncDiagram({ backends }: { backends: string[] }) {
             <div>
               <p className="font-semibold tracking-tight">Homeostate</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                The sync engine between them.
+                Sync engine, @homeostate/core
               </p>
             </div>
           </div>
@@ -53,8 +81,12 @@ export function SyncDiagram({ backends }: { backends: string[] }) {
           />
         </div>
         <figcaption className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-          <span className="hc-caption-out">Local changes flow out.</span>{" "}
-          <span className="hc-caption-in">Remote changes flow in.</span>
+          <span className="hc-caption-out">
+            Changes in your store are written to the document.
+          </span>{" "}
+          <span className="hc-caption-in">
+            Changes from peers are applied to your store.
+          </span>
         </figcaption>
       </div>
     </figure>

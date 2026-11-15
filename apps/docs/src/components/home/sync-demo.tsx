@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { PauseIcon, PlayIcon, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import {
   useEffect,
   useId,
@@ -9,6 +9,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { PauseButton } from "@/components/home/pause-button.tsx";
 import { HomeostateMark } from "@/components/layout/homeostate-mark.tsx";
 import { createTimeline, STOPPED, type Timeline } from "@/lib/timeline.ts";
 
@@ -47,11 +48,11 @@ const TASKS: Record<TaskId, string> = {
 const STORES: Record<Side, string> = { a: "zustand", b: "redux" };
 
 const CAPTIONS = {
-  sync: "Tick a task in one store. Every client gets the change.",
+  sync: "One client runs Zustand, the other Redux. A tick in one shows in both.",
   offline: "The connection drops. Both clients keep working.",
   merge: "Back online, the edits merge. Both tasks are kept.",
   still:
-    "Every client holds the same state. Offline edits merge when they reconnect.",
+    "Zustand and Redux clients share one state. Offline edits merge on reconnect.",
 };
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -217,20 +218,11 @@ export function SyncDemo() {
               />
               {STATUS_LABEL[scene.status]}
             </span>
-            {/* Reduced motion gets the still frame, nothing to pause. */}
-            <button
-              type="button"
-              onClick={() => setPaused((value) => !value)}
-              aria-label={paused ? "Play demo" : "Pause demo"}
-              title={paused ? "Play demo" : "Pause demo"}
-              className="grid size-6.5 shrink-0 place-items-center rounded-full border bg-background text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:hidden"
-            >
-              {paused ? (
-                <PlayIcon aria-hidden="true" className="size-3" />
-              ) : (
-                <PauseIcon aria-hidden="true" className="size-3" />
-              )}
-            </button>
+            <PauseButton
+              paused={paused}
+              onToggle={() => setPaused((value) => !value)}
+              what="demo"
+            />
           </div>
         </div>
         <div

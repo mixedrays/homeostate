@@ -3,7 +3,7 @@ import { ArrowRightIcon } from "lucide-react";
 import { Link } from "react-router";
 import type { Route } from "./+types/home";
 import { SyncDemo } from "@/components/home/sync-demo.tsx";
-// import { SyncDiagram } from "@/components/home/sync-diagram.tsx";
+import { SyncDiagram } from "@/components/home/sync-diagram.tsx";
 import { GithubIcon } from "@/components/layout/github-icon.tsx";
 import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
@@ -201,7 +201,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </Link>
           </div>
           <div className="grid gap-5">
-            {/* <SyncDiagram backends={byGroup("crdt").map((pkg) => pkg.label)} /> */}
+            <SyncDiagram
+              stores={byGroup("store").map((pkg) => pkg.label)}
+              backends={byGroup("crdt").map((pkg) => pkg.label)}
+            />
             <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
               <PackageColumn
                 step="01"
