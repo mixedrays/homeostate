@@ -122,6 +122,19 @@ flush or write: remote changes waiting for the flush stay out of the store until
 update arrives. Then the backend reports one change and the store catches up. The store only
 ever shows states the document passed through.
 
+An engine that connects meanwhile, as after `disconnect()` or when an `atomWithSync` atom
+mounts again, reconciles with the same state, if the backend read or wrote the map after the
+map's last change before the waiting update, as when the engine was connected until then. A
+key the waiting update replaced then still counts as one the backend holds, so connecting
+writes nothing over it. Otherwise there is no such state to show, as for a backend created
+during the wait, or after a peer changed the map while the engine was disconnected. Until the
+engine subscribes, `read()` then returns the map as it is, without the values the waiting update
+replaced, and with `seed`, the default, connecting writes the store's values for those keys
+into the document. That write is concurrent with the waiting update, so Yjs keeps one of the two
+by client ID, and about half the time the store's older value replaces the waiting update's on
+every replica. Where an engine may connect during such a wait, pass `seed: false` to avoid
+that: a key only the store holds then waits for the next local change.
+
 Local changes still reach the document meanwhile. A write merges what the store changed into
 what the document holds, with what the store was shown as the base, so it never puts back a
 value the waiting update replaced, and keeps the changes other peers made in the meantime:

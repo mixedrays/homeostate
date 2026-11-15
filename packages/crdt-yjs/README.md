@@ -71,7 +71,11 @@ A provider can deliver a peer's update before an earlier one it depends on, as y
 for about one round trip after a reconnect. Yjs then applies the update's deletes and keeps the
 rest waiting, which would hide a value the update replaces. Until the earlier update arrives, a
 subscribed backend shows the state from before it, as the engine last read or wrote it, and
-reports nothing; then it reports one change. Local changes still reach the document, merged
+reports nothing; then it reports one change. An engine that connects meanwhile reconciles with
+that state too, if the backend read or wrote the map after its last change before the waiting
+update. Otherwise it reads the map without the hidden values and, with `seed`, writes the
+store's values over them, which about half the time replace the waiting update's on every
+replica; `seed: false` avoids that. Local changes still reach the document, merged
 three ways with what it holds, so they never put back hidden values or drop other peers'
 changes. Every other change waits too, such as a peer's change to another key, and so does a
 backend whose document has an update waiting in another shared type. See

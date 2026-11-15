@@ -550,7 +550,7 @@ describe("an update that waits for an earlier one", () => {
 
   /**
    * A writer on client 1 and a reader on `readerId` that both hold `initial`, with the
-   * reader's store synced by an engine. Each `write` returns the writer's update, which the
+   * reader's store synced by `engine`, connected. Each `write` returns the writer's update, which the
    * test delivers to the reader with `deliver`, in any order. `peer` adds a third replica on
    * client 3 holding `initial`, whose `write` returns its update too. Every backend takes
    * `options`, and the engine `schedule`.
@@ -571,12 +571,18 @@ describe("an update that waits for an earlier one", () => {
     Y.applyUpdate(readerDoc, start);
     const backend = createYjsBackend(readerDoc, NAME, options);
     const store = createTestStore<State>({});
-    createSyncEngine({ backend, adapter: store.adapter, schedule }).connect();
+    const engine = createSyncEngine({
+      backend,
+      adapter: store.adapter,
+      schedule,
+    });
+    engine.connect();
     return {
       writerDoc,
       readerDoc,
       backend,
       store,
+      engine,
       write: (next: State): Uint8Array => sendWrite(writer, next),
       deliver: (update: Uint8Array) => Y.applyUpdate(readerDoc, update),
       peer: () => {
@@ -922,5 +928,205 @@ describe("an update that waits for an earlier one", () => {
     };
     expect(store.getState()).toEqual(synced);
     expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
+  });
+
+  describe("an engine that connects while the gap is open", () => {
+    const initial = { text: "seed", log: "seed" };
+
+    it.each([
+      ["above", 2],
+      ["below", 0],
+    ])(
+      "keeps the waiting update's value, with the reader's client ID %s the writer's",
+      (_order, readerId) => {
+        const { writerDoc, readerDoc, store, engine, write, deliver } = gap(
+          initial,
+          readerId,
+        );
+        engine.disconnect();
+        const u0 = write({ text: "seed", log: "changed" });
+        const u1 = write({ text: "changed", log: "changed" });
+
+        deliver(u1);
+        engine.connect();
+        expect(store.getState()).toEqual(initial);
+        expect(readerDoc.getMap(NAME).has("text")).toBe(false);
+        deliver(u0);
+        syncAll(readerDoc, writerDoc);
+
+        const synced = { text: "changed", log: "changed" };
+        expect(store.getState()).toEqual(synced);
+        expect(readerDoc.getMap(NAME).toJSON()).toEqual(synced);
+        expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
+      },
+    );
+
+    it.each([
+      ["nothing else", {}],
+      ["a key only it holds", { only: 1 }],
+    ])(
+      "keeps the value the gap hides in the store through a store change, when the store holds %s",
+      (_holds, only) => {
+        const { writerDoc, readerDoc, backend, store, engine, write, deliver } =
+          gap(initial);
+        engine.disconnect();
+        store.update((state) => ({ ...state, ...only }));
+        const u0 = write({ text: "seed", log: "changed" });
+        const u1 = write({ text: "changed", log: "changed" });
+
+        deliver(u1);
+        engine.connect();
+        expect(readerDoc.getMap(NAME).toJSON()).toEqual({
+          log: "seed",
+          ...only,
+        });
+        expect(backend.read()).toEqual({ ...initial, ...only });
+        store.update((state) => ({ ...state, other: 1 }));
+        expect(store.getState()).toEqual({ ...initial, ...only, other: 1 });
+        deliver(u0);
+        syncAll(readerDoc, writerDoc);
+
+        const synced = { text: "changed", log: "changed", ...only, other: 1 };
+        expect(store.getState()).toEqual(synced);
+        expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
+      },
+    );
+
+    it("applies a peer's change made during a gap in another shared type once the gap closes", () => {
+      const { writerDoc, store, engine, deliver, peer } = gap(initial);
+      engine.disconnect();
+      const updates: Uint8Array[] = [];
+      writerDoc.on("update", (update: Uint8Array) => updates.push(update));
+      writerDoc.getText("notes").insert(0, "a");
+      writerDoc.getText("notes").insert(1, "b");
+
+      deliver(updates[1]);
+      deliver(peer().write({ ...initial, other: 1 }));
+      engine.connect();
+      expect(store.getState()).toEqual(initial);
+      deliver(updates[0]);
+      expect(store.getState()).toEqual({ ...initial, other: 1 });
+    });
+
+    // The backend has nothing from before the gap to show, since a peer changed the map after
+    // its last read. It shows the map with the hole the gap made, so the engine seeds the
+    // store's `text`, and Yjs's client order picks between that and the waiting update's.
+    it.each([
+      ["with", 2, true, "seed"],
+      ["with", 0, true, "changed"],
+      ["without", 2, false, "changed"],
+      ["without", 0, false, "changed"],
+    ])(
+      "keeps a peer's value over the store's for a key both added while disconnected, %s a gap, with reader client %i",
+      (_with, readerId, withGap, text) => {
+        const { writerDoc, readerDoc, store, engine, write, deliver } = gap(
+          initial,
+          readerId,
+        );
+        engine.disconnect();
+        deliver(write({ ...initial, x: "peer" }));
+        store.update((state) => ({ ...state, x: "local" }));
+        const u0 = write({ text: "seed", log: "changed", x: "peer" });
+        const u1 = write({ text: "changed", log: "changed", x: "peer" });
+
+        if (!withGap) deliver(u0);
+        deliver(u1);
+        engine.connect();
+        deliver(u0);
+        syncAll(readerDoc, writerDoc);
+
+        const synced = { text, log: "changed", x: "peer" };
+        expect(store.getState()).toEqual(synced);
+        expect(readerDoc.getMap(NAME).toJSON()).toEqual(synced);
+        expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
+      },
+    );
+
+    // A backend that never read the map shows it with the hole the gap made, as above. Without
+    // `seed`, the engine writes nothing for the key only the store holds.
+    it.each([
+      [true, 2, "seed"],
+      [true, 0, "changed"],
+      [false, 2, "changed"],
+      [false, 0, "changed"],
+    ])(
+      "with seed %s and reader client %i, ends with the text %s through a backend created during the gap",
+      (seed, readerId, text) => {
+        const { writerDoc, readerDoc, write, deliver } = gap(initial, readerId);
+        const u0 = write({ text: "seed", log: "changed" });
+        deliver(write({ text: "changed", log: "changed" }));
+        // The store holds what it held before, as when restored from storage.
+        const backend = createYjsBackend(readerDoc, NAME);
+        const store = createTestStore<State>(initial);
+
+        createSyncEngine({ backend, adapter: store.adapter, seed }).connect();
+        deliver(u0);
+        syncAll(readerDoc, writerDoc);
+
+        const synced = { text, log: "changed" };
+        expect(store.getState()).toEqual(synced);
+        expect(writerDoc.getMap(NAME).toJSON()).toEqual(synced);
+      },
+    );
+  });
+
+  describe("a backend no engine is subscribed to", () => {
+    const initial = { text: "seed", log: "seed" };
+    const subscriptions: [string, (backend: YjsBackend) => void][] = [
+      ["that never subscribed", () => {}],
+      ["that unsubscribed", (backend) => backend.subscribe(() => {})()],
+    ];
+
+    it.each(subscriptions)(
+      "shows the map as it last read it, %s, while the gap is open",
+      (_how, use) => {
+        const { readerDoc, write, deliver } = gap(initial);
+        const backend = createYjsBackend(readerDoc, NAME);
+        backend.read();
+        use(backend);
+        const revision = backend.revision();
+        const u0 = write({ text: "seed", log: "changed" });
+
+        deliver(write({ text: "changed", log: "changed" }));
+        expect(backend.read()).toEqual(initial);
+        expect(backend.revision()).toBe(revision);
+        deliver(u0);
+        expect(backend.read()).toEqual({ text: "changed", log: "changed" });
+        expect(backend.revision()).not.toBe(revision);
+      },
+    );
+
+    it.each(subscriptions)(
+      "reads the map as it is, %s, while the gap is open after a peer changed the map since its last read",
+      (_how, use) => {
+        const { readerDoc, write, deliver, peer } = gap(initial);
+        const backend = createYjsBackend(readerDoc, NAME);
+        backend.read();
+        use(backend);
+        deliver(peer().write({ ...initial, a: 1 }));
+        const revision = backend.revision();
+        write({ text: "seed", log: "changed" });
+
+        deliver(write({ text: "changed", log: "changed" }));
+        expect(backend.read()).toEqual({ log: "seed", a: 1 });
+        expect(backend.revision()).not.toBe(revision);
+      },
+    );
+
+    it("reads the map as it is while the gap is open, when it was created during the gap", () => {
+      const { write, peer } = gap(initial);
+      const other = peer();
+      // A document no backend counted before the gap.
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, Y.encodeStateAsUpdate(other.doc));
+      write({ text: "seed", log: "changed" });
+      Y.applyUpdate(doc, write({ text: "changed", log: "changed" }));
+      const backend = createYjsBackend(doc, NAME);
+      backend.read();
+
+      Y.applyUpdate(doc, other.write({ ...initial, a: 1 }));
+
+      expect(backend.read()).toEqual({ log: "seed", a: 1 });
+    });
   });
 });
