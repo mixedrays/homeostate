@@ -9,19 +9,23 @@ import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
 import { Markdown } from "@/components/markdown/markdown.tsx";
 import { Button } from "@/components/ui/button";
+import { docsPackage } from "@/content/docs-package.server.ts";
 import { BENEFITS, INSTALL, QUICKSTART } from "@/content/landing.server.ts";
 import { getManifest, summarizePackage } from "@/content/manifest.server.ts";
 import { renderFragment } from "@/content/markdown.server.ts";
 import type { PackageSummary } from "@/content/types.ts";
 import { pageMeta } from "@/lib/meta.ts";
 import { siteUrl } from "@/lib/site-url.ts";
-import { groups, site } from "@/site.config.ts";
+import { groups, site, siteNav } from "@/site.config.ts";
 
 export async function loader() {
   const manifest = getManifest();
+  const docs = docsPackage();
   return {
     packages: manifest.packages.map(summarizePackage),
     benefits: BENEFITS,
+    // As the About page's header shows it.
+    docsVersion: `${docs.name}@${docs.version}`,
     quickstart: await renderFragment(
       `${INSTALL}\n\n${QUICKSTART}`,
       manifest,
@@ -103,8 +107,31 @@ const featuredGroups = new Set<PackageSummary["group"]>([
   "crdt",
 ]);
 
+/** `to` links are site pages, `href` links are files or other sites. */
+const footerColumns: {
+  title: string;
+  links: ({ label: string; to: string } | { label: string; href: string })[];
+}[] = [
+  { title: "Learn", links: [...siteNav] },
+  {
+    title: "Project",
+    links: [
+      { label: "About", to: site.aboutPage },
+      { label: "GitHub", href: site.repo },
+      { label: "npm", href: site.npmOrg },
+    ],
+  },
+  {
+    title: "For LLMs",
+    links: [
+      { label: "llms.txt", href: "/llms.txt" },
+      { label: "llms-full.txt", href: "/llms-full.txt" },
+    ],
+  },
+];
+
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { packages, benefits, quickstart } = loaderData;
+  const { packages, benefits, docsVersion, quickstart } = loaderData;
   const byGroup = (group: PackageSummary["group"]) =>
     packages.filter((p) => p.group === group);
   const moreGroups = groups
@@ -341,45 +368,69 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               id="guide-heading"
               className="text-xl font-semibold tracking-tight"
             >
-              From local state to shared state.
+              Try it in two browser tabs
             </h2>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Build a synced counter with the getting-started guide, then
-              connect your own app.
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-pretty text-muted-foreground">
+              The guide builds a React counter with a local sync server, so an
+              increment in one tab shows up in the other. The concepts page
+              explains how the engine, store adapters and CRDT backends fit
+              together.
             </p>
           </div>
-          <Button
-            size="lg"
-            render={<Link to={site.docsHome} prefetch="intent" />}
-          >
-            Follow the guide <ArrowRightIcon aria-hidden="true" />
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="lg"
+              render={<Link to={site.docsHome} prefetch="intent" />}
+            >
+              Follow the guide <ArrowRightIcon aria-hidden="true" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              render={<Link to={site.conceptsPage} prefetch="intent" />}
+            >
+              Read the concepts
+            </Button>
+          </div>
         </section>
       </main>
       <footer className="border-t">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-5 px-4 py-8 text-sm sm:px-6">
-          <p className="font-medium">
-            Homeostate{" "}
-            <span className="ml-2 font-normal text-muted-foreground">
-              MIT licensed
-            </span>
-          </p>
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:px-6 md:grid-cols-[1fr_auto] md:gap-16">
+          <div>
+            <p className="font-medium">{site.name}</p>
+            <p className="mt-2 text-muted-foreground">MIT licensed</p>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              {docsVersion}
+            </p>
+          </div>
           <nav
             aria-label="Footer"
-            className="flex flex-wrap gap-x-5 gap-y-3 text-muted-foreground"
+            className="grid grid-cols-2 gap-x-12 gap-y-8 sm:grid-cols-3"
           >
-            <a href="/llms.txt" className="hover:text-foreground">
-              llms.txt
-            </a>
-            <a href="/llms-full.txt" className="hover:text-foreground">
-              llms-full.txt
-            </a>
-            <a href={site.repo} className="hover:text-foreground">
-              GitHub
-            </a>
-            <a href={site.npmOrg} className="hover:text-foreground">
-              npm
-            </a>
+            {footerColumns.map((column) => (
+              <div key={column.title}>
+                <h2 className="font-medium">{column.title}</h2>
+                <ul className="mt-3 grid gap-2 text-muted-foreground">
+                  {column.links.map((link) => (
+                    <li key={link.label}>
+                      {"to" in link ? (
+                        <Link
+                          to={link.to}
+                          prefetch="intent"
+                          className="hover:text-foreground"
+                        >
+                          {link.label}
+                        </Link>
+                      ) : (
+                        <a href={link.href} className="hover:text-foreground">
+                          {link.label}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </nav>
         </div>
       </footer>

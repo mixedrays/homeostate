@@ -15,14 +15,15 @@ export const site = {
   npmOrg: "https://www.npmjs.com/org/homeostate",
   /** Where `/docs` sends readers. */
   docsHome: "/docs/getting-started",
+  conceptsPage: "/docs/concepts",
   /** The guide whose header shows the docs app's version, GitHub and npm. */
   aboutPage: "/docs/about",
 } as const;
 
-/** The site header's links; the manifest checks each has a page. */
+/** The site header's links, also in the landing footer; the manifest checks each has a page. */
 export const siteNav = [
   { label: "Docs", to: site.docsHome },
-  { label: "Concepts", to: "/docs/concepts" },
+  { label: "Concepts", to: site.conceptsPage },
   { label: "Packages", to: "/docs/core/introduction" },
 ] as const;
 

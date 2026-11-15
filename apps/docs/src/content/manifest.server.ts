@@ -382,6 +382,7 @@ function buildManifest(): Manifest {
   ];
   for (const [key, pathname] of [
     ["docsHome", site.docsHome],
+    ["conceptsPage", site.conceptsPage],
     ["aboutPage", site.aboutPage],
   ] as const) {
     if (!guides.some((g) => g.path === pathname)) {
