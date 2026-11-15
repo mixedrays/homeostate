@@ -1091,7 +1091,7 @@ export const describeCrdtBackend = <D>(
       });
 
       scenario(
-        "two peers seeding an empty room at once end with one state (replica ids %i and %i)",
+        "two peers seeding an empty room at once end with one state that keeps each peer's own keys (replica ids %i and %i)",
       ).each(replicaOrders, async (idA, idB) => {
         const a = peer(createDoc(idA), { count: 1, title: "a", onlyA: true });
         const b = peer(createDoc(idB), { count: 2, title: "b", onlyB: true });
@@ -1110,9 +1110,30 @@ export const describeCrdtBackend = <D>(
           const state = a.backend.read();
           expect([1, 2]).toContain(state.count);
           expect(["a", "b"]).toContain(state.title);
+          expect(state).toMatchObject({ onlyA: true, onlyB: true });
         } finally {
           a.engine.disconnect();
           b.engine.disconnect();
+        }
+      });
+
+      scenario(
+        "a peer seeding before a populated room arrives keeps the room's other keys (replica ids %i and %i)",
+      ).each(replicaOrders, (idA, idB) => {
+        const room = createDoc(idA);
+        const roomBackend = backend(room);
+        roomBackend.write({ count: 7, roomOnly: true });
+        const late = peer(createDoc(idB), { count: 0, lateOnly: true });
+        try {
+          exchange(room, late.doc);
+
+          const state = roomBackend.read();
+          expect(state).toMatchObject({ roomOnly: true, lateOnly: true });
+          expect([0, 7]).toContain(state.count);
+          expect(late.backend.read()).toEqual(state);
+          expect(late.store.getState()).toEqual(state);
+        } finally {
+          late.engine.disconnect();
         }
       });
 

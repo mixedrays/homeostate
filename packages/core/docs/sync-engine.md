@@ -339,9 +339,11 @@ concurrent writes merge is up to the library, so waiting does not make these out
 
 - Which value of a key survives depends on the library. Do not rely on either peer's.
 - In a document that does not hold the synced map yet, Automerge creates it, and two peers that
-  each do so keep one map whole. The other peer's keys are lost, even those no other peer wrote,
-  so a peer whose timeout expires can remove keys only the room held. Yjs and Loro merge the two
-  per key, and a document that already holds the map merges per key on all three.
+  each do so make two maps at one key. Yjs and Loro merge the two per key. The Automerge backend
+  reads both and moves the losing map's keys into the winning one on the next write, so keys
+  only one peer wrote survive, but a peer's edit inside a moved value, made before that peer
+  receives the move, is lost. See
+  [Peers that create the synced key](../../crdt-automerge/docs/introduction.md#peers-that-create-the-synced-key).
 
 ### Reporting errors
 
