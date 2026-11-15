@@ -103,7 +103,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <SiteHeader />
+      <SiteHeader containerClassName="max-w-6xl" />
       <main id="content" className="mx-auto max-w-6xl px-4 sm:px-6">
         <section
           aria-labelledby="hero-heading"

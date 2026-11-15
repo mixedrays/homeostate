@@ -19,6 +19,13 @@ export const site = {
   aboutPage: "/docs/about",
 } as const;
 
+/** The site header's links; the manifest checks each has a page. */
+export const siteNav = [
+  { label: "Docs", to: site.docsHome },
+  { label: "Concepts", to: "/docs/concepts" },
+  { label: "Packages", to: "/docs/core/introduction" },
+] as const;
+
 /**
  * `role` names one of the group's packages; a package introduction's title leads with its label
  * and role ("Yjs CRDT backend"), since its H1 is the package name.

@@ -3,7 +3,7 @@ import path from "node:path";
 import { toString } from "mdast-util-to-string";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { groups, packageNav, site } from "../site.config.ts";
+import { groups, packageNav, site, siteNav } from "../site.config.ts";
 import type {
   GroupId,
   PackageSummary,
@@ -387,6 +387,14 @@ function buildManifest(): Manifest {
       errors.push({
         file: toRepoPath(guidesDir),
         message: `${pathname} (site.${key}) has no page`,
+      });
+    }
+  }
+  for (const link of siteNav) {
+    if (!pages.some((p) => p.path === link.to)) {
+      errors.push({
+        file: "apps/docs/src/site.config.ts",
+        message: `${link.to} (siteNav "${link.label}") has no page`,
       });
     }
   }
