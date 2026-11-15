@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { INSTALL, QUICKSTART } from "../content/landing.server.ts";
+import { BENEFITS, INSTALL, QUICKSTART } from "../content/landing.server.ts";
+import { loadManifest } from "../content/manifest.server.ts";
 import { guidesDir, packagesDir } from "../content/paths.server.ts";
 
 const guide = readFileSync(path.join(guidesDir, "getting-started.md"), "utf8");
@@ -39,4 +40,16 @@ describe("landing page quick start", () => {
     );
     expect(readme).toContain(own[2]);
   });
+});
+
+describe("landing page benefits", () => {
+  const manifest = loadManifest();
+
+  it.each(BENEFITS.map((b) => [b.link.to] as const))(
+    "%s is a page heading",
+    (to) => {
+      const [pathname, id] = to.split("#");
+      expect(manifest.byPath.get(pathname)?.anchors.has(id)).toBe(true);
+    },
+  );
 });

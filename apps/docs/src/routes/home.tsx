@@ -9,18 +9,19 @@ import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
 import { Markdown } from "@/components/markdown/markdown.tsx";
 import { Button } from "@/components/ui/button";
-import { INSTALL, QUICKSTART } from "@/content/landing.server.ts";
+import { BENEFITS, INSTALL, QUICKSTART } from "@/content/landing.server.ts";
 import { getManifest, summarizePackage } from "@/content/manifest.server.ts";
 import { renderFragment } from "@/content/markdown.server.ts";
 import type { PackageSummary } from "@/content/types.ts";
 import { pageMeta } from "@/lib/meta.ts";
 import { siteUrl } from "@/lib/site-url.ts";
-import { site } from "@/site.config.ts";
+import { groups, site } from "@/site.config.ts";
 
 export async function loader() {
   const manifest = getManifest();
   return {
     packages: manifest.packages.map(summarizePackage),
+    benefits: BENEFITS,
     quickstart: await renderFragment(
       `${INSTALL}\n\n${QUICKSTART}`,
       manifest,
@@ -98,10 +99,21 @@ function PackageColumn({
   );
 }
 
+/** Groups shown in the integrations section; the rest go in "More packages". */
+const featuredGroups = new Set<PackageSummary["group"]>([
+  "core",
+  "store",
+  "crdt",
+]);
+
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { packages, quickstart } = loaderData;
+  const { packages, benefits, quickstart } = loaderData;
   const byGroup = (group: PackageSummary["group"]) =>
     packages.filter((p) => p.group === group);
+  const moreGroups = groups
+    .filter((group) => !featuredGroups.has(group.id))
+    .map((group) => ({ ...group, packages: byGroup(group.id) }))
+    .filter((group) => group.packages.length > 0);
 
   return (
     <>
@@ -243,6 +255,94 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               />
             </div>
           </div>
+        </section>
+
+        {moreGroups.length > 0 && (
+          <section aria-labelledby="more-heading" className="pb-16 sm:pb-20">
+            <p className="mb-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
+              More packages
+            </p>
+            <h2
+              id="more-heading"
+              className="text-xl font-semibold tracking-tight"
+            >
+              Persistence, UI bindings and tools
+            </h2>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {moreGroups.map((group) => (
+                <section
+                  key={group.id}
+                  aria-labelledby={`more-${group.id}-heading`}
+                  className="min-w-0 rounded-2xl border p-5"
+                >
+                  <h3
+                    id={`more-${group.id}-heading`}
+                    className="text-sm font-semibold"
+                  >
+                    {group.title}
+                  </h3>
+                  <ul className="mt-3 grid gap-1">
+                    {group.packages.map((pkg) => (
+                      <li key={pkg.slug} className="min-w-0">
+                        <Link
+                          to={pkg.path}
+                          prefetch="intent"
+                          className="group -mx-2 flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          <span className="min-w-0 text-sm">
+                            <span className="font-medium">{pkg.label}</span>{" "}
+                            <span className="font-mono text-[11px] wrap-break-word text-muted-foreground">
+                              {pkg.name}
+                            </span>
+                          </span>
+                          <ArrowRightIcon
+                            aria-hidden="true"
+                            className="size-3.5 shrink-0 self-center text-muted-foreground transition-colors group-hover:text-primary"
+                          />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section
+          aria-labelledby="why-heading"
+          className="border-t py-16 sm:py-20"
+        >
+          <p className="mb-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
+            Why Homeostate
+          </p>
+          <h2
+            id="why-heading"
+            className="text-3xl font-semibold tracking-tight"
+          >
+            Less code to change, no conflicts to resolve
+          </h2>
+          <ul className="mt-8 grid gap-5 md:grid-cols-2">
+            {benefits.map((benefit) => (
+              <li
+                key={benefit.title}
+                className="flex flex-col rounded-2xl border bg-background p-5 sm:p-6"
+              >
+                <h3 className="font-semibold">{benefit.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-pretty text-muted-foreground">
+                  {benefit.body}
+                </p>
+                <Link
+                  to={benefit.link.to}
+                  prefetch="intent"
+                  className="mt-4 inline-flex items-center gap-2 self-start text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                >
+                  {benefit.link.label}{" "}
+                  <ArrowRightIcon aria-hidden="true" className="size-4" />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section
