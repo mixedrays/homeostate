@@ -105,9 +105,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <>
       <SiteHeader containerClassName="max-w-6xl" />
       <main id="content" className="mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Splits at xl: below ~1140px the demo's column is under its 26rem side-by-side width. */}
         <section
           aria-labelledby="hero-heading"
-          className="grid items-center gap-12 pt-14 pb-12 sm:pt-20 lg:grid-cols-[1.2fr_1fr] lg:gap-16 lg:pt-24"
+          className="grid items-center gap-12 pt-14 pb-12 sm:pt-20 lg:pt-24 xl:grid-cols-[1.2fr_1fr] xl:gap-16"
         >
           <div>
             <p className="mb-6 flex items-center gap-2 font-mono text-xs tracking-wider text-muted-foreground uppercase">
