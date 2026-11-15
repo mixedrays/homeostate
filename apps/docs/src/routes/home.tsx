@@ -9,6 +9,7 @@ import { NpmIcon } from "@/components/layout/npm-icon.tsx";
 import { SiteHeader } from "@/components/layout/site-header.tsx";
 import { Markdown } from "@/components/markdown/markdown.tsx";
 import { Button } from "@/components/ui/button";
+import { INSTALL, QUICKSTART } from "@/content/landing.server.ts";
 import { getManifest, summarizePackage } from "@/content/manifest.server.ts";
 import { renderFragment } from "@/content/markdown.server.ts";
 import type { PackageSummary } from "@/content/types.ts";
@@ -16,14 +17,15 @@ import { pageMeta } from "@/lib/meta.ts";
 import { siteUrl } from "@/lib/site-url.ts";
 import { site } from "@/site.config.ts";
 
-const INSTALL =
-  "```bash install\nnpm install @homeostate/core @homeostate/store-zustand @homeostate/crdt-yjs\n```";
-
 export async function loader() {
   const manifest = getManifest();
   return {
     packages: manifest.packages.map(summarizePackage),
-    install: await renderFragment(INSTALL, manifest, siteUrl),
+    quickstart: await renderFragment(
+      `${INSTALL}\n\n${QUICKSTART}`,
+      manifest,
+      siteUrl,
+    ),
   };
 }
 
@@ -97,7 +99,7 @@ function PackageColumn({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { packages, install } = loaderData;
+  const { packages, quickstart } = loaderData;
   const byGroup = (group: PackageSummary["group"]) =>
     packages.filter((p) => p.group === group);
 
@@ -156,20 +158,40 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </section>
 
         <section
-          aria-labelledby="install-heading"
-          className="grid items-center gap-x-8 border-y py-6 lg:grid-cols-[1fr_2fr]"
+          aria-labelledby="quickstart-heading"
+          className="grid gap-8 border-y py-12 sm:py-16 lg:grid-cols-[1fr_1.6fr] lg:gap-12"
         >
           <div>
-            <h2 id="install-heading" className="text-sm font-medium">
+            <p className="mb-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
+              Quick start
+            </p>
+            <h2
+              id="quickstart-heading"
+              className="text-3xl font-semibold tracking-tight"
+            >
               Start with Zustand + Yjs
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              One engine, one adapter, one backend.
+            <p className="mt-3 max-w-md text-pretty text-muted-foreground">
+              Install the sync engine, the Zustand adapter, the Yjs backend and
+              their dependencies, then wrap your state creator in{" "}
+              <code className="font-mono text-[0.9em] text-foreground">
+                homeostate
+              </code>
+              . The store works locally until the provider has the room's state,
+              then syncs everything but its functions.
             </p>
+            <Link
+              to={site.docsHome}
+              prefetch="intent"
+              className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            >
+              Read the getting-started guide{" "}
+              <ArrowRightIcon aria-hidden="true" className="size-4" />
+            </Link>
           </div>
-          {/* Tightens the my-6 on CodeGroup's root, which is spaced for prose. */}
-          <div className="min-w-0 [&>div]:my-3">
-            <Markdown hast={install} />
+          {/* Drops the prose my-6 on code blocks; the grid spaces them. */}
+          <div className="grid min-w-0 gap-4 [&>*]:my-0">
+            <Markdown hast={quickstart} />
           </div>
         </section>
 
