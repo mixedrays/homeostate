@@ -188,16 +188,19 @@ same way.
 The merge compares the store's synced state and the backend's with what the backend held
 before the pending changes, which both last agreed on, and keeps each side's changes from it:
 
-| What changed                                                     | Result                                                                                                                                |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Different keys of a record                                       | Both. Records merge key by key, at any depth.                                                                                         |
-| Different items of an array                                      | Both. Items match by value, or by a unique entry such as an `id`, so a local edit lands on its item after remote inserts and deletes. |
-| Items inserted at the same place on both sides                   | Both, the remote ones first.                                                                                                          |
-| The same value, changed differently on both sides                | The local value, as its write would. A string is one value, replaced whole and never merged as text.                                  |
-| A record or array the store changed inside, which remote deleted | Deleted, as a CRDT loses an edit inside a deleted container. A value the store replaced whole, such as a string, is kept instead.     |
-| A value the store deleted                                        | Deleted, also where the remote side changed it.                                                                                       |
+| What changed                                                           | Result                                                                                                                                  |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Different keys of a record                                             | Both. Records merge key by key, at any depth.                                                                                           |
+| Different items of an array                                            | Both. Items match by value, or by a unique entry such as an `id`, so a local edit lands on its item after remote inserts and deletes.   |
+| Items inserted at the same place on both sides                         | Both, the remote ones first.                                                                                                            |
+| A text, changed on both sides                                          | Both, merged by UTF-16 unit, as the backend merges concurrent edits to its text.                                                        |
+| The same value, changed differently on both sides                      | The local value, as its write would. A string the backend keeps as a value is replaced whole.                                           |
+| A record, array or text the store changed inside, which remote deleted | Deleted, as a CRDT loses an edit inside a deleted container. A value the store replaced whole, such as a plain string, is kept instead. |
+| A value the store deleted                                              | Deleted, also where the remote side changed it.                                                                                         |
 
-The merge is [`mergeConcurrent`](./diffing.md#mergeconcurrent), without a text policy.
+A text is a string the backend's [`text`](#crdtbackend) policy marks, such as a `Y.Text` with the
+Yjs backend; a backend without one keeps every string as a value. The merge is
+[`mergeConcurrent`](./diffing.md#mergeconcurrent), with that policy.
 [Matching array items](./diffing.md#matching-array-items) says how it matches the items of a list
 the remote change both moved and changed, and where it falls back to their positions.
 
@@ -779,6 +782,7 @@ interface CrdtBackend {
   write: (next: JsonObjectInput, previous?: JsonObjectInput) => void;
   revision: () => unknown;
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
+  readonly text?: TextPolicy;
 }
 ```
 
@@ -792,12 +796,19 @@ It is assignable to `JsonObject`, so a backend uses `next` as one without a cast
 has no index signature, so `read()` converts to one through `unknown`:
 `backend.read() as unknown as State`.
 
-| Member                   | Contract                                                                                                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read()`                 | Returns a plain JSON snapshot that does not alias mutable backend internals. For the sync engine, expose the synced top-level state as an object.                |
-| `write(next, previous?)` | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                          |
-| `revision()`             | A value equal (`===`) to an earlier one only if the synced subtree has not changed since, reported or not; `undefined` while it cannot tell.                     |
-| `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function. |
+| Member                   | Contract                                                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read()`                 | Returns a plain JSON snapshot that does not alias mutable backend internals. For the sync engine, expose the synced top-level state as an object.                           |
+| `write(next, previous?)` | Makes the synced subtree equal to `next` in one atomic transaction. The backend chooses how to turn that snapshot into CRDT operations.                                     |
+| `revision()`             | A value equal (`===`) to an earlier one only if the synced subtree has not changed since, reported or not; `undefined` while it cannot tell.                                |
+| `subscribe(callback)`    | Reports changes outside this backend's own `write`, including imports from peers and local edits made directly on the document. Returns an unsubscribe function.            |
+| `text`                   | Optional. The [text policy](./diffing.md#text-policy): which strings the backend keeps as its text type, by path from the synced subtree's root, as its `text` option says. |
+
+`text` tells the engine how the backend merges strings. When the engine merges a local change into
+a remote change it has not applied yet, as with [`schedule`](#coalescing-remote-changes), it
+merges the strings `text` marks by UTF-16 unit, so a peer's concurrent edit to the same text is
+kept, and replaces every other string whole. Leave it out when the backend keeps no string as
+text; every string is then replaced whole.
 
 `previous`, when given, is what the synced subtree holds now: the whole state the engine last
 wrote or read. `next` is the whole subtree too: the store's synced keys, and every other key as
@@ -863,6 +874,7 @@ The backend it returns:
   transaction.
 - `subscribe` reports only the changes `watch` does not call its own.
 - `read` and `revision` are the parts' own functions, called directly.
+- `text` is the parts' `text`, and is absent when they give none.
 
 The Loro backend, in short, with `createLoroOps` its `ApplyOps`:
 

@@ -14,6 +14,7 @@ import {
   type JsonObjectInput,
   WriteLoopError,
   type SyncEngineConfig,
+  type TextPolicy,
 } from "../index.js";
 import { createMemoryBackend, type MemoryBackend } from "../testing.js";
 import {
@@ -2271,18 +2272,20 @@ describe("createSyncEngine", () => {
        * Connects a store holding `initial`, lets the backend receive `remote` of it, and makes
        * `local` of the store's state before the flush. Checks that the write passed what the
        * backend held as `previous`, that the backend and the store agree, and that the flush
-       * changes nothing, then returns the store's state.
+       * changes nothing, then returns the store's state. `text`, where given, is the backend's
+       * text policy.
        */
       const concurrent = <S extends object>(
         initial: S,
         remote: (s: S) => S,
         local: (s: S) => S,
+        text?: TextPolicy,
       ): S => {
         const { backend, previous } = checkedBackend(initial);
         const store = createTestStore(initial);
         const scheduler = manualScheduler();
         createSyncEngine({
-          backend,
+          backend: text === undefined ? backend : { ...backend, text },
           adapter: store.adapter,
           schedule: scheduler.schedule,
         }).connect();
@@ -2416,6 +2419,62 @@ describe("createSyncEngine", () => {
         );
 
         expect(state.searchTerm).toBe("a draft");
+      });
+
+      describe("with a backend that keeps strings as text", () => {
+        const isSearchTerm: TextPolicy = (path) =>
+          path.length === 1 && path[0] === "searchTerm";
+
+        it("merges a string its text policy marks as text by unit", () => {
+          const state = concurrent(
+            setSearchTerm(threeTodos(), "draft"),
+            (s) => setSearchTerm(s, "Xdraft"),
+            (s) => setSearchTerm(s, "draft!"),
+            isSearchTerm,
+          );
+
+          expect(state.searchTerm).toBe("Xdraft!");
+        });
+
+        it("merges text by its path from the backend's root", () => {
+          const state = concurrent(
+            threeTodos(),
+            (s) => renameTodo(s, "2", `X${s.todos[1].title}`),
+            (s) => renameTodo(s, "2", `${s.todos[1].title}!`),
+            (path) => path[0] === "todos" && path[2] === "title",
+          );
+
+          expect(state.todos[1].title).toBe(`X${todo("2").title}!`);
+        });
+
+        it("replaces a string its text policy leaves out whole", () => {
+          const state = concurrent(
+            setSearchTerm(threeTodos(), "draft"),
+            (s): TodoState => ({
+              ...setSearchTerm(s, "Xdraft"),
+              filterStatus: "active",
+            }),
+            (s): TodoState => ({
+              ...setSearchTerm(s, "draft!"),
+              filterStatus: "completed",
+            }),
+            isSearchTerm,
+          );
+
+          expect(state.searchTerm).toBe("Xdraft!");
+          expect(state.filterStatus).toBe("completed");
+        });
+
+        it("drops a local edit to a text the remote side deleted", () => {
+          const state = concurrent<{ note?: string; count: number }>(
+            { note: "draft", count: 0 },
+            ({ count }) => ({ count }),
+            (s) => ({ note: `${s.note}!`, count: 1 }),
+            (path) => path[0] === "note",
+          );
+
+          expect(state).toEqual({ count: 1 });
+        });
       });
 
       it("drops a local edit to an item the remote side deleted", () => {

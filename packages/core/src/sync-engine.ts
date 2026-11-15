@@ -493,7 +493,9 @@ export function createSyncEngine<S extends object>(
     const local = { ...synced };
     for (const key of Object.keys(seen))
       if (!hasOwn(synced, key) && !heldKeys.has(key)) local[key] = seen[key];
-    return mergeConcurrent(seen, local, remote) as Plain;
+    return mergeConcurrent(seen, local, remote, {
+      text: backend.text,
+    }) as Plain;
   };
 
   /**

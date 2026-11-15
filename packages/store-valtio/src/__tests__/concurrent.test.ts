@@ -7,6 +7,7 @@ import {
   createSyncEngine,
   type CrdtBackend,
   type PersistableDoc,
+  type TextPolicy,
 } from "@homeostate/core";
 import {
   createAutomergeBackend,
@@ -20,41 +21,47 @@ import {
 import { createYjsBackend, createYjsPersistable } from "@homeostate/crdt-yjs";
 import { createValtioAdapter } from "../index.js";
 
-/** One document per peer, with a fixed ID so that concurrent inserts order the same every run. */
+/**
+ * One document per peer, with a fixed ID so that concurrent inserts order the same every run, and
+ * its backend with the given options.
+ */
 const backends: [
   string,
-  (index: number) => { backend: CrdtBackend; doc: PersistableDoc },
+  (
+    index: number,
+    options?: { text?: TextPolicy },
+  ) => { backend: CrdtBackend; doc: PersistableDoc },
 ][] = [
   [
     "Yjs",
-    (index) => {
+    (index, options) => {
       const doc = new Y.Doc();
       doc.clientID = index + 1;
       return {
-        backend: createYjsBackend(doc, "shared"),
+        backend: createYjsBackend(doc, "shared", options),
         doc: createYjsPersistable(doc),
       };
     },
   ],
   [
     "Loro",
-    (index) => {
+    (index, options) => {
       const doc = new LoroDoc();
       doc.setPeerId(index + 1);
       return {
-        backend: createLoroBackend(doc, "shared"),
+        backend: createLoroBackend(doc, "shared", options),
         doc: createLoroPersistable(doc),
       };
     },
   ],
   [
     "Automerge",
-    (index) => {
+    (index, options) => {
       const handle = createAutomergeHandle<Record<string, unknown>>(
         A.init({ actor: (index + 1).toString(16).padStart(8, "0") }),
       );
       return {
-        backend: createAutomergeBackend(handle, "shared"),
+        backend: createAutomergeBackend(handle, "shared", options),
         doc: createAutomergePersistable(handle),
       };
     },
@@ -65,11 +72,17 @@ const backends: [
 const flush = (): Promise<void> => Promise.resolve();
 
 describe.each(backends)("Valtio peers on %s", (_, createDoc) => {
-  /** Two peers sharing a room that holds `initial`, and a way to deliver each one's updates. */
-  const pair = <T extends object>(initial: () => T) => {
+  /**
+   * Two peers sharing a room that holds `initial`, with backends given `options`, and a way to
+   * deliver each one's updates.
+   */
+  const pair = <T extends object>(
+    initial: () => T,
+    options?: { text?: TextPolicy },
+  ) => {
     const peer = (index: number) => {
       const state = proxy(initial());
-      return { state, ...createDoc(index) };
+      return { state, ...createDoc(index, options) };
     };
     const a = peer(0);
     const b = peer(1);
@@ -164,5 +177,19 @@ describe.each(backends)("Valtio peers on %s", (_, createDoc) => {
     await flush();
 
     expect(await exchange()).toEqual({ log: ["from a"], title: "from b" });
+  });
+
+  it("keeps both peers' edits to one text when a remote insert arrives before the write", async () => {
+    const { a, b, deliver, exchange } = pair(() => ({ title: "hello" }), {
+      text: (path) => path[0] === "title",
+    });
+
+    b.state.title = "Xhello";
+    await flush();
+    a.state.title += "!";
+    deliver(b, a);
+    await flush();
+
+    expect(await exchange()).toEqual({ title: "Xhello!" });
   });
 });
