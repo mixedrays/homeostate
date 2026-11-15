@@ -40,6 +40,8 @@ export interface PackageSummary {
   group: GroupId;
   version: string;
   description: string;
+  /** One-line trade-off on the landing page's package card; CRDT backends only. */
+  hint?: string;
   path: string;
   repoPath: string;
 }

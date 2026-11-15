@@ -49,31 +49,23 @@ export const meta: Route.MetaFunction = () => [
   },
 ];
 
+/** A card of package links; side by side from `lg`, its rows grow to match the other card. */
 function PackageColumn({
   title,
   hint,
-  step,
   packages,
   columns = false,
 }: {
   title: string;
   hint: string;
-  step: string;
   packages: PackageSummary[];
   columns?: boolean;
 }) {
   return (
-    <section className="min-w-0 rounded-2xl border bg-background p-5 sm:p-6">
-      <div className="flex items-start gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted/40 font-mono text-xs text-muted-foreground">
-          {step}
-        </span>
-        <div>
-          <h3 className="font-semibold">{title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
-        </div>
-      </div>
-      <ul className={cn("mt-6 grid gap-2", columns && "sm:grid-cols-2")}>
+    <section className="flex min-w-0 flex-col rounded-2xl border bg-background p-5 sm:p-6">
+      <h3 className="font-semibold">{title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+      <ul className={cn("mt-6 grid flex-1 gap-2", columns && "sm:grid-cols-2")}>
         {packages.map((pkg) => (
           <li key={pkg.slug} className="min-w-0">
             <Link
@@ -86,6 +78,11 @@ function PackageColumn({
                 <span className="mt-1 block font-mono text-[11px] wrap-break-word text-muted-foreground">
                   {pkg.name}
                 </span>
+                {pkg.hint && (
+                  <span className="mt-2 block text-xs leading-snug text-pretty text-muted-foreground">
+                    {pkg.hint}
+                  </span>
+                )}
               </span>
               <ArrowRightIcon
                 aria-hidden="true"
@@ -211,46 +208,36 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           aria-labelledby="integrations-heading"
           className="py-16 sm:py-20"
         >
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
-            <div>
-              <p className="mb-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                Integrations
-              </p>
-              <h2
-                id="integrations-heading"
-                className="text-3xl font-semibold tracking-tight"
-              >
-                Any store adapter works with any CRDT backend
-              </h2>
-              <p className="mt-3 max-w-xl text-pretty text-muted-foreground">
-                Pick one of each. Homeostate handles the sync between them.
-              </p>
-            </div>
-            <Link
-              to={byGroup("core")[0]?.path ?? site.docsHome}
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          <div className="mb-8">
+            <p className="mb-3 font-mono text-xs tracking-wider text-muted-foreground uppercase">
+              Integrations
+            </p>
+            <h2
+              id="integrations-heading"
+              className="text-3xl font-semibold tracking-tight"
             >
-              Explore the sync engine{" "}
-              <ArrowRightIcon aria-hidden="true" className="size-4" />
-            </Link>
+              Any store adapter works with any CRDT backend
+            </h2>
+            <p className="mt-3 max-w-xl text-pretty text-muted-foreground">
+              Pick one of each. Homeostate handles the sync between them.
+            </p>
           </div>
           <div className="grid gap-5">
             <SyncDiagram
               stores={byGroup("store").map((pkg) => pkg.label)}
               backends={byGroup("crdt").map((pkg) => pkg.label)}
+              corePath={byGroup("core")[0]?.path ?? site.docsHome}
             />
             <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
               <PackageColumn
-                step="01"
                 title="Store adapters"
                 hint="One per state manager."
                 packages={byGroup("store")}
                 columns
               />
               <PackageColumn
-                step="02"
                 title="CRDT backends"
-                hint="Choose how your state replicates."
+                hint="One per CRDT library."
                 packages={byGroup("crdt")}
               />
             </div>

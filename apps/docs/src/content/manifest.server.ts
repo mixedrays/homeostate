@@ -300,6 +300,7 @@ function buildManifest(): Manifest {
       group: groupOf(slug),
       version: pkgJson.version,
       description: pkgJson.description ?? "",
+      hint: nav?.hint,
       path: `/docs/${slug}/introduction`,
       repoPath: toRepoPath(dir),
     });
@@ -483,7 +484,26 @@ export function summarizePage(page: SourcePage): PageSummary {
 }
 
 export function summarizePackage(pkg: SourcePackage): PackageSummary {
-  const { slug, name, label, group, version, description, path, repoPath } =
-    pkg;
-  return { slug, name, label, group, version, description, path, repoPath };
+  const {
+    slug,
+    name,
+    label,
+    group,
+    version,
+    description,
+    hint,
+    path,
+    repoPath,
+  } = pkg;
+  return {
+    slug,
+    name,
+    label,
+    group,
+    version,
+    description,
+    hint,
+    path,
+    repoPath,
+  };
 }

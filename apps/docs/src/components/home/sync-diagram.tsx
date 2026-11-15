@@ -1,6 +1,12 @@
 import { cn } from "cn";
-import { DatabaseIcon, LayersIcon, type LucideIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  DatabaseIcon,
+  LayersIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router";
 import { PauseButton } from "@/components/home/pause-button.tsx";
 import { HomeostateMark } from "@/components/layout/homeostate-mark.tsx";
 
@@ -17,14 +23,16 @@ const someOf = (names: string[], shown = 3) =>
 /**
  * How a store, Homeostate and a CRDT document connect: vertical on small screens, horizontal from
  * `lg`. A CSS loop in app.css sends a local change out through the links, then a remote one back.
- * `data-paused` holds the loop.
+ * `data-paused` holds the loop. The Homeostate card links to `corePath`.
  */
 export function SyncDiagram({
   stores,
   backends,
+  corePath,
 }: {
   stores: string[];
   backends: string[];
+  corePath: string;
 }) {
   const [paused, setPaused] = useState(false);
   return (
@@ -60,18 +68,29 @@ export function SyncDiagram({
             glow="hc-glow-store"
           />
           <DiagramLink label="store adapter" packet="hc-packet-store" />
-          <div className="flex items-center gap-4 rounded-xl border border-primary/30 bg-background p-5 shadow-[0_4px_24px_-8px_var(--primary)] lg:flex-1">
+          {/* Core's only link on the page; styled like the package cards. */}
+          <Link
+            to={corePath}
+            prefetch="intent"
+            className="group flex items-center gap-4 rounded-xl border border-primary/30 bg-background p-5 shadow-[0_4px_24px_-8px_var(--primary)] transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:flex-1"
+          >
             <HomeostateMark
               state="connected"
               className="hc-mark size-7 shrink-0"
             />
-            <div>
-              <p className="font-semibold tracking-tight">Homeostate</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold tracking-tight">
+                Homeostate
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
                 Sync engine, @homeostate/core
-              </p>
-            </div>
-          </div>
+              </span>
+            </span>
+            <ArrowRightIcon
+              aria-hidden="true"
+              className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary"
+            />
+          </Link>
           <DiagramLink label="CRDT backend" packet="hc-packet-crdt" />
           <Endpoint
             icon={DatabaseIcon}

@@ -42,6 +42,22 @@ describe("landing page quick start", () => {
   });
 });
 
+describe("landing page package cards", () => {
+  const { packages } = loadManifest();
+
+  // Store and other cards stay label + package name.
+  it("gives a short hint to every CRDT backend and no other package", () => {
+    const hinted = packages.filter((p) => p.hint).map((p) => p.slug);
+    expect(hinted).toEqual(
+      packages.filter((p) => p.group === "crdt").map((p) => p.slug),
+    );
+    expect(hinted.length).toBeGreaterThan(0);
+    for (const pkg of packages) {
+      expect(pkg.hint?.length ?? 0).toBeLessThanOrEqual(90);
+    }
+  });
+});
+
 describe("landing page benefits", () => {
   const manifest = loadManifest();
 

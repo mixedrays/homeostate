@@ -40,12 +40,31 @@ export const groups: { id: GroupId; title: string; role?: string }[] = [
   { id: "tools", title: "Tools" },
 ];
 
-/** Sidebar label and order per package slug; the group comes from the slug's prefix. */
-export const packageNav: Record<string, { label: string; order: number }> = {
+/**
+ * Sidebar label and order per package slug; the group comes from the slug's prefix. `hint` is
+ * the landing page card's one-line trade-off, for CRDT backends only; back it with the
+ * package's docs.
+ */
+export const packageNav: Record<
+  string,
+  { label: string; order: number; hint?: string }
+> = {
   core: { label: "Core", order: 0 },
-  "crdt-yjs": { label: "Yjs", order: 1 },
-  "crdt-loro": { label: "Loro", order: 2 },
-  "crdt-automerge": { label: "Automerge", order: 3 },
+  "crdt-yjs": {
+    label: "Yjs",
+    order: 1,
+    hint: "Syncs through any Yjs provider, such as y-websocket. y-indexeddb can store it.",
+  },
+  "crdt-loro": {
+    label: "Loro",
+    order: 2,
+    hint: "You wire replication, and it has no storage package of its own. Ships WebAssembly.",
+  },
+  "crdt-automerge": {
+    label: "Automerge",
+    order: 3,
+    hint: "automerge-repo can sync and store the document for you. Ships WebAssembly.",
+  },
   "store-zustand": { label: "Zustand", order: 1 },
   "store-redux": { label: "Redux", order: 2 },
   "store-mobx": { label: "MobX", order: 3 },
