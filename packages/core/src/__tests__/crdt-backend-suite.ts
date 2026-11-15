@@ -970,6 +970,107 @@ export const describeCrdtBackend = <D>(
       );
 
       scenario(
+        "exposes the text policy it was given, and none without one",
+      ).run(() => {
+        expect(backend(createDoc(), { text: todoTitles }).text).toBe(
+          todoTitles,
+        );
+        expect(backend(createDoc()).text).toBeUndefined();
+      });
+
+      describe("a peer's insert into a text the store appends to before the engine applies it", () => {
+        const text: TextPolicy = (path) => path[0] === "title";
+        // Lets what a library reports in a microtask run.
+        const settled = (): Promise<void> =>
+          new Promise((resolve) => setTimeout(resolve));
+
+        /**
+         * Peer B, and A's document holding B's `{ title: "hello" }`, for A's engine to connect
+         * to with `text` as its backend's policy.
+         */
+        const syncedTitle = () => {
+          const docA = createDoc(1);
+          const docB = createDoc(2);
+          const b = peer(docB, { title: "hello" }, { text });
+          exchange(docA, docB);
+          return { docA, b };
+        };
+
+        /** Expects A's store, A's document and B's store to hold both edits. */
+        const expectBothEdits = (
+          store: { getState: () => object },
+          docA: D,
+          b: ReturnType<typeof syncedTitle>["b"],
+        ): void => {
+          const expected = { title: "Xhello!" };
+          expect(store.getState()).toEqual(expected);
+          expect(backend(docA).read()).toEqual(expected);
+          expect(b.store.getState()).toEqual(expected);
+        };
+
+        scenario("keeps both edits when the apply waits for schedule").run(
+          async () => {
+            const { docA, b } = syncedTitle();
+            const store = createTestStore({ title: "hello" });
+            const engine = createSyncEngine({
+              backend: backend(docA, { text }),
+              adapter: store.adapter,
+              schedule: queueMicrotask,
+            });
+            engine.connect();
+            try {
+              b.store.update((s) => ({ title: `X${s.title}` }));
+              exchange(docA, b.doc);
+              store.update((s) => ({ title: `${s.title}!` }));
+              await settled();
+              exchange(docA, b.doc);
+              await settled();
+
+              expectBothEdits(store, docA, b);
+            } finally {
+              engine.disconnect();
+            }
+          },
+        );
+
+        scenario(
+          "keeps both edits when another listener appends before the engine hears of the insert",
+        ).run(async () => {
+          const { docA, b } = syncedTitle();
+          const store = createTestStore({ title: "hello" });
+          // App code that reacts to a peer's change, subscribed before the engine connects, so
+          // it runs before the engine's own listener.
+          let armed = false;
+          backend(docA).subscribe(() => {
+            if (!armed) return;
+            armed = false;
+            store.update((s) => ({ title: `${s.title}!` }));
+          });
+          const onError = vi.fn();
+          const engine = createSyncEngine({
+            backend: backend(docA, { text }),
+            adapter: store.adapter,
+            onError,
+          });
+          engine.connect();
+          try {
+            b.store.update((s) => ({ title: `X${s.title}` }));
+            armed = true;
+            exchange(docA, b.doc);
+            await settled();
+            exchange(docA, b.doc);
+            await settled();
+
+            expect(armed).toBe(false);
+            expect(onError).not.toHaveBeenCalled();
+            expectBothEdits(store, docA, b);
+          } finally {
+            engine.disconnect();
+          }
+        });
+      });
+
+      scenario(
         "gives the receiver new containers along the changed path only",
       ).run(() => {
         const { a, b } = twoSyncedPeers();

@@ -58,8 +58,8 @@ then one change, and a peer's concurrent edit stays on the item it targeted.
   same task.
 - A remote change that arrives before that write is merged with the waiting mutations: changes
   to different values both stay, and where both sides changed the same value, the mutation wins.
-  A string counts as one value, also one the backend keeps as text, so a concurrent edit to the
-  same text keeps the mutation's text whole; see
+  A string the backend keeps as text, through its `text` option, merges by UTF-16 unit, so both
+  sides' edits to it stay; every other string counts as one value; see
   [Coalescing remote changes](../../core/docs/sync-engine.md#coalescing-remote-changes).
 - `engine.disconnect()` writes waiting mutations before it disconnects.
 - A write that fails goes to `onError`. Without it, the write has no caller left to throw to, so

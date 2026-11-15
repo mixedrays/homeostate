@@ -1,3 +1,5 @@
+import type { TextPolicy } from "./diff.js";
+
 export type Unsubscribe = () => void;
 
 /**
@@ -132,6 +134,16 @@ export interface CrdtBackend {
 
   /** Notify about changes that did not come through this backend's own `write`. */
   subscribe: (onRemoteChange: () => void) => Unsubscribe;
+
+  /**
+   * Which strings the backend keeps as its text type, by their path from the synced subtree's
+   * root, as the backend's `text` option says. Absent when it keeps none as text.
+   *
+   * When the sync engine merges a local change into a remote change it has not applied yet, it
+   * merges these strings by UTF-16 unit, as the backend merges concurrent text edits, and
+   * replaces every other string whole. Without it, every string is replaced whole.
+   */
+  readonly text?: TextPolicy;
 }
 
 /**
@@ -174,8 +186,8 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    *
    * Local changes are still written synchronously. A local change made while an apply is pending
    * runs that apply first: `mergeConcurrent` merges the local change into it, against what the
-   * backend held before the pending changes, and the engine writes the result, so neither side's
-   * change is lost; see
+   * backend held before the pending changes and with the backend's `text` policy, and the engine
+   * writes the result, so neither side's change is lost; see
    * {@link https://homeostate.pages.dev/docs/core/sync-engine#coalescing-remote-changes | Coalescing remote changes}.
    * After a backend read or write threw, nothing tells which side changed what, so the remote
    * changes replace what the local change did to synced keys.

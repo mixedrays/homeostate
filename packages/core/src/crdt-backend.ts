@@ -35,7 +35,8 @@ export interface CrdtBackendParts {
   /**
    * Which strings the library stores as its text type, by their path from the synced root; a
    * write edits those in place and replaces every other changed string whole. Defaults to none.
-   * Give the `ApplyOps` that `transact` hands over the same policy.
+   * Give the `ApplyOps` that `transact` hands over the same policy. The backend exposes it as
+   * its `text`.
    */
   text?: TextPolicy;
 }
@@ -47,7 +48,7 @@ export interface CrdtBackendParts {
  *   applies only what differs from `{}` when `transact` created the root, otherwise from
  *   `previous` when the engine gives it, and otherwise from `read()`;
  * - reports through `subscribe` only the changes that `watch` does not mark as its own;
- * - reads with `read`, and has the parts' `revision`.
+ * - reads with `read`, and has the parts' `revision`, and their `text` when they give one.
  *
  * @example
  * ```typescript
@@ -93,5 +94,7 @@ export const createCrdtBackend = ({
       watch((own) => {
         if (!own) onRemoteChange();
       }),
+
+    ...(text === undefined ? {} : { text }),
   };
 };

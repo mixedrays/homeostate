@@ -186,7 +186,7 @@ The record keys and array indices from the root of a synced subtree to a nested 
 _Avoid_: Key path
 
 **Text policy**:
-A `TextPolicy` function that, given a path, says whether the string there is text; a CRDT backend takes it as its `text` option, and `getChanges` as `options.text`.
+A `TextPolicy` function that, given a path, says whether the string there is text; a CRDT backend takes it as its `text` option and exposes it as its `text` member, for the sync engine's merge, and `getChanges` takes it as `options.text`.
 Every backend writing to one document should use the same text policy.
 
 ## Diffing

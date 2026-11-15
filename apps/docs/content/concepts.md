@@ -208,6 +208,6 @@ createSyncEngine({
 
 Until the flush, the store does not show the pending changes. A local change made in the
 meantime applies them first, merged with the local change, so neither is lost: records merge
-key by key and arrays item by item, and where both sides changed the same value, the local value
-wins. See [Coalescing remote changes](../../../packages/core/docs/sync-engine.md#coalescing-remote-changes)
+key by key, arrays item by item and the backend's text by UTF-16 unit, and where both sides
+changed the same value, the local value wins. See [Coalescing remote changes](../../../packages/core/docs/sync-engine.md#coalescing-remote-changes)
 for the merge rules and when it happens.
