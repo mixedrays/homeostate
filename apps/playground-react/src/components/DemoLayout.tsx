@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { accentClass, type PageMeta } from "../demos";
 import { useSyncConnection } from "../hooks/useSyncConnection";
 import { InlineCode } from "./InlineCode";
+import { SyncFailureNotice } from "./SyncFailureNotice";
 import { SyncStatus } from "./SyncStatus";
 import { SyncToggle } from "./SyncToggle";
 
@@ -97,6 +98,7 @@ export function DemoLayout({
         <div className="space-y-4">
           {status === "offline" && <OfflineNotice />}
           {status === "unreachable" && <ServerDownNotice />}
+          {devtools.engine && <SyncFailureNotice engine={devtools.engine} />}
 
           {children}
         </div>

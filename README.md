@@ -31,6 +31,7 @@ Docs: [homeostate.pages.dev](https://homeostate.pages.dev/docs/getting-started).
 | `@homeostate/store-ngrx-signals`    | NgRx Signals adapter                              |
 | `@homeostate/persist-indexeddb`     | IndexedDB storage for `createPersistence`         |
 | `@homeostate/persist-local-storage` | localStorage storage for `createPersistence`      |
+| `@homeostate/react`                 | React hook for a sync engine's status             |
 | `@homeostate/tool-devtools`         | Panel to inspect and edit synced state            |
 | `@homeostate/tool-simulator`        | Test peers converge on a simulated network        |
 

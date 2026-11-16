@@ -41,7 +41,10 @@ const createPeer = <R extends Replica>(
   replica: R = candidate.createReplica(),
 ): Peer<R> => {
   const store = createStore(state);
-  const engine = createSyncEngine(replica.backend, store.adapter);
+  const engine = createSyncEngine({
+    backend: replica.backend,
+    adapter: store.adapter,
+  });
   engine.connect();
   return { replica, store, engine };
 };
@@ -315,10 +318,10 @@ const measureSeed = <R extends Replica>(
   return measure(options, "seed", () => engine.connect(), {
     beforeEach: () => {
       replica = candidate.createReplica();
-      engine = createSyncEngine(
-        replica.backend,
-        createStore(makeState(size)).adapter,
-      );
+      engine = createSyncEngine({
+        backend: replica.backend,
+        adapter: createStore(makeState(size)).adapter,
+      });
     },
     afterEach: () => {
       engine.disconnect();
@@ -343,10 +346,10 @@ const measureAdopt = <R extends Replica>(
       replica = candidate.createReplica();
       wire = candidate.connect(replicaA, replica);
       seeded = createPeer(candidate, makeState(size), replicaA);
-      engine = createSyncEngine(
-        replica.backend,
-        createStore(emptyState()).adapter,
-      );
+      engine = createSyncEngine({
+        backend: replica.backend,
+        adapter: createStore(emptyState()).adapter,
+      });
     },
     afterEach: () => {
       engine.disconnect();

@@ -57,7 +57,10 @@ describe("MobxStateTreeAdapter", () => {
   it("seeds the backend, writes actions, and applies remote changes", () => {
     const store = createStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createMobxStateTreeAdapter(store));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createMobxStateTreeAdapter(store),
+    });
 
     engine.connect();
     expect(backend.read()).toEqual({
@@ -88,7 +91,10 @@ describe("MobxStateTreeAdapter", () => {
     const store = createStore();
     const backend = createMemoryBackend({ todos: [], filter: "active" });
 
-    createSyncEngine(backend, createMobxStateTreeAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createMobxStateTreeAdapter(store),
+    }).connect();
 
     expect(getSnapshot(store)).toEqual({ todos: [], filter: "active" });
   });
@@ -96,7 +102,10 @@ describe("MobxStateTreeAdapter", () => {
   it("writes once per action even when the action mutates several fields", () => {
     const store = createStore();
     const { backend, writes } = countingWrites(createMemoryBackend());
-    createSyncEngine(backend, createMobxStateTreeAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createMobxStateTreeAdapter(store),
+    }).connect();
     expect(writes).toHaveLength(1);
 
     store.reset("done");
@@ -108,7 +117,10 @@ describe("MobxStateTreeAdapter", () => {
   it("reconciles remote changes onto existing instances by identifier", () => {
     const store = createStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createMobxStateTreeAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createMobxStateTreeAdapter(store),
+    }).connect();
     const second = store.todos[1];
 
     backend.receive({
@@ -135,7 +147,10 @@ describe("MobxStateTreeAdapter", () => {
       .model("ItemStore", { items: types.array(Item) })
       .create({ items: [] });
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createMobxStateTreeAdapter(store)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createMobxStateTreeAdapter(store),
+    }).connect();
     // An observer makes MST create the inserted node, so its hook runs, during the apply.
     const stop = reaction(
       () => store.items.map((item) => item.createdAt),
@@ -154,7 +169,10 @@ describe("MobxStateTreeAdapter", () => {
   it("stops both directions after disconnect", () => {
     const store = createStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(backend, createMobxStateTreeAdapter(store));
+    const engine = createSyncEngine({
+      backend,
+      adapter: createMobxStateTreeAdapter(store),
+    });
     engine.connect();
 
     engine.disconnect();

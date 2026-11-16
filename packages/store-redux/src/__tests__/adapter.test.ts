@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import {
   combineReducers,
   configureStore,
@@ -69,10 +69,10 @@ describe("ReduxAdapter", () => {
   it("seeds the backend, writes dispatched changes, and applies remote changes", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      createReduxAdapter(store, replaced),
-    );
+      adapter: createReduxAdapter(store, replaced),
+    });
 
     engine.connect();
     expect(backend.read()).toEqual({ filter: "all", todos: [] });
@@ -91,7 +91,10 @@ describe("ReduxAdapter", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend({ filter: "open", todos: [bread] });
 
-    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createReduxAdapter(store, replaced),
+    }).connect();
 
     expect(store.getState()).toEqual({ filter: "open", todos: [bread] });
   });
@@ -99,7 +102,10 @@ describe("ReduxAdapter", () => {
   it("writes only when a dispatch produces a new state", () => {
     const store = createTodoStore();
     const { backend, writes } = countingWrites(createMemoryBackend());
-    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createReduxAdapter(store, replaced),
+    }).connect();
     store.dispatch(added(milk));
     expect(writes).toHaveLength(2);
 
@@ -114,7 +120,10 @@ describe("ReduxAdapter", () => {
   it("does not echo a remote change back to the backend", () => {
     const store = createTodoStore();
     const { backend, writes } = countingWrites(createMemoryBackend());
-    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createReduxAdapter(store, replaced),
+    }).connect();
     expect(writes).toHaveLength(1);
 
     backend.receive({ filter: "all", todos: [milk] });
@@ -127,7 +136,10 @@ describe("ReduxAdapter", () => {
   it("applies remote changes to Immer-frozen state and keeps untouched items", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createReduxAdapter(store, replaced)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createReduxAdapter(store, replaced),
+    }).connect();
     store.dispatch(added(milk));
     store.dispatch(added(bread));
     const before = store.getState();
@@ -172,7 +184,10 @@ describe("ReduxAdapter", () => {
     const store = legacy_createStore(reducer);
     const backend = createMemoryBackend();
 
-    createSyncEngine(backend, createReduxAdapter(store, replace)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createReduxAdapter(store, replace),
+    }).connect();
     store.dispatch({ type: "counter/increment" });
     expect(backend.read()).toEqual({ count: 1, label: "a" });
 
@@ -197,10 +212,10 @@ describe("ReduxAdapter", () => {
     });
     const store = configureStore({ reducer: counted.reducer });
     const backend = createMemoryBackend();
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      createReduxAdapter(store, counted.actions.replaced),
-    ).connect();
+      adapter: createReduxAdapter(store, counted.actions.replaced),
+    }).connect();
 
     backend.receive({ todos: ["a", "b"], count: 0 });
 
@@ -224,7 +239,10 @@ describe("ReduxAdapter", () => {
       type: "counter/replaceState",
       payload,
     });
-    createSyncEngine(backend, createReduxAdapter(store, replace)).connect();
+    createSyncEngine({
+      backend,
+      adapter: createReduxAdapter(store, replace),
+    }).connect();
     writes.length = 0;
 
     backend.receive({ count: 5 });
@@ -237,10 +255,10 @@ describe("ReduxAdapter", () => {
   it("stops both directions after disconnect", () => {
     const store = createTodoStore();
     const backend = createMemoryBackend();
-    const engine = createSyncEngine(
+    const engine = createSyncEngine({
       backend,
-      createReduxAdapter(store, replaced),
-    );
+      adapter: createReduxAdapter(store, replaced),
+    });
     engine.connect();
 
     engine.disconnect();
@@ -270,7 +288,7 @@ describe("withHomeostate and replaceState", () => {
       ),
     });
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createReduxAdapter(store)).connect();
+    createSyncEngine({ backend, adapter: createReduxAdapter(store) }).connect();
     expect(backend.read()).toEqual({
       todos: { filter: "all", todos: [] },
       ui: { dark: false },
@@ -298,6 +316,48 @@ describe("withHomeostate and replaceState", () => {
       ui: { dark: false },
     });
   });
+  it("removes a room key combineReducers drops on the next action, unless keys leaves it out", () => {
+    // combineReducers warns of the unexpected key in development.
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      for (const [config, kept] of [
+        [{}, false],
+        [{ keys: ["todos", "ui"] }, true],
+      ] as const) {
+        const store = configureStore({
+          reducer: withHomeostate(
+            combineReducers({ todos: todos.reducer, ui: ui.reducer }),
+          ),
+        });
+        const room = {
+          todos: { filter: "all", todos: [] },
+          ui: { dark: false },
+        };
+        // A newer peer has already written `tags`.
+        const backend = createMemoryBackend({ ...room, tags: ["x"] });
+        createSyncEngine({
+          backend,
+          adapter: createReduxAdapter(store),
+          ...config,
+        }).connect();
+        expect(backend.read()).toEqual({ ...room, tags: ["x"] });
+
+        // The replace action hands the store `tags`, and the next action drops it.
+        store.dispatch(added(milk));
+
+        expect(store.getState()).not.toHaveProperty("tags");
+        expect(backend.read()).toEqual({
+          ...room,
+          todos: { filter: "all", todos: [milk] },
+          ...(kept ? { tags: ["x"] } : {}),
+        });
+      }
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
   it("syncs a slice that handles replaceState in its extra reducers", () => {
     const counter = createSlice({
       name: "counter",
@@ -315,7 +375,7 @@ describe("withHomeostate and replaceState", () => {
     });
     const store = configureStore({ reducer: counter.reducer });
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createReduxAdapter(store)).connect();
+    createSyncEngine({ backend, adapter: createReduxAdapter(store) }).connect();
 
     store.dispatch(counter.actions.increment());
     expect(backend.read()).toEqual({ count: 1 });
@@ -331,7 +391,7 @@ describe("withHomeostate and replaceState", () => {
       action.type === "counter/increment" ? { count: state.count + 1 } : state;
     const store = legacy_createStore(withHomeostate(reducer));
     const backend = createMemoryBackend();
-    createSyncEngine(backend, createReduxAdapter(store)).connect();
+    createSyncEngine({ backend, adapter: createReduxAdapter(store) }).connect();
 
     store.dispatch({ type: "counter/increment" });
     expect(backend.read()).toEqual({ count: 1 });
@@ -432,7 +492,7 @@ describe("Redux-like stores", () => {
     const adapter = createReduxAdapter(store, replace);
     expectTypeOf(adapter.getState()).toEqualTypeOf<Counter>();
 
-    createSyncEngine(backend, adapter).connect();
+    createSyncEngine({ backend, adapter }).connect();
     store.dispatch({ type: "counter/increment" });
     expect(backend.read()).toEqual({ count: 1 });
 
@@ -467,12 +527,12 @@ describe("Redux-like stores", () => {
     };
     const backend = createMemoryBackend();
 
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      createReduxAdapter(store, (next: State) =>
+      adapter: createReduxAdapter(store, (next: State) =>
         replace({ count: next.count }),
       ),
-    ).connect();
+    }).connect();
     store.dispatch({ type: "counter/increment" });
     expect(backend.read()).toEqual({ count: 1 });
 
@@ -489,10 +549,13 @@ describe("Redux-like stores", () => {
     );
     const backend = createMemoryBackend();
 
-    createSyncEngine(
+    createSyncEngine({
       backend,
-      createReduxAdapter(store, (next) => ({ type: "counter/set", next })),
-    ).connect();
+      adapter: createReduxAdapter(store, (next) => ({
+        type: "counter/set",
+        next,
+      })),
+    }).connect();
     backend.receive({ count: 3 });
 
     expect(store.getState()).toEqual({ count: 3 });

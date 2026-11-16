@@ -3,7 +3,7 @@ import path from "node:path";
 import { toString } from "mdast-util-to-string";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { groups, packageNav, site } from "../site.config.ts";
+import { groups, packageNav, site, siteNav } from "../site.config.ts";
 import type {
   GroupId,
   PackageSummary,
@@ -90,6 +90,7 @@ function includeDrafts() {
 
 function groupOf(slug: string): GroupId {
   if (slug === "core") return "core";
+  if (slug === "react") return "frameworks";
   if (slug.startsWith("crdt-")) return "crdt";
   if (slug.startsWith("store-")) return "store";
   if (slug.startsWith("persist-")) return "persist";
@@ -299,6 +300,7 @@ function buildManifest(): Manifest {
       group: groupOf(slug),
       version: pkgJson.version,
       description: pkgJson.description ?? "",
+      hint: nav?.hint,
       path: `/docs/${slug}/introduction`,
       repoPath: toRepoPath(dir),
     });
@@ -380,12 +382,22 @@ function buildManifest(): Manifest {
   ];
   for (const [key, pathname] of [
     ["docsHome", site.docsHome],
+    ["conceptsPage", site.conceptsPage],
+    ["packagesPage", site.packagesPage],
     ["aboutPage", site.aboutPage],
   ] as const) {
     if (!guides.some((g) => g.path === pathname)) {
       errors.push({
         file: toRepoPath(guidesDir),
         message: `${pathname} (site.${key}) has no page`,
+      });
+    }
+  }
+  for (const link of siteNav) {
+    if (!pages.some((p) => p.path === link.to)) {
+      errors.push({
+        file: "apps/docs/src/site.config.ts",
+        message: `${link.to} (siteNav "${link.label}") has no page`,
       });
     }
   }
@@ -474,7 +486,26 @@ export function summarizePage(page: SourcePage): PageSummary {
 }
 
 export function summarizePackage(pkg: SourcePackage): PackageSummary {
-  const { slug, name, label, group, version, description, path, repoPath } =
-    pkg;
-  return { slug, name, label, group, version, description, path, repoPath };
+  const {
+    slug,
+    name,
+    label,
+    group,
+    version,
+    description,
+    hint,
+    path,
+    repoPath,
+  } = pkg;
+  return {
+    slug,
+    name,
+    label,
+    group,
+    version,
+    description,
+    hint,
+    path,
+    repoPath,
+  };
 }

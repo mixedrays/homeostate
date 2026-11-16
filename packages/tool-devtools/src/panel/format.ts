@@ -25,12 +25,6 @@ export const previewOf = (value: Json | undefined): string => {
   return text.length > MAX_STRING ? `${text.slice(0, MAX_STRING - 1)}…"` : text;
 };
 
-/** `None`, `100 ms`, `2 s`. */
-export const formatDelay = (ms: number): string => {
-  if (ms === 0) return "None";
-  return ms >= 1000 ? `${ms / 1000} s` : `${ms} ms`;
-};
-
 /** Whether any condition slows down or cuts the link. */
 export const conditionsActive = ({ conditions }: NetworkSnapshot): boolean =>
   conditions.latency > 0 ||

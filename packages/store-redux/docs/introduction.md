@@ -1,11 +1,11 @@
 ---
-description: Keep a Redux or Redux Toolkit store in sync with a Yjs, Loro or Automerge document.
+description: Keep a Redux or Redux Toolkit store in sync with a Yjs, Loro or Automerge document, with the homeostate store enhancer or an adapter for an existing store.
 label: Introduction
 ---
 
 # @homeostate/store-redux
 
-[Redux](https://redux.js.org) store adapter for
+[Redux](https://redux.js.org) store enhancer and adapter for
 [`@homeostate/core`](../../core/docs/introduction.md).
 It keeps a Redux store in sync with a CRDT backend such as
 [Yjs](../../crdt-yjs/docs/introduction.md), [Loro](../../crdt-loro/docs/introduction.md) or
@@ -17,22 +17,22 @@ It keeps a Redux store in sync with a CRDT backend such as
 npm install @homeostate/core @homeostate/store-redux @reduxjs/toolkit @homeostate/crdt-yjs yjs
 ```
 
-The package does not depend on `redux`: the adapter takes any store with Redux's `getState`,
+The adapter does not depend on `redux`: it takes any store with Redux's `getState`,
 `dispatch` and `subscribe`. Redux Toolkit, Redux 4 and Redux 5 stores work, and so does a
-store made with Zustand's `redux` middleware. For a plain Redux store, install `redux` instead
-of `@reduxjs/toolkit`.
+store made with Zustand's `redux` middleware. Only the types of the `homeostate` enhancer need
+`redux`, an optional peer dependency that Redux Toolkit already installs. For a plain Redux
+store, install `redux` instead of `@reduxjs/toolkit`.
 
 ## Usage
 
-The adapter applies remote changes by dispatching `replaceState`, an action that replaces the
-whole root state. Wrap the root reducer in `withHomeostate` to handle it, whatever its shape:
+Add the `homeostate` enhancer to the store. It takes the backend and any sync engine options,
+and exposes the sync engine as `store.homeostate`:
 
 ```ts
 import * as Y from "yjs";
-import { combineReducers, configureStore, createSlice } from "@reduxjs/toolkit";
-import { createSyncEngine } from "@homeostate/core";
+import { configureStore, createSlice } from "@reduxjs/toolkit";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
-import { createReduxAdapter, withHomeostate } from "@homeostate/store-redux";
+import { homeostate } from "@homeostate/store-redux";
 
 const counter = createSlice({
   name: "counter",
@@ -55,23 +55,137 @@ const ui = createSlice({
 });
 
 const store = configureStore({
+  reducer: { counter: counter.reducer, ui: ui.reducer },
+  enhancers: (getDefaultEnhancers) =>
+    getDefaultEnhancers().prepend(
+      homeostate({ backend: createYjsBackend(new Y.Doc(), "shared") }),
+    ),
+});
+
+store.homeostate.disconnect(); // stop syncing
+store.homeostate.connect(); // sync again
+```
+
+The store connects when it is created: a room that already has state replaces the store's
+synced state, and an empty room is seeded from the store. The enhancer applies remote changes
+by dispatching `replaceState`, an action that replaces the whole root state, and wraps the
+root reducer in `withHomeostate` to handle it, whatever its shape. It also wraps a reducer
+later passed to `store.replaceReducer`.
+
+| Option                                                  | Default  | Description                                                          |
+| ------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
+| `backend`                                               |          | The `CrdtBackend` the store syncs with                               |
+| `connect`                                               | `"auto"` | `"manual"` leaves `store.homeostate.connect()` to the app; see below |
+| `omit`, `keys`, `filter`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the root state             |
+
+Pass the root state type to check the names in `omit` and `keys` against it, so
+`homeostate<RootState>({ backend, omit: ["ui"] })` keeps the `ui` slice on each device, and a
+misspelled key fails to compile.
+
+Immer-frozen state is fine: the engine never mutates store state in place. Local changes
+are sent only when a dispatch produces a new state object.
+
+### Keys the reducer does not know
+
+`replaceState` hands the store every key the room holds, including one a peer on a newer version
+of the app adds. `combineReducers` drops a key it has no reducer for on the next action, and warns
+about it in development. To the engine that is the store removing a key it held, so that action
+deletes the key from the room. List the root reducer's slices in `keys` to keep such a key out of
+the store and in the room for the peers that sync it:
+
+```ts
+homeostate<RootState>({ backend, keys: ["todos", "ui"] });
+```
+
+### Connecting later
+
+With `connect: "manual"`, the store is created without touching the backend, and the app
+connects it when it is ready, for example once its provider has received the room's state:
+
+```ts
+const store = configureStore({
+  reducer: rootReducer,
+  enhancers: (getDefaultEnhancers) =>
+    getDefaultEnhancers().prepend(homeostate({ backend, connect: "manual" })),
+});
+
+provider.once("sync", () => store.homeostate.connect());
+```
+
+Until then the store works locally. Connecting then works as on any `connect()`: the room's
+values replace the store's for every key the room holds, edits made meanwhile included, and
+keys the room lacks seed it.
+
+Waiting this way keeps the store's initial state from competing with a populated room; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for what to wait
+for, such as `persistence.whenLoaded`.
+
+### Placing the enhancer
+
+The enhancer dispatches `replaceState` on the store it wraps, so its place among the
+enhancers decides whether the middleware sees remote changes:
+
+- **Before the middleware**, with `getDefaultEnhancers().prepend(homeostate(...))`: remote
+  changes go through every middleware, as a `store.dispatch` does, so listener middleware,
+  sagas and Redux Toolkit's development checks see them. This is the recommended placement.
+- **After the middleware**, with `getDefaultEnhancers().concat(homeostate(...))`: the store
+  syncs the same way, but remote changes skip the middleware.
+
+With plain Redux, compose the enhancer before `applyMiddleware`:
+
+```ts
+import {
+  applyMiddleware,
+  compose,
+  legacy_createStore,
+  type StoreEnhancer,
+} from "redux";
+import type { SyncEngine } from "@homeostate/core";
+import { homeostate } from "@homeostate/store-redux";
+
+const store = legacy_createStore(
+  rootReducer,
+  compose(homeostate({ backend }), applyMiddleware(logger)) as StoreEnhancer<{
+    homeostate: SyncEngine;
+  }>,
+);
+```
+
+Redux 5's `compose` types return `unknown` for two or more enhancers, so state what the
+composed enhancer adds. A store with no middleware takes the enhancer alone:
+`legacy_createStore(rootReducer, homeostate({ backend }))`.
+
+### Without the enhancer
+
+The adapter can also be wired by hand, for example to share one store adapter with other
+tools. Wrap the root reducer in `withHomeostate`, then create the adapter and the engine:
+
+```ts
+import { combineReducers, configureStore } from "@reduxjs/toolkit";
+import { createSyncEngine } from "@homeostate/core";
+import { createReduxAdapter, withHomeostate } from "@homeostate/store-redux";
+
+const store = configureStore({
   reducer: withHomeostate(
     combineReducers({ counter: counter.reducer, ui: ui.reducer }),
   ),
 });
 
-const engine = createSyncEngine(
-  createYjsBackend(new Y.Doc(), "shared"),
-  createReduxAdapter(store),
-);
+const engine = createSyncEngine({
+  backend,
+  adapter: createReduxAdapter(store),
+});
 engine.connect();
 ```
 
 A store of a single slice wraps that slice's reducer the same way:
-`withHomeostate(counter.reducer)`.
+`withHomeostate(counter.reducer)`. The adapter dispatches `replaceState` on `store.dispatch`,
+so remote changes go through the middleware.
 
-Immer-frozen state is fine: the engine never mutates store state in place. Local changes
-are sent only when a dispatch produces a new state object.
+The enhancer syncs the root state and cannot take a scoped adapter. To sync a nested slice, or
+several slices to several rooms, wire the store by hand as above and wrap `createReduxAdapter` in
+[`scopeAdapter`](../../core/docs/sync-engine.md#scopeadapter). A dispatch that leaves the slice
+unchanged then adds no write.
 
 ### Handling the replace action yourself
 
@@ -111,14 +225,16 @@ DevTools log, add it to `actionsDenylist`; to keep Redux Toolkit's serializable 
 walking that payload on every remote change, add it to `serializableCheck.ignoredActions`:
 
 ```ts
-import { REPLACE_STATE, withHomeostate } from "@homeostate/store-redux";
+import { homeostate, REPLACE_STATE } from "@homeostate/store-redux";
 
 const store = configureStore({
-  reducer: withHomeostate(rootReducer),
+  reducer: rootReducer,
   devTools: { actionsDenylist: [REPLACE_STATE] },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: { ignoredActions: [REPLACE_STATE] },
     }),
+  enhancers: (getDefaultEnhancers) =>
+    getDefaultEnhancers().prepend(homeostate({ backend })),
 });
 ```

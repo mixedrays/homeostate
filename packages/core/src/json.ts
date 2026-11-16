@@ -2,7 +2,7 @@
 export const isAbsent = (value: unknown): boolean =>
   value === undefined || typeof value === "function";
 
-/** Whether `value` is an object other than an array, as the diff compares records. */
+/** Whether `value` is an object other than an array. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -19,7 +19,7 @@ export const hasOwn = (object: object, key: string): boolean =>
  */
 export const PROTO_KEY = "__proto__";
 
-/** What `value` is, as an error about a broken contract names it. */
+/** The kind of `value`, as an error message about a broken contract names it. */
 export const kindOf = (value: unknown): string =>
   value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 
@@ -31,51 +31,80 @@ export const toJsonPrimitive = (value: unknown): unknown =>
 export const jsonItem = (value: unknown): unknown =>
   isAbsent(value) ? null : value;
 
+/** The entry of `record` at `key` as JSON would store it; `undefined` when it would be left out. */
+export const jsonEntry = (
+  record: Record<string, unknown>,
+  key: string,
+): unknown =>
+  hasOwn(record, key) && !isAbsent(record[key]) ? record[key] : undefined;
+
 /**
- * Whether `a` and `b` are equal as `JSON.stringify` would store them in an object: entries
- * holding `undefined` or a function are absent, such array items, holes included, equal `null`,
- * and so do `NaN` and infinite numbers. Records compare their own keys only, so a key such as
- * `constructor` is never found on an object that lacks it, and `__proto__` keys are ignored on
- * both sides. Meant for JSON values: any other object, such as a `Date`, compares as a record of
- * its own enumerable entries.
+ * `jsonEqual` with `json`, and `deepEqual` without. Without `json`, entries holding `undefined`
+ * or a function count as present and compare by identity, and `NaN` is the only value equal to a
+ * value that is not `===` to it. The rest of the walk, keys included, is shared.
  */
-export const jsonEqual = (a: unknown, b: unknown): boolean => {
+const equal = (a: unknown, b: unknown, json: boolean): boolean => {
   if (a === b) return true;
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
-    // A loop, since `every` skips holes.
-    for (let i = 0; i < a.length; i++)
-      if (!jsonItemEqual(a[i], b[i])) return false;
+    // Loops, since `every` skips holes.
+    if (json) {
+      for (let i = 0; i < a.length; i++)
+        if (!equal(jsonItem(a[i]), jsonItem(b[i]), true)) return false;
+    } else {
+      for (let i = 0; i < a.length; i++)
+        if (!equal(a[i], b[i], false)) return false;
+    }
     return true;
   }
   if (isRecord(a) && isRecord(b)) {
     let count = 0;
     for (const key of Object.keys(a)) {
-      if (key === PROTO_KEY || isAbsent(a[key])) continue;
-      if (!hasOwn(b, key) || !jsonEqual(a[key], b[key])) return false;
+      const value = a[key];
+      if (key === PROTO_KEY || (json && isAbsent(value))) continue;
+      if (!hasOwn(b, key) || !equal(value, b[key], json)) return false;
       count++;
     }
-    // `b` rarely holds absent entries, so its own key count usually settles it.
-    return count === Object.keys(b).length || count === jsonKeyCount(b);
+    // `b` rarely holds `__proto__` or absent entries, so its own key count usually settles it.
+    return count === Object.keys(b).length || count === keyCount(b, json);
   }
-  return toJsonPrimitive(a) === toJsonPrimitive(b);
+  return json
+    ? toJsonPrimitive(a) === toJsonPrimitive(b)
+    : Number.isNaN(a) && Number.isNaN(b);
 };
 
-/** `jsonEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
-export const jsonItemEqual = (a: unknown, b: unknown): boolean =>
-  jsonEqual(jsonItem(a), jsonItem(b));
-
-/** The number of entries of `record` that `JSON.stringify` stores and the diff compares. */
-const jsonKeyCount = (record: Record<string, unknown>): number => {
+/** The number of entries of `record` that `equal` compares. */
+const keyCount = (record: Record<string, unknown>, json: boolean): number => {
   let count = 0;
   for (const key of Object.keys(record))
-    if (key !== PROTO_KEY && !isAbsent(record[key])) count++;
+    if (key !== PROTO_KEY && !(json && isAbsent(record[key]))) count++;
   return count;
 };
 
 /**
+ * Whether `a` and `b` are equal as values, as `getChanges` matches array items without `json`:
+ * an entry holding `undefined` differs from a missing one, and `NaN` equals itself, so a store
+ * that keeps holding it has not changed. Keys compare as in `jsonEqual`.
+ */
+export const deepEqual = (a: unknown, b: unknown): boolean =>
+  equal(a, b, false);
+
+/**
+ * Whether `a` and `b` are equal as `JSON.stringify` would store them in an object; see
+ * `toJsonValue` for what it leaves out or turns into `null`. Records compare their own keys only,
+ * so a key such as `constructor` is never found on an object that lacks it, and `__proto__` keys
+ * are ignored on both sides. Meant for JSON values: any other object, such as a `Date`, compares
+ * as a record of its own enumerable entries.
+ */
+export const jsonEqual = (a: unknown, b: unknown): boolean => equal(a, b, true);
+
+/** `jsonEqual` between `a` and `b` as `JSON.stringify` would store them in an array. */
+export const jsonItemEqual = (a: unknown, b: unknown): boolean =>
+  equal(jsonItem(a), jsonItem(b), true);
+
+/**
  * Returns `value` as `JSON.stringify` would store it: object entries holding `undefined` or a
- * function are left out, such array items, holes included, become `null`, and so do `NaN` and
+ * function are left out; array items holding them, and holes, become `null`, and so do `NaN` and
  * infinite numbers. Own `__proto__` keys are left out too, since the sync engine never syncs
  * them. Only the containers on a path to such a value are copied, so a value that is already
  * JSON is returned as is.

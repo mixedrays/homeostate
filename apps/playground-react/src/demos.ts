@@ -93,8 +93,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     path: "/todo/mobx",
     name: "MobX",
     title: "MobX Todo",
-    description:
-      "An observable class store kept in sync through createMobxAdapter.",
+    description: "An observable class store kept in sync by syncMobxStore.",
     adapter: "@homeostate/store-mobx",
     accent: "violet",
     icon: Atom,
@@ -105,7 +104,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     name: "Redux",
     title: "Redux Todo",
     description:
-      "A Redux Toolkit slice kept in sync through createReduxAdapter.",
+      "A Redux Toolkit slice kept in sync by the homeostate store enhancer.",
     adapter: "@homeostate/store-redux",
     accent: "emerald",
     icon: Layers,
@@ -115,8 +114,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     path: "/todo/jotai",
     name: "Jotai",
     title: "Jotai Todo",
-    description:
-      "Atoms composed into one writable root atom kept in sync through createJotaiAdapter.",
+    description: "A record of atoms kept in sync through createJotaiAdapter.",
     adapter: "@homeostate/store-jotai",
     accent: "cyan",
     icon: Orbit,
@@ -149,7 +147,7 @@ export const demos: Record<DemoId, DemoMeta> = {
     name: "MobX-State-Tree",
     title: "MobX-State-Tree Todo",
     description:
-      "A typed model tree kept in sync through its snapshots with createMobxStateTreeAdapter.",
+      "A typed model tree kept in sync through its snapshots by syncStateTree.",
     adapter: "@homeostate/store-mobx-state-tree",
     accent: "fuchsia",
     icon: TreePine,

@@ -34,7 +34,7 @@ export function createNgrxSignalsAdapter<
         (state) => {
           const next = options.select(state);
           // watchState fires immediately. Subscription must not seed the backend,
-          // particularly when the engine uses seed: 'never'.
+          // particularly when the engine uses seed: false.
           if (Object.is(previous, next)) return;
           previous = next;
           onChange();

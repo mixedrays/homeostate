@@ -2,12 +2,14 @@ import { cn } from "cn";
 import { PlusIcon } from "lucide-react";
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { PauseButton } from "@/components/home/pause-button.tsx";
 import { HomeostateMark } from "@/components/layout/homeostate-mark.tsx";
 import { createTimeline, STOPPED, type Timeline } from "@/lib/timeline.ts";
 
@@ -46,11 +48,11 @@ const TASKS: Record<TaskId, string> = {
 const STORES: Record<Side, string> = { a: "zustand", b: "redux" };
 
 const CAPTIONS = {
-  sync: "Tick a task in one store. Every client gets the change.",
+  sync: "One client runs Zustand, the other Redux. A tick in one shows in both.",
   offline: "The connection drops. Both clients keep working.",
   merge: "Back online, the edits merge. Both tasks are kept.",
   still:
-    "Every client holds the same state. Offline edits merge when they reconnect.",
+    "Zustand and Redux clients share one state. Offline edits merge on reconnect.",
 };
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -108,12 +110,21 @@ function useReducedMotion() {
  * middle. A scripted loop ticks a task on each side, drops the connection while both sides add
  * a task, then reconnects and merges. The prerendered HTML is the loop's first frame; visitors
  * who ask for reduced motion get its end state instead. The loop pauses while the demo is off
- * screen or the tab is hidden.
+ * screen, the tab is hidden, or the visitor pauses it.
  */
 export function SyncDemo() {
   const [scene, setScene] = useState(START);
+  const [paused, setPaused] = useState(false);
   const reducedMotion = useReducedMotion();
   const ref = useRef<HTMLElement>(null);
+  const pausedRef = useRef(paused);
+  const pauseRef = useRef<(paused: boolean) => void>(undefined);
+  const labelId = useId();
+
+  useEffect(() => {
+    pausedRef.current = paused;
+    pauseRef.current?.(paused);
+  }, [paused]);
 
   useEffect(() => {
     const root = ref.current;
@@ -127,21 +138,24 @@ export function SyncDemo() {
     const timeline = createTimeline();
     const stage = stageIn(root, timeline, setScene);
 
-    let offscreen = false;
-    const syncPaused = () => {
-      const paused = offscreen || document.hidden;
-      timeline.setPaused(paused);
+    // Animations follow the timeline: paused while any reason holds it.
+    const pauseFor = (reason: string, on: boolean) => {
+      timeline.setPaused(reason, on);
+      const { paused } = timeline;
       for (const animation of root.getAnimations({ subtree: true })) {
         if (paused && animation.playState === "running") animation.pause();
         else if (!paused && animation.playState === "paused") animation.play();
       }
     };
+    timeline.setPaused("user", pausedRef.current);
+    timeline.setPaused("hidden", document.hidden);
+    pauseRef.current = (on) => pauseFor("user", on);
+    const onVisibility = () => pauseFor("hidden", document.hidden);
     const observer = new IntersectionObserver((entries) => {
-      offscreen = !entries.at(-1)?.isIntersecting;
-      syncPaused();
+      pauseFor("offscreen", !entries.at(-1)?.isIntersecting);
     });
     observer.observe(root);
-    document.addEventListener("visibilitychange", syncPaused);
+    document.addEventListener("visibilitychange", onVisibility);
 
     let last = performance.now();
     let frame = requestAnimationFrame(function tick(now) {
@@ -160,8 +174,9 @@ export function SyncDemo() {
     return () => {
       timeline.stop();
       cancelAnimationFrame(frame);
+      pauseRef.current = undefined;
       observer.disconnect();
-      document.removeEventListener("visibilitychange", syncPaused);
+      document.removeEventListener("visibilitychange", onVisibility);
       root.getAnimations({ subtree: true }).forEach((a) => a.cancel());
       for (const { pointer } of Object.values(stage.windows)) {
         pointer.el.style.removeProperty("translate");
@@ -175,8 +190,7 @@ export function SyncDemo() {
   return (
     <figure
       ref={ref}
-      role="img"
-      aria-label="Two task lists, one on Zustand and one on Redux, synced through Homeostate, show the same tasks. A task ticked in one list is ticked in the other. While the connection is down, each list adds a task; when it comes back, both lists have both tasks."
+      aria-labelledby={labelId}
       className="relative overflow-hidden rounded-2xl border bg-muted/30 p-5 sm:p-6"
     >
       <div
@@ -185,40 +199,58 @@ export function SyncDemo() {
       />
       <div className="relative @container">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <span className="font-mono text-xs text-muted-foreground uppercase">
-            Same state, every client
+          <span
+            id={labelId}
+            className="font-mono text-xs text-muted-foreground uppercase"
+          >
+            Two stores, one document
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
             <span
-              className={cn(
-                "size-1.5 rounded-full transition-colors",
-                STATUS_DOT[scene.status],
-              )}
+              aria-hidden="true"
+              className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground"
+            >
+              <span
+                className={cn(
+                  "size-1.5 rounded-full transition-colors",
+                  STATUS_DOT[scene.status],
+                )}
+              />
+              {STATUS_LABEL[scene.status]}
+            </span>
+            <PauseButton
+              paused={paused}
+              onToggle={() => setPaused((value) => !value)}
+              what="demo"
             />
-            {STATUS_LABEL[scene.status]}
-          </span>
+          </div>
         </div>
-        <div data-row className="flex flex-col @min-[26rem]:flex-row">
-          <TaskWindow
-            side="a"
-            tasks={scene.tasks.a}
-            offline={offline}
-            glow={scene.glow.a}
-          />
-          <Wire offline={offline} />
-          <TaskWindow
-            side="b"
-            tasks={scene.tasks.b}
-            offline={offline}
-            glow={scene.glow.b}
-          />
-        </div>
-        <p
-          key={scene.caption}
-          className="sd-caption mt-5 min-h-10 text-center text-xs leading-relaxed text-balance text-muted-foreground"
+        <div
+          role="img"
+          aria-label="Two task lists, one on Zustand and one on Redux, synced through Homeostate, show the same tasks. A task ticked in one list is ticked in the other. While the connection is down, each list adds a task; when it comes back, both lists have both tasks."
         >
-          {CAPTIONS[scene.caption]}
-        </p>
+          <div data-row className="flex flex-col @min-[26rem]:flex-row">
+            <TaskWindow
+              side="a"
+              tasks={scene.tasks.a}
+              offline={offline}
+              glow={scene.glow.a}
+            />
+            <Wire offline={offline} />
+            <TaskWindow
+              side="b"
+              tasks={scene.tasks.b}
+              offline={offline}
+              glow={scene.glow.b}
+            />
+          </div>
+          <p
+            key={scene.caption}
+            className="sd-caption mt-5 min-h-10 text-center text-xs leading-relaxed text-balance text-muted-foreground"
+          >
+            {CAPTIONS[scene.caption]}
+          </p>
+        </div>
       </div>
     </figure>
   );

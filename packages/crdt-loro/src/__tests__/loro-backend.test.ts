@@ -1,7 +1,12 @@
 import { LoroDoc, LoroList, LoroMap, LoroText } from "loro-crdt";
-import { describe, expect, it } from "vitest";
-import { describeCrdtBackend } from "@homeostate/core/conformance";
-import { createLoroBackend } from "../index.js";
+import { describe, expect, it, vi } from "vitest";
+import { createSyncEngine } from "@homeostate/core";
+import {
+  createTestStore,
+  describeCrdtBackend,
+} from "@homeostate/core/conformance";
+import { createLoroBackend, createLoroPersistable } from "../index.js";
+import { textDeletePanicSnapshot } from "./fixtures/text-delete-panic.js";
 
 const NAME = "shared";
 
@@ -64,12 +69,60 @@ describe("createLoroBackend", () => {
     const doc = new LoroDoc();
     const backend = createLoroBackend(doc, NAME);
     backend.write({ count: 1 });
-    const before = backend.revision?.();
+    const before = backend.revision();
 
     // Reported only once committed.
     doc.getMap(NAME).set("count", 2);
 
-    expect(backend.revision?.()).not.toBe(before);
+    expect(backend.revision()).not.toBe(before);
+  });
+
+  it("reports an edit other code has not committed before its next write", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME);
+    backend.write({ count: 1, other: 0 });
+    const onRemoteChange = vi.fn();
+    backend.subscribe(onRemoteChange);
+
+    doc.getMap(NAME).set("count", 5);
+    backend.write({ count: 1, other: 1 }, { count: 1, other: 0 });
+
+    expect(onRemoteChange).toHaveBeenCalledTimes(1);
+    expect(backend.read()).toEqual({ count: 5, other: 1 });
+  });
+
+  it("commits once and reports nothing when no edit is pending", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME);
+    backend.write({ count: 1 });
+    const onRemoteChange = vi.fn();
+    backend.subscribe(onRemoteChange);
+    const commits = vi.fn();
+    doc.subscribeLocalUpdates(commits);
+
+    backend.write({ count: 2 });
+
+    expect(commits).toHaveBeenCalledTimes(1);
+    expect(onRemoteChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps a store change made after an edit other code has not committed", () => {
+    const doc = new LoroDoc();
+    const store = createTestStore<Record<string, unknown>>({});
+    const errors: unknown[] = [];
+    createSyncEngine({
+      backend: createLoroBackend(doc, NAME),
+      adapter: store.adapter,
+      onError: (error, source) => errors.push([source, error]),
+    }).connect();
+    store.update(() => ({ count: 1, other: 0 }));
+
+    doc.getMap(NAME).set("count", 5);
+    store.update((state) => ({ ...state, other: 1 }));
+
+    expect(errors).toEqual([]);
+    expect(store.getState()).toEqual({ count: 5, other: 1 });
+    expect(doc.getMap(NAME).toJSON()).toEqual({ count: 5, other: 1 });
   });
 
   it("has no revision while checked out, and its latest one again after", () => {
@@ -78,12 +131,102 @@ describe("createLoroBackend", () => {
     backend.write({ count: 1 });
     const earlier = doc.frontiers();
     backend.write({ count: 2 });
-    const latest = backend.revision?.();
+    const latest = backend.revision();
 
     doc.checkout(earlier);
-    expect(backend.revision?.()).toBeUndefined();
+    expect(backend.revision()).toBeUndefined();
     doc.checkoutToLatest();
 
-    expect(backend.revision?.()).toBe(latest);
+    expect(backend.revision()).toBe(latest);
+  });
+
+  // loro-crdt before 1.16.4 panics at commit on this delete when the document has a subscriber,
+  // which the engine always adds, and every later call on the document throws.
+  it("deletes a text in a restored document while the engine is connected", () => {
+    const doc = new LoroDoc();
+    createLoroPersistable(doc).apply(textDeletePanicSnapshot());
+    const errors: unknown[] = [];
+    const store = createTestStore<Record<string, unknown>>({});
+    createSyncEngine({
+      backend: createLoroBackend(doc, NAME, { text: () => true }),
+      adapter: store.adapter,
+      onError: (error, source) => errors.push([source, error]),
+    }).connect();
+    expect(store.getState().chaos).toBe("🙂y");
+
+    store.update((state) => ({ ...state, chaos: "" }));
+    store.update((state) => ({ ...state, log: "after" }));
+
+    expect(errors).toEqual([]);
+    expect(doc.getMap(NAME).toJSON()).toMatchObject({
+      chaos: "",
+      log: "after",
+    });
+  });
+
+  describe("a store edit merged into a pending apply that moved and changed its row", () => {
+    type Row = { id: string; cells: Record<string, number> };
+    const row = (id: string, cells: Record<string, number> = {}): Row => ({
+      id,
+      cells,
+    });
+    const exchange = (a: LoroDoc, b: LoroDoc): void => {
+      b.import(a.export({ mode: "update", from: b.version() }));
+      a.import(b.export({ mode: "update", from: a.version() }));
+    };
+
+    it.each([
+      {
+        change: "an insert and an edit",
+        base: [row("r1")],
+        remote: [row("r0"), row("r1", { b: 1 })],
+        expected: [row("r0"), row("r1", { b: 1, a: 2 })],
+      },
+      {
+        change: "a delete and an edit",
+        base: [row("r0"), row("r1")],
+        remote: [row("r1", { b: 1 })],
+        expected: [row("r1", { b: 1, a: 2 })],
+      },
+      {
+        change: "an insert only",
+        base: [row("r1")],
+        remote: [row("r0"), row("r1")],
+        expected: [row("r0"), row("r1", { a: 2 })],
+      },
+    ])(
+      "lands on its row after $change from the other peer",
+      async ({ base, remote, expected }) => {
+        const a = new LoroDoc();
+        a.setPeerId(1);
+        const b = new LoroDoc();
+        b.setPeerId(2);
+        const backendB = createLoroBackend(b, NAME);
+        backendB.write({ rows: base });
+        exchange(b, a);
+        const store = createTestStore<{ rows: Row[] }>({ rows: [] });
+        createSyncEngine({
+          backend: createLoroBackend(a, NAME),
+          adapter: store.adapter,
+          schedule: queueMicrotask,
+        }).connect();
+
+        backendB.write({ rows: remote }, { rows: base });
+        exchange(b, a);
+        // The apply waits for its microtask, so the store edits r1 before it runs.
+        expect(store.getState().rows).toEqual(base);
+        store.update((s) => ({
+          rows: s.rows.map((r) =>
+            r.id === "r1" ? { ...r, cells: { ...r.cells, a: 2 } } : r,
+          ),
+        }));
+        await Promise.resolve();
+        exchange(a, b);
+
+        expect(store.getState().rows).toEqual(expected);
+        expect(a.getMap(NAME).toJSON()).toEqual({ rows: expected });
+        expect(b.getMap(NAME).toJSON()).toEqual({ rows: expected });
+      },
+    );
   });
 });

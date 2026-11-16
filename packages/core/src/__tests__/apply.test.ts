@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChanges, applyStringChanges, type ApplyOps } from "../apply.js";
-import { ChangeType } from "../change.js";
-import { getChanges } from "../diff.js";
+import { applyChanges, type ApplyOps } from "../apply.js";
 import { snapshot } from "./helpers.js";
 
 type Plain = Record<string, unknown>;
@@ -67,42 +65,6 @@ const reconcile = <T extends object>(before: T, after: T) => {
   return { target, log };
 };
 
-describe("applyStringChanges", () => {
-  it("revises a string by the edit script getChanges produced", () => {
-    const cases: [string, string][] = [
-      ["", "abc"],
-      ["abc", ""],
-      ["abc", "abcd"],
-      ["abc", "xyz"],
-      ["the quick fox", "the quick brown fox"],
-      ["aaa", "aa"],
-    ];
-
-    for (const [before, after] of cases)
-      expect(applyStringChanges(before, getChanges(before, after))).toBe(after);
-  });
-
-  it("deletes a run of UTF-16 units in one step, one unit when the count is absent", () => {
-    expect(
-      applyStringChanges("a😀bc", [
-        { type: ChangeType.DELETE, key: 1, count: 3 },
-      ]),
-    ).toBe("ac");
-    expect(
-      applyStringChanges("abc", [{ type: ChangeType.DELETE, key: 1 }]),
-    ).toBe("ac");
-  });
-
-  it("takes only text steps", () => {
-    expect(
-      applyStringChanges("ab", [
-        // @ts-expect-error A text script has no update.
-        { type: ChangeType.UPDATE, key: 0, value: "z" },
-      ]),
-    ).toBe("ab");
-  });
-});
-
 describe("applyChanges", () => {
   it("adds, replaces and removes record keys", () => {
     const { target, log } = reconcile({ keep: 1, drop: 2, change: "a" }, {
@@ -129,7 +91,9 @@ describe("applyChanges", () => {
     const { ops, log } = createOps();
     const target = { list: [1, 2, 3, 4], title: new Text("a😀b") };
 
-    applyChanges(target, snapshot(target), { list: [], title: "" }, ops);
+    applyChanges(target, snapshot(target), { list: [], title: "" }, ops, {
+      text: () => true,
+    });
 
     expect(target.list).toEqual([]);
     expect(target.title.value).toBe("");
@@ -173,13 +137,6 @@ describe("applyChanges", () => {
     expect(target.list[1]).toBe(untouched);
   });
 
-  it("replaces a string field whole when the target holds it as a plain value", () => {
-    const { target, log } = reconcile({ title: "todo" }, { title: "todos" });
-
-    expect(target).toEqual({ title: "todos" });
-    expect(log).toEqual(["set title"]);
-  });
-
   it("replaces a child the ops treat as a plain value with its next value", () => {
     // Its JSON is a record, but the target holds it whole, as a document holds a value other
     // code stored.
@@ -205,16 +162,43 @@ describe("applyChanges", () => {
     expect(log).toEqual(["set item"]);
   });
 
-  it("leaves a target that is not a record or a list alone", () => {
+  it("throws for a target that is not a record or a list, and writes nothing", () => {
     const { ops, log } = createOps();
     const opaque = new Opaque({ a: 1 });
     const text = new Text("a");
 
-    applyChanges(opaque, { a: 1 }, { a: 2 }, ops);
-    applyChanges(text, {}, { a: 1 }, ops);
-
+    expect(() => applyChanges(opaque, { a: 1 }, { a: 2 }, ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a plain value target, object and object",
+      ),
+    );
+    expect(() => applyChanges(text, {}, { a: 1 }, ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a text target, object and object",
+      ),
+    );
     expect(opaque.json).toEqual({ a: 1 });
     expect(text.value).toBe("a");
+    expect(log).toEqual([]);
+  });
+
+  it("throws when current and next are not the target's kind, and writes nothing", () => {
+    const { ops, log } = createOps();
+    const record = { a: 1 };
+    const list = [1];
+
+    expect(() => applyChanges(record, [1], [2], ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a record target, array and array",
+      ),
+    );
+    expect(() => applyChanges(list, [1], { a: 1 }, ops)).toThrow(
+      new TypeError(
+        "applyChanges needs a record target and two records, or a list target and two arrays, got a list target, array and object",
+      ),
+    );
+    expect(record).toEqual({ a: 1 });
+    expect(list).toEqual([1]);
     expect(log).toEqual([]);
   });
 
@@ -228,6 +212,7 @@ describe("applyChanges", () => {
       snapshot(target),
       { todos: [{ title: "Plan a 😀 trip" }] },
       ops,
+      { text: () => true },
     );
 
     expect(target.todos[0].title).toBe(title);
@@ -242,6 +227,18 @@ describe("applyChanges", () => {
   it("replaces text whole when the ops cannot edit it", () => {
     const { ops, log } = createOps();
     delete ops.editText;
+    const target = { title: new Text("Plan") };
+
+    applyChanges(target, snapshot(target), { title: "Plan it" }, ops, {
+      text: () => true,
+    });
+
+    expect(target).toEqual({ title: "Plan it" });
+    expect(log).toEqual(["set title"]);
+  });
+
+  it("replaces every string whole without a text policy", () => {
+    const { ops, log } = createOps();
     const target = { title: new Text("Plan") };
 
     applyChanges(target, snapshot(target), { title: "Plan it" }, ops);

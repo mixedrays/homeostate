@@ -1,9 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
-  ChangeType,
   getChanges,
   type Change,
-  type Diffable,
   type ListChange,
   type RecordChange,
   type TextChange,
@@ -11,15 +9,9 @@ import {
 
 // These checks run when the test files are type-checked, as `pnpm typecheck` does.
 describe("Change types", () => {
-  it("names each step type with a const object", () => {
-    expect(ChangeType).toEqual({
-      INSERT: "insert",
-      UPDATE: "update",
-      DELETE: "delete",
-      PENDING: "pending",
-    });
-    expectTypeOf<ChangeType>().toEqualTypeOf<
-      "insert" | "update" | "delete" | "pending"
+  it("names each step type with a string literal", () => {
+    expectTypeOf<Change["type"]>().toEqualTypeOf<
+      "insert" | "update" | "delete" | "edit"
     >();
   });
 
@@ -46,12 +38,12 @@ describe("Change types", () => {
     expectTypeOf(changes).toEqualTypeOf<RecordChange[]>();
     expect(changes).toEqual([
       {
-        type: "pending",
+        type: "edit",
         key: "todos",
         kind: "list",
         changes: [
           {
-            type: "pending",
+            type: "edit",
             key: 0,
             kind: "record",
             changes: [{ type: "update", key: "done", value: true }],
@@ -62,14 +54,14 @@ describe("Change types", () => {
   });
 
   it("accepts only two values of one kind", () => {
-    const text = "a" as Diffable;
-    const list = ["a"] as Diffable;
+    const text = "a" as string | unknown[];
+    const list = ["a"] as string | unknown[];
     expect(() =>
       // @ts-expect-error A string and an array have no edit script.
       getChanges("a", ["a"]),
     ).toThrow(TypeError);
     expect(() =>
-      // @ts-expect-error Values typed only as `Diffable` may be of different kinds.
+      // @ts-expect-error Values typed as a union of kinds may be of different kinds.
       getChanges(text, list),
     ).toThrow(TypeError);
   });
@@ -80,13 +72,13 @@ describe("Change types", () => {
     expectTypeOf<TextChange["key"]>().toEqualTypeOf<number>();
   });
 
-  it("narrows a pending step's script by its kind", () => {
+  it("narrows an edit step's script by its kind", () => {
     const [change] = getChanges({ t: "a" }, { t: "ab" });
-    if (change.type === ChangeType.PENDING && change.kind === "text")
+    if (change.type === "edit" && change.kind === "text")
       expectTypeOf(change.changes).toEqualTypeOf<TextChange[]>();
-    if (change.type === ChangeType.PENDING && change.kind === "list")
+    if (change.type === "edit" && change.kind === "list")
       expectTypeOf(change.changes).toEqualTypeOf<ListChange[]>();
-    if (change.type === ChangeType.PENDING && change.kind === "record")
+    if (change.type === "edit" && change.kind === "record")
       expectTypeOf(change.changes).toEqualTypeOf<RecordChange[]>();
   });
 
@@ -94,15 +86,19 @@ describe("Change types", () => {
     const rejected: Change[] = [
       // @ts-expect-error A record delete has no count.
       { type: "delete", key: "a", count: 2 },
-      // @ts-expect-error A pending step names the kind of its script.
-      { type: "pending", key: 0, changes: [] },
+      // @ts-expect-error An edit step names the kind of its script.
+      { type: "edit", key: 0, changes: [] },
     ];
     // @ts-expect-error A text insert carries a string.
     const insert: TextChange = { type: "insert", key: 0, value: 1 };
     // @ts-expect-error A text script has no update.
     const update: TextChange = { type: "update", key: 0, value: "x" };
-    // @ts-expect-error A list key is a number.
-    const stringIndex: ListChange = { type: "insert", key: "0", value: 1 };
-    expect([...rejected, insert, update, stringIndex]).toHaveLength(5);
+    // @ts-expect-error A list delete says how many items it removes.
+    const listDelete: ListChange = { type: "delete", key: 0 };
+    // @ts-expect-error A text delete says how many units it removes.
+    const textDelete: TextChange = { type: "delete", key: 0 };
+    expect([...rejected, insert, update, listDelete, textDelete]).toHaveLength(
+      6,
+    );
   });
 });

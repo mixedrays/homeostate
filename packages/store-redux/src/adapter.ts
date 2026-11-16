@@ -122,7 +122,8 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
  *   reducer: withHomeostate(combineReducers({ todos: todos.reducer, ui: ui.reducer })),
  * });
  * const adapter = createReduxAdapter(store);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * ```
  */

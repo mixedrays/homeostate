@@ -96,7 +96,7 @@ export function createTodoStore(syncServerUrl: string) {
     connectSharedDoc(syncServerUrl);
   const adapter = createTanStackStoreAdapter(store);
   const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isTodoTitle });
-  const engine = createSyncEngine(backend, adapter);
+  const engine = createSyncEngine({ backend, adapter });
 
   /** The store as the devtools panel sees it. */
   const devtoolsSource: DevtoolsSource = {

@@ -59,10 +59,10 @@ const openTab = () => {
   const doc = new Y.Doc();
   seedDocument(doc);
   const store = createStore<{ text: string }>(() => ({ text: "" }));
-  const engine = createSyncEngine(
-    createYjsBackend(doc, SYNC_MAP_NAME, { text: isDocumentText }),
-    createZustandAdapter(store),
-  );
+  const engine = createSyncEngine({
+    backend: createYjsBackend(doc, SYNC_MAP_NAME, { text: isDocumentText }),
+    adapter: createZustandAdapter(store),
+  });
   engine.connect();
   // Never connected: it is only here for the awareness instance the demo would get from it.
   const provider = new WebsocketProvider("ws://localhost:0", "test", doc, {

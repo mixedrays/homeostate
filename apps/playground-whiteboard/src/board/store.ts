@@ -46,7 +46,7 @@ seedBoard(ydoc);
 
 const adapter = createZustandAdapter(useBoardStore);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, { text: isShapeText });
-const syncEngine = createSyncEngine(backend, adapter);
+const syncEngine = createSyncEngine({ backend, adapter });
 
 syncEngine.connect();
 

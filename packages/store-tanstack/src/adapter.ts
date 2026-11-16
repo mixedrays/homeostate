@@ -37,7 +37,8 @@ class TanStackStoreAdapter<S extends object> implements StoreAdapter<S> {
  *
  * const store = new Store({ count: 0 });
  * const adapter = createTanStackStoreAdapter(store);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * store.setState((s) => ({ ...s, count: s.count + 1 }));
  * ```

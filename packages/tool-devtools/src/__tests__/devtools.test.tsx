@@ -49,7 +49,7 @@ beforeEach(() => {
     filter: "all",
   });
   backend = createMemoryBackend();
-  engine = createSyncEngine(backend, store.adapter);
+  engine = createSyncEngine({ backend, adapter: store.adapter });
   engine.connect();
   container = document.createElement("div");
   document.body.append(container);
@@ -110,6 +110,24 @@ const statusToggle = (text: string): HTMLButtonElement => {
   );
   if (!toggle) throw new Error(`no status toggle ${text}`);
   return toggle as HTMLButtonElement;
+};
+
+/** The range input of the slider labelled `label`. */
+const sliderFor = (label: string): HTMLInputElement => {
+  const input = [
+    ...shadow().querySelectorAll<HTMLInputElement>('input[type="range"]'),
+  ].find((candidate) => {
+    const labelId = candidate.getAttribute("aria-labelledby");
+    return labelId && shadow().getElementById(labelId)?.textContent === label;
+  });
+  if (!input) throw new Error(`no slider labelled ${label}`);
+  return input;
+};
+
+const press = async (element: Element, key: string) => {
+  await act(async () => {
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  });
 };
 
 const click = async (element: Element) => {
@@ -601,12 +619,12 @@ describe("HomeostateDevtools", () => {
 
     const toggle = byLabel("Sync engine connected");
     await click(toggle);
-    expect(engine.isConnected()).toBe(false);
+    expect(engine.getStatus().connected).toBe(false);
     expect(shadow().textContent).toContain("Disconnected");
     expect(markState()).toBe("disconnected");
 
     await click(byLabel("Sync engine connected"));
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(markState()).toBe("connected");
   });
 
@@ -693,7 +711,7 @@ describe("HomeostateDevtools", () => {
       expect(network.getSnapshot().conditions.offline).toBe(false);
       expect(statusToggle("Online").getAttribute("aria-pressed")).toBe("true");
       await click(statusToggle("Connected"));
-      expect(engine.isConnected()).toBe(true);
+      expect(engine.getStatus().connected).toBe(true);
       expect(statusToggle("Connected").getAttribute("aria-pressed")).toBe(
         "true",
       );
@@ -766,7 +784,7 @@ describe("HomeostateDevtools", () => {
     expect(button().getAttribute("title")).toBe("Todos: disconnected");
 
     await click(statusToggle("Connected"));
-    expect(engine.isConnected()).toBe(true);
+    expect(engine.getStatus().connected).toBe(true);
     expect(button().getAttribute("title")).toBeNull();
   });
 
@@ -1246,9 +1264,46 @@ describe("HomeostateDevtools", () => {
     expect(network.getSnapshot().conditions.offline).toBe(true);
     expect(shadow().textContent).toContain("Network offline");
 
-    await click(byLabel("Latency 500 ms"));
-    expect(network.getSnapshot().conditions.latency).toBe(500);
+    await press(sliderFor("Latency"), "ArrowRight");
+    expect(network.getSnapshot().conditions.latency).toBe(50);
+    expect(byLabel<HTMLInputElement>("Latency in milliseconds").value).toBe(
+      "50",
+    );
     expect(byLabel("conditions on")).toBeTruthy();
+
+    await press(sliderFor("Jitter"), "End");
+    expect(network.getSnapshot().conditions.jitter).toBe(1000);
+
+    await click(byLabel("Reset latency"));
+    await click(byLabel("Reset jitter"));
+    expect(network.getSnapshot().conditions).toMatchObject({
+      latency: 0,
+      jitter: 0,
+    });
+    expect(byLabel<HTMLButtonElement>("Reset latency").disabled).toBe(true);
+    network.destroy();
+  });
+
+  it("takes typed delays past the slider's end", async () => {
+    const network = createNetworkLink(createTestDoc(), createTestDoc());
+    await renderSources([{ name: "Todos", adapter: store.adapter, network }]);
+    await click(buttonWithText("Network"));
+    const latency = byLabel<HTMLInputElement>("Latency in milliseconds");
+
+    await type(latency, "5000");
+    expect(network.getSnapshot().conditions.latency).toBe(5000);
+    expect(sliderFor("Latency").value).toBe("2000");
+
+    await type(latency, "");
+    expect(latency.getAttribute("aria-invalid")).toBe("true");
+    expect(network.getSnapshot().conditions.latency).toBe(5000);
+    await act(async () => {
+      latency.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(latency.value).toBe("5000");
+
+    await type(latency, "120000");
+    expect(network.getSnapshot().conditions.latency).toBe(60_000);
     network.destroy();
   });
 

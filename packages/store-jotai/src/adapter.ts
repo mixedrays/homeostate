@@ -4,6 +4,13 @@ import {
   type createStore,
 } from "jotai/vanilla";
 import type { StoreAdapter, Unsubscribe } from "@homeostate/core";
+import {
+  combineAtoms,
+  isAtom,
+  type AnyAtoms,
+  type SyncedAtoms,
+  type SyncedAtomsState,
+} from "./atoms.js";
 
 export type JotaiStore = ReturnType<typeof createStore>;
 
@@ -40,7 +47,8 @@ class JotaiAdapter<S extends object> implements StoreAdapter<S> {
 /**
  * Creates a Jotai-specific store adapter that syncs one writable atom with the sync engine.
  * Pass a primitive atom, or a derived writable atom that fans a replacement out
- * to several atoms to sync a slice spread across the atom graph.
+ * to several atoms to sync a slice spread across the atom graph. To sync several atoms
+ * without writing that root atom, pass a record of atoms instead.
  *
  * @param atom - Writable atom holding the synced state
  * @param store - Jotai store the atom lives in; defaults to the global default store
@@ -55,13 +63,58 @@ class JotaiAdapter<S extends object> implements StoreAdapter<S> {
  * const counterAtom = atom({ count: 0 });
  * const store = createStore();
  * const adapter = createJotaiAdapter(counterAtom, store);
- * const engine = createSyncEngine(createYjsBackend(new Y.Doc(), 'shared'), adapter);
+ * const backend = createYjsBackend(new Y.Doc(), 'shared');
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * ```
  */
 export function createJotaiAdapter<S extends object>(
   atom: SyncedAtom<S>,
   store?: JotaiStore,
-): StoreAdapter<S> {
-  return new JotaiAdapter(atom, store);
+): StoreAdapter<S>;
+
+/**
+ * Creates a Jotai-specific store adapter that syncs a record of writable atoms as one state,
+ * one top-level key per atom, typed from the atoms' values. Each atom must accept a full
+ * replacement of its value, as primitive, `atomWithReset` and `atomWithStorage` atoms do.
+ *
+ * A remote change sets every atom it changes in one `store.set`, so subscribers to the state
+ * hear one notification, and atoms it does not change keep their value and are not written.
+ *
+ * An `undefined` value is an absent key. When a peer removes a key, its atom is reset to its
+ * initial value (`init`), and the sync engine writes that value back, as it writes anything the
+ * store normalises, so the key returns on every peer. An atom without an initial value, such as
+ * a derived writable atom, keeps its value instead, which is written back the same way. Only an
+ * atom whose initial value is `undefined` keeps the key absent. So setting an atom with another
+ * initial value to `undefined` resets it to that value on every peer, this one included.
+ *
+ * The record's keys are the whole synced state: a key the backend holds that the record does
+ * not list, such as one a newer version of the app adds, never reaches an atom and stays in the
+ * backend as it is.
+ *
+ * @param atoms - Record of writable atoms, keyed by the synced key each one holds
+ * @param store - Jotai store the atoms live in; defaults to the global default store
+ * @returns StoreAdapter instance for the atoms
+ *
+ * @example
+ * ```typescript
+ * const todosAtom = atom<Todo[]>([]);
+ * const searchTermAtom = atom('');
+ * const store = createStore();
+ * // StoreAdapter<{ todos: Todo[]; searchTerm: string }>
+ * const adapter = createJotaiAdapter({ todos: todosAtom, searchTerm: searchTermAtom }, store);
+ * createSyncEngine({ backend: createYjsBackend(new Y.Doc(), 'shared'), adapter }).connect();
+ * ```
+ */
+export function createJotaiAdapter<R extends SyncedAtoms<R>>(
+  atoms: R,
+  store?: JotaiStore,
+): StoreAdapter<SyncedAtomsState<R>>;
+
+export function createJotaiAdapter(
+  target: SyncedAtom<object> | AnyAtoms,
+  store?: JotaiStore,
+): StoreAdapter<object> | StoreAdapter<SyncedAtomsState<AnyAtoms>> {
+  if (isAtom(target)) return new JotaiAdapter(target, store);
+  return new JotaiAdapter(combineAtoms(target), store);
 }

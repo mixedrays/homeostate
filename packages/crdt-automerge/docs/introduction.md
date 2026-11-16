@@ -34,10 +34,10 @@ import {
 } from "@homeostate/crdt-automerge";
 
 const handle = createAutomergeHandle(A.init());
-const engine = createSyncEngine(
-  createAutomergeBackend(handle, "shared"),
+const engine = createSyncEngine({
+  backend: createAutomergeBackend(handle, "shared"),
   adapter,
-);
+});
 engine.connect();
 
 // Replication is yours to wire, for example:
@@ -63,14 +63,18 @@ edits alike.
 `undefined` and functions are not JSON, so the backend leaves out object entries holding
 either and stores such array items as `null`, as `JSON.stringify` does.
 
-Snapshots from `read()` copy only what changed since the last read and are shared between
-reads, so treat them as immutable. A missing synced key reads as `{}`. If a peer stores
+A snapshot from `read()` is yours: changing it changes neither the document nor a later
+`read()`. The backend keeps its own copy, so a read copies only what changed in the document.
+Each read checks the objects the last read returned against that copy, and returns those that
+still match again, so unchanged subtrees keep their identity between reads. One you changed is
+copied afresh. A store still needs new objects for what changes, since the engine diffs against
+the state it last wrote. A missing synced key reads as `{}`. If a peer stores
 anything but a map there, such as a string or `null`, `read()` throws a `TypeError` naming
 what the key holds, which the sync engine reports; a `write` replaces it with a map.
 
 ## With automerge-repo
 
-[automerge-repo](https://automerge.org/docs/repositories/) keeps documents in a `Repo`, which
+[automerge-repo](https://automerge.org/docs/reference/repositories/) keeps documents in a `Repo`, which
 stores them through a storage adapter and syncs them through network adapters. Pass one of its
 `DocHandle`s instead of a handle, and the `Repo` stores and syncs what the engine writes:
 
@@ -87,10 +91,10 @@ const repo = new Repo({
 });
 // `url` is the document's AutomergeUrl, such as `repo.create().url` where it was created.
 const docHandle = await repo.find(url);
-const engine = createSyncEngine(
-  createAutomergeBackend(docHandle, "shared"),
-  storeAdapter,
-);
+const engine = createSyncEngine({
+  backend: createAutomergeBackend(docHandle, "shared"),
+  adapter: storeAdapter,
+});
 engine.connect();
 ```
 
@@ -101,6 +105,29 @@ storage, received from peers, or made through `docHandle.change`.
 
 The `Repo` and the backend must share one copy of `@automerge/automerge`, so check that your
 package manager installs only one.
+
+## Peers that create the synced key
+
+The synced key holds one Automerge map, which a document creates with its first write. Two peers
+that each create it, each in a document without it, such as a peer that seeds before the room's
+state arrives, make two competing maps at the key. Automerge shows only one of them, the winner,
+so the backend merges them itself:
+
+- `read()` returns the winner's keys and every key only a losing map holds. A key both hold
+  reads as the winner's value, as when two peers write one key at once.
+- The next write moves those keys into the winner and empties the losing maps, so every peer, an
+  earlier release of this package included, reads them from the winner, and a key deleted later
+  stays deleted. A key a peer adds to its own map before it receives the move is moved by the
+  write after it.
+
+A moved value is a copy. So a peer's edit inside it, made in its own map before that peer
+receives the move, such as toggling a todo the move copied, is lost. Documents stored by an
+earlier release that already hold two maps read the same way and are merged by their next
+write.
+
+Two maps still compete for each value two peers seed, so
+[waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) before `connect()`
+keeps the room's values, as with Yjs and Loro.
 
 ## Strings and text
 
@@ -119,6 +146,36 @@ returns plain strings either way, `ImmutableString`s included. Give every backen
 the document the same policy. A string held as the other kind, such as text written by an
 earlier release, reads as usual and is stored as the configured kind when it next changes. See
 [Strings and text](/docs/concepts#strings-and-text).
+
+## Known issue: list order after some merges
+
+Automerge 3.4.1 and 3.5.0 patch a document's view wrongly after some merges. Each document
+keeps a materialized view, the object tree `handle.doc()` returns, and updates it from patches.
+When one merge brings a delete of a list item together with an insert after that item, while
+another peer's concurrent update of the item is in the same merge or already in the document,
+the insert's patch lands one index too low. The view then holds another order than the document
+itself, which `A.save`, `A.load` and `A.toJS` read. Other 3.x releases were not tested.
+
+Such a merge happens when two users edit one list at once, one removing an item while the other
+edits it and adds one after it, and a third peer receives the delete and the insert together:
+through `A.loadIncremental`, `A.merge`, the sync protocol, as automerge-repo uses it, or a stored
+update that persistence restores. A single change can carry both, too, when a peer adds an item
+after another and then removes that one while a concurrent update of it is already in the
+receiving document. A peer that receives the delete and the insert in separate merges is fine.
+
+The backend reads the view, so on the affected peer:
+
+- `read()` and the store show another order than every other peer, with no error, and peers
+  that compare heads consider themselves in sync;
+- the next write diffs against that order and edits list items by index, so it changes another
+  item than the store did, and every peer receives that change.
+
+The backend does not work around it yet. Materializing the synced key afresh on every read after
+a merge would cost about 8 ms per remote change at 1000 todos. Other code that reads
+`handle.doc()` or a `DocHandle`'s document sees the same wrong view. Loading the document again,
+from storage or the room as a page reload does, shows the right list, but edits made in the
+meantime stay. The upstream issue (link to follow) tracks the fix. Once a release ships
+it, this package raises its `@automerge/automerge` peer range to that release.
 
 ## Persistence
 

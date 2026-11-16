@@ -1,4 +1,5 @@
 export { ConvergenceError, createNetwork } from "./network.js";
+export { LostKeyError } from "./lost-keys.js";
 export type {
   Network,
   NetworkOptions,

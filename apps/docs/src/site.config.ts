@@ -15,9 +15,19 @@ export const site = {
   npmOrg: "https://www.npmjs.com/org/homeostate",
   /** Where `/docs` sends readers. */
   docsHome: "/docs/getting-started",
+  conceptsPage: "/docs/concepts",
+  /** Every package by group; the header's "Packages" link. */
+  packagesPage: "/docs/packages",
   /** The guide whose header shows the docs app's version, GitHub and npm. */
   aboutPage: "/docs/about",
 } as const;
+
+/** The site header's links, also in the landing footer; the manifest checks each has a page. */
+export const siteNav = [
+  { label: "Docs", to: site.docsHome },
+  { label: "Concepts", to: site.conceptsPage },
+  { label: "Packages", to: site.packagesPage },
+] as const;
 
 /**
  * `role` names one of the group's packages; a package introduction's title leads with its label
@@ -29,15 +39,35 @@ export const groups: { id: GroupId; title: string; role?: string }[] = [
   { id: "crdt", title: "CRDT backends", role: "CRDT backend" },
   { id: "store", title: "Store adapters", role: "store adapter" },
   { id: "persist", title: "Persistence", role: "persistence adapter" },
+  { id: "frameworks", title: "UI frameworks", role: "bindings" },
   { id: "tools", title: "Tools" },
 ];
 
-/** Sidebar label and order per package slug; the group comes from the slug's prefix. */
-export const packageNav: Record<string, { label: string; order: number }> = {
+/**
+ * Sidebar label and order per package slug; the group comes from the slug's prefix. `hint` is
+ * the landing page card's one-line trade-off, for CRDT backends only; back it with the
+ * package's docs.
+ */
+export const packageNav: Record<
+  string,
+  { label: string; order: number; hint?: string }
+> = {
   core: { label: "Core", order: 0 },
-  "crdt-yjs": { label: "Yjs", order: 1 },
-  "crdt-loro": { label: "Loro", order: 2 },
-  "crdt-automerge": { label: "Automerge", order: 3 },
+  "crdt-yjs": {
+    label: "Yjs",
+    order: 1,
+    hint: "Syncs through any Yjs provider, such as y-websocket. y-indexeddb can store it.",
+  },
+  "crdt-loro": {
+    label: "Loro",
+    order: 2,
+    hint: "You wire replication, and it has no storage package of its own. Ships WebAssembly.",
+  },
+  "crdt-automerge": {
+    label: "Automerge",
+    order: 3,
+    hint: "automerge-repo can sync and store the document for you. Ships WebAssembly.",
+  },
   "store-zustand": { label: "Zustand", order: 1 },
   "store-redux": { label: "Redux", order: 2 },
   "store-mobx": { label: "MobX", order: 3 },
@@ -48,6 +78,7 @@ export const packageNav: Record<string, { label: string; order: number }> = {
   "store-ngrx-signals": { label: "NgRx Signals", order: 8 },
   "persist-indexeddb": { label: "IndexedDB", order: 1 },
   "persist-local-storage": { label: "localStorage", order: 2 },
+  react: { label: "React", order: 1 },
   "tool-devtools": { label: "Devtools", order: 1 },
   "tool-simulator": { label: "Simulator", order: 2 },
 };

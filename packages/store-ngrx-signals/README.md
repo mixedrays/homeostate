@@ -38,7 +38,10 @@ const adapter = createNgrxSignalsAdapter(state, {
   replace: (shared) => patchState(state, { shared }),
   injector: inject(Injector),
 });
-const engine = createSyncEngine(createYjsBackend(doc, "counter"), adapter);
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "counter"),
+  adapter,
+});
 engine.connect();
 
 inject(DestroyRef).onDestroy(() => {

@@ -18,12 +18,12 @@ export const setMapEntry = (
   key: string,
   value: unknown,
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): void => {
   const at = [...path, key];
   if (Array.isArray(value))
     fillList(map.setContainer(key, new LoroList()), value, at, text);
-  else if (typeof value === "string" && text(at))
+  else if (typeof value === "string" && text?.(at) === true)
     map.setContainer(key, new LoroText()).insert(0, value);
   else if (isRecord(value))
     fillMap(map.setContainer(key, new LoroMap()), value, at, text);
@@ -36,12 +36,12 @@ export const insertListItem = (
   index: number,
   value: unknown,
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): void => {
   const at = [...path, index];
   if (Array.isArray(value))
     fillList(list.insertContainer(index, new LoroList()), value, at, text);
-  else if (typeof value === "string" && text(at))
+  else if (typeof value === "string" && text?.(at) === true)
     list.insertContainer(index, new LoroText()).insert(0, value);
   else if (isRecord(value))
     fillMap(list.insertContainer(index, new LoroMap()), value, at, text);
@@ -52,7 +52,7 @@ const fillMap = (
   map: LoroMap,
   object: Record<string, unknown>,
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): void => {
   for (const [key, value] of Object.entries(object))
     setMapEntry(map, key, value, path, text);
@@ -62,7 +62,7 @@ const fillList = (
   list: LoroList,
   array: unknown[],
   path: Path,
-  text: TextPolicy,
+  text: TextPolicy | undefined,
 ): void => {
   array.forEach((value, index) =>
     insertListItem(list, index, value, path, text),

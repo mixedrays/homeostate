@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
-import { Wifi } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
+import { RotateCcw, Wifi } from "lucide-react";
 import { cn } from "cn";
+import { Button } from "../components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -8,16 +9,25 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "../components/ui/empty";
+import { Input } from "../components/ui/input";
+import { Slider } from "../components/ui/slider";
 import { Switch } from "../components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import type { Inspector, InspectorSnapshot } from "../inspector";
 import { useNetworkSnapshot } from "../lib/use-network-snapshot";
 import type { NetworkLink } from "../network";
-import { formatDelay } from "./format";
 import { HomeostateMark } from "./mark";
 
-const LATENCIES = [0, 100, 500, 2000];
-const JITTERS = [0, 50, 200, 1000];
+/** The sliders' ranges and steps, in milliseconds; the fields go past them. */
+const LATENCY = { max: 2000, step: 50 };
+const JITTER = { max: 1000, step: 25 };
+/** The longest delay the fields take: a minute already stalls the link. */
+const MAX_DELAY = 60_000;
+/** Reads a slider's value out as `500 ms`. */
+const DELAY_FORMAT: Intl.NumberFormatOptions = {
+  style: "unit",
+  unit: "millisecond",
+  unitDisplay: "short",
+};
 
 export function NetworkTab({
   snapshot,
@@ -106,30 +116,20 @@ export function NetworkTab({
             />
           }
         />
-        <Condition
+        <DelayCondition
           label="Latency"
-          value={formatDelay(conditions.latency)}
           hint="Added to every update, either way."
-        >
-          <Presets
-            label="Latency"
-            values={LATENCIES}
-            value={conditions.latency}
-            onChange={(latency) => network.setConditions({ latency })}
-          />
-        </Condition>
-        <Condition
+          {...LATENCY}
+          value={conditions.latency}
+          onChange={(latency) => network.setConditions({ latency })}
+        />
+        <DelayCondition
           label="Jitter"
-          value={formatDelay(conditions.jitter)}
           hint="Up to this much more per update, at random. Updates still arrive in order."
-        >
-          <Presets
-            label="Jitter"
-            values={JITTERS}
-            value={conditions.jitter}
-            onChange={(jitter) => network.setConditions({ jitter })}
-          />
-        </Condition>
+          {...JITTER}
+          value={conditions.jitter}
+          onChange={(jitter) => network.setConditions({ jitter })}
+        />
         <Condition
           label="Flaky"
           hint="Drops the link for 1 to 3 seconds every 3 to 10 seconds."
@@ -228,13 +228,13 @@ function EngineSection({
 
 function Condition({
   label,
-  value,
+  labelId,
   hint,
   control,
   children,
 }: {
   label: string;
-  value?: string;
+  labelId?: string;
   hint: string;
   control?: ReactNode;
   children?: ReactNode;
@@ -242,11 +242,12 @@ function Condition({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2 text-xs">
-        <span className="font-medium">{label}</span>
-        {value && (
-          <span className="text-muted-foreground tabular-nums">{value}</span>
+        <span id={labelId} className="font-medium">
+          {label}
+        </span>
+        {control && (
+          <span className="ml-auto flex items-center gap-1">{control}</span>
         )}
-        {control && <span className="ml-auto flex">{control}</span>}
       </div>
       {children}
       <p className="text-xs text-muted-foreground">{hint}</p>
@@ -254,36 +255,112 @@ function Condition({
   );
 }
 
-function Presets({
+/** A delay set with a stepped slider, or typed in milliseconds, past the slider's end too, with a button back to 0. */
+function DelayCondition({
   label,
-  values,
+  hint,
+  max,
+  step,
   value,
   onChange,
 }: {
   label: string;
-  values: number[];
+  hint: string;
+  max: number;
+  step: number;
   value: number;
   onChange: (value: number) => void;
 }) {
+  const labelId = useId();
   return (
-    <ToggleGroup
-      aria-label={label}
-      variant="outline"
-      size="sm"
-      value={[String(value)]}
-      onValueChange={(next: string[]) => {
-        if (next[0] !== undefined) onChange(Number(next[0]));
-      }}
+    <Condition
+      label={label}
+      labelId={labelId}
+      hint={hint}
+      control={
+        <>
+          <DelayInput
+            label={label}
+            step={step}
+            value={value}
+            onChange={onChange}
+          />
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Reset ${label.toLowerCase()}`}
+            title="Reset to 0"
+            disabled={value === 0}
+            onClick={() => onChange(0)}
+          >
+            <RotateCcw />
+          </Button>
+        </>
+      }
     >
-      {values.map((option) => (
-        <ToggleGroupItem
-          key={option}
-          value={String(option)}
-          aria-label={`${label} ${formatDelay(option)}`}
-        >
-          {formatDelay(option)}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
+      <Slider
+        aria-labelledby={labelId}
+        min={0}
+        max={max}
+        step={step}
+        largeStep={step * 5}
+        format={DELAY_FORMAT}
+        value={[Math.min(value, max)]}
+        onValueChange={(next) =>
+          onChange(typeof next === "number" ? next : next[0])
+        }
+        className="py-1"
+      />
+    </Condition>
+  );
+}
+
+/** Whole milliseconds from 0 to `MAX_DELAY`, or `undefined` for an empty or negative field. */
+const parseDelay = (text: string): number | undefined => {
+  if (text.trim() === "") return undefined;
+  const ms = Number(text);
+  if (!Number.isFinite(ms) || ms < 0) return undefined;
+  return Math.min(Math.round(ms), MAX_DELAY);
+};
+
+/** Applies the delay as it is typed, and shows the one applied once the field is left. */
+function DelayInput({
+  label,
+  step,
+  value,
+  onChange,
+}: {
+  label: string;
+  step: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  // What is typed, until the field is left or Enter is pressed.
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? String(value);
+  return (
+    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={MAX_DELAY}
+        step={step}
+        value={text}
+        aria-label={`${label} in milliseconds`}
+        aria-invalid={parseDelay(text) === undefined || undefined}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          const next = parseDelay(event.target.value);
+          if (next !== undefined && next !== value) onChange(next);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") setDraft(null);
+        }}
+        onBlur={() => setDraft(null)}
+        className="h-6 w-16 [appearance:textfield] rounded-md px-1.5 py-0 text-right text-xs text-foreground tabular-nums md:text-xs [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      ms
+    </label>
   );
 }

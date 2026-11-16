@@ -1,14 +1,26 @@
+// For maintainers: this package uses Yjs members its README leaves out, which any 13.x release
+// the peer range allows could change:
+// - a shared type's `_item`, and that item's `deleted` and `parent`: `isRemoved`,
+//   `countTransactions` and `watch`, to find a removed map and the maps a change is inside;
+// - `transaction.changed` and the document's `beforeObserverCalls` event: `countTransactions`
+//   and `watch`, for `revision` and for a gap that opens or closes;
+// - `doc.store.pendingStructs`: `hasGap` in `pending.ts`.
+// The tests "a removed map", "an update that waits for an earlier one" and the revision tests
+// catch a change to any of them, so run them when raising the Yjs version.
 import * as Y from "yjs";
 import {
   createCrdtBackend,
   type CrdtBackend,
+  type JsonObject,
+  type JsonObjectInput,
+  mergeConcurrent,
   type TextPolicy,
   type Unsubscribe,
 } from "@homeostate/core";
 import { toPlainMap } from "./mapping.js";
 import { createYjsOps } from "./patching.js";
+import { copyJson, createHold, hasGap } from "./pending.js";
 
-/** Options for `createYjsBackend` */
 export interface YjsBackendOptions {
   /**
    * Which strings are stored as Y.Text, by their path from the synced map, such as
@@ -17,23 +29,11 @@ export interface YjsBackendOptions {
    * one of them whole. Defaults to none.
    */
   text?: TextPolicy;
-  /**
-   * The origin of every transaction `write` runs. `subscribe` skips transactions with this
-   * origin, so it must be unique to this backend. Defaults to a private Symbol.
-   */
-  origin?: unknown;
-  /**
-   * Called once when the synced map is removed from its document, as when a peer replaces it,
-   * or a map holding it, with a new map. No peer sees a write to the removed map, so create a
-   * backend over the map that replaced it. Only a nested map can be removed, and a backend
-   * notices only while subscribed. Defaults to logging the error with `console.error`.
-   */
-  onRemoved?: (error: Error) => void;
 }
 
 /** The `CrdtBackend` `createYjsBackend` returns, with the Yjs objects it works on. */
 export interface YjsBackend extends CrdtBackend {
-  /** The synced map. */
+  /** The Y.Map this backend syncs: `doc.getMap(name)`, or the map passed in. */
   readonly map: Y.Map<unknown>;
   /**
    * The origin of every transaction `write` runs, to pass to `Y.UndoManager` as one of its
@@ -41,10 +41,6 @@ export interface YjsBackend extends CrdtBackend {
    */
   readonly origin: unknown;
 }
-
-const reportRemoved = (error: Error): void => {
-  console.error("[homeostate] Yjs backend lost its map:", error);
-};
 
 /**
  * Whether `map` was deleted from its document. Deleting a map also deletes every type it holds,
@@ -57,34 +53,94 @@ const removedError = (): Error =>
     "The synced Y.Map was removed from its document, as when a peer replaces it with a new map",
   );
 
-/** A document's transactions, as far as its events tell, for the `revision` of its backends. */
+/**
+ * Throws once `map` is removed. A removed map reads as empty and takes writes no peer sees, so
+ * the engine would take a read for a remote change that deleted every key.
+ */
+const assertPresent = (map: Y.Map<unknown>): void => {
+  if (isRemoved(map)) throw removedError();
+};
+
+/** A synced map's changes. */
+interface Changes {
+  /**
+   * How many transactions changed the map or a type inside it, counted when their observers are
+   * about to be called, so before any observer hears of a change.
+   */
+  count: number;
+  /** The number of the gap `opened` belongs to. */
+  gap: number;
+  /** `count` when gap number `gap` opened; `undefined` if counting began during that gap. */
+  opened: number | undefined;
+}
+
+/**
+ * A document's transactions, as far as its events tell, for the `revision` of its backends and
+ * for what their maps held when a gap opened.
+ */
 interface Transactions {
   /** Started, whose observers have not been called yet. */
   open: number;
-  /** Whose observers have been called, and that changed a shared type. */
-  done: number;
+  /** Whether the last transaction whose observers were called left a gap open. */
+  inGap: boolean;
+  /** How many gaps have opened since counting began, one open then included. */
+  gaps: number;
+  /** For each synced map. */
+  changes: WeakMap<object, Changes>;
 }
+
+/** A shared type, as far as finding its parent goes. */
+type Parent = { _item: Y.Item | null };
 
 /** One count per document, however many backends work on it. */
 const counts = new WeakMap<Y.Doc, Transactions>();
 
 /**
- * Counts `doc`'s transactions. Their changes reach observers only once they end, and a
- * transaction an observer starts ends before the observers still running return, so until a
- * transaction's observers are called, what it changed is unknown.
+ * Counts `doc`'s transactions, and those that changed each synced map. Their changes reach
+ * observers only once they end, and a transaction an observer starts ends before the observers
+ * still running return, so until a transaction's observers are called, what it changed is
+ * unknown. A map is counted from the moment its first backend is created, subscribed or not.
  */
 const countTransactions = (doc: Y.Doc): Transactions => {
   const known = counts.get(doc);
   if (known) return known;
-  const transactions: Transactions = { open: 0, done: 0 };
+  const inGap = hasGap(doc);
+  const transactions: Transactions = {
+    open: 0,
+    inGap,
+    gaps: inGap ? 1 : 0,
+    changes: new WeakMap(),
+  };
   doc.on("beforeTransaction", () => {
     transactions.open++;
   });
   doc.on("beforeObserverCalls", (transaction) => {
     // Not below zero, for a transaction already open when the count began.
     transactions.open = Math.max(0, transactions.open - 1);
+    // Before the check below, since a transaction that opens a gap may change nothing.
+    const gap = hasGap(doc);
+    if (gap && !transactions.inGap) transactions.gaps++;
+    transactions.inGap = gap;
     // An update the document already held changes nothing.
-    if (transaction.changed.size > 0) transactions.done++;
+    if (transaction.changed.size === 0) return;
+    // Each changed type and every type holding it, once.
+    const touched = new Set<object>();
+    for (let at of transaction.changed.keys() as Iterable<Parent | null>) {
+      while (at !== null && !touched.has(at)) {
+        touched.add(at);
+        const changes = transactions.changes.get(at);
+        if (changes !== undefined) {
+          // The first change during this gap.
+          if (gap && changes.gap !== transactions.gaps) {
+            changes.gap = transactions.gaps;
+            changes.opened = changes.count;
+          }
+          changes.count++;
+        }
+        // An integrated item's parent is a type.
+        at = (at._item?.parent ?? null) as Parent | null;
+      }
+    }
   });
   counts.set(doc, transactions);
   return transactions;
@@ -95,14 +151,25 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  * nested in another shared type or live in a subdocument, but must already be part of a
  * document.
  *
- * Writes run in a transaction tagged with `origin`, and `subscribe`
- * skips events from that origin, so the engine only hears about remote changes.
+ * Writes run in a transaction tagged with `backend.origin`, and `subscribe` skips events from
+ * that origin, so the engine only hears about remote changes.
+ *
+ * While its document holds an update waiting for an earlier one, a subscribed backend shows the
+ * state as the engine last read or wrote it (with `schedule`, at its last flush or write) and
+ * reports nothing, then reports one change when the earlier update arrives. An unsubscribed
+ * backend, as during `connect()`, shows that state only if it read or wrote the map after the
+ * map's last change before that update, and otherwise the map as it is. See
+ * {@link https://homeostate.pages.dev/docs/crdt-yjs/introduction#updates-out-of-order | Updates out of order}.
+ *
+ * Once a peer removes the map, as by replacing it or a map holding it, `read` and `write` throw.
+ * A subscribed backend then reports one change at once, even while an update waits, so that the
+ * engine reads and reports the error.
  *
  * @example
  * ```typescript
  * const doc = new Y.Doc();
  * const backend = createYjsBackend(doc, 'shared');
- * const engine = createSyncEngine(backend, adapter);
+ * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
  * const undo = new Y.UndoManager(backend.map, { trackedOrigins: new Set([backend.origin]) });
  * ```
@@ -111,9 +178,7 @@ export function createYjsBackend(
   map: Y.Map<unknown>,
   options?: YjsBackendOptions,
 ): YjsBackend;
-// Last, so that `Parameters` and other inference from `typeof createYjsBackend` see this form,
-// as they did before the map form existed.
-/** Creates a CrdtBackend over the Y.Map called `name` inside `doc`. */
+// Last, so that `Parameters` and other inference from `typeof createYjsBackend` see this form.
 export function createYjsBackend(
   doc: Y.Doc,
   name: string,
@@ -124,7 +189,7 @@ export function createYjsBackend(
   nameOrOptions?: string | YjsBackendOptions,
   docOptions?: YjsBackendOptions,
 ): YjsBackend {
-  // The name tells the forms apart: `instanceof` fails when an app loads two copies of Yjs.
+  // The name tells the forms apart.
   const named = typeof nameOrOptions === "string";
   const map = named
     ? (source as Y.Doc).getMap<unknown>(nameOrOptions)
@@ -135,42 +200,138 @@ export function createYjsBackend(
     throw new TypeError(
       "createYjsBackend needs a Y.Doc and a name, or a Y.Map that is part of a Y.Doc",
     );
-  const {
-    origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`),
-    onRemoved = reportRemoved,
-  } = options;
+  const { text } = options;
+  // Unique to this backend, since `subscribe` skips every transaction with it.
+  const origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`);
   const transactions = countTransactions(doc);
-  let reported = false;
+  // Backends over one map share its count.
+  const counted: Changes = transactions.changes.get(map) ?? {
+    count: 0,
+    gap: transactions.gaps,
+    // What the map held when an open gap opened is unknown.
+    opened: transactions.inGap ? undefined : 0,
+  };
+  transactions.changes.set(map, counted);
+  const changes = (): number => counted.count;
+  const hold = createHold(map, doc, changes, () =>
+    counted.gap === transactions.gaps ? counted.opened : counted.count,
+  );
 
-  const backend = createCrdtBackend((text) => {
-    const ops = createYjsOps(text);
-    return {
-      read: () => toPlainMap(map),
+  const ops = createYjsOps(text);
 
-      transact: (edit) => doc.transact(() => edit(map, ops), origin),
+  const backend = createCrdtBackend({
+    read: () => {
+      assertPresent(map);
+      const held = hold.held();
+      if (held !== undefined) return copyJson(held.value);
+      const value = toPlainMap(map);
+      hold.remember(value);
+      return value;
+    },
 
-      watch: (onChange): Unsubscribe => {
-        const handler = (_events: unknown, transaction: Y.Transaction): void =>
-          onChange(transaction.origin === origin);
-        // Yjs sends a deleted map no event, so look for the removal after every transaction.
-        const watchRemoval = (): void => {
-          if (reported || !isRemoved(map)) return;
-          reported = true;
-          onRemoved(removedError());
-        };
-        map.observeDeep(handler);
-        const nested = map._item !== null;
-        if (nested) doc.on("afterTransaction", watchRemoval);
-        return () => {
-          map.unobserveDeep(handler);
-          if (nested) doc.off("afterTransaction", watchRemoval);
-        };
-      },
+    transact: (edit) => doc.transact(() => edit(map, ops), origin),
 
-      // Every change in the document, since telling which ones changed the map takes more.
-      revision: () => (transactions.open > 0 ? undefined : transactions.done),
-    };
-  }, options);
+    watch: (onChange): Unsubscribe => {
+      const untrack = hold.track();
+      /**
+       * Whether the gap's closing must report a change. Set while a gap is open by a peer's
+       * change to the map, and by any transaction, this backend's own included, while what
+       * `read` shows is behind the map; set from the start when a gap is open already.
+       */
+      let missed = hasGap(doc);
+      /** The transaction that closed the gap, while its missed changes are unreported. */
+      let closing: Y.Transaction | null = null;
+      const handler = (_events: unknown, transaction: Y.Transaction): void => {
+        const own = transaction.origin === origin;
+        if (hasGap(doc)) {
+          if (!own) missed = true;
+          return;
+        }
+        const closed = closing === transaction;
+        closing = null;
+        onChange(own && !closed);
+      };
+      const watchGap = (transaction: Y.Transaction): void => {
+        if (hasGap(doc)) {
+          // `read` shows the map as last read or written, which may lack a change reported
+          // before the gap and not read yet, as with the engine's `schedule`.
+          if (hold.held()?.revision !== changes()) missed = true;
+          return;
+        }
+        if (!missed) return;
+        missed = false;
+        closing = transaction;
+      };
+      // For a gap that closes in a transaction that leaves the map alone.
+      const reportClosed = (transaction: Y.Transaction): void => {
+        if (closing !== transaction) return;
+        closing = null;
+        onChange(false);
+      };
+      const nested = map._item !== null;
+      let watching = true;
+      const unwatch = (): void => {
+        if (!watching) return;
+        watching = false;
+        // A transaction already calling its listeners still calls `reportClosed`, removed or not.
+        closing = null;
+        map.unobserveDeep(handler);
+        doc.off("beforeObserverCalls", watchGap);
+        doc.off("afterTransaction", reportClosed);
+        if (nested) doc.off("afterTransaction", watchRemoval);
+        untrack();
+      };
+      // Yjs sends a deleted map no event, so look for the removal after every transaction. A
+      // removed map never changes again, so the watch ends, and reports once, before a gap that
+      // closes later could: the engine then reads, `read` throws, and the engine reports that.
+      const watchRemoval = (): void => {
+        if (!isRemoved(map)) return;
+        unwatch();
+        onChange(false);
+      };
+      map.observeDeep(handler);
+      doc.on("beforeObserverCalls", watchGap);
+      // Before `reportClosed`, so that a transaction that removes the map and closes a gap is
+      // reported once.
+      if (nested) doc.on("afterTransaction", watchRemoval);
+      doc.on("afterTransaction", reportClosed);
+      return unwatch;
+    },
 
-  return { ...backend, map, origin };
+    // How many transactions have changed the map, not the rest of the document, so that a change
+    // elsewhere does not make the engine read the map; while a gap is open, only the changes
+    // `read` shows.
+    revision: () => {
+      if (transactions.open > 0) return undefined;
+      return hold.held()?.revision ?? changes();
+    },
+
+    text,
+  });
+
+  const write = (next: JsonObjectInput, previous?: JsonObjectInput): void => {
+    assertPresent(map);
+    const held = hold.held();
+    if (held === undefined) {
+      backend.write(next, previous);
+      hold.remember(next);
+      return;
+    }
+    // The store changed what it was shown, which the document no longer holds: an edit script
+    // made from it could address items that are gone. So merge what the store changed into what
+    // the document holds, leaving alone what it did not change, the values the gap hides too.
+    const seen = previous ?? held.value;
+    const real = toPlainMap(map);
+    backend.write(
+      mergeConcurrent(seen, next, real, { text }) as JsonObject,
+      real,
+    );
+    held.value = mergeConcurrent(seen, next, held.value, {
+      text,
+    }) as JsonObjectInput;
+    // Equal to no revision before it, whether or not the write ran inside a transaction.
+    held.revision = {};
+  };
+
+  return { ...backend, write, map, origin };
 }

@@ -33,7 +33,9 @@ export type HomeostateMiddleware = <
 
 /** The part of the `persist` middleware's `store.persist` API the middleware uses. */
 interface PersistApi {
+  rehydrate: () => Promise<void> | void;
   hasHydrated: () => boolean;
+  onHydrate: (listener: () => void) => () => void;
   onFinishHydration: (listener: () => void) => () => void;
 }
 
@@ -77,12 +79,19 @@ const homeostateImpl = <T extends object>(
   const { backend, connect = "auto", ...config } = options;
   return (set, get, api) => {
     const initialState = creator(set, get, api);
-    const engine = createSyncEngine(backend, createZustandAdapter(api), config);
+    const engine = createSyncEngine({
+      ...config,
+      backend,
+      adapter: createZustandAdapter(api),
+    });
     /** Cancels a connect waiting for hydration; a no-op once it ran or was cancelled. */
     let stopWaiting: (() => void) | undefined;
+    /** Whether the waiting connect resumes a store that a rehydrate disconnected. */
+    let resumingRehydrated = false;
     const cancelWaiting = (): void => {
       stopWaiting?.();
       stopWaiting = undefined;
+      resumingRehydrated = false;
     };
     /** Connects, or waits until `persist` has hydrated the store, so the room wins over it. */
     const connectWhenHydrated = (): void => {
@@ -98,18 +107,46 @@ const homeostateImpl = <T extends object>(
       }
     };
     (api as unknown as { homeostate: SyncEngine }).homeostate = {
+      ...engine,
       connect: connectWhenHydrated,
       disconnect: () => {
         cancelWaiting();
         engine.disconnect();
       },
-      isConnected: engine.isConnected,
-      getSyncedState: engine.getSyncedState,
-      subscribe: engine.subscribe,
     };
 
     const persistApi = (api as { persist?: PersistApi }).persist;
-    if (persistApi === undefined) rejectOuterPersist(api, engine);
+    if (persistApi === undefined) {
+      rejectOuterPersist(api, engine);
+    } else {
+      // A later `persist.rehydrate()` writes stored state through `setState`, which the engine
+      // would send to the room. Disconnect while it runs and reconnect once it has finished, so
+      // the room wins over it as on the first hydration. A store the app disconnected stays so.
+      let hydrations = 0;
+      persistApi.onHydrate(() => {
+        hydrations++;
+        if (!engine.getStatus().connected) return;
+        engine.disconnect();
+        connectWhenHydrated();
+        resumingRehydrated = true;
+      });
+      // A failed rehydrate never finishes hydration and still resolves, so reconnect after the
+      // latest one when it failed: a store that was syncing keeps syncing, and the room wins.
+      // The first hydration does not go through here, so a store whose first one failed waits.
+      const rehydrate = persistApi.rehydrate;
+      persistApi.rehydrate = () => {
+        const started = hydrations;
+        const result = rehydrate();
+        const hydration = hydrations;
+        if (result === undefined || hydration === started) return result;
+        return result.then(() => {
+          if (hydration !== hydrations || !resumingRehydrated) return;
+          if (persistApi.hasHydrated()) return;
+          cancelWaiting();
+          engine.connect();
+        });
+      };
+    }
     if (connect === "manual") return initialState;
     if (persistApi !== undefined && !persistApi.hasHydrated()) {
       connectWhenHydrated();
@@ -132,12 +169,15 @@ const homeostateImpl = <T extends object>(
  *
  * The store connects when it is created. With `connect: "manual"`, nothing reads or writes the
  * backend until the app calls `store.homeostate.connect()`, for example once its provider has
- * synced.
+ * synced or `persistence.whenLoaded` has resolved, so that the store does not seed its initial
+ * state over the room's.
  *
  * Put Zustand's `persist` inside: `homeostate(persist(creator, options), { backend })`. The
  * store then connects once `persist` has hydrated it, and a `connect()` made before that waits
- * for it, so the room wins over the persisted state as on any `connect()`. With `persist`
- * outside, creating the store throws.
+ * for it, so the room wins over the persisted state as on any `connect()`. A `persist.rehydrate()` on a
+ * connected store disconnects it until the store is hydrated again, or the rehydrate has failed,
+ * then reconnects it, unless the app disconnected it meanwhile. With `persist` outside, creating
+ * the store throws.
  *
  * Use the curried `create<T>()(...)` form: Zustand cannot infer the state type through a
  * middleware, so `create(homeostate(...))` types the state as `object`.

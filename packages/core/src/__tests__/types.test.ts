@@ -1,13 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   createSyncEngine,
-  defaultSyncFilter,
+  scopeAdapter,
   type CrdtBackend,
   type JsonObject,
   type JsonObjectInput,
   type SetupOptions,
   type StoreAdapter,
   type SyncEngineConfig,
+  type SyncEngineOptions,
 } from "../index.js";
 import { createMemoryBackend } from "../testing.js";
 
@@ -20,33 +21,6 @@ interface TodoState {
 const todoState = (): TodoState => ({
   todos: [{ id: "1", title: "a" }],
   length: 1,
-});
-
-describe("defaultSyncFilter", () => {
-  it("excludes functions and classes", () => {
-    expect(defaultSyncFilter("arrow", () => {})).toBe(false);
-    expect(defaultSyncFilter("named", function named() {})).toBe(false);
-    expect(defaultSyncFilter("cls", class {})).toBe(false);
-  });
-
-  it("keeps every other value regardless of the key", () => {
-    for (const value of [
-      0,
-      1,
-      "",
-      "text",
-      false,
-      true,
-      null,
-      undefined,
-      [],
-      [1],
-      {},
-      { a: 1 },
-    ]) {
-      expect(defaultSyncFilter("key", value)).toBe(true);
-    }
-  });
 });
 
 // These checks run when the test files are type-checked, as `pnpm typecheck` does.
@@ -110,44 +84,77 @@ describe("SyncEngineConfig", () => {
 
   it("takes the state type from the adapter and type-checks keys and omit", () => {
     const backend = createMemoryBackend();
-    createSyncEngine(backend, adapter(), { omit: ["length"] });
-    createSyncEngine(backend, adapter(), { keys: ["todos"] });
+    createSyncEngine({ backend, adapter: adapter(), omit: ["length"] });
+    createSyncEngine({ backend, adapter: adapter(), keys: ["todos"] });
     // @ts-expect-error "todo" is not a key of TodoState.
-    createSyncEngine(backend, adapter(), { omit: ["todo"] });
+    createSyncEngine({ backend, adapter: adapter(), omit: ["todo"] });
     // @ts-expect-error "todo" is not a key of TodoState.
-    createSyncEngine(backend, adapter(), { keys: ["todos", "todo"] });
+    createSyncEngine({ backend, adapter: adapter(), keys: ["todos", "todo"] });
     // @ts-expect-error keys and omit cannot be given together.
-    createSyncEngine(backend, adapter(), { keys: ["todos"], omit: ["length"] });
+    createSyncEngine({
+      backend,
+      adapter: adapter(),
+      keys: ["todos"],
+      omit: ["length"],
+    });
+  });
+
+  it("takes the state type from the adapter alone, not from keys or the filter", () => {
+    const backend = createMemoryBackend();
+    const options = { backend, adapter: adapter(), keys: ["todos"] as const };
+    createSyncEngine(options);
+    expectTypeOf(options).toExtend<SyncEngineOptions<TodoState>>();
+    expectTypeOf({
+      backend,
+      adapter: adapter(),
+      keys: ["todo"] as const,
+    }).not.toExtend<SyncEngineOptions<TodoState>>();
+    expectTypeOf({ backend, keys: ["todos"] as const }).not.toExtend<
+      SyncEngineOptions<TodoState>
+    >();
+    createSyncEngine({
+      backend,
+      adapter: adapter(),
+      // @ts-expect-error The filter does not take every key of TodoState.
+      filter: (key: "todos" | "other") => key === "todos",
+    });
   });
 
   it("accepts readonly key lists, such as an as const constant", () => {
     const LOCAL = ["length"] as const;
     const SYNCED: readonly "todos"[] = ["todos"];
     const backend = createMemoryBackend();
-    createSyncEngine(backend, adapter(), { omit: LOCAL });
-    createSyncEngine(backend, adapter(), { keys: SYNCED });
+    createSyncEngine({ backend, adapter: adapter(), omit: LOCAL });
+    createSyncEngine({ backend, adapter: adapter(), keys: SYNCED });
   });
 
-  it("types the filter by the state, and takes existing string predicates and keys or omit", () => {
+  it("types the filter's key by the state, and takes string predicates and keys or omit", () => {
     const backend = createMemoryBackend();
-    createSyncEngine(backend, adapter(), {
-      filter: (key, value) => {
+    createSyncEngine({
+      backend,
+      adapter: adapter(),
+      filter: (key) => {
         expectTypeOf(key).toEqualTypeOf<"todos" | "length">();
-        expectTypeOf(value).toEqualTypeOf<TodoState[keyof TodoState]>();
         return key !== "length";
       },
     });
-    createSyncEngine(backend, adapter(), {
-      filter: (key: string, value: unknown) =>
-        defaultSyncFilter(key, value) && key !== "length",
+    createSyncEngine({
+      backend,
+      adapter: adapter(),
+      filter: (key: string) => key !== "length",
       keys: ["todos"],
     });
-    createSyncEngine(backend, adapter(), { filter: defaultSyncFilter });
+    createSyncEngine({
+      backend,
+      adapter: adapter(),
+      // @ts-expect-error The filter takes the key alone, not the value.
+      filter: (_key: string, value: unknown) => typeof value !== "function",
+    });
   });
 
-  it("types keys as strings and values as unknown without a state type", () => {
+  it("types keys as strings without a state type", () => {
     type Filter = NonNullable<SyncEngineConfig["filter"]>;
-    expectTypeOf<Parameters<Filter>>().toEqualTypeOf<[string, unknown]>();
+    expectTypeOf<Parameters<Filter>>().toEqualTypeOf<[string]>();
     expectTypeOf<{ omit: string[] }>().toExtend<SyncEngineConfig>();
   });
 
@@ -164,5 +171,69 @@ describe("SyncEngineConfig", () => {
       keys: ["todos"] as const,
       omit: ["length"] as const,
     }).not.toExtend<SetupOptions<TodoState>>();
+  });
+});
+
+describe("scopeAdapter", () => {
+  /** A slice typed with an interface, one the store may lack, and an array. */
+  interface Root {
+    state: TodoState;
+    optional?: TodoState;
+    list: string[];
+    count: number;
+  }
+
+  const adapter = (): StoreAdapter<Root> => ({
+    getState: () => ({ state: todoState(), list: [], count: 0 }),
+    setState: () => {},
+    subscribe: () => () => {},
+  });
+
+  const stateScope = {
+    get: (root: Root) => root.state,
+    set: (root: Root, state: TodoState) => ({ ...root, state }),
+  };
+
+  it("takes the slice's type from get", () => {
+    expectTypeOf(
+      scopeAdapter(adapter(), {
+        get: (root) => root.state,
+        set: (root, state) => ({ ...root, state }),
+      }),
+    ).toEqualTypeOf<StoreAdapter<TodoState>>();
+  });
+
+  it("types the engine's config by the slice", () => {
+    const backend = createMemoryBackend();
+    const scoped = scopeAdapter(adapter(), stateScope);
+    createSyncEngine({ backend, adapter: scoped, keys: ["todos"] });
+    // @ts-expect-error "count" is a key of the store, not of the slice.
+    createSyncEngine({ backend, adapter: scoped, keys: ["count"] });
+  });
+
+  it("rejects an array slice, and takes one wrapped in an object", () => {
+    const listScope = {
+      get: (root: Root) => root.list,
+      set: (root: Root, list: string[]) => ({ ...root, list }),
+    };
+    // @ts-expect-error an array is not an object the engine can sync.
+    scopeAdapter(adapter(), listScope);
+    scopeAdapter(adapter(), {
+      get: (root) => ({ list: root.list }),
+      set: (root, { list }) => ({ ...root, list }),
+    });
+  });
+
+  it("rejects a slice that may be absent, and takes one with a fallback", () => {
+    const optionalScope = {
+      get: (root: Root) => root.optional,
+      set: (root: Root, optional?: TodoState) => ({ ...root, optional }),
+    };
+    // @ts-expect-error `undefined` is not an object the engine can sync.
+    scopeAdapter(adapter(), optionalScope);
+    scopeAdapter(adapter(), {
+      get: (root) => root.optional ?? todoState(),
+      set: (root, optional) => ({ ...root, optional }),
+    });
   });
 });

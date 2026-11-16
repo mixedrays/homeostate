@@ -38,7 +38,10 @@ export const describePersistableDoc = <D>(
 
   const connect = (doc: D, initial: TodoState = threeTodos()) => {
     const store = createTestStore(initial);
-    const engine = createSyncEngine(backend(doc), store.adapter);
+    const engine = createSyncEngine({
+      backend: backend(doc),
+      adapter: store.adapter,
+    });
     engine.connect();
     return store;
   };
@@ -138,19 +141,25 @@ export const describePersistableDoc = <D>(
       ).toEqual(addTodo(threeTodos(), todo("4")));
     });
 
-    it("stores updates received from peers", async () => {
-      const first = await open();
-      const peer = createDoc();
-      exchange(first.doc, peer);
-      const peerStore = connect(peer);
-      peerStore.setState(addTodo(peerStore.getState(), todo("remote")));
-      exchange(first.doc, peer);
-      await first.persistence.destroy();
+    it("restores edits stored after a failed append, which depend on it", async () => {
+      const memory = createMemoryPersistenceAdapter();
+      const append = vi.fn(memory.append);
+      const first = await open({ ...memory, append }, undefined, vi.fn());
+      await first.persistence.flush();
+      append.mockRejectedValueOnce(new Error("temporary storage failure"));
+      first.store.setState(addTodo(first.store.getState(), todo("4")));
+      first.store.setState(toggleTodo(first.store.getState(), "4"));
 
-      const reloaded = await open(first.adapter);
+      await expect(first.persistence.destroy()).resolves.toBeUndefined();
+      const reloaded = await open(memory, {
+        todos: [],
+        searchTerm: "",
+        filterStatus: "all",
+      });
 
-      expect(reloaded.store.getState().todos.map((t) => t.id)).toContain(
-        "remote",
+      expect(reloaded.loaded).toEqual({ status: "loaded" });
+      expect(reloaded.store.getState()).toEqual(
+        toggleTodo(addTodo(threeTodos(), todo("4")), "4"),
       );
     });
 
@@ -269,7 +278,10 @@ export const describePersistableDoc = <D>(
             deriving.setState({ ...state, count: state.todos.length });
         });
         const engines = docs.map((doc, i) =>
-          createSyncEngine(backend(doc), stores[i].adapter),
+          createSyncEngine({
+            backend: backend(doc),
+            adapter: stores[i].adapter,
+          }),
         );
         relay(0);
         engines[0].connect();

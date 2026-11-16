@@ -47,7 +47,7 @@ export const TodoStore = signalStore(
     const backend = createYjsBackend(connection.ydoc, SYNC_MAP_NAME, {
       text: isTodoTitle,
     });
-    const engine = createSyncEngine(backend, adapter);
+    const engine = createSyncEngine({ backend, adapter });
     /** The store as the devtools panel sees it. */
     const devtoolsSource: DevtoolsSource = {
       name: "NgRx Signals todos",

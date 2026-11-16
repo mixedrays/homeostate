@@ -17,8 +17,9 @@ middle-of-array delete, a toggle or a keystroke each produce one small update.
 npm install @homeostate/core @homeostate/crdt-loro loro-crdt
 ```
 
-`loro-crdt` ships WebAssembly; for bundler setup see
-[Loro's documentation](https://loro.dev/docs).
+`loro-crdt` 1.16.4 or later is a peer dependency. It ships WebAssembly; for bundler setup see
+[Loro's documentation](https://loro.dev/docs). Earlier versions can panic when a text policy
+deletes a range of a `LoroText`, after which the document throws on every call.
 
 ## Usage
 
@@ -28,7 +29,10 @@ import { createSyncEngine } from "@homeostate/core";
 import { createLoroBackend } from "@homeostate/crdt-loro";
 
 const doc = new LoroDoc();
-const engine = createSyncEngine(createLoroBackend(doc, "shared"), adapter);
+const engine = createSyncEngine({
+  backend: createLoroBackend(doc, "shared"),
+  adapter,
+});
 engine.connect();
 ```
 

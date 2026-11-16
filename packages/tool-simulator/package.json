@@ -59,7 +59,7 @@
     "@homeostate/crdt-loro": "workspace:^",
     "@homeostate/crdt-yjs": "workspace:^",
     "@homeostate/store-zustand": "workspace:^",
-    "loro-crdt": "^1.16.1",
+    "loro-crdt": "^1.17.1",
     "yjs": "^13.6.23",
     "zustand": "^4.5.2"
   }

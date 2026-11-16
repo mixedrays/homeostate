@@ -52,6 +52,14 @@
   "dependencies": {
     "@homeostate/core": "workspace:^"
   },
+  "peerDependencies": {
+    "redux": "^4.0.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "redux": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@reduxjs/toolkit": "^2.11.0",
     "redux": "^5.0.1"

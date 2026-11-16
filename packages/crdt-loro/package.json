@@ -53,9 +53,9 @@
     "@homeostate/core": "workspace:^"
   },
   "peerDependencies": {
-    "loro-crdt": "^1.0.0"
+    "loro-crdt": "^1.16.4"
   },
   "devDependencies": {
-    "loro-crdt": "^1.16.1"
+    "loro-crdt": "^1.17.1"
   }
 }

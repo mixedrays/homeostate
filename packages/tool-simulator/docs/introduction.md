@@ -80,6 +80,7 @@ JSON. `network.peers` lists every peer in the order they joined.
 | `dropRate`             | `0`     | Probability that an update is lost                                        |
 | `reorder`              | `false` | Whether messages between two peers may overtake each other                |
 | `maxDeliveries`        | 100 000 | Deliveries one `settle()` makes before it gives up on a network in a loop |
+| `checkLostKeys`        | `true`  | Whether `advance` and `settle` reject when a peer loses a synced key      |
 
 Every change to a peer's document goes to each peer it is linked to, after the latency. Without
 `reorder`, messages between two peers arrive in the order they were sent, as over a WebSocket.
@@ -87,6 +88,24 @@ Every change to a peer's document goes to each peer it is linked to, after the l
 Linking two peers makes them exchange their whole documents, as providers do when they
 reconnect. That exchange is never dropped, so once peers are linked again, whatever was lost on
 the way reaches them.
+
+The updates the exchange leads to are not so safe. A store that writes in answer to remote
+changes, such as a subscriber that keeps a derived key in synced state or a model that fills
+defaults, writes new updates as the exchanged documents arrive, and with a `dropRate` those can
+be dropped too. Nothing links the peers again, so they stay lost, where a provider would resync.
+Before checking convergence, repeat `heal()` and `settle()` until `stats().dropped` stops
+growing. Cap the rounds, as [`runRandomized`](#randomized-runs) does, since a store that writes
+on every exchange never stops:
+
+```ts
+for (let round = 0; round < 10; round++) {
+  const dropped = network.stats().dropped;
+  network.heal();
+  await network.settle();
+  if (network.stats().dropped === dropped) break;
+}
+network.expectConverged();
+```
 
 | Method                 | Does                                                                             |
 | ---------------------- | -------------------------------------------------------------------------------- |
@@ -107,6 +126,38 @@ the way reaches them.
 between deliveries they let the event loop run, so stores that notify asynchronously catch up.
 They keep working if the test fakes timers later.
 
+### Lost keys
+
+Convergence is checked only when you ask, so a peer that drops a synced key for a while and
+gets it back once a late update arrives would still converge. App code that reads the key in
+between would not cope. So `advance` and `settle` also check, after each delivery and when they
+return, that no peer lost a synced top-level key:
+
+- A peer **holds** a key once a check sees it both in the store's synced state, what
+  `peer.syncedState()` returns, and in the peer's document.
+- A key is **deleted** for the rest of the network's life once it leaves any peer's store or
+  document outside a delivery: in your test's own changes, between `advance` and `settle` calls.
+- A peer **lost** a key when it held the key, its store and document both lack it now, and no
+  peer deleted it.
+
+`advance` or `settle` then rejects with a `LostKeyError` that has the `seed`, the `peer`'s name,
+the `key`, and the virtual time `at` which it was found:
+
+```text
+peer-1 lost the synced key title at 412.5 ms (seed 11), on an update from peer-0: its store and document both lack it, and no peer deleted it.
+```
+
+A key keeps the store's own value when the peer does not sync it, such as one its `filter`
+rejects or one its store holds as a function, and a key that a store has but its document never
+held is not held, so neither is reported. A peer whose engine is disconnected keeps its store as it is, so it loses nothing. A
+store that notifies asynchronously, or an engine with `schedule`, can apply a change after its
+delivery's check: a loss is then found at a later check, or missed if your test changes the
+store first, but never reported wrongly.
+
+A top-level key deleted during a delivery, such as by a store subscriber or a timer, is
+reported as lost when the delete reaches the other peers. Pass `checkLostKeys: false` for such
+tests.
+
 ## Convergence
 
 `expectConverged()` throws a `ConvergenceError` unless the peers agree. It compares, as JSON:
@@ -124,13 +175,20 @@ The error lists one line per difference, with the first path where the two diffe
 ```
 
 `differences()` returns the same lines, empty once the peers have converged. When messages are
-still on their way, the error says so: `settle()` first.
+still on their way, the error says so: `settle()` first. When updates were dropped since the
+last `heal()`, it says how many: `heal()` and `settle()` again, as in [the network](#the-network).
 
 ## Randomized runs
 
 `runRandomized` tests many interleavings at once. Each step changes a random peer's store with
 a random action, or cuts or restores a random link, then lets a random amount of virtual time
-pass. At the end it heals the network, settles it and checks convergence.
+pass. At the end it heals the network, settles it and checks convergence. Throughout, the
+network checks that no peer [loses a synced key](#lost-keys).
+
+With a `dropRate`, the updates stores write in answer to the healing exchange can be dropped
+too, as [the network](#the-network) explains. So the run heals and settles again until a round
+drops nothing, at most 10 rounds, as a provider that resyncs would. Only that final phase
+repeats: the steps make the same random choices, so a seed replays the same steps.
 
 ```ts title="todos.random.test.ts"
 import { runRandomized } from "@homeostate/tool-simulator";
@@ -152,16 +210,16 @@ await runRandomized({
 });
 ```
 
-| Option           | Default        | Description                                                    |
-| ---------------- | -------------- | -------------------------------------------------------------- |
-| `createPeer`     |                | Makes peer `index`, as `addPeer` takes it                      |
-| `seed`           | random         | Seed of the run                                                |
-| `peers`          | `3`            | Number of peers                                                |
-| `steps`          | `100`          | Number of steps                                                |
-| `actions`        | `[randomEdit]` | What a step may do to a peer's store: `(peer, random) => void` |
-| `network`        |                | `latency`, `dropRate`, `reorder` and `maxDeliveries`           |
-| `linkChangeRate` | `0.1`          | Chance that a step cuts or restores a link instead             |
-| `stepInterval`   | `10`           | Most virtual milliseconds between two steps                    |
+| Option           | Default        | Description                                                           |
+| ---------------- | -------------- | --------------------------------------------------------------------- |
+| `createPeer`     |                | Makes peer `index`, as `addPeer` takes it                             |
+| `seed`           | random         | Seed of the run                                                       |
+| `peers`          | `3`            | Number of peers                                                       |
+| `steps`          | `100`          | Number of steps                                                       |
+| `actions`        | `[randomEdit]` | What a step may do to a peer's store: `(peer, random) => void`        |
+| `network`        |                | `latency`, `dropRate`, `reorder`, `maxDeliveries` and `checkLostKeys` |
+| `linkChangeRate` | `0.1`          | Chance that a step cuts or restores a link instead                    |
+| `stepInterval`   | `10`           | Most virtual milliseconds between two steps                           |
 
 A run that fails rejects with an error that names its seed and step, followed by the
 differences:
@@ -170,6 +228,21 @@ differences:
 Randomized run failed after 200 steps; pass `seed: 1187460231` to replay it.
 3 peers did not converge (seed 1187460231):
 - peer-2's store differs from its document at todos[1].title: "mil" vs "milk"
+```
+
+or by the key a peer lost, with the step in which it happened:
+
+```text
+Randomized run failed at step 67 of 150; pass `seed: 11` to replay it.
+peer-1 lost the synced key title at 412.5 ms (seed 11), on an update from peer-0: its store and document both lack it, and no peer deleted it.
+```
+
+When peers do not converge and the tenth round of healing still dropped updates, the error ends
+with a line that says so. A store probably writes in answer to every exchange, so the updates
+never stop:
+
+```text
+Updates were still being dropped after 10 rounds of heal() and settle(): does a store write in answer to every exchange?
 ```
 
 Pass that `seed` to replay the run. For runs that replay exactly, give each document a fixed
@@ -188,6 +261,9 @@ the store's own API, picking values with `random`:
 const addTodo: RandomAction = (peer, random) =>
   todoStores[peer.index].addTodo(`todo ${random.int(100)}`);
 ```
+
+An action may delete a store's top-level keys: it runs between deliveries, so the delete does
+not count as a [lost key](#lost-keys) when it reaches the other peers.
 
 `createRandom(seed)` makes the same kind of seeded source: `next()`, `int(max)`, `chance(p)`
 and `pick(items)`.
@@ -208,3 +284,7 @@ const peer = network.addPeer({ ...setup, connect: false });
 await network.settle();
 peer.engine.connect();
 ```
+
+See [Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for the app's
+side. Until the peer connects, `expectConverged()` throws if the store holds a key its document
+lacks: the peer has not written it, so it has not converged.

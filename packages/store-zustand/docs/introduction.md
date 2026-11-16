@@ -78,21 +78,31 @@ Until then the store works locally. Connecting then works as on any `connect()`:
 values replace the store's for every key the room holds, edits made meanwhile included, and
 keys the room lacks seed it.
 
+Waiting this way keeps the store's initial state from competing with a populated room; see
+[Waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) for what to wait
+for, such as `persistence.whenLoaded`.
+
 To sync a store you already have, create the engine yourself with `createZustandAdapter`:
 
 ```ts
 import { createSyncEngine } from "@homeostate/core";
 import { createZustandAdapter } from "@homeostate/store-zustand";
 
-const engine = createSyncEngine(
-  createYjsBackend(doc, "shared"),
-  createZustandAdapter(useCounter),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter: createZustandAdapter(useCounter),
+});
 engine.connect();
 ```
 
-Only data is synced: the default filter skips actions and other functions in the state, and
+Only data is synced: the engine never syncs actions and other functions in the state, and
 remote changes leave them in place.
+
+`homeostate` syncs the store's root and cannot take a scoped adapter. To sync a nested slice, or
+several slices to several rooms, wrap `createZustandAdapter` in
+[`scopeAdapter`](../../core/docs/sync-engine.md#scopeadapter) and create the engine yourself. With
+`persist` on async storage, [wait for hydration](../../core/docs/sync-engine.md#setup-helpers)
+before `connect()`.
 
 ## Combining with other middlewares
 
@@ -138,16 +148,23 @@ detects that order and throws when the store is created, naming the right one.
 
 With `persist` inside, the store connects once it is hydrated: at once with synchronous
 storage such as `localStorage`, and after the read with asynchronous storage such as React
-Native's `AsyncStorage` or an IndexedDB wrapper. Until then `store.homeostate.isConnected()`
+Native's `AsyncStorage` or an IndexedDB wrapper. Until then `store.homeostate.getStatus().connected`
 is `false`. Calling `store.homeostate.disconnect()` cancels the pending connect, and calling
 `store.homeostate.connect()`, as with `connect: "manual"`, connects once hydration has
 finished. If hydration fails, the store stays disconnected, and Zustand passes the error to
 the callback returned by `onRehydrateStorage`; `store.persist.rehydrate()` retries, and the
 store connects once it succeeds.
 
+Calling `store.persist.rehydrate()` on a connected store, for example on the window `storage`
+event or after switching the storage key, disconnects it while `persist` reads storage and
+reconnects it once the store is hydrated, so the room wins over the rehydrated state as on the
+first hydration. If the rehydrate fails, the store reconnects once `rehydrate()` settles, so a
+store that was syncing keeps syncing; with several rehydrates in flight, it waits for the
+latest. A store the app disconnected, before or during the rehydrate, stays disconnected.
+
 Connecting then works as on any [`connect()`](/docs/concepts#connecting): the room wins over
 the persisted state, and persisted keys the room lacks seed it. So edits persisted while
 offline are lost when the room already has state; keeping them across a reconnect is not
 supported yet. For offline apps, persist the CRDT document with
-[`createPersistence`](/docs/persistence) instead of the store: the document records offline
+[`createPersistence`](../../core/docs/persistence.md#createpersistence) instead of the store: the document records offline
 edits and merges them with the room's.

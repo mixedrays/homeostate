@@ -2,7 +2,7 @@
 // import from a `.server.ts` module.
 
 export type GroupId =
-  "guides" | "core" | "crdt" | "store" | "persist" | "tools";
+  "guides" | "core" | "crdt" | "store" | "persist" | "frameworks" | "tools";
 
 export type PageKind = "guide" | "package" | "changelog";
 
@@ -40,6 +40,8 @@ export interface PackageSummary {
   group: GroupId;
   version: string;
   description: string;
+  /** One-line trade-off on the landing page's package card; CRDT backends only. */
+  hint?: string;
   path: string;
   repoPath: string;
 }

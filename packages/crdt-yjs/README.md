@@ -25,7 +25,10 @@ import { createSyncEngine } from "@homeostate/core";
 import { createYjsBackend } from "@homeostate/crdt-yjs";
 
 const doc = new Y.Doc();
-const engine = createSyncEngine(createYjsBackend(doc, "shared"), adapter);
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
+});
 engine.connect();
 ```
 
@@ -50,7 +53,7 @@ An undo reaches the store as a remote change:
 
 ```ts
 const backend = createYjsBackend(doc, "shared");
-createSyncEngine(backend, adapter).connect();
+createSyncEngine({ backend, adapter }).connect();
 const undoManager = new Y.UndoManager(backend.map, {
   trackedOrigins: new Set([backend.origin]),
 });
@@ -58,9 +61,25 @@ const undoManager = new Y.UndoManager(backend.map, {
 
 To sync into a map you already have, such as one nested in another map, pass it instead of a
 document and a name: `createYjsBackend(map, options)`. It must already be part of a document.
-If a peer later replaces it, or a map holding it, the backend calls `onRemoved` (by default it
-logs with `console.error`): no peer sees its writes from then on, so connect a new engine over
-the map that replaced it.
+If a peer later replaces it, or a map holding it, no peer would see a write to the removed map,
+so from then on the backend's reads and writes throw. The engine reports the removal at once as
+a failure with the source `'backend'`, to `onError` and in `getStatus().failure`, and again for
+each later store change; the store keeps its state. Connect a new engine over the map that
+replaced it.
+
+A provider can deliver a peer's update before an earlier one it depends on, as y-websocket can
+for about one round trip after a reconnect. Yjs then applies the update's deletes and keeps the
+rest waiting, which would hide a value the update replaces. Until the earlier update arrives, a
+subscribed backend shows the state from before it, as the engine last read or wrote it, and
+reports nothing; then it reports one change. An engine that connects meanwhile reconciles with
+that state too, if the backend read or wrote the map after its last change before the waiting
+update. Otherwise it reads the map without the hidden values and, with `seed`, writes the
+store's values over them, which about half the time replace the waiting update's on every
+replica; `seed: false` avoids that. Local changes still reach the document, merged
+three ways with what it holds, so they never put back hidden values or drop other peers'
+changes. Every other change waits too, such as a peer's change to another key, and so does a
+backend whose document has an update waiting in another shared type. See
+[Updates out of order](https://homeostate.pages.dev/docs/crdt-yjs/introduction#updates-out-of-order).
 
 To persist the document, pass `createYjsPersistable(doc)` to `createPersistence`; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).

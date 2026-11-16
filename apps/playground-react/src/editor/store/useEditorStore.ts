@@ -35,7 +35,7 @@ const adapter = createZustandAdapter(useEditorStore);
 const backend = createYjsBackend(ydoc, SYNC_MAP_NAME, {
   text: isDocumentText,
 });
-const syncEngine = createSyncEngine(backend, adapter);
+const syncEngine = createSyncEngine({ backend, adapter });
 
 syncEngine.connect();
 

@@ -28,10 +28,10 @@ import { createTanStackStoreAdapter } from "@homeostate/store-tanstack";
 
 const store = createStore({ count: 0 });
 
-const engine = createSyncEngine(
-  createYjsBackend(new Y.Doc(), "shared"),
-  createTanStackStoreAdapter(store),
-);
+const engine = createSyncEngine({
+  backend: createYjsBackend(new Y.Doc(), "shared"),
+  adapter: createTanStackStoreAdapter(store),
+});
 engine.connect();
 
 store.setState((state) => ({ ...state, count: state.count + 1 }));

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSyncEngine,
-  defaultSyncFilter,
   type CrdtBackend,
   type TextPolicy,
   type Unsubscribe,
@@ -171,8 +170,7 @@ const initialEdited = (): EditedState => ({
   action: onSelect,
 });
 
-const withoutDraft = (key: string, value: unknown): boolean =>
-  defaultSyncFilter(key, value) && key !== "draft";
+const withoutDraft = (key: string): boolean => key !== "draft";
 
 /** A store that does not always hold what it is given: it resets `meta.count` past 3. */
 const resetCount = (state: EditedState): EditedState =>
@@ -315,7 +313,10 @@ export const describeCrdtBackend = <D>(
   ) => {
     const store = createTestStore(initial);
     const peerBackend = backend(doc, options);
-    const engine = createSyncEngine(peerBackend, store.adapter);
+    const engine = createSyncEngine({
+      backend: peerBackend,
+      adapter: store.adapter,
+    });
     engine.connect();
     return { doc, store, backend: peerBackend, engine };
   };
@@ -391,11 +392,13 @@ export const describeCrdtBackend = <D>(
       const doc = createDoc(1);
       const own = backend(doc, { text: todoTitles });
       const store = createTestStore(initialEdited(), resetCount);
-      const engine = createSyncEngine(
-        passPrevious ? own : { ...own, write: (next) => own.write(next) },
-        store.adapter,
-        { filter: withoutDraft },
-      );
+      const engine = createSyncEngine({
+        backend: passPrevious
+          ? own
+          : { ...own, write: (next) => own.write(next) },
+        adapter: store.adapter,
+        filter: withoutDraft,
+      });
       engine.connect();
       const peerDoc = createDoc(2);
       const peer = backend(peerDoc, { text: todoTitles });
@@ -464,14 +467,58 @@ export const describeCrdtBackend = <D>(
       },
     );
 
-    scenario("keeps the document when a read result is mutated").run(() => {
+    // One backend throughout, so that a backend which keeps what it read between reads shows
+    // whether a caller's mutation reaches its later reads.
+    scenario("keeps its later reads when a read result is mutated").run(() => {
       const doc = createDoc();
-      backend(doc).write({ obj: { a: [1] } });
+      const written = backend(doc);
+      written.write({ obj: { a: [1], b: "x" } });
 
-      (backend(doc).read() as { obj: { a: number[] } }).obj.a.push(2);
+      const first = written.read() as {
+        obj: { a: number[]; b?: string; c?: number };
+        top?: number;
+      };
+      first.obj.a.push(2);
+      first.obj.c = 3;
+      delete first.obj.b;
+      first.top = 4;
 
-      expect(backend(doc).read()).toEqual({ obj: { a: [1] } });
+      expect(written.read()).toEqual({ obj: { a: [1], b: "x" } });
+      (written.read() as { obj: { a: number[] } }).obj.a.length = 0;
+      expect(written.read()).toEqual({ obj: { a: [1], b: "x" } });
+      expect(backend(doc).read()).toEqual({ obj: { a: [1], b: "x" } });
     });
+
+    scenario(
+      "writes %s after a read result is mutated, so that the document holds it",
+    ).each(
+      [
+        [
+          "the mutated result",
+          (read: { obj: { a: number[] } }) => read,
+          { obj: { a: [1, 2] } },
+        ],
+        ["the state before", () => ({ obj: { a: [1] } }), { obj: { a: [1] } }],
+        [
+          "a new state",
+          () => ({ obj: { a: [1, 2, 3] } }),
+          { obj: { a: [1, 2, 3] } },
+        ],
+      ] as [string, (read: { obj: { a: number[] } }) => object, object][],
+      (_, next, expected) => {
+        const doc = createDoc();
+        const written = backend(doc);
+        written.write({ obj: { a: [1] } });
+        const read = written.read() as { obj: { a: number[] } };
+        read.obj.a.push(2);
+
+        written.write(next(read));
+
+        // A new backend reads the document itself.
+        expect(backend(doc).read()).toEqual(expected);
+        expect(written.read()).toEqual(expected);
+      },
+    );
 
     scenario("keeps the document when a written value is mutated").run(() => {
       const doc = createDoc();
@@ -569,6 +616,37 @@ export const describeCrdtBackend = <D>(
         expect(isText(doc, ["tags", 0])).toBe(true);
         expect(isText(doc, ["todos", 0, "title"])).toBe(false);
       });
+
+      scenario(
+        "edits text under an empty key, a key with a slash, and the nested path the slash spells",
+      ).run(() => {
+        const doc = createDoc();
+        const written = backend(doc, { text: () => true });
+        let state: object = {
+          notes: { "": "hello" },
+          files: { "src/app.ts": "let a" },
+          "a/b": "slash",
+          a: { b: "nested" },
+        };
+        written.write(state);
+
+        const edits: [string, object][] = [
+          ["empty key", { notes: { "": "hello!" } }],
+          ["file path key", { files: { "src/app.ts": "let ab" } }],
+          ["slash key", { "a/b": "slash!" }],
+          ["nested path", { a: { b: "nested?" } }],
+        ];
+        for (const [edit, change] of edits) {
+          state = { ...state, ...change };
+          written.write(state);
+          expect(written.read(), edit).toEqual(state);
+        }
+
+        expect(isText(doc, ["notes", ""])).toBe(true);
+        expect(isText(doc, ["files", "src/app.ts"])).toBe(true);
+        expect(isText(doc, ["a/b"])).toBe(true);
+        expect(isText(doc, ["a", "b"])).toBe(true);
+      });
     }
 
     if (storeForeignContainers)
@@ -601,13 +679,14 @@ export const describeCrdtBackend = <D>(
         }
       });
 
-    // `revision` is optional in the contract, but every backend in this repository has one.
+    // `revision` may return `undefined` while a backend cannot tell; each backend here can tell
+    // in this scenario.
     scenario(
       "changes its revision with every change, and keeps it across reads",
     ).run(() => {
       const doc = createDoc();
       const watched = backend(doc);
-      const revision = () => watched.revision?.();
+      const revision = () => watched.revision();
       const seen = [revision()];
       const expectChanged = (change: string): void => {
         const next = revision();
@@ -833,7 +912,11 @@ export const describeCrdtBackend = <D>(
           store.update((s) => toggleTodo(s, "3"));
         });
         const onError = vi.fn();
-        createSyncEngine(backend(docA), store.adapter, { onError }).connect();
+        createSyncEngine({
+          backend: backend(docA),
+          adapter: store.adapter,
+          onError,
+        }).connect();
         exchange(docA, docB);
         const b = peer(docB, threeTodos());
 
@@ -887,6 +970,107 @@ export const describeCrdtBackend = <D>(
       );
 
       scenario(
+        "exposes the text policy it was given, and none without one",
+      ).run(() => {
+        expect(backend(createDoc(), { text: todoTitles }).text).toBe(
+          todoTitles,
+        );
+        expect(backend(createDoc()).text).toBeUndefined();
+      });
+
+      describe("a peer's insert into a text the store appends to before the engine applies it", () => {
+        const text: TextPolicy = (path) => path[0] === "title";
+        // Lets what a library reports in a microtask run.
+        const settled = (): Promise<void> =>
+          new Promise((resolve) => setTimeout(resolve));
+
+        /**
+         * Peer B, and A's document holding B's `{ title: "hello" }`, for A's engine to connect
+         * to with `text` as its backend's policy.
+         */
+        const syncedTitle = () => {
+          const docA = createDoc(1);
+          const docB = createDoc(2);
+          const b = peer(docB, { title: "hello" }, { text });
+          exchange(docA, docB);
+          return { docA, b };
+        };
+
+        /** Expects A's store, A's document and B's store to hold both edits. */
+        const expectBothEdits = (
+          store: { getState: () => object },
+          docA: D,
+          b: ReturnType<typeof syncedTitle>["b"],
+        ): void => {
+          const expected = { title: "Xhello!" };
+          expect(store.getState()).toEqual(expected);
+          expect(backend(docA).read()).toEqual(expected);
+          expect(b.store.getState()).toEqual(expected);
+        };
+
+        scenario("keeps both edits when the apply waits for schedule").run(
+          async () => {
+            const { docA, b } = syncedTitle();
+            const store = createTestStore({ title: "hello" });
+            const engine = createSyncEngine({
+              backend: backend(docA, { text }),
+              adapter: store.adapter,
+              schedule: queueMicrotask,
+            });
+            engine.connect();
+            try {
+              b.store.update((s) => ({ title: `X${s.title}` }));
+              exchange(docA, b.doc);
+              store.update((s) => ({ title: `${s.title}!` }));
+              await settled();
+              exchange(docA, b.doc);
+              await settled();
+
+              expectBothEdits(store, docA, b);
+            } finally {
+              engine.disconnect();
+            }
+          },
+        );
+
+        scenario(
+          "keeps both edits when another listener appends before the engine hears of the insert",
+        ).run(async () => {
+          const { docA, b } = syncedTitle();
+          const store = createTestStore({ title: "hello" });
+          // App code that reacts to a peer's change, subscribed before the engine connects, so
+          // it runs before the engine's own listener.
+          let armed = false;
+          backend(docA).subscribe(() => {
+            if (!armed) return;
+            armed = false;
+            store.update((s) => ({ title: `${s.title}!` }));
+          });
+          const onError = vi.fn();
+          const engine = createSyncEngine({
+            backend: backend(docA, { text }),
+            adapter: store.adapter,
+            onError,
+          });
+          engine.connect();
+          try {
+            b.store.update((s) => ({ title: `X${s.title}` }));
+            armed = true;
+            exchange(docA, b.doc);
+            await settled();
+            exchange(docA, b.doc);
+            await settled();
+
+            expect(armed).toBe(false);
+            expect(onError).not.toHaveBeenCalled();
+            expectBothEdits(store, docA, b);
+          } finally {
+            engine.disconnect();
+          }
+        });
+      });
+
+      scenario(
         "gives the receiver new containers along the changed path only",
       ).run(() => {
         const { a, b } = twoSyncedPeers();
@@ -904,6 +1088,53 @@ export const describeCrdtBackend = <D>(
         expect(after.todos[1]).toBe(before.todos[1]);
         expect(after.todos[2]).toBe(before.todos[2]);
         expect(before).toEqual(beforeSnapshot);
+      });
+
+      scenario(
+        "two peers seeding an empty room at once end with one state that keeps each peer's own keys (replica ids %i and %i)",
+      ).each(replicaOrders, async (idA, idB) => {
+        const a = peer(createDoc(idA), { count: 1, title: "a", onlyA: true });
+        const b = peer(createDoc(idB), { count: 2, title: "b", onlyB: true });
+        // Lets what a library reports in a microtask run.
+        const settled = (): Promise<void> =>
+          new Promise((resolve) => setTimeout(resolve));
+        try {
+          exchange(a.doc, b.doc);
+          await settled();
+          exchange(a.doc, b.doc);
+          await settled();
+
+          expect(b.backend.read()).toEqual(a.backend.read());
+          expect(a.store.getState()).toEqual(a.backend.read());
+          expect(b.store.getState()).toEqual(a.backend.read());
+          const state = a.backend.read();
+          expect([1, 2]).toContain(state.count);
+          expect(["a", "b"]).toContain(state.title);
+          expect(state).toMatchObject({ onlyA: true, onlyB: true });
+        } finally {
+          a.engine.disconnect();
+          b.engine.disconnect();
+        }
+      });
+
+      scenario(
+        "a peer seeding before a populated room arrives keeps the room's other keys (replica ids %i and %i)",
+      ).each(replicaOrders, (idA, idB) => {
+        const room = createDoc(idA);
+        const roomBackend = backend(room);
+        roomBackend.write({ count: 7, roomOnly: true });
+        const late = peer(createDoc(idB), { count: 0, lateOnly: true });
+        try {
+          exchange(room, late.doc);
+
+          const state = roomBackend.read();
+          expect(state).toMatchObject({ roomOnly: true, lateOnly: true });
+          expect([0, 7]).toContain(state.count);
+          expect(late.backend.read()).toEqual(state);
+          expect(late.store.getState()).toEqual(state);
+        } finally {
+          late.engine.disconnect();
+        }
       });
 
       scenario(

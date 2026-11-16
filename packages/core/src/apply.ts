@@ -1,16 +1,12 @@
 import {
-  ChangeType,
   type ContainerKind,
+  type EditStep,
   type ListChange,
+  type Path,
   type RecordChange,
-  type TextChange,
 } from "./change.js";
 import { getChanges, type DiffOptions } from "./diff.js";
-import { isRecord, toJsonValue } from "./json.js";
-
-export type { ContainerKind } from "./change.js";
-
-type Path = readonly (string | number)[];
+import { isRecord, kindOf, toJsonValue } from "./json.js";
 
 /**
  * How one store or document writes into its containers. `applyChanges` decides *what* to write;
@@ -23,8 +19,8 @@ type Path = readonly (string | number)[];
  */
 export interface ApplyOps {
   /**
-   * What `value`, the target or a child read with `get`, is to the walk: a container it edits in
-   * place, or `undefined` for a plain value, which it replaces whole.
+   * How the walk treats `value`, the target or a child read with `get`: the kind of container it
+   * edits in place, or `undefined` for a plain value, which it replaces whole.
    */
   kind(value: unknown): ContainerKind | undefined;
   /** The child at `key` of the record or list `container`. */
@@ -47,9 +43,9 @@ export interface ApplyOps {
     path: Path,
   ): void;
   /**
-   * Delete `deleteCount` UTF-16 units at `index` of the text `text`, then insert `inserted` there.
-   * `path` is the text's own path. Omit it for a store without text: `kind` then never returns
-   * `"text"`, and a text it does return is replaced whole.
+   * Delete `deleteCount` units at `index` of the text `text`, as `TextChange` counts them, then
+   * insert `inserted` there. `path` is the text's own path. Omit it for a store without text.
+   * `kind` should then never return `"text"`; if it does, the text is replaced whole.
    */
   editText?(
     text: unknown,
@@ -61,42 +57,21 @@ export interface ApplyOps {
 }
 
 /**
- * Revises `value` by the character-level edit script `changes`, which is what `getChanges`
- * returns for two strings. Each index addresses the string as revised by the steps before it.
- * Offsets and deletion counts are UTF-16 units; an absent count means one unit.
- */
-export const applyStringChanges = (
-  value: string,
-  changes: TextChange[],
-): string =>
-  changes.reduce((revised, change) => {
-    const at = change.key;
-    if (change.type === ChangeType.INSERT)
-      return revised.slice(0, at) + change.value + revised.slice(at);
-    if (change.type === ChangeType.DELETE)
-      return revised.slice(0, at) + revised.slice(at + (change.count ?? 1));
-    return revised;
-  }, value);
-
-/** A pending step of a record's or a list's script. */
-type Pending = Extract<RecordChange | ListChange, { type: "pending" }>;
-
-/**
- * Applies the pending step `change` to the child at its key of `container`, whose next value is
- * `next`. The child is edited in place when it is the kind of container the step's script edits;
+ * Applies the edit step `change` to the child of `container` at the step's key. `next` is the
+ * next value of `container`. The child is edited in place when it is the kind of container the step's script edits;
  * any other child, such as a string held as a plain value or a plain value other code stored, is
  * replaced whole by its next value.
  */
-const walkPending = (
+const walkEdit = (
   container: object,
-  change: Pending,
+  change: EditStep,
   next: unknown,
   path: Path,
   ops: ApplyOps,
   options: DiffOptions,
 ): void => {
   const { key } = change;
-  // Steps before a pending one are final, so `key` is also its index in `next`.
+  // Steps before an edit step are final, so `key` is also its index in `next`.
   const nextChild = (next as Record<string | number, unknown>)[key];
   const child = ops.get(container, key);
   const at = [...path, key];
@@ -121,9 +96,9 @@ const walkPending = (
       );
     if (ops.editText !== undefined) {
       for (const step of change.changes)
-        if (step.type === ChangeType.INSERT)
+        if (step.type === "insert")
           ops.editText(child, step.key, 0, step.value, at);
-        else ops.editText(child, step.key, step.count ?? 1, "", at);
+        else ops.editText(child, step.key, step.count, "", at);
       return;
     }
   }
@@ -145,10 +120,9 @@ const walkRecord = (
   options: DiffOptions,
 ): void => {
   for (const change of changes) {
-    if (change.type === ChangeType.PENDING)
-      walkPending(record, change, next, path, ops, options);
-    else if (change.type === ChangeType.DELETE)
-      ops.remove(record, change.key, path);
+    if (change.type === "edit")
+      walkEdit(record, change, next, path, ops, options);
+    else if (change.type === "delete") ops.remove(record, change.key, path);
     else ops.set(record, change.key, change.value, path);
   }
 };
@@ -164,16 +138,16 @@ const walkList = (
 ): void => {
   for (const change of changes) {
     switch (change.type) {
-      case ChangeType.PENDING:
-        walkPending(list, change, next, path, ops, options);
+      case "edit":
+        walkEdit(list, change, next, path, ops, options);
         break;
-      case ChangeType.DELETE:
-        ops.splice(list, change.key, change.count ?? 1, [], path);
+      case "delete":
+        ops.splice(list, change.key, change.count, [], path);
         break;
-      case ChangeType.INSERT:
+      case "insert":
         ops.splice(list, change.key, 0, [change.value], path);
         break;
-      case ChangeType.UPDATE:
+      case "update":
         ops.set(list, change.key, change.value, path);
         break;
     }
@@ -185,11 +159,10 @@ const walkList = (
  * JSON `target` holds. Everything else keeps its identity, which is what fine-grained stores
  * react to and what keeps a CRDT update small.
  *
- * @param target The record or list to mutate.
- * @param current What `target` holds now, as plain JSON.
- * @param next What `target` should hold.
- * @param ops How this store or document writes; see {@link ApplyOps}.
  * @param options Passed to `getChanges`.
+ * @throws {TypeError} Unless `target` is a record and `current` and `next` are records, or
+ * `target` is a list and `current` and `next` are arrays, as `ops.kind` tells for `target`.
+ * Nothing is written then.
  */
 export const applyChanges = (
   target: object,
@@ -216,5 +189,9 @@ export const applyChanges = (
       [],
       ops,
       options,
+    );
+  else
+    throw new TypeError(
+      `applyChanges needs a record target and two records, or a list target and two arrays, got a ${kind ?? "plain value"} target, ${kindOf(current)} and ${kindOf(next)}`,
     );
 };

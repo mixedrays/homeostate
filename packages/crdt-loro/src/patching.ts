@@ -8,9 +8,9 @@ import { insertListItem, setMapEntry } from "./mapping.js";
  * character by character, and any other string is a plain value. A string held as the other
  * kind becomes the configured one when it next changes.
  *
- * @param text Which strings, by path from the synced map, are LoroTexts.
+ * @param text Which strings, by path from the synced map, are LoroTexts. Defaults to none.
  */
-export const createLoroOps = (text: TextPolicy): ApplyOps => ({
+export const createLoroOps = (text?: TextPolicy): ApplyOps => ({
   kind: (value) =>
     value instanceof LoroMap
       ? "record"

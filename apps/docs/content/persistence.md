@@ -36,8 +36,8 @@ npm install @homeostate/persist-indexeddb
 
 ## Usage
 
-Create the persistence next to the document, then connect the sync engine once it has
-loaded:
+Create the persistence next to the document, and connect the sync engine once `whenLoaded`
+resolves, so it writes nothing until the stored document is restored:
 
 ```ts {9-13,17}
 import * as Y from "yjs";
@@ -57,18 +57,23 @@ const persistence = createPersistence(
 new WebsocketProvider("wss://sync.example.com", "todos", doc);
 
 await persistence.whenLoaded;
-createSyncEngine(createYjsBackend(doc, "shared"), adapter).connect();
+const engine = createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter,
+});
+engine.connect();
 ```
 
 The whole document is stored, including shared types outside the synced map. Every update is
 stored, local edits and those from peers alike.
 
 > [!IMPORTANT]
-> Connect the engine after `whenLoaded`. Before it resolves the document is still empty, so
-> `connect()` would seed the store's defaults as new operations, and they could win over the
-> restored values. The provider may connect at any time.
+> Do not seed before `whenLoaded`. Until it resolves the document may still be empty, so the
+> engine would write the store's defaults as new operations, and they could win over the restored
+> values. Connect after `await persistence.whenLoaded`. The provider may connect at any time.
 
-With the Zustand middleware, pass `connect: "manual"` and connect the store the same way:
+With a setup helper, pass `connect: "manual"` and connect the engine it exposes once
+`whenLoaded` resolves. With the Zustand middleware:
 
 ```ts
 const useTodos = create<TodoState>()(
@@ -80,6 +85,32 @@ const useTodos = create<TodoState>()(
 
 await persistence.whenLoaded;
 useTodos.homeostate.connect();
+```
+
+Jotai's `atomWithSync` has no `connect` option: mount the atom once `whenLoaded` resolves.
+
+### Waiting for the provider too
+
+`whenLoaded` tells that the stored document is back, not that the room's state has
+arrived. On a first visit nothing is stored, so a peer that seeds then competes with a populated
+room. To wait for both, combine them, with the `synced` helper from
+[Waiting for the room](../../../packages/core/docs/sync-engine.md#waiting-for-the-room):
+
+```ts
+await Promise.all([persistence.whenLoaded, synced(provider)]);
+engine.connect();
+```
+
+This never settles while the provider cannot reach the server. An app that must start offline
+can race the provider against a timeout, which trades safety for an offline start: if the room's
+state arrives after the timeout, its values compete with what this peer seeded.
+
+```ts
+await Promise.all([
+  persistence.whenLoaded,
+  Promise.race([synced(provider), timeout(3000)]),
+]);
+engine.connect();
 ```
 
 ## Checking what was restored
@@ -105,7 +136,10 @@ if (loaded.status === "empty" || loaded.status === "loaded") {
 
 Connecting after `"partial"` or `"failed"` can seed the store's defaults for what was not
 restored, as on a first visit; a log that could not be applied stays in storage either way, see
-[Unreadable stored updates](#unreadable-stored-updates). The errors are the ones `onError`
+[Unreadable stored updates](#unreadable-stored-updates). To hold writes back instead, leave the
+engine disconnected, as above.
+
+The errors are the ones `onError`
 received while loading, not those of later writes. The result only describes restoring the
 document: `"loaded"` does not mean the initial snapshot is written or that peers have synced.
 Await `flush()` for storage writes.
@@ -116,7 +150,8 @@ Await `flush()` for storage writes.
   Use it by default.
 - **localStorage** keeps each document as one JSON entry, rewritten on every update and
   limited to about 5 MB per origin. It suits small documents and environments without
-  IndexedDB. Pass `sessionStorage` to keep a document only for the tab's session.
+  IndexedDB. Pass `sessionStorage` to keep a document only for the tab's session. Tabs take
+  turns writing through Web Locks, which need https or localhost; see [Several tabs](#several-tabs).
 
 ## The CRDT library's own storage
 
@@ -145,7 +180,10 @@ const stored = new IndexeddbPersistence("todos", doc);
 new WebsocketProvider("wss://sync.example.com", "todos", doc);
 
 await stored.whenSynced;
-createSyncEngine(createYjsBackend(doc, "shared"), storeAdapter).connect();
+createSyncEngine({
+  backend: createYjsBackend(doc, "shared"),
+  adapter: storeAdapter,
+}).connect();
 ```
 
 It stores the document much as `createPersistence` does: one row per update, merged into one
@@ -171,10 +209,10 @@ const repo = new Repo({
   network: [new BrowserWebSocketClientAdapter("wss://sync.example.com")],
 });
 const docHandle = await repo.find(url);
-createSyncEngine(
-  createAutomergeBackend(docHandle, "shared"),
-  storeAdapter,
-).connect();
+createSyncEngine({
+  backend: createAutomergeBackend(docHandle, "shared"),
+  adapter: storeAdapter,
+}).connect();
 ```
 
 See [With automerge-repo](../../../packages/crdt-automerge/docs/introduction.md#with-automerge-repo)
@@ -201,10 +239,12 @@ await persistence.clear(); // stop storing and delete the stored document, e.g. 
 [Checking what was restored](#checking-what-was-restored).
 
 The other methods reject when their storage work fails, with the error `onError` also
-received. `flush()` and `destroy()` reject while an update the document reported may be
-missing from storage, also after a failure before the call, until a later compaction or
-`clear()` stores or removes it; `compact()` and `clear()` reject with their own storage error.
-So a sign-out can tell whether local data was deleted:
+received. A failed write can leave later updates unrestorable, since they depend on it, so
+persistence stores the whole document again after the next write that succeeds, and on each
+`flush()` and `destroy()`. They reject only when that fails too, while an update the document
+reported may still be missing from storage, also after a failure before the call;
+`compact()` and `clear()` reject with their own storage error. So a sign-out can tell whether
+local data was deleted:
 
 ```ts
 try {
@@ -214,9 +254,9 @@ try {
 }
 ```
 
-A promise left unawaited never becomes an unhandled rejection. The
-[API reference](../../../packages/core/docs/persistence.md#which-failures-a-barrier-reports)
-says which failures each method reports.
+A promise left unawaited never becomes an unhandled rejection. The API reference says
+[how a failed write is repaired](../../../packages/core/docs/persistence.md#repairing-a-failed-write)
+and [which failures each method reports](../../../packages/core/docs/persistence.md#which-failures-a-barrier-reports).
 
 ## Unreadable stored updates
 
@@ -234,13 +274,28 @@ describes what happens on load and on each compaction.
 Tabs of one origin may persist the same key at once. Each update is appended to a log, and
 every `compactAfter` updates (100 by default) a tab merges the log into its document and
 replaces the part it merged with one snapshot. Updates another tab appended meanwhile are
-kept, so no tab loses another's edits.
+kept, so no tab loses another's edits:
+
+- **IndexedDB** writes each append and compaction in one transaction.
+- **localStorage** has no transactions, so the adapter holds a
+  [Web Lock](https://developer.mozilla.org/docs/Web/API/Web_Locks_API) for the key while it
+  reads and rewrites the document's entry. Browsers provide Web Locks in secure contexts only,
+  https and `localhost`. On a page opened over plain http from another address, such as a LAN
+  IP, every write rejects with an error saying so, through `onError` and `flush()`. Serve the
+  page over https, or pass `coordination: "single-writer"` when only one tab writes the
+  storage, as with `sessionStorage`; two tabs writing one key in that mode can lose each
+  other's updates. The
+  [adapter's documentation](../../../packages/persist-local-storage/docs/introduction.md#several-tabs)
+  has the details.
+
+`clear()` deletes the stored document for every tab, but another tab that still persists the
+key writes it again with its next update.
 
 ## Custom storage
 
 A [`PersistenceAdapter`](../../../packages/core/docs/persistence.md#persistenceadapter-and-storedupdates)
 is an append-only log of binary updates per key, with `load`, `append`, `compact` and `clear`.
 `compact` must atomically replace the updates up to the version `load` returned with one
-snapshot, keeping anything appended since.
+snapshot, keeping anything appended since, also by another tab writing the same key.
 [`createMemoryPersistenceAdapter()`](../../../packages/core/docs/testing.md#creatememorypersistenceadapter)
 from `@homeostate/core/testing` is an in-memory one for tests.

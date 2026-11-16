@@ -1,5 +1,4 @@
-import { applyStringChanges } from "./apply.js";
-import { ChangeType, type ListChange, type RecordChange } from "./change.js";
+import type { EditStep, ListChange, RecordChange } from "./change.js";
 import { getChanges } from "./diff.js";
 import { isRecord, PROTO_KEY } from "./json.js";
 
@@ -41,19 +40,14 @@ const toPlain = (value: unknown): unknown => {
 const copyOf = (value: object): Record<string, unknown> =>
   (Array.isArray(value) ? [...value] : { ...value }) as Record<string, unknown>;
 
-/** The value the pending step `change` leaves at its key, given the value there now. */
-const applyPending = (
-  current: unknown,
-  change: Extract<RecordChange | ListChange, { type: "pending" }>,
-): unknown => {
-  // The diff found a container of `change.kind` at its key.
-  if (change.kind === "text")
-    return applyStringChanges(current as string, change.changes);
+/** The value the edit step `change` leaves at its key, given the value there now. */
+const applyEdit = (current: unknown, change: EditStep): unknown => {
+  // The diff found a container of `change.kind` at its key; without a text policy, never a text.
   if (change.kind === "list")
     return applyChangesToArray(current as unknown[], change.changes);
   return applyChangesToObject(
     current as Record<string, unknown>,
-    change.changes,
+    change.changes as RecordChange[],
   );
 };
 
@@ -65,20 +59,20 @@ const applyChangesToArray = (
 
   for (const change of changes) {
     switch (change.type) {
-      case ChangeType.INSERT:
+      case "insert":
         revised.splice(change.key, 0, toPlain(change.value));
         break;
 
-      case ChangeType.UPDATE:
+      case "update":
         revised[change.key] = toPlain(change.value);
         break;
 
-      case ChangeType.PENDING:
-        revised[change.key] = applyPending(revised[change.key], change);
+      case "edit":
+        revised[change.key] = applyEdit(revised[change.key], change);
         break;
 
-      case ChangeType.DELETE:
-        revised.splice(change.key, change.count ?? 1);
+      case "delete":
+        revised.splice(change.key, change.count);
         break;
     }
   }
@@ -94,16 +88,16 @@ const applyChangesToObject = (
 
   for (const change of changes) {
     switch (change.type) {
-      case ChangeType.INSERT:
-      case ChangeType.UPDATE:
+      case "insert":
+      case "update":
         revised[change.key] = toPlain(change.value);
         break;
 
-      case ChangeType.PENDING:
-        revised[change.key] = applyPending(object[change.key], change);
+      case "edit":
+        revised[change.key] = applyEdit(object[change.key], change);
         break;
 
-      case ChangeType.DELETE:
+      case "delete":
         delete revised[change.key];
         break;
     }
@@ -113,15 +107,16 @@ const applyChangesToObject = (
 };
 
 /**
- * Returns `next`, reusing every subtree of `previous` it leaves unchanged, without `__proto__`
- * keys: built from `previous` by applying the edit script `getChanges` finds between them, so
- * only the containers along a changed path are new, and an item that shifts in a list, such as
+ * Returns `next`, without `__proto__` keys, reusing every subtree of `previous` that `next` leaves
+ * unchanged. The result is built from `previous` by applying the edit script that `getChanges`
+ * finds between the two, so only the containers along a changed path are new, and an item that shifts in a list, such as
  * after an insert at the top, keeps its identity. Neither input is mutated.
  *
  * When nothing changed, `previous` itself is returned; when the two are of different kinds,
- * `next` is. Every value taken from `next` is plain: own `__proto__` keys are left out at any
- * depth, and an object whose prototype is neither `Object.prototype` nor `null` is replaced by a
- * plain object of its own entries. Arrays and binary values (`ArrayBuffer` views) are kept.
+ * `next` is. A string that changed is taken from `next` whole. Every value taken from `next` is
+ * plain: own `__proto__` keys are left out at any depth, and an object whose prototype is
+ * neither `Object.prototype` nor `null` is replaced by a plain object of its own entries. Arrays
+ * and binary values (`ArrayBuffer` views) are kept.
  *
  * The sync engine builds the store's next state with it, so a store re-renders only what a
  * remote change touched. Use it to write a whole state, such as a restored one, the same way.
@@ -136,12 +131,8 @@ const applyChangesToObject = (
 export const keepIdentity = <T>(previous: T, next: T): T => {
   const a: unknown = previous;
   const b: unknown = next;
-  if (typeof a === "string" && typeof b === "string") {
-    const changes = getChanges(a, b);
-    return changes.length === 0
-      ? previous
-      : (applyStringChanges(a, changes) as T);
-  }
+  if (typeof a === "string" && typeof b === "string")
+    return a === b ? previous : next;
   if (Array.isArray(a) && Array.isArray(b)) {
     const changes = getChanges(a, b);
     return changes.length === 0
