@@ -51,7 +51,7 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 `handle.update(fn)` replaces the document with the result of any Automerge call. See the
 [documentation](https://homeostate.pages.dev/docs/crdt-automerge/introduction) for details.
 
-To let an [automerge-repo](https://automerge.org/docs/repositories/) `Repo` store and sync the
+To let an [automerge-repo](https://automerge.org/docs/reference/repositories/) `Repo` store and sync the
 document instead, pass one of its `DocHandle`s:
 
 ```ts

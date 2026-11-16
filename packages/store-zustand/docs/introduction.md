@@ -166,5 +166,5 @@ Connecting then works as on any [`connect()`](/docs/concepts#connecting): the ro
 the persisted state, and persisted keys the room lacks seed it. So edits persisted while
 offline are lost when the room already has state; keeping them across a reconnect is not
 supported yet. For offline apps, persist the CRDT document with
-[`createPersistence`](/docs/persistence) instead of the store: the document records offline
+[`createPersistence`](../../core/docs/persistence.md#createpersistence) instead of the store: the document records offline
 edits and merges them with the room's.

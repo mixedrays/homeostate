@@ -864,7 +864,7 @@ CRDT library.
 | `transact` | Runs `edit` as one transaction tagged as this backend's own, with the synced root and the `ApplyOps` that write into it. When the document holds no map there, it puts an empty one in its place and passes `created` as true. |
 | `watch`    | Calls `onChange` after every change to the synced subtree, with `own` set when the change carries the tag `transact` gives. Returns the cleanup.                                                                               |
 | `revision` | The backend's `revision`, as it is; it returns `undefined` when the library cannot tell. See [CrdtBackend](#crdtbackend).                                                                                                      |
-| `text`     | Optional. Which strings the library stores as its text type, by path from the synced root; by default none. Build the library's [`ApplyOps`](./diffing.md) from the same policy.                                               |
+| `text`     | Optional. Which strings the library stores as its text type, by path from the synced root; by default none. Build the library's [`ApplyOps`](./diffing.md#applyops) from the same policy.                                      |
 
 The backend it returns:
 

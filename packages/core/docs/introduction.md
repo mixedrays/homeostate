@@ -69,7 +69,7 @@ tagged as the backend's own, `watch` to hear of every change and say whether it 
 the document with `applyChanges`, `json: true` and that policy, and leaves the backend's own
 writes out of `subscribe`.
 
-- `transact` hands its edit your [`ApplyOps`](./diffing.md), which read and write your
+- `transact` hands its edit your [`ApplyOps`](./diffing.md#applyops), which read and write your
   library's maps, lists and texts. Build them from the same `text` policy you pass in the
   parts, which may be `undefined` for none: in `set` and `splice`, store the strings it marks in
   your library's text type and every other string as a plain value; text is then edited through
