@@ -1,5 +1,198 @@
 # @homeostate/crdt-yjs
 
+## 0.4.0
+
+### Minor Changes
+
+- ad55a91: **Breaking:** `createYjsBackend` takes fewer options, keeping one way to do each thing. Migrate as
+  follows:
+
+  - The `origin` option is gone. `subscribe` skips every transaction with the backend's origin, so
+    an origin another writer also used, such as `{ origin: "store" }`, silently hid that writer's
+    changes from the store. The origin is now always a `Symbol` unique to the backend. Drop the
+    option, and read `backend.origin` after creating the backend wherever you passed your own
+    value, such as in `Y.UndoManager`'s `trackedOrigins`.
+  - The `onRemoved` option is gone, and so is its default `console.error` log. When a peer
+    replaces the synced map, or a map holding it, a connected engine now reports the removal at
+    once through its own error path: `onError` receives an `Error` with the source `'backend'`,
+    and `getStatus().failure` holds it. Move your `onRemoved` handling to the engine's `onError`,
+    or read `getStatus().failure`; the error's message says that the synced `Y.Map` was removed
+    from its document. Without `onError`, the error now propagates from the Yjs update that
+    removed the map. As before, connect a new engine over the map that replaced it.
+
+### Patch Changes
+
+- e98195d: **Breaking:** a smaller sync engine API, with one way to do each thing. Migrate as follows:
+
+  - `SyncEngine` drops `isConnected()`, which returned what `getStatus()` holds. Replace
+    `engine.isConnected()` with `engine.getStatus().connected`. This also applies to the engine that
+    Zustand's and Redux's `store.homeostate`, `syncMobxStore` and `syncStateTree` return. An object
+    that implements `SyncEngine` by hand can drop the method.
+  - `SyncEvent` gains `"error"`, sent when the engine records a failure, which
+    `getStatus().failure` then holds. Work that throws, which used to send no event, now sends
+    `"error"`, before `onError` runs or the error propagates. A write loop sends it after the
+    `"remote"` of the apply that stopped it. A `switch` over `SyncEvent` must handle it.
+  - `SyncEngine` drops `subscribeStatus()`: every change of the status comes with a sync event, so
+    `subscribe` tells when to read it. Replace `engine.subscribeStatus(listener)` with
+    `engine.subscribe(() => listener())`, and read `engine.getStatus()` in it as before; it returns
+    the same object while the status is unchanged, so compare by identity to skip the events that
+    change nothing. An object that implements `SyncEngine` by hand can drop the method.
+  - `SyncEngineConfig.seed` is a boolean, `true` by default, and the `SeedStrategy` type is gone.
+    `"if-empty"` seeded each synced key the backend lacks, not only an empty backend. Replace
+    `seed: "if-empty"` with `seed: true`, or leave it out, and `seed: "never"` with `seed: false`.
+    This also applies to the options of Zustand's and Redux's `homeostate`, `syncMobxStore`,
+    `syncStateTree` and `atomWithSync`. Remove imports of `SeedStrategy`; type a variable that holds
+    the option as `boolean`. In plain JavaScript, a leftover `seed: "never"` is truthy and now
+    seeds, so replace it.
+  - The `ChangeType` object and type are removed; compare a step's `type` with its string literal.
+    Replace `ChangeType.INSERT`, `ChangeType.UPDATE` and `ChangeType.DELETE` with `"insert"`,
+    `"update"` and `"delete"`, and type a variable that holds a step type as `Change["type"]`.
+  - The `"pending"` step type is renamed `"edit"`: a step that edits the container at its key in
+    place by its nested script `changes`, as before. `getChanges` returns `"edit"` steps where it
+    returned `"pending"` ones. Replace `ChangeType.PENDING` and `"pending"` with `"edit"` wherever
+    you build a script or switch on a step's `type`; a `switch` left on `"pending"` no longer
+    matches, and TypeScript reports the comparison.
+  - `applyStringChanges`, `EditScript` and `Diffable` are no longer exported. `applyStringChanges`
+    returned the string a text script leads to, which is the second string given to `getChanges`,
+    so use that string; to edit a text in place, use `applyChanges` with `ApplyOps.editText`.
+    Replace `EditScript` with the script type of the kind diffed, `RecordChange[]`, `ListChange[]`
+    or `TextChange[]`, as `getChanges` returns it, and `Diffable` with
+    `JsonObject | unknown[] | string`; `getChanges` still needs both values narrowed to one kind.
+  - `count` is required on an array or string delete step: `ListChange` and `TextChange` declare
+    `count: number`, no longer `count?: number`. `getChanges` already set it on every such delete,
+    so only a script built by hand changes: add `count: 1` to an array or string delete that left
+    it out before passing the script to `applyChanges`. In plain JavaScript, such a delete no
+    longer removes one item, so add the `count` there too. A record delete still has no `count`.
+  - `getChanges` replaces a changed nested string whole by default, as `createCrdtBackend` and
+    `mergeConcurrent` already did: without `options.text`, a string in a record or an array that
+    changed is one `"update"` step instead of an `"edit"` step with a character-level script, and
+    so is what `applyChanges` writes. Two strings passed directly are still diffed character by
+    character. Pass `text: () => true` to keep character-level scripts for every nested string, or
+    a `TextPolicy` for some. The CRDT backends pass their `text` option, so they are unchanged.
+  - `createCrdtBackend` takes the parts as one object, `text` among them, and
+    `CrdtBackendOptions` is removed. Replace
+    `createCrdtBackend((text) => ({ read, transact, watch, revision }), { text })` with
+    `createCrdtBackend({ read, transact, watch, revision, text })`, and build the `ApplyOps` that
+    `transact` hands over from the same `text`, which is `undefined` when no string is text: core
+    no longer passes a policy with its default applied. `CrdtBackendParts` gains the optional
+    `text`. The Yjs, Loro and Automerge backends take their `text` option as before.
+  - `CrdtBackend.revision` and `CrdtBackendParts.revision` are required. A backend written by hand,
+    or parts passed to `createCrdtBackend`, must implement `revision`; return `undefined` when it
+    cannot tell, which keeps the read before every local change that a backend without `revision`
+    had. Such a backend now also gets no `previous` when the engine writes back what the store
+    changed during a remote apply, or a local change merged into one, since the engine cannot tell
+    whether the document changed during `setState`; the backend diffs against its document then.
+    The Yjs, Loro, Automerge and memory backends already implement it.
+  - `createSyncEngine` takes one options object, as the setup helpers do: the `backend`, the
+    `adapter` and the `SyncEngineConfig` options, flat. Replace
+    `createSyncEngine(backend, adapter, config)` with
+    `createSyncEngine({ backend, adapter, ...config })`, or list the options inline, such as
+    `createSyncEngine({ backend, adapter, omit: ["draft"] })`, and
+    `createSyncEngine(backend, adapter)` with `createSyncEngine({ backend, adapter })`. The state
+    type is still taken from `adapter`. The new `SyncEngineOptions<S>` type names the object. The
+    setup helpers' options are unchanged.
+  - `filter` takes the key alone, `(key: keyof S & string) => boolean`, and a key the store holds as
+    a function is never synced, whatever `filter` returns: the engine neither writes it nor reads the
+    backend's value into it. A store that makes a synced key a function deletes it from the backend
+    with its next write, as before, and syncs it again once it holds a JSON value. A backend value is
+    no longer judged: a synced key always takes it. `defaultSyncFilter` is removed. Drop
+    `filter: defaultSyncFilter`; replace `(key, value) => defaultSyncFilter(key, value) && key !==
+"draft"` with `(key) => key !== "draft"`, or with `omit: ["draft"]`; elsewhere, replace
+    `defaultSyncFilter(key, value)` with `typeof value !== "function"`. A custom filter no longer
+    syncs functions it keeps, so it need not exclude them. A rule on any other value has no
+    replacement: choose the keys by name, or sync a slice without them with `scopeAdapter`. A filter
+    that takes a second parameter fails to compile; in plain JavaScript, it gets `undefined` there.
+
+- 40191e6: An engine that connects while an update waits for an earlier one no longer writes the store's
+  old value over the waiting update. When a provider delivered a peer's update before one it
+  depends on, a backend no engine was subscribed to read the map without the values the waiting
+  update replaced, so `connect()` seeded the store's values for those keys. That write was
+  concurrent with the waiting update, and about half the time, by client ID, the old value won on
+  every replica. A backend that read or wrote the map after the map's last change before the
+  waiting update now shows that content while unsubscribed too, as it does while subscribed, so
+  reconciliation writes nothing over a hidden key, and the subscription it starts keeps showing
+  that content until the earlier update arrives. A backend with no such content, as one created
+  during the wait or after a peer changed the map while the engine was disconnected, still reads
+  the map as it is; pass `seed: false` to the engine to avoid the seeding there.
+- 988dec0: While an update waits for an earlier one, writes now merge with core's `mergeConcurrent`, with
+  the backend's `text` option, instead of a merge of their own. Two cases change:
+
+  - Object entries holding `undefined` or a function count as absent, and such array items as
+    `null`, as the document stores them. Before, a value an earlier write in the gap left as
+    `undefined` or a function counted as present, so the state `read()` showed could keep an edit
+    the document had dropped, or drop one the document kept.
+  - A value the store holds equal to the document's is left as it is, so an item the store and a
+    peer both inserted at one place is written once where the two arrays are otherwise equal,
+    instead of twice.
+
+- 48b0532: While an update waits for an earlier one, the store's change to a list item now lands on that
+  item when peers inserted or deleted items beside it and also changed it. Until now, the write
+  paired that item with its neighbour, so the change was written into another item, or dropped,
+  for every peer, while the store showed it kept until the gap closed. The write's merge, core's
+  `mergeConcurrent`, now matches list records by a value no other record of either array holds,
+  such as an `id`, before their positions.
+- dd79c7d: A backend no longer reads the whole synced map before each remote transaction to keep a copy
+  for an update that waits for an earlier one. While such an update waits, it shows what the map
+  held when the engine last read or wrote it. With the engine's `schedule`, that is the state at
+  its last flush or write, so remote changes waiting for the flush reach the store once the
+  earlier update arrives, not before. With 5,000 todos and `schedule`, ten remote transactions
+  before one flush now read the map once, in the flush, instead of 11 times; without `schedule`,
+  the first remote transaction after `connect()` reads it once instead of twice.
+- 519fae5: A replaced value now stays in the store while its replacement waits for an earlier update. When
+  a provider delivered a peer's update before one it depends on, Yjs applied the update's deletes
+  at once and kept the rest waiting, so the store lost the replaced key until the earlier update
+  arrived, and a store that put back a default could overwrite the peer's value on every peer.
+  While the document holds such a waiting update, a subscribed backend now shows the state from
+  before it, as the engine last read or wrote it, keeps its `revision()`, and reports nothing
+  until the earlier update arrives; then it reports one change. Writes meanwhile merge what the
+  store changed into what the document holds, objects key by key and arrays and text position by
+  position, so they neither put back a hidden value nor drop another peer's change. Every other
+  change waits too, including a peer's change to another key and an update waiting in another
+  shared type of the document.
+- c5ae1a8: After a peer replaces or deletes the synced map, or a map holding it, the backend's `read` and
+  `write` now throw. Before, the store's next change emptied the store: the removed map read as
+  empty, so the engine took it for a remote change that deleted every synced key, and later
+  changes went into the removed map, which no peer sees. Now the engine reports the removal as a
+  failure with the source `'backend'`, in `onError` and in `SyncStatus.failure`, and the store
+  keeps its state. Without `onError`, the error propagates, as for any backend failure.
+- 923e45d: A change elsewhere in the document no longer makes the next store change read the whole synced
+  map. The backend's `revision` counted every transaction in the document, so another backend's
+  write or an editor's keystroke in a `Y.Text` made the engine read the map and compare it with
+  what it last synced. It now counts only the transactions that change the synced map or a type
+  inside it. With 5,000 todos, a toggle that follows an insert into another shared type takes
+  about 0.07 ms instead of 1.5 ms, and with two backends on one document writing in turn, each
+  toggle takes about 0.07 ms instead of 1.1 to 1.2 ms, with no read of the map.
+- 90dda9d: Writing a large value without a `text` policy is faster. The backend built a path for every
+  array item and object entry it converted to a shared type, which only the text policy reads, so
+  it now builds them only when there is one. With 5,000 todos, seeding an empty document takes
+  about 10.8 ms instead of 11.9 ms and adding them all in one store change 10.3 ms instead of
+  11.8 ms; with 20,000, 38.5 ms instead of 40.1 ms and 39.4 ms instead of 41.3 ms. Writes with a
+  `text` policy are unchanged.
+- Updated dependencies [e98195d]
+- Updated dependencies [e4e66f6]
+- Updated dependencies [d17efad]
+- Updated dependencies [7172cf4]
+- Updated dependencies [3edede4]
+- Updated dependencies [ea86a91]
+- Updated dependencies [b2c1521]
+- Updated dependencies [038c0e1]
+- Updated dependencies [988dec0]
+- Updated dependencies [48b0532]
+- Updated dependencies [bf8324b]
+- Updated dependencies [e97b920]
+- Updated dependencies [2756e79]
+- Updated dependencies [44a47f2]
+- Updated dependencies [fab156f]
+- Updated dependencies [e51dad7]
+- Updated dependencies [1a6cfb8]
+- Updated dependencies [4008d1e]
+- Updated dependencies [76ec475]
+- Updated dependencies [106f2a4]
+- Updated dependencies [b296a2f]
+- Updated dependencies [987d676]
+- Updated dependencies [3e8a239]
+  - @homeostate/core@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes

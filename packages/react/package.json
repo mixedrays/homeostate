@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/react",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "React hook for the status of a @homeostate/core sync engine",
   "license": "MIT",
   "type": "module",

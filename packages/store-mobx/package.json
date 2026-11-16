@@ -1,6 +1,6 @@
 {
   "name": "@homeostate/store-mobx",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MobX adapter for @homeostate/core",
   "license": "MIT",
   "type": "module",
