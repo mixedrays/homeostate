@@ -1,5 +1,5 @@
 import { LoroDoc, LoroList, LoroMap, LoroText } from "loro-crdt";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createSyncEngine } from "@homeostate/core";
 import {
   createTestStore,
@@ -75,6 +75,54 @@ describe("createLoroBackend", () => {
     doc.getMap(NAME).set("count", 2);
 
     expect(backend.revision()).not.toBe(before);
+  });
+
+  it("reports an edit other code has not committed before its next write", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME);
+    backend.write({ count: 1, other: 0 });
+    const onRemoteChange = vi.fn();
+    backend.subscribe(onRemoteChange);
+
+    doc.getMap(NAME).set("count", 5);
+    backend.write({ count: 1, other: 1 }, { count: 1, other: 0 });
+
+    expect(onRemoteChange).toHaveBeenCalledTimes(1);
+    expect(backend.read()).toEqual({ count: 5, other: 1 });
+  });
+
+  it("commits once and reports nothing when no edit is pending", () => {
+    const doc = new LoroDoc();
+    const backend = createLoroBackend(doc, NAME);
+    backend.write({ count: 1 });
+    const onRemoteChange = vi.fn();
+    backend.subscribe(onRemoteChange);
+    const commits = vi.fn();
+    doc.subscribeLocalUpdates(commits);
+
+    backend.write({ count: 2 });
+
+    expect(commits).toHaveBeenCalledTimes(1);
+    expect(onRemoteChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps a store change made after an edit other code has not committed", () => {
+    const doc = new LoroDoc();
+    const store = createTestStore<Record<string, unknown>>({});
+    const errors: unknown[] = [];
+    createSyncEngine({
+      backend: createLoroBackend(doc, NAME),
+      adapter: store.adapter,
+      onError: (error, source) => errors.push([source, error]),
+    }).connect();
+    store.update(() => ({ count: 1, other: 0 }));
+
+    doc.getMap(NAME).set("count", 5);
+    store.update((state) => ({ ...state, other: 1 }));
+
+    expect(errors).toEqual([]);
+    expect(store.getState()).toEqual({ count: 5, other: 1 });
+    expect(doc.getMap(NAME).toJSON()).toEqual({ count: 5, other: 1 });
   });
 
   it("has no revision while checked out, and its latest one again after", () => {
