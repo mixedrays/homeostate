@@ -3,7 +3,7 @@
 // - a shared type's `_item`, and that item's `deleted` and `parent`: `isRemoved`,
 //   `countTransactions` and `watch`, to find a removed map and the maps a change is inside;
 // - `transaction.changed` and the document's `beforeObserverCalls` event: `countTransactions`
-//   and `watch`, for `revision` and for a gap that closes;
+//   and `watch`, for `revision` and for a gap that opens or closes;
 // - `doc.store.pendingStructs`: `hasGap` in `pending.ts`.
 // The tests "a removed map", "an update that waits for an earlier one" and the revision tests
 // catch a change to any of them, so run them when raising the Yjs version.
@@ -61,15 +61,32 @@ const assertPresent = (map: Y.Map<unknown>): void => {
   if (isRemoved(map)) throw removedError();
 };
 
-/** A document's transactions, as far as its events tell, for the `revision` of its backends. */
+/** A synced map's changes. */
+interface Changes {
+  /**
+   * How many transactions changed the map or a type inside it, counted when their observers are
+   * about to be called, so before any observer hears of a change.
+   */
+  count: number;
+  /** The number of the gap `opened` belongs to. */
+  gap: number;
+  /** `count` when gap number `gap` opened; `undefined` if counting began during that gap. */
+  opened: number | undefined;
+}
+
+/**
+ * A document's transactions, as far as its events tell, for the `revision` of its backends and
+ * for what their maps held when a gap opened.
+ */
 interface Transactions {
   /** Started, whose observers have not been called yet. */
   open: number;
-  /**
-   * For each synced map, how many transactions changed it or a type inside it, counted when their
-   * observers are about to be called, so before any observer hears of a change.
-   */
-  changes: WeakMap<object, number>;
+  /** Whether the last transaction whose observers were called left a gap open. */
+  inGap: boolean;
+  /** How many gaps have opened since counting began, one open then included. */
+  gaps: number;
+  /** For each synced map. */
+  changes: WeakMap<object, Changes>;
 }
 
 /** A shared type, as far as finding its parent goes. */
@@ -87,13 +104,23 @@ const counts = new WeakMap<Y.Doc, Transactions>();
 const countTransactions = (doc: Y.Doc): Transactions => {
   const known = counts.get(doc);
   if (known) return known;
-  const transactions: Transactions = { open: 0, changes: new WeakMap() };
+  const inGap = hasGap(doc);
+  const transactions: Transactions = {
+    open: 0,
+    inGap,
+    gaps: inGap ? 1 : 0,
+    changes: new WeakMap(),
+  };
   doc.on("beforeTransaction", () => {
     transactions.open++;
   });
   doc.on("beforeObserverCalls", (transaction) => {
     // Not below zero, for a transaction already open when the count began.
     transactions.open = Math.max(0, transactions.open - 1);
+    // Before the check below, since a transaction that opens a gap may change nothing.
+    const gap = hasGap(doc);
+    if (gap && !transactions.inGap) transactions.gaps++;
+    transactions.inGap = gap;
     // An update the document already held changes nothing.
     if (transaction.changed.size === 0) return;
     // Each changed type and every type holding it, once.
@@ -101,8 +128,15 @@ const countTransactions = (doc: Y.Doc): Transactions => {
     for (let at of transaction.changed.keys() as Iterable<Parent | null>) {
       while (at !== null && !touched.has(at)) {
         touched.add(at);
-        const count = transactions.changes.get(at);
-        if (count !== undefined) transactions.changes.set(at, count + 1);
+        const changes = transactions.changes.get(at);
+        if (changes !== undefined) {
+          // The first change during this gap.
+          if (gap && changes.gap !== transactions.gaps) {
+            changes.gap = transactions.gaps;
+            changes.opened = changes.count;
+          }
+          changes.count++;
+        }
         // An integrated item's parent is a type.
         at = (at._item?.parent ?? null) as Parent | null;
       }
@@ -122,7 +156,9 @@ const countTransactions = (doc: Y.Doc): Transactions => {
  *
  * While its document holds an update waiting for an earlier one, a subscribed backend shows the
  * state as the engine last read or wrote it (with `schedule`, at its last flush or write) and
- * reports nothing, then reports one change when the earlier update arrives. See
+ * reports nothing, then reports one change when the earlier update arrives. An unsubscribed
+ * backend, as during `connect()`, shows that state only if it read or wrote the map after the
+ * map's last change before that update, and otherwise the map as it is. See
  * {@link https://homeostate.pages.dev/docs/crdt-yjs/introduction#updates-out-of-order | Updates out of order}.
  *
  * Once a peer removes the map, as by replacing it or a map holding it, `read` and `write` throw.
@@ -169,9 +205,17 @@ export function createYjsBackend(
   const origin = Symbol(`homeostate:${named ? nameOrOptions : "map"}`);
   const transactions = countTransactions(doc);
   // Backends over one map share its count.
-  if (!transactions.changes.has(map)) transactions.changes.set(map, 0);
-  const changes = (): number => transactions.changes.get(map) ?? 0;
-  const hold = createHold(map, doc, changes);
+  const counted: Changes = transactions.changes.get(map) ?? {
+    count: 0,
+    gap: transactions.gaps,
+    // What the map held when an open gap opened is unknown.
+    opened: transactions.inGap ? undefined : 0,
+  };
+  transactions.changes.set(map, counted);
+  const changes = (): number => counted.count;
+  const hold = createHold(map, doc, changes, () =>
+    counted.gap === transactions.gaps ? counted.opened : counted.count,
+  );
 
   const ops = createYjsOps(text);
 
