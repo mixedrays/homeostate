@@ -24,22 +24,59 @@ const put = (record: Plain, key: string, value: unknown): void => {
   else record[key] = value;
 };
 
+/** Whether `a` and `b`, values of our own copy, hold the same JSON. */
+const equal = (a: unknown, b: unknown): boolean => {
+  if (Object.is(a, b)) return true;
+  if (
+    a === null ||
+    b === null ||
+    typeof a !== "object" ||
+    typeof b !== "object"
+  )
+    return false;
+  if (Array.isArray(a))
+    return (
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, i) => equal(item, b[i]))
+    );
+  if (Array.isArray(b) || keyCount(a) !== keyCount(b)) return false;
+  for (const key in a)
+    if (
+      hasOwn(a, key) &&
+      (!hasOwn(b, key) || !equal((a as Plain)[key], (b as Plain)[key]))
+    )
+      return false;
+  return true;
+};
+
 /**
  * Returns a function that copies a value read from an Automerge document into plain JSON,
  * reading `ImmutableString`s as strings. What it returns belongs to the caller, who may change
  * it without changing what later calls return.
+ *
+ * Given `losers`, maps that lose to `value`, a map, in a conflict, from the one by the greatest
+ * operation down, it returns `value` with every key of theirs it lacks, from the first loser
+ * that holds it.
  *
  * It keeps two copies. Its own is cached per document object, so a call copies only what
  * changed in the document, and it never leaves this function. A call returns the other: the
  * objects an earlier call returned, checked against its own copy and returned again while they
  * still match, so an unchanged subtree keeps its identity between calls and one a caller changed
  * is copied afresh. The check visits every object, and allocates nothing while they match.
+ * A loser is a fresh object on every read, so its keys are checked against what the last merge
+ * held instead, and keep their identity while they hold the same JSON.
  */
-export const createSnapshot = (): ((value: unknown) => unknown) => {
+export const createSnapshot = (): ((
+  value: unknown,
+  losers?: readonly object[],
+) => unknown) => {
   /** Our own copy of each Automerge object. */
   const copies = new WeakMap<object, unknown>();
   /** What a call last returned for each object of our own copy. */
   const shown = new WeakMap<object, unknown>();
+  /** Our own copy of the last map merged with losers. */
+  let lastMerged: Plain | undefined;
 
   const copy = (value: unknown): unknown => {
     if (value === null || typeof value !== "object") return value;
@@ -113,5 +150,39 @@ export const createSnapshot = (): ((value: unknown) => unknown) => {
     return Array.isArray(own) ? showList(own) : showRecord(own as Plain);
   };
 
-  return (value) => show(copy(value));
+  /** `own`, a map of our own copy, with the keys it lacks from `losers`. */
+  const merge = (own: Plain, losers: readonly object[]): Plain => {
+    const last = lastMerged;
+    const merged: Plain = {};
+    let same = last !== undefined;
+    const add = (key: string, item: unknown): void => {
+      const kept =
+        last !== undefined && hasOwn(last, key) && equal(last[key], item)
+          ? last[key]
+          : item;
+      if (same && (!hasOwn(last!, key) || last![key] !== kept)) same = false;
+      put(merged, key, kept);
+    };
+    for (const key in own) if (hasOwn(own, key)) add(key, own[key]);
+    for (const loser of losers) {
+      const theirs = copy(loser) as Plain;
+      for (const key in theirs)
+        if (hasOwn(theirs, key) && !hasOwn(merged, key)) add(key, theirs[key]);
+    }
+    if (same && keyCount(last!) === keyCount(merged)) return last!;
+    lastMerged = merged;
+    return merged;
+  };
+
+  return (value, losers = []) => {
+    const own = copy(value);
+    if (
+      losers.length === 0 ||
+      own === null ||
+      typeof own !== "object" ||
+      Array.isArray(own)
+    )
+      return show(own);
+    return show(merge(own as Plain, losers));
+  };
 };

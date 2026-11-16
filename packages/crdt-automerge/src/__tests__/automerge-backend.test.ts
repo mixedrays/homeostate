@@ -12,6 +12,7 @@ import {
   createAutomergeBackend,
   createAutomergeHandle,
   createAutomergePersistable,
+  type AutomergeBackendOptions,
   type AutomergeDocSource,
   type AutomergeHandle,
 } from "../index.js";
@@ -67,35 +68,193 @@ describe("two peers that each create the synced map", () => {
     a.update((doc) => A.merge(doc, b.doc()));
   };
 
-  it("keep one map whole, the one by the higher actor, with no key of the other", () => {
-    const low = createHandle(1);
-    const high = createHandle(2);
-    createAutomergeBackend(low, NAME).write({ count: 1, onlyLow: true });
-    createAutomergeBackend(high, NAME).write({ count: 2, onlyHigh: true });
+  /** Documents by actors 1 and 2, each creating the synced map with its value, then merged. */
+  const competingMaps = (
+    low: Root,
+    high: Root,
+    options?: AutomergeBackendOptions,
+  ) => {
+    const docLow = createHandle(1);
+    const docHigh = createHandle(2);
+    createAutomergeBackend(docLow, NAME, options).write(low);
+    createAutomergeBackend(docHigh, NAME, options).write(high);
+    exchange(docLow, docHigh);
+    return { docLow, docHigh };
+  };
 
-    exchange(low, high);
+  /** Every map at the synced key, by the operation that created it. */
+  const maps = (handle: Handle) => A.getConflicts(handle.doc(), NAME);
 
-    const merged = { count: 2, onlyHigh: true };
-    expect(createAutomergeBackend(low, NAME).read()).toEqual(merged);
-    expect(createAutomergeBackend(high, NAME).read()).toEqual(merged);
+  it("read every map's keys, with the winning map's value for a key both hold", () => {
+    const { docLow, docHigh } = competingMaps(
+      { count: 1, onlyLow: true },
+      { count: 2, onlyHigh: true },
+    );
+
+    const merged = { count: 2, onlyLow: true, onlyHigh: true };
+    expect(createAutomergeBackend(docLow, NAME).read()).toEqual(merged);
+    expect(createAutomergeBackend(docHigh, NAME).read()).toEqual(merged);
+    // What an earlier release reads: the map by the higher actor.
+    expect(docLow.doc()[NAME]).toEqual({ count: 2, onlyHigh: true });
   });
 
-  it("lose the keys only the room holds when a peer seeds an empty document first", () => {
-    const room = createHandle(1);
-    createAutomergeBackend(room, NAME).write({ count: 7, roomOnly: true });
-    const late = createHandle(2);
-    const store = createTestStore<Root>({ count: 0 });
-    const engine = createSyncEngine({
-      backend: createAutomergeBackend(late, NAME),
-      adapter: store.adapter,
+  it("move the losing map's keys into the winning one on the next write, and empty it", () => {
+    const { docLow } = competingMaps(
+      { count: 1, onlyLow: { nested: [1] } },
+      { count: 2, onlyHigh: true },
+    );
+    const backend = createAutomergeBackend(docLow, NAME);
+
+    backend.write({ ...backend.read(), added: true });
+
+    const healed = {
+      count: 2,
+      onlyLow: { nested: [1] },
+      onlyHigh: true,
+      added: true,
+    };
+    expect(backend.read()).toEqual(healed);
+    expect(maps(docLow)).toEqual({ "1@01": {}, "1@02": healed });
+  });
+
+  it("read what the write that moves the keys wrote while it notifies", () => {
+    const { docLow } = competingMaps({ onlyLow: true }, { onlyHigh: true });
+    const backend = createAutomergeBackend(docLow, NAME);
+    const reads: unknown[] = [];
+    docLow.subscribe(() => reads.push(backend.read()));
+
+    backend.write({ onlyLow: true, onlyHigh: true, added: true });
+
+    expect(reads).toEqual([{ onlyLow: true, onlyHigh: true, added: true }]);
+  });
+
+  it("do not bring back a key deleted by the write that moves it, even one both maps held", () => {
+    const { docLow } = competingMaps(
+      { count: 1, onlyLow: true },
+      { count: 2, onlyHigh: true },
+    );
+    const backend = createAutomergeBackend(docLow, NAME);
+
+    backend.write({ onlyHigh: true });
+
+    expect(backend.read()).toEqual({ onlyHigh: true });
+    expect(maps(docLow)).toEqual({ "1@01": {}, "1@02": { onlyHigh: true } });
+  });
+
+  it("read a key that two losing maps hold from the one by the higher actor", () => {
+    const docs = [1, 2, 3].map((id) => createHandle(id));
+    const values = [{ shared: 1, one: 1 }, { shared: 2, two: 2 }, { three: 3 }];
+    docs.forEach((doc, i) =>
+      createAutomergeBackend(doc, NAME).write(values[i]),
+    );
+    exchange(docs[0], docs[1]);
+    exchange(docs[1], docs[2]);
+    const backend = createAutomergeBackend(docs[1], NAME);
+    const merged = { shared: 2, one: 1, two: 2, three: 3 };
+
+    expect(backend.read()).toEqual(merged);
+    backend.write(merged);
+    expect(docs[1].doc()[NAME]).toEqual(merged);
+  });
+
+  it("read and heal two maps in a document stored before this release", () => {
+    // An earlier release created the map in each peer's first write.
+    const created = (id: number, value: Root) =>
+      A.change(A.init<Root>(actor(id)), (doc) => {
+        doc[NAME] = value;
+      });
+    const stored = A.save(
+      A.merge(
+        created(1, { count: 1, onlyLow: true }),
+        created(2, { count: 2 }),
+      ),
+    );
+    const handle = createAutomergeHandle(A.load<Root>(stored, actor(3)));
+    const backend = createAutomergeBackend(handle, NAME);
+
+    expect(backend.read()).toEqual({ count: 2, onlyLow: true });
+    backend.write({ count: 3, onlyLow: true });
+    expect(handle.doc()[NAME]).toEqual({ count: 3, onlyLow: true });
+  });
+
+  it("move a key a peer writes into its own map before it sees the move", () => {
+    const docLow = createHandle(1);
+    const docHigh = createHandle(2);
+    const low = createAutomergeBackend(docLow, NAME);
+    const high = createAutomergeBackend(docHigh, NAME);
+    low.write({ onlyLow: true });
+    high.write({ onlyHigh: true });
+    docHigh.update((doc) => A.merge(doc, docLow.doc()));
+    high.write({ ...high.read(), moved: true });
+
+    low.write({ onlyLow: true, late: true });
+    exchange(docLow, docHigh);
+
+    const merged = { onlyLow: true, onlyHigh: true, moved: true, late: true };
+    expect(high.read()).toEqual(merged);
+    high.write(merged);
+    expect(maps(docHigh)).toEqual({ "1@01": {}, "1@02": merged });
+  });
+
+  it("lose a peer's edit inside a moved value made before it sees the move", () => {
+    const docLow = createHandle(1);
+    const docHigh = createHandle(2);
+    const low = createAutomergeBackend(docLow, NAME);
+    const high = createAutomergeBackend(docHigh, NAME);
+    low.write({ todo: { done: false } });
+    high.write({ onlyHigh: true });
+    docHigh.update((doc) => A.merge(doc, docLow.doc()));
+    high.write({ ...high.read(), moved: true });
+
+    // The move copies `todo` into the winning map, so this edits a copy no longer read.
+    low.write({ todo: { done: true } });
+    exchange(docLow, docHigh);
+
+    expect(high.read()).toEqual({
+      todo: { done: false },
+      onlyHigh: true,
+      moved: true,
     });
-    engine.connect();
+  });
 
-    exchange(room, late);
+  it("store a moved string as the policy says", () => {
+    const options = {
+      text: (path: readonly (string | number)[]) => path[0] === "title",
+    };
+    const { docLow } = competingMaps(
+      { title: "abc", label: "low" },
+      { onlyHigh: true },
+      options,
+    );
+    const backend = createAutomergeBackend(docLow, NAME, options);
 
-    expect(store.getState()).toEqual({ count: 0 });
-    expect(createAutomergeBackend(room, NAME).read()).toEqual({ count: 0 });
-    engine.disconnect();
+    backend.write({ ...backend.read(), title: "abcd" });
+
+    expect(backend.read()).toEqual({
+      title: "abcd",
+      label: "low",
+      onlyHigh: true,
+    });
+    expect(typeof at(docLow, ["title"])).toBe("string");
+    expect(A.isImmutableString(at(docLow, ["label"]))).toBe(true);
+  });
+
+  it("keep the unchanged values of a losing map between reads", () => {
+    const { docLow } = competingMaps(
+      { onlyLow: { nested: [1] } },
+      { count: 2 },
+    );
+    const backend = createAutomergeBackend(docLow, NAME);
+    const first = backend.read();
+    expect(backend.read()).toBe(first);
+
+    docLow.change((doc) => {
+      (doc[NAME] as Root).count = 3;
+    });
+    const second = backend.read();
+
+    expect(second).toEqual({ count: 3, onlyLow: { nested: [1] } });
+    expect(second.onlyLow).toBe(first.onlyLow);
   });
 
   it("keep every key when the document already holds the map", () => {

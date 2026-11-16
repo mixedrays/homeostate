@@ -109,13 +109,25 @@ package manager installs only one.
 ## Peers that create the synced key
 
 The synced key holds one Automerge map, which a document creates with its first write. Two peers
-that each create it, each from a document without it, make two competing maps, and the merge
-keeps one of them whole: the other peer's keys are lost, even those no other peer wrote. Peers
-still end with one consistent state, and a document that already holds the map merges per key.
+that each create it, each in a document without it, such as a peer that seeds before the room's
+state arrives, make two competing maps at the key. Automerge shows only one of them, the winner,
+so the backend merges them itself:
 
-So [waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) before
-`connect()` matters more here. A peer that connects at once, or whose timeout expires before the
-room's state arrives, can seed an empty document and remove keys only the room held. Yjs and Loro merge these two writes per key.
+- `read()` returns the winner's keys and every key only a losing map holds. A key both hold
+  reads as the winner's value, as when two peers write one key at once.
+- The next write moves those keys into the winner and empties the losing maps, so every peer, an
+  earlier release of this package included, reads them from the winner, and a key deleted later
+  stays deleted. A key a peer adds to its own map before it receives the move is moved by the
+  write after it.
+
+A moved value is a copy. So a peer's edit inside it, made in its own map before that peer
+receives the move, such as toggling a todo the move copied, is lost. Documents stored by an
+earlier release that already hold two maps read the same way and are merged by their next
+write.
+
+Two maps still compete for each value two peers seed, so
+[waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) before `connect()`
+keeps the room's values, as with Yjs and Loro.
 
 ## Strings and text
 
