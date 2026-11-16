@@ -23,12 +23,32 @@ describe("createTimeline", () => {
     const woke = vi.fn();
     void timeline.sleep(50).then(woke);
 
-    timeline.setPaused(true);
+    timeline.setPaused("user", true);
     timeline.advance(500);
     await settle();
     expect(woke).not.toHaveBeenCalled();
 
-    timeline.setPaused(false);
+    timeline.setPaused("user", false);
+    timeline.advance(50);
+    await settle();
+    expect(woke).toHaveBeenCalledOnce();
+  });
+
+  it("stays paused until every reason is lifted", async () => {
+    const timeline = createTimeline();
+    const woke = vi.fn();
+    void timeline.sleep(50).then(woke);
+
+    timeline.setPaused("user", true);
+    timeline.setPaused("hidden", true);
+    timeline.setPaused("hidden", false);
+    expect(timeline.paused).toBe(true);
+    timeline.advance(500);
+    await settle();
+    expect(woke).not.toHaveBeenCalled();
+
+    timeline.setPaused("user", false);
+    expect(timeline.paused).toBe(false);
     timeline.advance(50);
     await settle();
     expect(woke).toHaveBeenCalledOnce();

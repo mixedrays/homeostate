@@ -74,7 +74,7 @@ what the key holds, which the sync engine reports; a `write` replaces it with a 
 
 ## With automerge-repo
 
-[automerge-repo](https://automerge.org/docs/repositories/) keeps documents in a `Repo`, which
+[automerge-repo](https://automerge.org/docs/reference/repositories/) keeps documents in a `Repo`, which
 stores them through a storage adapter and syncs them through network adapters. Pass one of its
 `DocHandle`s instead of a handle, and the `Repo` stores and syncs what the engine writes:
 

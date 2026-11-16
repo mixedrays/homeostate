@@ -541,6 +541,11 @@
     animation: hc-caption-in var(--hc-loop) ease-in-out infinite;
   }
 
+  /* The pause button (WCAG 2.2.2). Declared after `.hc-mark .hm-diamond`, which it ties. */
+  .hc-diagram[data-paused] * {
+    animation-play-state: paused;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     :is(
       .hc-packet-store,

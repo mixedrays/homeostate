@@ -6,7 +6,9 @@ export interface Timeline {
   sleep(ms: number): Promise<void>;
   /** Moves the clock forward; does nothing while paused or stopped. */
   advance(ms: number): void;
-  setPaused(paused: boolean): void;
+  /** Holds the clock for `reason`, or lifts that hold; it runs once no reason holds it. */
+  setPaused(reason: string, paused: boolean): void;
+  readonly paused: boolean;
   /** Rejects every pending and later sleep with `STOPPED`. */
   stop(): void;
 }
@@ -17,7 +19,7 @@ export interface Timeline {
  */
 export function createTimeline(): Timeline {
   let now = 0;
-  let paused = false;
+  const holds = new Set<string>();
   let stopped = false;
   let pending: {
     at: number;
@@ -33,14 +35,18 @@ export function createTimeline(): Timeline {
       });
     },
     advance(ms) {
-      if (paused || stopped) return;
+      if (holds.size > 0 || stopped) return;
       now += ms;
       const due = pending.filter((sleep) => sleep.at <= now);
       pending = pending.filter((sleep) => sleep.at > now);
       due.forEach((sleep) => sleep.resolve());
     },
-    setPaused(value) {
-      paused = value;
+    setPaused(reason, paused) {
+      if (paused) holds.add(reason);
+      else holds.delete(reason);
+    },
+    get paused() {
+      return holds.size > 0;
     },
     stop() {
       stopped = true;
