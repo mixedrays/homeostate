@@ -16,6 +16,8 @@ export const site = {
   /** Where `/docs` sends readers. */
   docsHome: "/docs/getting-started",
   conceptsPage: "/docs/concepts",
+  /** Every package by group; the header's "Packages" link. */
+  packagesPage: "/docs/packages",
   /** The guide whose header shows the docs app's version, GitHub and npm. */
   aboutPage: "/docs/about",
 } as const;
@@ -24,7 +26,7 @@ export const site = {
 export const siteNav = [
   { label: "Docs", to: site.docsHome },
   { label: "Concepts", to: site.conceptsPage },
-  { label: "Packages", to: "/docs/core/introduction" },
+  { label: "Packages", to: site.packagesPage },
 ] as const;
 
 /**
