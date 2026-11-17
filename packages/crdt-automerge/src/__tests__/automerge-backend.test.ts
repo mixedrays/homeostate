@@ -596,6 +596,15 @@ describe("numbers and values other Automerge code stores", () => {
     expect(A.getHeads(handle.doc())).toEqual(heads);
   });
 
+  it("reads a Counter holding a 64-bit integer as a number", () => {
+    const handle = createHandle();
+    storeIn(handle, "counter", new A.Counter(2 ** 60));
+    const backend = createAutomergeBackend(handle, NAME);
+
+    expect(backend.read()).toStrictEqual({ counter: 2 ** 60 });
+    expect(JSON.stringify(backend.read())).toBe(`{"counter":${2 ** 60}}`);
+  });
+
   it("keeps a store's large numbers on its own writes and when a peer's change arrives", () => {
     const doc = createHandle(1);
     const store = createTestStore<Root>({ id: 2 ** 53 + 2, count: 0 });

@@ -83,7 +83,8 @@ export const createSnapshot = (): ((
     if (typeof value === "bigint") return Number(value);
     if (value === null || typeof value !== "object") return value;
     if (!Array.isArray(value) && A.isImmutableString(value)) return value.val;
-    if (!Array.isArray(value) && A.isCounter(value)) return value.value;
+    // A `Counter` holds a `bigint` from `Number.MAX_SAFE_INTEGER` up, as an integer does.
+    if (!Array.isArray(value) && A.isCounter(value)) return Number(value.value);
     const cached = copies.get(value);
     if (cached !== undefined) return cached;
     const result = Array.isArray(value)
