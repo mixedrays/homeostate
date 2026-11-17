@@ -1,5 +1,5 @@
 import * as A from "@automerge/automerge";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createSyncEngine } from "@homeostate/core";
 import {
   createTestStore,
@@ -257,6 +257,27 @@ describe("two peers that each create the synced map", () => {
     expect(second.onlyLow).toBe(first.onlyLow);
   });
 
+  it("read and move a losing map's large integers and counters as numbers", () => {
+    const { docLow } = competingMaps({}, { count: 2 });
+    docLow.change((doc) => {
+      const conflicts = A.getConflicts(doc, NAME)!;
+      const loser = Object.entries(conflicts).find(([id]) =>
+        id.endsWith("@01"),
+      )![1] as Root;
+      loser.big = 2 ** 53 + 2;
+      loser.counter = new A.Counter(5);
+    });
+    const backend = createAutomergeBackend(docLow, NAME);
+    const read = { count: 2, big: 2 ** 53 + 2, counter: 5 };
+
+    expect(backend.read()).toEqual(read);
+
+    backend.write({ ...backend.read(), added: true });
+
+    expect(backend.read()).toEqual({ ...read, added: true });
+    expect(typeof (docLow.doc()[NAME] as Root).big).toBe("number");
+  });
+
   it("keep every key when the document already holds the map", () => {
     const room = createHandle(1);
     const roomBackend = createAutomergeBackend(room, NAME);
@@ -496,6 +517,107 @@ describe("text under keys that hold a slash", () => {
 
     expect(a.read()).toEqual({ "a/b": "Xslash!" });
     expect(b.read()).toEqual({ "a/b": "Xslash!" });
+  });
+});
+
+describe("numbers and values other Automerge code stores", () => {
+  /** Integers Automerge would store as 64-bit integers, and read as `bigint` or clamp. */
+  const large = {
+    max: 2 ** 53 - 1,
+    min: -(2 ** 53 - 1),
+    above: 2 ** 53 + 2,
+    below: -(2 ** 53 + 2),
+    e19: 1e19,
+    e21: 1e21,
+    minusE21: -1e21,
+    list: [2 ** 53 - 1, 2 ** 63],
+  };
+
+  it("reads large integers back as the numbers written, as JSON", () => {
+    const backend = createAutomergeBackend(createHandle(), NAME);
+
+    backend.write(large);
+
+    expect(backend.read()).toEqual(large);
+    expect(JSON.parse(JSON.stringify(backend.read()))).toEqual(large);
+  });
+
+  it("reads large integers inserted into a list, or replacing its items, as numbers", () => {
+    const backend = createAutomergeBackend(createHandle(), NAME);
+    backend.write({ list: [1, 2, 3] });
+
+    const next = {
+      list: [1, 2 ** 53 + 2, { n: [1e21] }, 2, -(2 ** 53 - 1), 2 ** 53 - 1],
+    };
+    backend.write(next);
+
+    expect(backend.read()).toEqual(next);
+  });
+
+  it("reads large integers a peer wrote, after a save and load", () => {
+    const handle = createHandle();
+    createAutomergeBackend(handle, NAME).write(large);
+
+    const loaded = createAutomergeHandle(A.load<Root>(A.save(handle.doc())));
+
+    expect(createAutomergeBackend(loaded, NAME).read()).toEqual(large);
+  });
+
+  it("reads 64-bit integers other code stored as numbers, and writes them back unchanged", () => {
+    const handle = createHandle();
+    storeIn(handle, "n", 2 ** 53 + 2);
+    storeIn(handle, "unsigned", new A.Uint(3));
+    const backend = createAutomergeBackend(handle, NAME);
+    const heads = A.getHeads(handle.doc());
+
+    const read = backend.read();
+    backend.write(read);
+
+    expect(read).toEqual({ n: 2 ** 53 + 2, unsigned: 3 });
+    expect(A.getHeads(handle.doc())).toEqual(heads);
+  });
+
+  it("reads a Counter and an ImmutableString other code stored as a number and a string", () => {
+    const handle = createHandle();
+    handle.change((doc) => {
+      doc[NAME] = {
+        counter: new A.Counter(5),
+        raw: new A.ImmutableString("raw"),
+        list: [new A.Counter(1)],
+      };
+    });
+    const backend = createAutomergeBackend(handle, NAME);
+    const heads = A.getHeads(handle.doc());
+
+    const read = backend.read();
+    backend.write(read);
+
+    expect(read).toEqual({ counter: 5, raw: "raw", list: [1] });
+    expect(A.getHeads(handle.doc())).toEqual(heads);
+  });
+
+  it("keeps a store's large numbers on its own writes and when a peer's change arrives", () => {
+    const doc = createHandle(1);
+    const store = createTestStore<Root>({ id: 2 ** 53 + 2, count: 0 });
+    const engine = createSyncEngine({
+      backend: createAutomergeBackend(doc, NAME),
+      adapter: store.adapter,
+    });
+    engine.connect();
+    const onStoreChange = vi.fn();
+    store.adapter.subscribe(onStoreChange);
+
+    store.update((state) => ({ ...state, count: 1 }));
+    expect(store.getState()).toStrictEqual({ id: 2 ** 53 + 2, count: 1 });
+    expect(onStoreChange).toHaveBeenCalledTimes(1);
+
+    const other = createHandle(2);
+    other.update((d) => A.merge(d, doc.doc()));
+    createAutomergeBackend(other, NAME).write({ id: 2 ** 53 + 2, count: 2 });
+    doc.update((d) => A.merge(d, other.doc()));
+
+    expect(store.getState()).toStrictEqual({ id: 2 ** 53 + 2, count: 2 });
+    engine.disconnect();
   });
 });
 

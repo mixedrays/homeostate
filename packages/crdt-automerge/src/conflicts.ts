@@ -1,6 +1,6 @@
 import * as A from "@automerge/automerge";
 import type { TextPolicy } from "@homeostate/core";
-import { toAutomerge, type Container } from "./patching.js";
+import { assign, type Container } from "./patching.js";
 import { createSnapshot } from "./snapshot.js";
 
 /** Splits an operation ID, `counter@actor`. */
@@ -63,7 +63,7 @@ export const moveLosingKeys = (
     for (const key of Object.keys(loser)) {
       // A map holds no `undefined`, so this is a key the winner lacks.
       if (winner[key] === undefined)
-        winner[key] = toAutomerge(plain(loser[key]), [key], text);
+        assign(winner, key, plain(loser[key]), [key], text);
       delete loser[key];
     }
 };

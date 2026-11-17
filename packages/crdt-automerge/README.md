@@ -67,6 +67,10 @@ createAutomergeBackend(handle, "shared", {
 });
 ```
 
+Integers from `Number.MAX_SAFE_INTEGER` up, or below its negation, are stored as `Float64`
+values, so `read()` returns them as the numbers written, with a double's precision, rather than
+as `bigint`s.
+
 To persist the document, pass `createAutomergePersistable(handle)` to `createPersistence`, or
 use a `Repo`'s storage adapter; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).
