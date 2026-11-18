@@ -117,6 +117,87 @@ describe("createAutomergeHandle", () => {
     expect(events).toEqual([true, false]);
   });
 
+  it("notifies every listener of a change when one throws, then throws its error", () => {
+    const handle = createAutomergeHandle<Root>();
+    const second = vi.fn();
+    handle.subscribe(() => {
+      throw new Error("first");
+    });
+    handle.subscribe(second);
+
+    expect(() =>
+      handle.change((doc) => {
+        doc.count = 1;
+      }),
+    ).toThrow("first");
+
+    expect(handle.doc()).toEqual({ count: 1 });
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledWith({ doc: handle.doc(), local: true });
+  });
+
+  it("notifies every listener of an update when one throws, then throws its error", () => {
+    const handle = createAutomergeHandle<Root>(A.from<Root>({ count: 1 }));
+    const other = A.change(A.load<Root>(A.save(handle.doc())), (doc) => {
+      doc.label = "x";
+    });
+    const second = vi.fn();
+    handle.subscribe(() => {
+      throw new Error("first");
+    });
+    handle.subscribe(second);
+
+    expect(() => handle.update((doc) => A.merge(doc, other))).toThrow("first");
+
+    expect(handle.doc()).toEqual({ count: 1, label: "x" });
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledWith({ doc: handle.doc(), local: false });
+  });
+
+  it("runs every listener when several throw, and throws the first error", () => {
+    const handle = createAutomergeHandle<Root>();
+    const calls: string[] = [];
+    handle.subscribe(() => {
+      calls.push("first");
+      throw new Error("first");
+    });
+    handle.subscribe(() => {
+      calls.push("second");
+      throw new Error("second");
+    });
+    handle.subscribe(() => calls.push("third"));
+
+    expect(() =>
+      handle.change((doc) => {
+        doc.count = 1;
+      }),
+    ).toThrow("first");
+
+    expect(calls).toEqual(["first", "second", "third"]);
+  });
+
+  it("throws a listener's error even when it is undefined", () => {
+    const handle = createAutomergeHandle<Root>();
+    const second = vi.fn();
+    handle.subscribe(() => {
+      throw undefined;
+    });
+    handle.subscribe(second);
+
+    let thrown = false;
+    try {
+      handle.change((doc) => {
+        doc.count = 1;
+      });
+    } catch (error) {
+      thrown = true;
+      expect(error).toBeUndefined();
+    }
+
+    expect(thrown).toBe(true);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
   it("stops notifying after unsubscribe", () => {
     const handle = createAutomergeHandle<Root>();
     const listener = vi.fn();
