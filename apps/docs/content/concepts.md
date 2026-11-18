@@ -65,6 +65,11 @@ neither diffed nor synced. The supplied backends store `undefined` and nested fu
 `JSON.stringify` does: object entries holding them are left out, and such array items become
 `null`. They store `NaN` and infinite numbers as `null`, as it does too.
 
+Numbers are JavaScript doubles, on every supplied backend. An integer beyond
+`Number.MAX_SAFE_INTEGER`, such as `2 ** 53 + 2` or `1e21`, reads back as the number written,
+but has only a double's precision: `2 ** 53 + 1` is already `2 ** 53`. Keep ids and amounts
+that need every digit in strings. `-0` may read back as `0`, as JSON stores it.
+
 Keys sync as own properties, so a key such as `constructor` or `toString` behaves like any
 other. A `__proto__` key is never synced: assigning it would replace an object's prototype, so
 the engine leaves it out of remote state at any depth, and copies an object a backend read with

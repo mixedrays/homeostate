@@ -147,6 +147,17 @@ the document the same policy. A string held as the other kind, such as text writ
 earlier release, reads as usual and is stored as the configured kind when it next changes. See
 [Strings and text](/docs/concepts#strings-and-text).
 
+## Numbers
+
+Numbers are JavaScript doubles. Automerge stores other integers as 64-bit integers, reads those
+from `Number.MAX_SAFE_INTEGER` up, or below its negation, as `bigint`s, and clamps those beyond
+the 64-bit range, so the backend stores such integers as `Float64` values: `read()` returns the
+number written, such as `2 ** 53 + 2` or `1e21`, with a double's precision.
+
+Values other Automerge code stored read as JSON too: a 64-bit integer as the nearest number, and
+a `Counter` as its value. A write that changes a `Counter`'s value replaces it with a plain
+number, so other code's concurrent increments of it are lost.
+
 ## Known issue: list order after some merges
 
 Automerge 3.4.1 and 3.5.0 patch a document's view wrongly after some merges. Each document

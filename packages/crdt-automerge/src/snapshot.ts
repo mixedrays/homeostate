@@ -52,8 +52,8 @@ const equal = (a: unknown, b: unknown): boolean => {
 
 /**
  * Returns a function that copies a value read from an Automerge document into plain JSON,
- * reading `ImmutableString`s as strings. What it returns belongs to the caller, who may change
- * it without changing what later calls return.
+ * reading `ImmutableString`s as strings, and `bigint`s and `Counter`s as numbers. What it returns
+ * belongs to the caller, who may change it without changing what later calls return.
  *
  * Given `losers`, maps that lose to `value`, a map, in a conflict, from the one by the greatest
  * operation down, it returns `value` with every key of theirs it lacks, from the first loser
@@ -79,8 +79,12 @@ export const createSnapshot = (): ((
   let lastMerged: Plain | undefined;
 
   const copy = (value: unknown): unknown => {
+    // A 64-bit integer from `Number.MAX_SAFE_INTEGER` up, or below its negation, or a `Uint`.
+    if (typeof value === "bigint") return Number(value);
     if (value === null || typeof value !== "object") return value;
     if (!Array.isArray(value) && A.isImmutableString(value)) return value.val;
+    // A `Counter` holds a `bigint` from `Number.MAX_SAFE_INTEGER` up, as an integer does.
+    if (!Array.isArray(value) && A.isCounter(value)) return Number(value.value);
     const cached = copies.get(value);
     if (cached !== undefined) return cached;
     const result = Array.isArray(value)

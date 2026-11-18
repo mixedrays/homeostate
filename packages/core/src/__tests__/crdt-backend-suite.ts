@@ -107,6 +107,26 @@ const roundTrips: [object, object][] = [
   ],
 ];
 
+/**
+ * Numbers every backend reads back as written, as JavaScript doubles: integers beyond the safe
+ * range, `Number.MAX_SAFE_INTEGER` itself, and values beyond the 64-bit integer range. `-0`
+ * reads back as `0` on some backends, as JSON stores it.
+ */
+const numbers = {
+  maxSafe: 2 ** 53 - 1,
+  minSafe: -(2 ** 53 - 1),
+  above: 2 ** 53 + 2,
+  below: -(2 ** 53 + 2),
+  e21: 1e21,
+  minusE21: -1e21,
+  max: Number.MAX_VALUE,
+  fraction: 0.1,
+  int32: 2 ** 31,
+  zero: -0,
+  list: [2 ** 53 - 1, 2 ** 53 + 2, 1e21, -1e21],
+  nested: { id: 2 ** 63, ids: [2 ** 53 + 2] },
+};
+
 /** Plain values other code stores, and the next value written over each: `[kind, stored, next]`. */
 const foreignValues: [string, unknown, unknown][] = [
   ["string", "abc", "abd"],
@@ -335,6 +355,31 @@ export const describeCrdtBackend = <D>(
         expect(written.read()).toEqual(before);
         written.write(after);
         expect(written.read()).toEqual(after);
+      },
+    );
+
+    scenario("reads numbers back as written, beyond the safe integers too").run(
+      () => {
+        const doc = createDoc();
+        const written = backend(doc);
+        // Inserted into a list and set into a map that exist, as well as created with the key.
+        written.write({ list: [0], nested: {} });
+        written.write(numbers);
+
+        // `snapshot` compares `-0` as `0`, and throws for a `bigint`.
+        expect(snapshot(written.read())).toEqual(snapshot(numbers));
+
+        if (onLocalUpdate) {
+          const onUpdate = vi.fn();
+          onLocalUpdate(doc, onUpdate);
+          written.write(written.read());
+          expect(onUpdate).not.toHaveBeenCalled();
+        }
+        if (exchange) {
+          const other = createDoc();
+          exchange(doc, other);
+          expect(snapshot(backend(other).read())).toEqual(snapshot(numbers));
+        }
       },
     );
 
