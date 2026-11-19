@@ -52,7 +52,8 @@ onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 - `handle.update((doc) => ...)` replaces the document with the result of `A.merge`,
   `A.applyChanges`, `A.loadIncremental`, `A.receiveSyncMessage` or any other Automerge call.
 - `handle.subscribe(({ doc, local }) => ...)` fires whenever the heads change; `local` is
-  true for `change` and false for `update`.
+  true for `change` and false for `update`. A listener that throws does not stop the others:
+  every listener hears the change, then `change` or `update` throws the first error.
 
 The backend uses only `doc`, `change` and `subscribe`, typed `AutomergeDocSource`, so any object
 with those three can hold the document in place of a handle.

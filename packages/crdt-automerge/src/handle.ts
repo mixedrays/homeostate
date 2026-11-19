@@ -44,7 +44,17 @@ export const createAutomergeHandle = <T = Record<string, unknown>>(
     current = next;
     if (sameHeads(before, A.getHeads(next))) return;
     const event = { doc: next, local };
-    listeners.forEach((listener) => listener(event));
+    // Every listener hears the change even after one throws (Yjs likewise calls every observer),
+    // then the first error is thrown. The live set skips a listener an earlier one unsubscribed.
+    let failed: { error: unknown } | undefined;
+    for (const listener of listeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        failed ??= { error };
+      }
+    }
+    if (failed) throw failed.error;
   };
 
   return {
