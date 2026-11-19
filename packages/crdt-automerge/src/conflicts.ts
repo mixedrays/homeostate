@@ -51,7 +51,8 @@ export const losingMaps = (doc: Container, name: string): Container[] => {
  *
  * A moved value is a copy, so a peer's change inside it that the move has not seen, made in
  * the losing map, is no longer read. A key that such a peer adds to its map is moved by the
- * next write.
+ * next write. A `Counter` holding a number moves as a new `Counter`; one nested in a moved map
+ * or list, or holding a `bigint`, moves as a number.
  */
 export const moveLosingKeys = (
   winner: Container,
@@ -62,8 +63,17 @@ export const moveLosingKeys = (
   for (const loser of losers)
     for (const key of Object.keys(loser)) {
       // A map holds no `undefined`, so this is a key the winner lacks.
-      if (winner[key] === undefined)
-        assign(winner, key, plain(loser[key]), [key], text);
+      if (winner[key] === undefined) {
+        const value = loser[key];
+        // A list proxy claims every property, so `isCounter` alone accepts one.
+        if (
+          !Array.isArray(value) &&
+          A.isCounter(value) &&
+          typeof value.value === "number"
+        )
+          winner[key] = new A.Counter(value.value);
+        else assign(winner, key, plain(value), [key], text);
+      }
       delete loser[key];
     }
 };
