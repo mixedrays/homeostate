@@ -104,6 +104,28 @@ sees the stored state instead of seeding the store's defaults over it. As with a
 engine picks up every change that did not come through its own write: changes loaded from
 storage, received from peers, or made through `docHandle.change`.
 
+The backend adds one `"heads-changed"` listener to the `DocHandle`, which calls every listener
+subscribed to the backend, the engine's included. If one of them throws, the rest still hear the
+change, and so do the handle's later listeners, its `"change"` event and the `Repo`'s sync to
+peers. The error is thrown from a timer, so no caller can catch it: a browser logs it, and Node
+exits unless an `uncaughtException` handler catches it. The engine's listener throws when the
+store adapter rejects remote state, so pass
+[`onError`](../../core/docs/sync-engine.md#reporting-errors) to the engine to handle such errors
+instead:
+
+```ts
+const engine = createSyncEngine({
+  backend: createAutomergeBackend(docHandle, "shared"),
+  adapter: storeAdapter,
+  onError: (error, source) =>
+    console.error(`Sync failed in the ${source}`, error),
+});
+```
+
+A listener you add to the `DocHandle` yourself is called by automerge-repo, and if it throws,
+the handle's later listeners, its `"change"` event and the sync to peers miss the change until
+the next one.
+
 The `Repo` and the backend must share one copy of `@automerge/automerge`, so check that your
 package manager installs only one.
 
