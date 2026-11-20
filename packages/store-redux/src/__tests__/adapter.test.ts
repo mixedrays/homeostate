@@ -223,7 +223,7 @@ describe("ReduxAdapter", () => {
     expect(backend.read()).toEqual({ todos: ["a", "b"], count: 2 });
   });
 
-  it("leaves a remote change in the backend when no reducer handles the replace action", () => {
+  describe("when the replace action leaves the state unchanged", () => {
     const counter = createSlice({
       name: "counter",
       initialState: { count: 0 },
@@ -233,23 +233,111 @@ describe("ReduxAdapter", () => {
         },
       },
     });
-    const store = configureStore({ reducer: counter.reducer });
-    const { backend, writes } = countingWrites(createMemoryBackend());
     const replace = (payload: { count: number }) => ({
       type: "counter/replaceState",
       payload,
     });
-    createSyncEngine({
-      backend,
-      adapter: createReduxAdapter(store, replace),
-    }).connect();
-    writes.length = 0;
+    const unhandled =
+      /dispatching "counter\/replaceState" left the store's state unchanged.*withHomeostate/;
 
-    backend.receive({ count: 5 });
+    it("throws a remote change no reducer handles, naming the action", () => {
+      const store = configureStore({ reducer: counter.reducer });
+      const backend = createMemoryBackend();
+      createSyncEngine({
+        backend,
+        adapter: createReduxAdapter(store, replace),
+      }).connect();
+
+      expect(() => backend.receive({ count: 5 })).toThrow(unhandled);
+      expect(store.getState()).toEqual({ count: 0 });
+      expect(backend.read()).toEqual({ count: 5 });
+    });
+
+    it("reports it to onError as a store error and leaves the backend alone", () => {
+      const store = configureStore({ reducer: counter.reducer });
+      const { backend, writes } = countingWrites(createMemoryBackend());
+      const errors: [unknown, string][] = [];
+      const engine = createSyncEngine({
+        backend,
+        adapter: createReduxAdapter(store, replace),
+        onError: (error, source) => errors.push([error, source]),
+      });
+      engine.connect();
+      writes.length = 0;
+
+      backend.receive({ count: 5 });
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0][1]).toBe("store");
+      expect(String(errors[0][0])).toMatch(unhandled);
+      expect(engine.getStatus().failure?.source).toBe("store");
+      expect(store.getState()).toEqual({ count: 0 });
+      expect(backend.read()).toEqual({ count: 5 });
+      expect(writes).toHaveLength(0);
+    });
+
+    it("fails connect() to a room that holds state", () => {
+      const store = configureStore({ reducer: counter.reducer });
+      const backend = createMemoryBackend({ count: 5 });
+      const engine = createSyncEngine({
+        backend,
+        adapter: createReduxAdapter(store, replace),
+      });
+
+      expect(() => engine.connect()).toThrow(unhandled);
+      expect(engine.getStatus().connected).toBe(false);
+      expect(engine.getStatus().failure?.source).toBe("store");
+      expect(backend.read()).toEqual({ count: 5 });
+    });
+
+    it("throws for a replace case that drops what a remote change removes", () => {
+      // Immer keeps the state's reference when the draft is left as it was.
+      const merging = createSlice({
+        name: "merging",
+        initialState: { count: 0, label: "a" } as {
+          count: number;
+          label?: string;
+        },
+        reducers: {},
+        extraReducers: (builder) =>
+          builder.addCase(replaceState<{ count: number }>, (state, action) => {
+            Object.assign(state, action.payload);
+          }),
+      });
+      const store = configureStore({ reducer: merging.reducer });
+      const backend = createMemoryBackend();
+      createSyncEngine({
+        backend,
+        adapter: createReduxAdapter(store),
+      }).connect();
+
+      expect(() => backend.receive({ count: 0 })).toThrow(
+        /dispatching "@homeostate\/replaceState" left the store's state unchanged/,
+      );
+    });
+  });
+
+  it("applies a remote change that only removes a key through an Immer replace case", () => {
+    const labelled = createSlice({
+      name: "labelled",
+      initialState: { count: 0, label: "a" } as {
+        count: number;
+        label?: string;
+      },
+      reducers: {},
+      extraReducers: (builder) =>
+        builder.addCase(
+          replaceState<{ count: number; label?: string }>,
+          (_state, action) => action.payload,
+        ),
+    });
+    const store = configureStore({ reducer: labelled.reducer });
+    const backend = createMemoryBackend();
+    createSyncEngine({ backend, adapter: createReduxAdapter(store) }).connect();
+
+    backend.receive({ count: 0 });
 
     expect(store.getState()).toEqual({ count: 0 });
-    expect(backend.read()).toEqual({ count: 5 });
-    expect(writes).toHaveLength(0);
   });
 
   it("stops both directions after disconnect", () => {

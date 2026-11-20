@@ -146,17 +146,21 @@ describe("scopeAdapter over a Redux store", () => {
     expect(backend.read()).toEqual({ title: "spaced" });
   });
 
-  it("keeps the room when the store has no case for the replace action", () => {
+  it("fails connect() and keeps the room when the store has no case for the replace action", () => {
     const store = configureStore({ reducer: rootReducer });
     const backend = createMemoryBackend({ title: "room" });
-    createSyncEngine({
+    const engine = createSyncEngine({
       backend,
       adapter: scopeAdapter(createReduxAdapter(store), {
         get: (state: Root) => ({ title: state.doc.title }),
         set: (state: Root, next: Doc) => ({ ...state, doc: next }),
       }),
-    }).connect();
+    });
 
+    expect(() => engine.connect()).toThrow(
+      /dispatching "@homeostate\/replaceState" left the store's state unchanged/,
+    );
+    expect(engine.getStatus().connected).toBe(false);
     expect(store.getState().doc).toEqual({ title: "doc" });
     expect(backend.read()).toEqual({ title: "room" });
   });

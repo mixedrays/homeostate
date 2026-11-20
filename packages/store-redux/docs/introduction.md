@@ -217,6 +217,36 @@ const counter = createSlice({
 A store that already has a replace action of its own passes its action creator instead:
 `createReduxAdapter(store, todos.actions.replaced)`. Only the action's `type` is required.
 
+### A remote change the store does not take
+
+The engine hands the adapter only a state that differs from the store's, so a correctly wired
+store always ends up with a new root state object. When the dispatch leaves `getState()` the same
+object, the adapter throws:
+
+```text
+@homeostate/store-redux: dispatching "counter/replaceState" left the store's state unchanged, so the remote change was not applied. Wrap the root reducer in withHomeostate, or make the reducer case for "counter/replaceState" return the payload as the new root state.
+```
+
+`connect()` throws it when the room holds state the store must take. While connected, the engine
+reports it to `onError` with the source `"store"` and keeps it as the status's failure; without
+`onError`, it is thrown to whatever delivered the remote change. Either way the store keeps its
+state, the room keeps the remote one, and nothing is written back. The usual causes:
+
+- The root reducer is not wrapped in `withHomeostate` and has no case for the action, or the
+  action's type is misspelled.
+- The case changes the Immer draft instead of returning the payload, as
+  `Object.assign(state, action.payload)` does. Immer keeps the old object when the change only
+  removes a key, since the draft then has nothing new.
+
+The enhancer always wraps the root reducer, but two things can still keep the state as it was:
+
+- **Redux DevTools**: while the DevTools show an earlier state, after jumping back in time, or
+  with "Lock changes" on, they keep the store's state from changing, so each remote change
+  meanwhile throws.
+- **Middleware that delays or drops actions**: placed before the middleware, the enhancer
+  dispatches `replaceState` through it, and the adapter checks the state as soon as `dispatch`
+  returns. Let `REPLACE_STATE` through at once, or place the enhancer after the middleware.
+
 ### DevTools and Redux Toolkit checks
 
 Every remote change dispatches an action of type `REPLACE_STATE`,
