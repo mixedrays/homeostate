@@ -53,11 +53,12 @@ engine.connect(); // sync again
 The node connects before the helper returns: a key the room holds replaces the node's value, and
 the keys the room lacks are seeded from the node unless `seed` is `false`.
 
-| Option                                                  | Default  | Description                                                   |
-| ------------------------------------------------------- | -------- | ------------------------------------------------------------- |
-| `backend`                                               |          | The `CrdtBackend` the node syncs with                         |
-| `connect`                                               | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below    |
-| `filter`, `keys`, `omit`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the node's snapshot |
+| Option                                                  | Default  | Description                                                                                                        |
+| ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `backend`                                               |          | The `CrdtBackend` the node syncs with                                                                              |
+| `connect`                                               | `"auto"` | `"manual"` leaves `engine.connect()` to the app; see below                                                         |
+| `filter`, `keys`, `omit`, `seed`, `schedule`, `onError` |          | The engine's `SyncEngineConfig`, typed by the node's snapshot                                                      |
+| `onInvalidSnapshot`                                     |          | What to do with a remote state that does not fit the model; see [below](#remote-state-that-does-not-fit-the-model) |
 
 The helper syncs the node's snapshot: local changes go to the backend once per action, and remote
 changes are applied with `applySnapshot`, so instances with an identifier are reconciled in place
@@ -112,7 +113,8 @@ for, such as `persistence.whenLoaded`.
 `syncStateTree` creates the store adapter and the sync engine, connects them and ties them to the
 node. Doing it yourself leaves that last step to you: without `addDisposer`, the engine keeps
 running after `destroy(node)`, and the next remote change reaches the dead node. The checks for a
-destroyed node above belong to the helper.
+destroyed node above belong to the helper. `createMobxStateTreeAdapter(store, { onInvalidSnapshot })`
+takes the helper's `onInvalidSnapshot` option.
 
 ```ts
 import { addDisposer } from "mobx-state-tree";
@@ -147,6 +149,41 @@ const engine = syncStateTree(store, {
 A remote change is applied outside any reaction, so without `onError` an error from it
 propagates to the provider as with any other store. See
 [Reporting errors](https://homeostate.pages.dev/docs/core/sync-engine#reporting-errors).
+
+### Remote state that does not fit the model
+
+A peer on another version of the app can send a state the node's type rejects, such as one with a
+renamed field, a new `types.enumeration` member or a stricter type. By default `applySnapshot`
+decides what happens to it, and that differs by build. In development it throws MST's type check
+error, which goes to `onError` or, without it, to the provider. With type checking disabled, as in
+production, it applies the state unchecked, so a field can hold a value of the wrong type, such as
+a number in a `types.identifier`.
+
+Pass `onInvalidSnapshot` to check each remote state against the node's type before it is applied,
+in every build, whatever MST's type checking is set to. An invalid state is never applied, not even
+its valid parts:
+
+| `onInvalidSnapshot` | With an invalid remote state                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"throw"`           | Throws MST's type check error. The engine stays connected and hands it to `onError` with the source `"store"`, or without `onError` lets it reach the provider. `connect()` throws it |
+| `"skip"`            | Leaves the node as it is and reports nothing                                                                                                                                          |
+| a function          | Is called with MST's validation errors and the state, and the node is left as it is. What the function throws goes where `"throw"`'s error goes                                       |
+
+```ts
+const engine = syncStateTree(store, {
+  backend,
+  onInvalidSnapshot: (errors, snapshot) => reportInvalidState(errors, snapshot),
+});
+```
+
+Each error holds the rejected `value`, and the path to it as `context`; its type is exported as
+`SnapshotValidationError`. The check validates the whole state on every remote change.
+
+Rejecting a state does not keep the peer's changes. The state stays in the room while the node
+keeps its own, and the next local change writes the node's state over the room, for every peer:
+what the peer changed is lost, its valid changes included. Peers on different versions of the model
+need a migration strategy, such as a `types.snapshotProcessor` that reads the older shape, or a
+version key the app checks before it connects.
 
 ## License
 

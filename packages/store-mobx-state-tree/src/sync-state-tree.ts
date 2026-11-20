@@ -5,26 +5,32 @@ import {
   type SetupOptions,
   type SyncEngine,
 } from "@homeostate/core";
-import { createMobxStateTreeAdapter, type SnapshotNode } from "./adapter.js";
+import {
+  createMobxStateTreeAdapter,
+  type MobxStateTreeAdapterOptions,
+  type SnapshotNode,
+} from "./adapter.js";
 
 const DESTROYED_MESSAGE =
   "[homeostate] syncStateTree cannot connect a destroyed node, since nothing could stop its " +
   "sync. Pass a live node to syncStateTree instead.";
 
 /**
- * The `syncStateTree` options for a node whose snapshot is `S`: the backend, the connect mode and
- * the engine's config, whose `filter`, `keys` and `omit` are typed by `S`.
+ * The `syncStateTree` options for a node whose snapshot is `S`: the backend, the connect mode,
+ * the engine's config, whose `filter`, `keys` and `omit` are typed by `S`, and the adapter's
+ * `onInvalidSnapshot`.
  */
 export type SyncStateTreeOptions<S extends object = JsonObject> =
-  SetupOptions<S>;
+  SetupOptions<S> & MobxStateTreeAdapterOptions;
 
 /**
  * Syncs a MobX-State-Tree node with a CRDT backend in one call, for as long as the node lives. It
  * takes the node, a root instance or a subtree, and its options: the `backend`, any `CrdtBackend`
  * such as `@homeostate/crdt-yjs`, `@homeostate/crdt-loro` or `@homeostate/crdt-automerge`, the
- * `connect` mode, and the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
- * `onError`). It creates the store adapter and the sync engine and returns the engine, so
- * `engine.disconnect()` stops syncing and `engine.connect()` syncs again.
+ * `connect` mode, the sync engine's config (`filter`, `keys`, `omit`, `seed`, `schedule`,
+ * `onError`), and `onInvalidSnapshot`, for a remote state that does not fit the node's type (see
+ * `MobxStateTreeAdapterOptions`). It creates the store adapter and the sync engine and returns the
+ * engine, so `engine.disconnect()` stops syncing and `engine.connect()` syncs again.
  *
  * The node connects before the helper returns. With `connect: "manual"`, nothing reads or writes
  * the node's state or the backend until the app calls `engine.connect()`, for example once its
@@ -49,7 +55,7 @@ export type SyncStateTreeOptions<S extends object = JsonObject> =
  * adds, never reaches the node and stays in the room as it is, with or without `keys`.
  *
  * @param node - The tree node to sync; a root instance or a subtree
- * @param options - The backend, the connect mode and the engine's config
+ * @param options - The backend, the connect mode, the engine's config and `onInvalidSnapshot`
  * @returns The sync engine, connected unless `connect` is `"manual"`
  * @throws Unless `connect` is `"manual"`, what `engine.connect()` throws, as for a destroyed node
  *
@@ -76,9 +82,9 @@ export function syncStateTree<S extends object>(
   node: SnapshotNode<S | null | undefined>,
   options: SyncStateTreeOptions<S>,
 ): SyncEngine {
-  const { backend, connect = "auto", ...config } = options;
+  const { backend, connect = "auto", onInvalidSnapshot, ...config } = options;
   let alive = isAlive(node);
-  const adapter = createMobxStateTreeAdapter<S>(node);
+  const adapter = createMobxStateTreeAdapter<S>(node, { onInvalidSnapshot });
   const engine = createSyncEngine({
     ...config,
     backend,
