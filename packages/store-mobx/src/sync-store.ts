@@ -30,19 +30,23 @@ export type SyncMobxStoreOptions<
  * stops syncing and `engine.connect()` syncs again.
  *
  * The store connects before the helper returns. With `connect: "manual"`, the helper lists the
- * store's fields when it is called unless `keys` names them, but reads and writes no state until
- * the app calls `engine.connect()`, for example once its provider has synced or
+ * store's fields, or checks the ones `keys` names, when it is called, but reads and writes no
+ * state until the app calls `engine.connect()`, for example once its provider has synced or
  * `persistence.whenLoaded` has resolved, so that the store does not seed its initial state over
  * the room's. A field added afterwards to an `observable({...})` store is not synced unless `keys` names it.
  *
  * `keys` and `omit` choose the synced fields as in {@link createMobxAdapter}, and without them the
- * helper syncs every observable data field. A key the room holds outside the store's synced fields,
- * such as one a peer running a newer version of the app adds, stays in the room as it is.
+ * helper syncs every observable data field; `keys` may list only observable data fields. A key
+ * the room holds outside the store's synced fields, such as one a peer running a newer version of
+ * the app adds, stays in the room as it is.
  *
  * @param store - The MobX store instance, already made observable
  * @param options - The backend, the connect mode, the adapter's options and the engine's config
  * @returns The sync engine, connected unless `connect` is `"manual"`
  * @throws When `keys` is not given and the store is not observable, whatever the connect mode
+ * @throws TypeError when `keys` lists a computed, an action or function, a field MobX does not
+ * observe or a key a class store does not have, whatever the connect mode; the message names
+ * the key
  *
  * @example
  * ```typescript

@@ -80,11 +80,19 @@ field names that TypeScript checks against the store, so a typo or a method name
 error, and a list shared as an `as const` constant works. The synced state is typed as the
 synced fields without the store's methods, `Pick<TodoStore, "todos" | "filter">` here. A
 computed getter looks like a field to TypeScript, so the type includes it unless `omit` names
-it; do not list one in `keys`.
+it.
 
-Without `keys`, the helper finds the fields when it is called, as `createMobxAdapter` does, so
-make the store observable first: a store that is not observable throws. A field added to the store
-later is not synced.
+`keys` may list only observable data fields: a field `makeAutoObservable` made observable,
+including one declared as `undefined`, a field annotated `observable`, `observableRef`,
+`observableShallow` or `observableStruct` (`observable.ref` and so on in MobX 6), and a data
+property of an `observable({...})` object, including one the object gains later. For any other
+key the helper throws a `TypeError` naming it: a computed, which could not be written back, an
+action or other function, a field MobX does not observe, and a key a class store does not have.
+`omit` is not checked, since leaving out a field that would not sync is harmless.
+
+Without `keys`, the helper finds the fields when it is called, as `createMobxAdapter` does, and
+with `keys` it checks them then, so make the store observable first: a store that is not
+observable throws. Without `keys`, a field added to the store later is not synced.
 
 A key the room holds outside the store's synced fields, such as one a peer running a newer version
 of the app adds, stays in the room as it is: this peer never reads or deletes it. A synced field
@@ -103,9 +111,9 @@ so it is set to `undefined` instead; type such fields as optional. A synced key 
 
 ### Connecting later
 
-With `connect: "manual"`, the helper lists the store's fields when it is called unless `keys`
-names them, and no state is read or written until `connect()`, so the app connects when it is
-ready, for example once its provider has received the room's state:
+With `connect: "manual"`, the helper lists the store's fields, or checks the ones `keys` names,
+when it is called, and no state is read or written until `connect()`, so the app connects when
+it is ready, for example once its provider has received the room's state:
 
 ```ts
 const engine = syncMobxStore(store, { backend, connect: "manual" });

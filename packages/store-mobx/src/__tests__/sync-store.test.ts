@@ -210,7 +210,7 @@ describe("syncMobxStore", () => {
     },
   );
 
-  it("lists the store's fields when it is called unless keys names them, with the manual connect mode too", () => {
+  it("lists the store's fields, or checks the ones keys names, when it is called, with the manual connect mode too", () => {
     const backend = createMemoryBackend();
     const store = observable<Record<string, unknown>>({ title: "Week" });
 
@@ -229,6 +229,9 @@ describe("syncMobxStore", () => {
         { title: "plain" },
         { backend, connect: "manual", keys: ["title"] },
       ),
+    ).toThrow(/'title' is not observable/);
+    expect(() =>
+      syncMobxStore(store, { backend, connect: "manual", keys: ["title"] }),
     ).not.toThrow();
   });
 
@@ -283,10 +286,15 @@ describe("syncMobxStore", () => {
     });
 
     it("rejects method names, unknown names and keys with omit", () => {
-      // @ts-expect-error `add` is a method, not data
-      syncMobxStore(store, { ...manual, keys: ["todos", "add"] });
-      // @ts-expect-error `todo` is not a field of the store
-      syncMobxStore(store, { ...manual, keys: ["todo"] });
+      // The runtime check rejects the same keys.
+      expect(() =>
+        // @ts-expect-error `add` is a method, not data
+        syncMobxStore(store, { ...manual, keys: ["todos", "add"] }),
+      ).toThrow(TypeError);
+      expect(() =>
+        // @ts-expect-error `todo` is not a field of the store
+        syncMobxStore(store, { ...manual, keys: ["todo"] }),
+      ).toThrow(TypeError);
       // @ts-expect-error `add` is a method, not data
       syncMobxStore(store, { ...manual, omit: ["add"] });
       // @ts-expect-error `keys` and `omit` do not combine

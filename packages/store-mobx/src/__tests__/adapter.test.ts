@@ -4,10 +4,13 @@ import {
   makeAutoObservable,
   makeObservable,
   observable,
+  observableRef,
+  observableShallow,
+  observableStruct,
   reaction,
   runInAction,
 } from "mobx";
-import { createSyncEngine } from "@homeostate/core";
+import { createSyncEngine, type StoreAdapter } from "@homeostate/core";
 import {
   createMemoryBackend,
   type MemoryBackend,
@@ -489,10 +492,15 @@ describe("MobxAdapter", () => {
     it("rejects method names, unknown names and omit at compile time", () => {
       const store = new TodoStore();
 
-      // @ts-expect-error `toggle` is a method, not data
-      createMobxAdapter(store, { keys: ["todos", "toggle"] });
-      // @ts-expect-error `todo` is not a field of the store
-      createMobxAdapter(store, { keys: ["todo"] });
+      // The runtime check rejects the same keys.
+      expect(() =>
+        // @ts-expect-error `toggle` is a method, not data
+        createMobxAdapter(store, { keys: ["todos", "toggle"] }),
+      ).toThrow(TypeError);
+      expect(() =>
+        // @ts-expect-error `todo` is not a field of the store
+        createMobxAdapter(store, { keys: ["todo"] }),
+      ).toThrow(TypeError);
       // @ts-expect-error `toggle` is a method, not data
       createMobxAdapter(store, { omit: ["toggle"] });
       // @ts-expect-error `keys` and `omit` do not combine
@@ -508,6 +516,189 @@ describe("MobxAdapter", () => {
 
       expect(() => legacy(store, ["todos"])).toThrow(TypeError);
       expect(() => legacy(store, ["todos"])).toThrow(/\{ keys: \[\.\.\.\] \}/);
+    });
+
+    /** Bypasses the key types, as a list built at runtime or cast to the keys type does. */
+    const untyped = createMobxAdapter as unknown as (
+      store: object,
+      options: { keys: readonly string[] },
+    ) => StoreAdapter<Record<string, unknown>>;
+
+    class CountedStore {
+      todos: Todo[] = [{ id: "1", title: "a", done: false }];
+      clear = () => {
+        this.todos = [];
+      };
+
+      constructor() {
+        makeAutoObservable(this);
+      }
+
+      get counts(): number {
+        return this.todos.length;
+      }
+
+      add(title: string): void {
+        this.todos.push({ id: "2", title, done: false });
+      }
+
+      *load() {
+        yield Promise.resolve();
+      }
+    }
+
+    it("throws a TypeError naming a computed, which it could not write back", () => {
+      const store = new CountedStore();
+
+      expect(() =>
+        createMobxAdapter(store, { keys: ["todos", "counts"] }),
+      ).toThrow(TypeError);
+      expect(() =>
+        createMobxAdapter(store, { keys: ["todos", "counts"] }),
+      ).toThrow(/'counts' is a computed value/);
+    });
+
+    it.each([
+      ["a method makeAutoObservable made an action", "add"],
+      ["an arrow-function field makeAutoObservable made an action", "clear"],
+      ["a generator makeAutoObservable made a flow", "load"],
+    ])("throws a TypeError naming %s", (_, key) => {
+      const store = new CountedStore();
+
+      expect(() => untyped(store, { keys: ["todos", key] })).toThrow(TypeError);
+      expect(() => untyped(store, { keys: ["todos", key] })).toThrow(
+        new RegExp(`'${key}' is an action or a function`),
+      );
+    });
+
+    it("throws a TypeError naming a method of an observable object or one left unannotated", () => {
+      const object = observable({
+        todos: [] as Todo[],
+        clear() {
+          this.todos = [];
+        },
+      });
+      class Unannotated {
+        todos: Todo[] = [];
+        constructor() {
+          makeObservable(this, { todos: observable });
+        }
+        clear(): void {}
+      }
+
+      expect(() => untyped(object, { keys: ["clear"] })).toThrow(
+        /'clear' is an action or a function/,
+      );
+      expect(() => untyped(new Unannotated(), { keys: ["clear"] })).toThrow(
+        /'clear' is an action or a function/,
+      );
+    });
+
+    it("throws a TypeError naming a field MobX does not observe", () => {
+      class PartlyObservable {
+        todos: Todo[] = [];
+        local = 0;
+        constructor() {
+          makeObservable(this, { todos: observable });
+        }
+        get plainGetter(): number {
+          return this.local;
+        }
+      }
+      const store = new PartlyObservable();
+
+      expect(() => createMobxAdapter(store, { keys: ["local"] })).toThrow(
+        TypeError,
+      );
+      expect(() => createMobxAdapter(store, { keys: ["local"] })).toThrow(
+        /'local' is not observable/,
+      );
+      expect(() => createMobxAdapter(store, { keys: ["plainGetter"] })).toThrow(
+        /'plainGetter' is not observable/,
+      );
+      expect(() =>
+        createMobxAdapter({ title: "plain" }, { keys: ["title"] }),
+      ).toThrow(/'title' is not observable/);
+    });
+
+    it("throws a TypeError naming a key a class store does not have", () => {
+      expect(() =>
+        untyped(new TodoStore(), { keys: ["todos", "later"] }),
+      ).toThrow(TypeError);
+      expect(() =>
+        untyped(new TodoStore(), { keys: ["todos", "later"] }),
+      ).toThrow(/'later' is not a field of the store/);
+    });
+
+    it("syncs a key an observable object gains later", () => {
+      const store = observable<Record<string, unknown>>({ title: "Week" });
+      const backend = createMemoryBackend();
+      createSyncEngine({
+        backend,
+        adapter: createMobxAdapter(store, { keys: ["title", "later"] }),
+      }).connect();
+
+      runInAction(() => {
+        store.later = 1;
+      });
+
+      expect(backend.read()).toEqual({ title: "Week", later: 1 });
+    });
+
+    it("accepts observable, observableRef, observableShallow and observableStruct fields", () => {
+      class Annotated {
+        deep: Todo[] = [];
+        ref = { id: "1" };
+        shallow: Todo[] = [];
+        struct = { x: 1 };
+        constructor() {
+          makeObservable(this, {
+            deep: observable,
+            ref: observableRef,
+            shallow: observableShallow,
+            struct: observableStruct,
+          });
+        }
+      }
+      const store = new Annotated();
+      const backend = createMemoryBackend();
+      createSyncEngine({
+        backend,
+        adapter: createMobxAdapter(store, {
+          keys: ["deep", "ref", "shallow", "struct"],
+        }),
+      }).connect();
+
+      runInAction(() => {
+        store.ref = { id: "2" };
+      });
+
+      expect(backend.read()).toEqual({
+        deep: [],
+        ref: { id: "2" },
+        shallow: [],
+        struct: { x: 1 },
+      });
+    });
+
+    it("accepts a declared field that is undefined and the data properties of an observable object", () => {
+      class Optional {
+        todos: Todo[] = [];
+        title?: string;
+        constructor() {
+          makeAutoObservable(this);
+        }
+      }
+      const object = observable({ todos: [] as Todo[], filter: "all" });
+
+      expect(
+        createMobxAdapter(new Optional(), {
+          keys: ["todos", "title"],
+        }).getState(),
+      ).toEqual({ todos: [] });
+      expect(
+        createMobxAdapter(object, { keys: ["todos", "filter"] }).getState(),
+      ).toEqual({ todos: [], filter: "all" });
     });
   });
 

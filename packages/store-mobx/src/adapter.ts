@@ -1,6 +1,7 @@
 import {
   _getGlobalState,
   isComputedProp,
+  isObservableObject,
   isObservableProp,
   keys as observableKeys,
   reaction,
@@ -88,6 +89,52 @@ const dataKeys = (store: object): string[] =>
       !isComputedProp(store, key) &&
       typeof (store as Plain)[key] !== "function",
   );
+
+/** The descriptor of `key` on the store or on its prototype chain. */
+const findDescriptor = (
+  store: object,
+  key: string,
+): PropertyDescriptor | undefined => {
+  for (
+    let source: object | null = store;
+    source;
+    source = Object.getPrototypeOf(source) as object | null
+  ) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (descriptor) return descriptor;
+  }
+  return undefined;
+};
+
+/**
+ * Why a key listed in `keys` cannot sync, or `undefined` when it can. A computed is an
+ * observable prop too, but assigning it throws. A key the store lacks is valid only on an
+ * `observable({...})` object, whose proxy observes a property added later; a class instance
+ * would get it as a plain, unobserved field.
+ */
+const keyProblem = (store: object, key: string): string | undefined => {
+  if (isComputedProp(store, key))
+    return "is a computed value, which cannot be assigned; sync the fields it derives from instead";
+  if (!(key in store)) {
+    const prototype = Object.getPrototypeOf(store) as unknown;
+    const plainObservable =
+      isObservableObject(store) &&
+      (prototype === Object.prototype || prototype === null);
+    return plainObservable
+      ? undefined
+      : "is not a field of the store; give it an initial value, even undefined, before making the store observable";
+  }
+  const observed = isObservableProp(store, key);
+  // An unobserved key is read off its descriptor, so a plain getter does not run.
+  const value = observed
+    ? (store as Plain)[key]
+    : (findDescriptor(store, key)?.value as unknown);
+  if (typeof value === "function")
+    return "is an action or a function, not data";
+  if (!observed)
+    return "is not observable; annotate it in makeObservable, or make the store observable first with the same MobX copy the adapter imports";
+  return undefined;
+};
 
 class MobxAdapter<S extends object> implements StoreAdapter<S> {
   private store: object;
@@ -185,7 +232,16 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
  * property of an `observable({...})` object. Computeds, actions and fields that are not
  * observable stay local, and so do the fields `omit` names. `keys` syncs the fields it lists
  * instead. The synced state is typed as those fields alone, `Pick<S, K>`, without the store's
- * methods. A computed getter looks like a field to TypeScript, so do not list one in `keys`.
+ * methods.
+ *
+ * `keys` may list only observable data fields: a field annotated `observable`, `observableRef`,
+ * `observableShallow` or `observableStruct` (`observable.ref` and so on in MobX 6), one
+ * `makeAutoObservable` made observable, including a declared field that is `undefined`, or a
+ * data property of an `observable({...})` object, which may also be one the object gains later.
+ * A computed getter looks like a field to TypeScript, but it cannot be assigned, so the adapter
+ * throws for one when it is created, as it does for an action or other function, a field MobX
+ * does not observe and a key a class store does not have. `omit` is not checked: leaving out a
+ * field the adapter would not sync anyway is harmless.
  *
  * A remote change is reconciled into the observable tree rather than assigned over it: the
  * adapter diffs the incoming state against the snapshot it last handed out and writes only
@@ -201,7 +257,10 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
  * @param store - The MobX store instance, already made observable
  * @param options - `keys` to sync only the fields it lists, or `omit` to keep some fields local
  * @returns StoreAdapter instance for the MobX store
- * @throws TypeError when the keys are passed as an array, the signature before 0.3.0
+ * @throws TypeError when the keys are passed as an array, the signature before 0.3.0, or when
+ * `keys` lists a computed, an action or function, a field MobX does not observe or a key a class
+ * store does not have; the message names the key
+ * @throws When `keys` is not given and the store is not observable
  *
  * @example
  * ```typescript
@@ -237,6 +296,10 @@ export function createMobxAdapter<
       "createMobxAdapter takes its keys as an option, createMobxAdapter(store, { keys: [...] }), " +
         "or syncs every observable field without them",
     );
+  for (const key of options.keys ?? []) {
+    const problem = keyProblem(store, key);
+    if (problem) throw new TypeError(`createMobxAdapter: '${key}' ${problem}`);
+  }
   const omitted: readonly string[] = options.omit ?? [];
   const synced = (options.keys ?? dataKeys(store)).filter(
     (key) => !omitted.includes(key),
