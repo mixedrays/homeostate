@@ -5,6 +5,7 @@ import {
   getDefaultStore,
   type WritableAtom,
 } from "jotai/vanilla";
+import { atomWithReset, atomWithStorage } from "jotai/vanilla/utils";
 import { createMemoryBackend } from "@homeostate/core/testing";
 import { atomWithSync } from "../index.js";
 
@@ -471,6 +472,36 @@ describe("atomWithSync", () => {
       >();
     });
 
+    it("takes utility atoms, and rejects atoms it cannot write", () => {
+      const backend = createMemoryBackend();
+      const counter: Counter = { count: 0, label: "a" };
+
+      expectTypeOf(
+        createStore().get(atomWithSync(atomWithReset(counter), { backend })),
+      ).toEqualTypeOf<Counter>();
+      expectTypeOf(
+        createStore().get(
+          atomWithSync(atomWithStorage("counter", counter), { backend }),
+        ),
+      ).toEqualTypeOf<Counter>();
+
+      const countAtom = atom(0);
+      const readOnly = atom((get) => ({ count: get(countAtom), label: "a" }));
+      const writeOnly = atom(null, (_get, set, next: Counter) =>
+        set(countAtom, next.count),
+      );
+      const writesAnother = atom(
+        (get) => ({ count: get(countAtom), label: "a" }),
+        (_get, set, count: number) => set(countAtom, count),
+      );
+      // @ts-expect-error A read-only atom cannot take a remote value.
+      atomWithSync(readOnly, { backend });
+      // @ts-expect-error A write-only atom holds no value to sync.
+      atomWithSync(writeOnly, { backend });
+      // @ts-expect-error The atom's write does not take its own value.
+      atomWithSync(writesAnother, { backend });
+    });
+
     it("types a record's state from its atoms", () => {
       const syncedAtom = atomWithSync(
         { todos: atom<string[]>([]), filter: atom("all") },
@@ -481,6 +512,31 @@ describe("atomWithSync", () => {
         todos: string[];
         filter: string;
       }>();
+    });
+
+    it("types a record of utility atoms, and rejects atoms it cannot write", () => {
+      const backend = createMemoryBackend();
+      const syncedAtom = atomWithSync(
+        {
+          draft: atomWithReset({ title: "" }),
+          theme: atomWithStorage<"light" | "dark">("theme", "light"),
+        },
+        { backend },
+      );
+      expectTypeOf(createStore().get(syncedAtom)).toEqualTypeOf<{
+        draft: { title: string };
+        theme: "light" | "dark";
+      }>();
+
+      const countAtom = atom(0);
+      const readOnly = atom((get) => get(countAtom));
+      const writeOnly = atom(null, (_get, set, count: number) =>
+        set(countAtom, count),
+      );
+      // @ts-expect-error A read-only atom cannot take a remote value.
+      atomWithSync({ countAtom, readOnly }, { backend });
+      // @ts-expect-error A write-only atom holds no value to sync.
+      atomWithSync({ countAtom, writeOnly }, { backend });
     });
 
     it("checks key names against the state and takes no connect mode", () => {
