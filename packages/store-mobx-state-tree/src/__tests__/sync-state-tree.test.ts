@@ -20,7 +20,11 @@ import {
 } from "mobx-state-tree";
 import type { SyncEngine } from "@homeostate/core";
 import { createMemoryBackend } from "@homeostate/core/testing";
-import { syncStateTree, type SyncStateTreeOptions } from "../index.js";
+import {
+  syncStateTree,
+  type SnapshotValidationError,
+  type SyncStateTreeOptions,
+} from "../index.js";
 
 const Todo = types.model("Todo", {
   id: types.identifier,
@@ -162,6 +166,18 @@ describe("syncStateTree", () => {
     expect(getSnapshot(store).filter).toBe("done");
 
     flushes[0]();
+    expect(getSnapshot(store)).toEqual({ todos: [milk], filter: "all" });
+  });
+
+  it("passes onInvalidSnapshot on to the store adapter", () => {
+    const backend = createMemoryBackend();
+    const store = TodoStore.create({ todos: [milk] });
+    const onInvalidSnapshot = vi.fn();
+    syncStateTree(store, { backend, onInvalidSnapshot });
+
+    backend.receive({ todos: [{ id: 2 }], filter: "all" });
+
+    expect(onInvalidSnapshot).toHaveBeenCalledOnce();
     expect(getSnapshot(store)).toEqual({ todos: [milk], filter: "all" });
   });
 
@@ -659,6 +675,19 @@ describe("syncStateTree", () => {
       syncStateTree(store, { ...manual, omit: ["add"] });
       // @ts-expect-error `keys` and `omit` do not combine
       syncStateTree(store, { ...manual, keys: ["todos"], omit: ["filter"] });
+    });
+
+    it("takes an onInvalidSnapshot policy", () => {
+      syncStateTree(store, { ...manual, onInvalidSnapshot: "skip" });
+      syncStateTree(store, {
+        ...manual,
+        onInvalidSnapshot: (errors, snapshot) => {
+          expectTypeOf(errors).toEqualTypeOf<SnapshotValidationError[]>();
+          expectTypeOf(snapshot).toBeUnknown();
+        },
+      });
+      // @ts-expect-error not a policy
+      syncStateTree(store, { ...manual, onInvalidSnapshot: "ignore" });
     });
 
     it("takes a connect mode, not a boolean", () => {
