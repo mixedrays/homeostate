@@ -144,9 +144,10 @@ so the backend merges them itself:
   write after it.
 
 A moved value is a copy. So a peer's edit inside it, made in its own map before that peer
-receives the move, such as toggling a todo the move copied, is lost. Documents stored by an
-earlier release that already hold two maps read the same way and are merged by their next
-write.
+receives the move, such as toggling a todo the move copied, is lost. A `Counter` other code
+stored at a key of a losing map moves as a `Counter`; one nested inside a moved map or list
+moves as a plain number. Documents stored by an earlier release that already hold two maps read
+the same way and are merged by their next write.
 
 Two maps still compete for each value two peers seed, so
 [waiting for the room](../../core/docs/sync-engine.md#waiting-for-the-room) before `connect()`
@@ -178,8 +179,12 @@ the 64-bit range, so the backend stores such integers as `Float64` values: `read
 number written, such as `2 ** 53 + 2` or `1e21`, with a double's precision.
 
 Values other Automerge code stored read as JSON too: a 64-bit integer as the nearest number, and
-a `Counter` as its value. A write that changes a `Counter`'s value replaces it with a plain
-number, so other code's concurrent increments of it are lost.
+a `Counter` as its value. A write that changes a `Counter`'s value increments it by the
+difference, so other code's concurrent increments are kept, and the key stays a `Counter`. A
+write replaces the counter with the value written instead when that value isn't an integer, is
+an integer from `Number.MAX_SAFE_INTEGER` up or from its negation down, differs from the
+counter's value by more than that, or when the counter already holds such an integer. The
+backend never creates a `Counter` itself.
 
 ## Known issue: list order after some merges
 

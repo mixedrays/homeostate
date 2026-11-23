@@ -257,7 +257,7 @@ describe("two peers that each create the synced map", () => {
     expect(second.onlyLow).toBe(first.onlyLow);
   });
 
-  it("read and move a losing map's large integers and counters as numbers", () => {
+  it("read a losing map's large integers and counters as numbers, and move a counter as one", () => {
     const { docLow } = competingMaps({}, { count: 2 });
     docLow.change((doc) => {
       const conflicts = A.getConflicts(doc, NAME)!;
@@ -276,6 +276,7 @@ describe("two peers that each create the synced map", () => {
 
     expect(backend.read()).toEqual({ ...read, added: true });
     expect(typeof (docLow.doc()[NAME] as Root).big).toBe("number");
+    expect(A.isCounter((docLow.doc()[NAME] as Root).counter)).toBe(true);
   });
 
   it("keep every key when the document already holds the map", () => {
@@ -327,6 +328,7 @@ describe("createAutomergeBackend", () => {
     ["a string", "text", "string"],
     ["a list", [1], "array"],
     ["null", null, "null"],
+    ["a Counter", new A.Counter(3), "number"],
   ])(
     "throws a TypeError from read() when a peer stores %s at the synced key",
     (_, held, kind) => {
@@ -627,6 +629,96 @@ describe("numbers and values other Automerge code stores", () => {
 
     expect(store.getState()).toStrictEqual({ id: 2 ** 53 + 2, count: 2 });
     engine.disconnect();
+  });
+});
+
+describe("Counters other Automerge code stores", () => {
+  /** Two peers sharing `value` under the synced map, created by other Automerge code. */
+  const sharedCounters = (value: Root) => {
+    const base = A.change(A.init<Root>(actor(1)), (doc) => {
+      doc[NAME] = value;
+    });
+    const other = createAutomergeHandle(A.load<Root>(A.save(base), actor(2)));
+    const doc = createAutomergeHandle(A.load<Root>(A.save(base), actor(3)));
+    const exchange = (): void => {
+      doc.update((d) => A.merge(d, other.doc()));
+      other.update((d) => A.merge(d, doc.doc()));
+    };
+    return {
+      other,
+      doc,
+      backend: createAutomergeBackend(doc, NAME),
+      otherBackend: createAutomergeBackend(other, NAME),
+      exchange,
+    };
+  };
+
+  it.each([
+    ["increments", 6, 8],
+    ["decrements", 3, 5],
+  ])(
+    "%s a counter by the difference a write makes, keeping a peer's concurrent increment",
+    (_, written, merged) => {
+      const { other, doc, backend, otherBackend, exchange } = sharedCounters({
+        count: new A.Counter(5),
+      });
+      other.change((d) => {
+        ((d[NAME] as Root).count as A.Counter).increment(2);
+      });
+
+      backend.write({ count: written });
+      exchange();
+
+      expect(backend.read()).toEqual({ count: merged });
+      expect(otherBackend.read()).toEqual({ count: merged });
+      expect(A.isCounter(at(doc, ["count"]))).toBe(true);
+      expect(A.isCounter(at(other, ["count"]))).toBe(true);
+    },
+  );
+
+  it("increments a counter that is an item of a list", () => {
+    const { other, doc, backend, otherBackend, exchange } = sharedCounters({
+      list: [new A.Counter(5)],
+    });
+    other.change((d) => {
+      ((d[NAME] as Root).list as A.Counter[])[0]!.increment(2);
+    });
+
+    backend.write({ list: [6] });
+    exchange();
+
+    expect(backend.read()).toEqual({ list: [8] });
+    expect(otherBackend.read()).toEqual({ list: [8] });
+    expect(A.isCounter(at(doc, ["list", 0]))).toBe(true);
+    expect(A.isCounter(at(other, ["list", 0]))).toBe(true);
+  });
+
+  it.each([
+    ["a fraction", 5.5],
+    ["a large integer", 2 ** 53 + 2],
+    ["an integer beyond the safe range from it", -(2 ** 53 - 3)],
+    ["a string", "five"],
+    ["an object", { value: 5 }],
+  ])("replaces a counter with %s written over it", (_, written) => {
+    const handle = createHandle();
+    storeIn(handle, "count", new A.Counter(5));
+    const backend = createAutomergeBackend(handle, NAME);
+
+    backend.write({ count: written });
+
+    expect(backend.read()).toEqual({ count: written });
+    expect(A.isCounter(at(handle, ["count"]))).toBe(false);
+  });
+
+  it("replaces a counter holding a 64-bit integer instead of throwing", () => {
+    const handle = createHandle();
+    storeIn(handle, "count", new A.Counter(2 ** 60));
+    const backend = createAutomergeBackend(handle, NAME);
+
+    backend.write({ count: 1 });
+
+    expect(backend.read()).toEqual({ count: 1 });
+    expect(A.isCounter(at(handle, ["count"]))).toBe(false);
   });
 });
 

@@ -95,11 +95,31 @@ export const assign = (
 };
 
 /**
+ * Increments `counter`, a counter proxy inside `A.change`, so that it holds `next`, and says
+ * whether it could: only when `next` is an integer that reads back as a number, and the delta a
+ * safe integer. Automerge truncates a fractional delta and wraps one beyond the 64-bit range.
+ */
+const incrementTo = (counter: A.Counter, next: unknown): boolean => {
+  // A `bigint` from `Number.MAX_SAFE_INTEGER` up, which `increment` can't add a number to.
+  const current: unknown = counter.value;
+  if (typeof current !== "number" || typeof next !== "number") return false;
+  if (!Number.isInteger(next) || isLargeInteger(next)) return false;
+  const delta = next - current;
+  if (!Number.isSafeInteger(delta)) return false;
+  if (delta !== 0) counter.increment(delta);
+  return true;
+};
+
+/**
  * How `applyChanges` writes into `doc[root]` inside `A.change`. Every value it writes is
  * stored as `assign` stores it. Text reads as a string and is edited character by character
  * through its object ID, found from its path; an `ImmutableString`, held by a peer
  * with another policy or an older version, is a plain value and is replaced whole. Paths given to
  * the policy start below `root`; without one, no string is text.
+ *
+ * A `Counter` other code stored is a plain value too, read as its number. A write over one
+ * increments it by the difference when `incrementTo` can, so concurrent increments of it merge,
+ * and otherwise replaces it.
  */
 export const createAutomergeOps = (
   doc: Container,
@@ -109,8 +129,8 @@ export const createAutomergeOps = (
   kind: (value) => {
     if (typeof value === "string") return "text";
     if (Array.isArray(value)) return "list";
-    // A list proxy claims every property, so `isImmutableString` alone accepts one.
-    return isRecord(value) && !A.isImmutableString(value)
+    // A list proxy claims every property, so `isImmutableString` or `isCounter` alone accepts one.
+    return isRecord(value) && !A.isImmutableString(value) && !A.isCounter(value)
       ? "record"
       : undefined;
   },
@@ -118,6 +138,14 @@ export const createAutomergeOps = (
   get: (container, key) => (container as Container)[key],
 
   set: (container, key, value, path) => {
+    const current = (container as Container)[key];
+    // A list proxy claims every property, so `isCounter` alone accepts one.
+    if (
+      !Array.isArray(current) &&
+      A.isCounter(current) &&
+      incrementTo(current, value)
+    )
+      return;
     assign(container, key, value, [...path, key], text);
   },
 
