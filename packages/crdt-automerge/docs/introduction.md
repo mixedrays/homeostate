@@ -47,6 +47,12 @@ handle.subscribe(({ doc, local }) => {
 onMessage((change) => handle.update((doc) => A.applyChanges(doc, [change])[0]));
 ```
 
+`adapter` is the [store adapter](/docs/concepts#store-adapters) through which the engine reads,
+replaces and watches your store. Your state manager's `store-*` package creates it, such as
+`createZustandAdapter(useStore)` from
+[`@homeostate/store-zustand`](../../store-zustand/docs/introduction.md);
+[Packages](/docs/packages#store-adapters) lists one for each state manager.
+
 - `handle.doc()` returns the current document; the synced state is `handle.doc().shared`.
 - `handle.change(fn)` applies a local change through `A.change`.
 - `handle.update((doc) => ...)` replaces the document with the result of `A.merge`,
@@ -94,7 +100,7 @@ const repo = new Repo({
 const docHandle = await repo.find(url);
 const engine = createSyncEngine({
   backend: createAutomergeBackend(docHandle, "shared"),
-  adapter: storeAdapter,
+  adapter,
 });
 engine.connect();
 ```
@@ -116,7 +122,7 @@ instead:
 ```ts
 const engine = createSyncEngine({
   backend: createAutomergeBackend(docHandle, "shared"),
-  adapter: storeAdapter,
+  adapter,
   onError: (error, source) =>
     console.error(`Sync failed in the ${source}`, error),
 });
