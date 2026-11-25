@@ -565,8 +565,8 @@ export function createSyncEngine<S extends object>(
       applyingRemote = false;
     }
     const after = readStore();
-    // A store that ignored the change entirely, such as a Redux store without the replace case,
-    // would otherwise write its old state back over every peer's.
+    // A store that ignored the change entirely, such as one whose `setState` drops remote
+    // state without throwing, would otherwise write its old state back over every peer's.
     if (after === current && next !== current) {
       recordHeldKeys(synced);
       return;

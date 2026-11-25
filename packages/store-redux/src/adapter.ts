@@ -82,8 +82,21 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
     return this.store.getState();
   }
 
+  /**
+   * Dispatches the replace action. The engine passes only a state that differs from the store's,
+   * so a dispatch that leaves `getState()` the same object did not apply it: throws, which the
+   * engine reports to `onError` as a `'store'` error.
+   */
   setState(state: S): void {
-    this.store.dispatch(this.setStateAction(state));
+    const before = this.store.getState();
+    const action = this.setStateAction(state);
+    this.store.dispatch(action);
+    if (this.store.getState() !== before) return;
+    throw new Error(
+      `@homeostate/store-redux: dispatching "${action.type}" left the store's state unchanged, ` +
+        "so the remote change was not applied. Wrap the root reducer in withHomeostate, or make " +
+        `the reducer case for "${action.type}" return the payload as the new root state.`,
+    );
   }
 
   subscribe(onStoreChange: () => void): Unsubscribe {
@@ -104,7 +117,10 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
  *
  * The adapter applies remote changes by dispatching an action that replaces the whole root
  * state. By default that is {@link replaceState}, which a root reducer wrapped in
- * {@link withHomeostate} handles, whatever its shape.
+ * {@link withHomeostate} handles, whatever its shape. If the dispatch leaves `getState()` the
+ * same object, the remote change was not applied, and the adapter's `setState` throws an error
+ * naming the action's type. `connect()` throws it, and while connected the engine reports it to
+ * `onError` as a `'store'` error.
  *
  * @param store - A Redux 4 or 5 store, a Redux Toolkit store, or any {@link ReduxLikeStore}
  * @param setStateAction - Action creator for an action that a reducer case answers by

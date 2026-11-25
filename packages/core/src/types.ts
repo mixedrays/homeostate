@@ -50,7 +50,9 @@ export interface StoreAdapter<S extends object> {
    * hold and leaves it in the backend. If the store held a key before the call and dropped it,
    * the store removed it, and the engine deletes it from the backend. If `getState()` returns the
    * same object as before the call, the engine concludes that the store ignored the change, and
-   * writes nothing.
+   * writes nothing. An adapter whose store must take every change may throw instead, as the Redux
+   * adapter does when no reducer applies its replace action; the engine reports it as a `'store'`
+   * error.
    *
    * What the store changes during the call must not change again when the same state is applied
    * a second time, and every peer must agree on it. Otherwise the engine stops writing back the
