@@ -36,6 +36,12 @@ const engine = createSyncEngine({
 engine.connect();
 ```
 
+`adapter` is the [store adapter](/docs/concepts#store-adapters) through which the engine reads,
+replaces and watches your store. Your state manager's `store-*` package creates it, such as
+`createZustandAdapter(useStore)` from
+[`@homeostate/store-zustand`](../../store-zustand/docs/introduction.md);
+[Packages](/docs/packages#store-adapters) lists one for each state manager.
+
 The synced state lives in `doc.getMap("shared")`. Replication is yours to wire, for example:
 
 ```ts
