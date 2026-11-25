@@ -50,6 +50,12 @@ createLoroBackend(doc, "shared", {
 });
 ```
 
+The backend writes an item that moves in a list, by drag and drop, `sort()` or `reverse()`, as a
+delete and an insert of a copy. Peers that reorder a list at once duplicate items, and an edit to
+a moved item is lost; see
+[Lists under concurrency](https://homeostate.pages.dev/docs/concepts#lists-under-concurrency) for
+how to order items safely.
+
 To persist the document, pass `createLoroPersistable(doc)` to `createPersistence`; see the
 [persistence guide](https://homeostate.pages.dev/docs/persistence).
 

@@ -138,6 +138,78 @@ with another policy, or by an earlier release of the backends, which stored ever
 text. It reads as usual and is stored as the configured kind the next time it changes. That
 change replaces the string whole, so a concurrent edit to the old one is lost.
 
+## Lists under concurrency
+
+Arrays are diffed by value, and the supplied backends' lists have no move. So an item that moves,
+by drag and drop, `sort()` or `reverse()`, is written as a delete of the item and an insert of a
+copy at its new index. On Yjs, Loro and Automerge alike:
+
+- Peers that move the same item at once each insert their own copy, so the item ends up twice.
+  Both moving `a` to the end of `[a, b, c, d]` gives `[b, c, d, a, a]`, and both sorting
+  `[d, b, a, c]` gives `[a, b, c, d, d]`.
+- An edit to an item another peer moves at once is lost: it lands in the copy the move deleted.
+  One peer moving `a` to the end while another marks it done gives `[b, c, d, a]` with `a` not
+  done.
+
+The peers converge and no error is reported. A subscriber or effect that keeps a synced list
+sorted makes every peer reorder after each remote change, so items keep duplicating. Moving an
+item to another list is a delete and an insert too.
+
+To reorder a synced list, keep its items as records keyed by `id`, store the order as a field of
+each item, and sort where the list is read, such as in a selector. Never write the sorted list
+back:
+
+```ts title="ordered-todos.ts"
+interface Todo {
+  id: string;
+  title: string;
+  done: boolean;
+  order: number;
+}
+
+interface TodoState {
+  todos: Record<string, Todo>;
+}
+
+/** An order between two neighbours' orders; leave out the one past either end. */
+const orderBetween = (before?: number, after?: number): number =>
+  before === undefined
+    ? after === undefined
+      ? 0
+      : after - 1
+    : after === undefined
+      ? before + 1
+      : (before + after) / 2;
+
+/** Moves todo `id` between `before` and `after`, changing only its `order`. */
+const moveTodo = (
+  state: TodoState,
+  id: string,
+  before?: Todo,
+  after?: Todo,
+): TodoState => ({
+  todos: {
+    ...state.todos,
+    [id]: {
+      ...state.todos[id],
+      order: orderBetween(before?.order, after?.order),
+    },
+  },
+});
+
+/** The todos in order, sorted where they are read; ties break by `id`. */
+const selectTodos = (state: TodoState): Todo[] =>
+  Object.values(state.todos).sort(
+    (a, b) => a.order - b.order || (a.id < b.id ? -1 : 1),
+  );
+```
+
+A move then changes one field of one record. Peers that move the same todo at once keep one of
+their orders, and a concurrent edit to the todo's other fields is kept. Two todos moved into the
+same gap at once can get the same order, and the sort breaks the tie by `id`. Moving todos into
+one gap again and again eventually runs out of a double's precision; a fractional indexing
+library's string keys avoid that. To move an item between lists, store its list as a field too.
+
 ## Choosing what to sync
 
 The engine syncs every top-level key of the store's state but its functions. `omit` keeps
