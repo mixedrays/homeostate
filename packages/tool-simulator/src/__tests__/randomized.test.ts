@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import * as Y from "yjs";
 import { createStore } from "zustand/vanilla";
+import { createYjsBackend, createYjsPersistable } from "@homeostate/crdt-yjs";
 import { createZustandAdapter } from "@homeostate/store-zustand";
 import {
   createNetwork,
@@ -176,6 +178,67 @@ describe("runRandomized", () => {
       (first.error as Error).message,
     );
     expect(replay.steps).toEqual(first.steps);
+  });
+});
+
+describe("randomized runs on Yjs with a Y.UndoManager on each peer", () => {
+  /**
+   * Edits, undoes and redoes on 3 peers, each undo manager tracking its backend's origin as
+   * the crdt-yjs introduction shows. Created with the peer, so seeding is a step to undo too.
+   */
+  const run = (seed: number, gc: boolean) => {
+    const undoManagers: Y.UndoManager[] = [];
+    const undoOrRedo: RandomAction<TodoState> = (peer, random) => {
+      const undoManager = undoManagers[peer.index];
+      if (random.chance(0.5)) undoManager.undo();
+      else undoManager.redo();
+      if (random.chance(0.5)) undoManager.stopCapturing();
+    };
+    const docs = (index: number) => {
+      const doc = new Y.Doc({ gc });
+      doc.clientID = index + 1;
+      const backend = createYjsBackend(doc, "shared");
+      undoManagers[index] = new Y.UndoManager(backend.map, {
+        trackedOrigins: new Set([backend.origin]),
+        captureTimeout: 0,
+      });
+      return { backend, doc: createYjsPersistable(doc) };
+    };
+    return runRandomized<TodoState>({
+      seed,
+      peers: 3,
+      steps: 150,
+      actions: [randomEdit, randomEdit, undoOrRedo],
+      network: {
+        latency: [0, 20],
+        reorder: seed % 2 === 0,
+        dropRate: seed % 3 === 0 ? 0.1 : 0,
+        // An undo deletes keys on the document, not the store, which the check can misreport
+        // as lost while a Yjs update waits for an earlier one.
+        checkLostKeys: false,
+      },
+      createPeer: (index) => todoPeer(docs, index).setup,
+    });
+  };
+
+  it.each([3, 6, 11])("converge with gc on, seed %i", (seed) =>
+    run(seed, true),
+  );
+
+  it.each([62, 100])("converge with gc off, seed %i", (seed) =>
+    run(seed, false),
+  );
+
+  // A Yjs bug, 13.6.0 to 13.6.33: undo past content another peer removed, or an update that
+  // integrates next to it, reads a neighbour of a GC struct. Once a Yjs release passes these,
+  // drop this test and the warning in crdt-yjs's introduction.
+  it.each([
+    [62, "redone"],
+    [100, "origin"],
+  ])("throw inside Yjs with gc on, seed %i", async (seed, property) => {
+    await expect(run(seed, true)).rejects.toThrow(
+      `Cannot read properties of undefined (reading '${property}')`,
+    );
   });
 });
 
