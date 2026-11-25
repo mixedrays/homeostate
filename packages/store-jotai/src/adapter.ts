@@ -14,8 +14,12 @@ import {
 
 export type JotaiStore = ReturnType<typeof createStore>;
 
-/** A writable atom that holds the whole synced state and accepts a full replacement */
-export type SyncedAtom<S> = WritableAtom<S, [S], unknown>;
+/**
+ * A writable atom that holds the whole synced state and accepts a full replacement.
+ * `S` is inferred from the value only: a primitive atom's write also takes an updater, and an
+ * `atomWithReset` atom's takes `RESET`, which must not widen the state.
+ */
+export type SyncedAtom<S> = WritableAtom<S, [NoInfer<S>], unknown>;
 
 class JotaiAdapter<S extends object> implements StoreAdapter<S> {
   private atom: SyncedAtom<S>;

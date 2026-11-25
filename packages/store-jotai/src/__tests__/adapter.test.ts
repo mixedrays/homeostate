@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { atom, createStore, getDefaultStore } from "jotai/vanilla";
 import { atomWithReset, atomWithStorage } from "jotai/vanilla/utils";
-import { createSyncEngine } from "@homeostate/core";
+import { createSyncEngine, type StoreAdapter } from "@homeostate/core";
 import { createMemoryBackend } from "@homeostate/core/testing";
 import { createJotaiAdapter } from "../index.js";
 
@@ -120,6 +120,45 @@ describe("JotaiAdapter", () => {
 
     backend.receive({ count: 9, label: "a" });
     expect(store.get(counterAtom).count).toBe(1);
+  });
+
+  it("types the state from the atom's value, and rejects atoms it cannot write", () => {
+    expectTypeOf(
+      createJotaiAdapter(atom<Counter>({ count: 0, label: "a" })).getState(),
+    ).toEqualTypeOf<Counter>();
+    expectTypeOf(
+      createJotaiAdapter(atomWithReset<Counter>({ count: 0, label: "a" })),
+    ).toEqualTypeOf<StoreAdapter<Counter>>();
+    expectTypeOf(
+      createJotaiAdapter(
+        atomWithStorage<Counter>("counter", { count: 0, label: "a" }),
+      ),
+    ).toEqualTypeOf<StoreAdapter<Counter>>();
+    const countAtom = atom(0);
+    const rootAtom = atom(
+      (get) => ({ count: get(countAtom), label: "a" }),
+      (_get, set, next: Counter) => set(countAtom, next.count),
+    );
+    expectTypeOf(createJotaiAdapter(rootAtom)).toEqualTypeOf<
+      StoreAdapter<{ count: number; label: string }>
+    >();
+
+    const readOnly = atom((get) => ({ count: get(countAtom), label: "a" }));
+    const writeOnly = atom(null, (_get, set, next: Counter) =>
+      set(countAtom, next.count),
+    );
+    const writesAnother = atom(
+      (get) => ({ count: get(countAtom), label: "a" }),
+      (_get, set, count: number) => set(countAtom, count),
+    );
+    // @ts-expect-error A read-only atom cannot take a remote value.
+    createJotaiAdapter(readOnly);
+    // @ts-expect-error A write-only atom holds no value to sync.
+    createJotaiAdapter(writeOnly);
+    // @ts-expect-error The atom's write does not take its own value.
+    createJotaiAdapter(writesAnother);
+    // @ts-expect-error The synced state must be an object.
+    createJotaiAdapter(atom(0));
   });
 });
 
