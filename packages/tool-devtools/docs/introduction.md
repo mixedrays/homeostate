@@ -120,9 +120,10 @@ remembered in `localStorage`.
 
 - **State** shows the store as a tree or as JSON. Click a value to edit it, click a boolean to
   toggle it, edit an object or array as JSON, or delete a key or item. The JSON view, with
-  its syntax highlighted, edits the whole state. An untouched inline editor never writes
-  on blur. If its value changes while you have a draft, the draft stays visible and cannot
-  be saved until you choose **Load latest** or cancel and reopen the editor.
+  its syntax highlighted, edits the whole state. An untouched editor follows its value, and an
+  untouched inline editor never writes on blur. If the value changes while you have a draft,
+  in any of these editors, the draft stays visible and cannot be saved or applied until you
+  choose **Load latest** or cancel and reopen the editor.
   Each top-level key is marked with how it
   relates to the backend. Values in synced keys that are not plain JSON, such as a `Date`, a
   `Map`, a class instance or `NaN`,

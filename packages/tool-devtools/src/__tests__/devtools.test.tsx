@@ -148,6 +148,16 @@ const type = async (input: HTMLInputElement, value: string) => {
   });
 };
 
+const typeJson = async (textarea: HTMLTextAreaElement, value: string) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )?.set?.call(textarea, value);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
+
 describe("HomeostateDevtools", () => {
   it("mounts in a shadow root on the body with its own styles", async () => {
     await render(false);
@@ -245,6 +255,83 @@ describe("HomeostateDevtools", () => {
     });
     await act(tick);
     expect(store.get().filter).toBe("next");
+  });
+
+  it("keeps a JSON draft of the state when the state changes and can load the latest state", async () => {
+    await render();
+    await click(buttonWithText("JSON"));
+    const textarea = byLabel<HTMLTextAreaElement>("Store state as JSON");
+    await typeJson(textarea, '{ "todos": [], "filter": "draft" }');
+    await act(async () =>
+      backend.receive({ ...store.get(), filter: "remote" }),
+    );
+    await act(tick);
+
+    const apply = buttonWithText("Apply");
+    expect(apply.disabled).toBe(true);
+    await click(apply);
+    await act(async () => {
+      textarea.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          ctrlKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+    await act(tick);
+
+    expect(store.get().filter).toBe("remote");
+    expect((backend.read() as unknown as State).filter).toBe("remote");
+    expect(textarea.value).toBe('{ "todos": [], "filter": "draft" }');
+    expect(shadow().textContent).toContain(
+      "The value changed since you started editing.",
+    );
+
+    await click(buttonWithText("Load latest"));
+    expect(JSON.parse(textarea.value)).toEqual({
+      todos: [{ title: "milk", done: false }],
+      filter: "remote",
+    });
+    expect(shadow().textContent).not.toContain(
+      "The value changed since you started editing.",
+    );
+  });
+
+  it("keeps a container's JSON draft when the container changes", async () => {
+    await render();
+    await click(byLabel("Edit todos as JSON"));
+    const textarea = byLabel<HTMLTextAreaElement>("todos as JSON");
+    await typeJson(textarea, "[]");
+    await act(async () =>
+      backend.receive({
+        ...store.get(),
+        todos: [{ title: "remote", done: true }],
+      }),
+    );
+    await act(tick);
+
+    const apply = buttonWithText("Apply");
+    expect(apply.disabled).toBe(true);
+    await click(apply);
+    await act(async () => {
+      textarea.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          metaKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+    await act(tick);
+
+    expect(store.get().todos).toEqual([{ title: "remote", done: true }]);
+    expect(textarea.value).toBe("[]");
+
+    await click(buttonWithText("Load latest"));
+    expect(JSON.parse(textarea.value)).toEqual([
+      { title: "remote", done: true },
+    ]);
   });
 
   it("filters the state tree and expands or collapses all of it", async () => {

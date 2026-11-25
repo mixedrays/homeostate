@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import { isRecord, type Json } from "../json";
+import { useDraft, type DraftFormat, type Parsed } from "./draft";
 import { JsonCodeArea } from "./json-code";
-
-type Parsed = { ok: true; value: Json } | { ok: false; error: string };
 
 const parse = (text: string, requireObject: boolean): Parsed => {
   try {
@@ -16,6 +15,10 @@ const parse = (text: string, requireObject: boolean): Parsed => {
     return { ok: false, error: (error as Error).message };
   }
 };
+
+const format = (value: Json): string => JSON.stringify(value, null, 2);
+const anyJson: DraftFormat = { format, parse: (text) => parse(text, false) };
+const objectJson: DraftFormat = { format, parse: (text) => parse(text, true) };
 
 interface JsonEditorProps {
   value: Json;
@@ -31,7 +34,7 @@ interface JsonEditorProps {
 
 /**
  * A highlighted JSON textarea over a live value. Until you type it follows the value; once you have,
- * a change underneath is flagged instead of overwriting your edit.
+ * a change underneath is flagged and blocks Apply until you load the latest value.
  */
 export function JsonEditor({
   value,
@@ -42,33 +45,20 @@ export function JsonEditor({
   className,
   autoFocus,
 }: JsonEditorProps) {
-  const latest = useMemo(() => JSON.stringify(value, null, 2), [value]);
-  const [base, setBase] = useState(latest);
-  const [text, setText] = useState(latest);
+  const draft = useDraft(value, requireObject ? objectJson : anyJson);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const dirty = text !== base;
+  const { parsed } = draft;
 
-  if (latest !== base && !dirty) {
-    setBase(latest);
-    setText(latest);
-  }
-  const stale = latest !== base;
-  const parsed = useMemo(
-    () => parse(text, requireObject),
-    [text, requireObject],
-  );
-
-  const load = (next: string): void => {
-    setBase(next);
-    setText(next);
+  const load = (): void => {
+    draft.loadLatest();
     setApplyError(null);
   };
 
   const apply = (): void => {
-    if (!parsed.ok || !dirty) return;
+    if (!draft.canCommit || !parsed.ok) return;
     try {
       onApply(parsed.value);
-      setBase(text);
+      draft.applied(parsed.value);
       setApplyError(null);
     } catch (error) {
       setApplyError((error as Error).message);
@@ -79,23 +69,23 @@ export function JsonEditor({
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      {stale && (
+      {draft.stale && (
         <div className="flex items-center gap-2 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300">
           <span className="flex-1">
             The value changed since you started editing.
           </span>
-          <Button size="xs" variant="outline" onClick={() => load(latest)}>
+          <Button size="xs" variant="outline" onClick={load}>
             Load latest
           </Button>
         </div>
       )}
       <JsonCodeArea
-        value={text}
+        value={draft.text}
         autoFocus={autoFocus}
         aria-label={label}
         aria-invalid={!parsed.ok || undefined}
         onChange={(event) => {
-          setText(event.target.value);
+          draft.edit(event.target.value);
           setApplyError(null);
         }}
         onKeyDown={(event) => {
@@ -126,15 +116,15 @@ export function JsonEditor({
           <Button
             size="xs"
             variant="ghost"
-            disabled={!dirty}
-            onClick={() => load(latest)}
+            disabled={!draft.dirty}
+            onClick={load}
           >
             Reset
           </Button>
         )}
         <Button
           size="xs"
-          disabled={!dirty || !parsed.ok}
+          disabled={!draft.canCommit}
           onClick={apply}
           title="Apply (⌘/Ctrl+Enter)"
         >

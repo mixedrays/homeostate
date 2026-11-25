@@ -17,12 +17,12 @@ import {
   type GroupOptions,
 } from "@mixedrays/keyrove";
 import { Braces, ChevronRight, Trash2 } from "lucide-react";
-import { jsonEqual } from "@homeostate/core";
 import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import type { KeyStatus } from "../inspector";
 import { formatPath, type Json, type JsonObject, type JsonPath } from "../json";
+import { useDraft, type DraftFormat } from "./draft";
 import { JsonEditor } from "./json-editor";
 import { keyStatusInfo, previewOf } from "./format";
 import { KeyStatusBadge, JsonValue, NonJsonBadge } from "./value";
@@ -511,12 +511,23 @@ function TreeNode({ name, value, path, depth, underHit, tree }: TreeNodeProps) {
   );
 }
 
-type ParsedValue = { ok: true; value: Json } | { ok: false };
-
 /**
  * A string is edited as text and stays a string; any other value is edited as JSON,
  * so `5` stays a number and `"5"` becomes a string.
  */
+const valueFormat: DraftFormat = {
+  format: (value) =>
+    typeof value === "string" ? value : JSON.stringify(value),
+  parse: (text, base) => {
+    if (typeof base === "string") return { ok: true, value: text };
+    try {
+      return { ok: true, value: JSON.parse(text) as Json };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  },
+};
+
 function ValueInput({
   value,
   label,
@@ -528,40 +539,26 @@ function ValueInput({
   onCommit: (value: Json) => void;
   onCancel: () => void;
 }) {
-  const [base, setBase] = useState(value);
-  const isString = typeof base === "string";
-  const [text, setText] = useState(() =>
-    typeof value === "string" ? value : JSON.stringify(value),
-  );
-  const initialText = isString ? base : JSON.stringify(base);
-  const dirty = text !== initialText;
-  const stale = !jsonEqual(value, base);
+  const draft = useDraft(value, valueFormat);
+  const { parsed, dirty, stale } = draft;
   const warningId = useId();
-  const parsed = useMemo((): ParsedValue => {
-    if (isString) return { ok: true, value: text };
-    try {
-      return { ok: true, value: JSON.parse(text) as Json };
-    } catch {
-      return { ok: false };
-    }
-  }, [isString, text]);
 
   const commit = (): void => {
     if (!parsed.ok) return;
     if (!dirty || parsed.value === value) onCancel();
-    else if (!stale) onCommit(parsed.value);
+    else if (draft.canCommit) onCommit(parsed.value);
   };
 
   return (
     <div className="min-w-0 flex-1">
       <Input
         autoFocus
-        value={text}
+        value={draft.text}
         aria-label={label}
         aria-invalid={!parsed.ok || undefined}
         aria-describedby={dirty && stale ? warningId : undefined}
         spellCheck={false}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => draft.edit(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
@@ -580,16 +577,7 @@ function ValueInput({
           <p id={warningId} role="status">
             The value changed since you started editing.
           </p>
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => {
-              setBase(value);
-              setText(
-                typeof value === "string" ? value : JSON.stringify(value),
-              );
-            }}
-          >
+          <Button size="xs" variant="outline" onClick={draft.loadLatest}>
             Load latest
           </Button>
           <Button size="xs" variant="ghost" onClick={onCancel}>
