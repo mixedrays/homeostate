@@ -95,6 +95,20 @@ origin, so the backend reports it as a remote change and the store follows. One 
 the writes made within `captureTimeout`, 500 ms by default; `undoManager.stopCapturing()`
 ends a step early.
 
+With garbage collection on, the `Y.Doc` default, Yjs can throw a `TypeError` once peers edit
+concurrently and one of them undoes: `undo()` or `redo()` can throw, and so can
+`Y.applyUpdate` of another peer's update on a peer with an undo manager. Yjs 13.6.0 to 13.6.33
+do this, with or without this backend. It takes a rare interleaving of edits, so a manual
+test can miss it. Until Yjs fixes it, turn garbage collection off on every replica of the
+document, a server's copy included, as one replica's garbage collection can break another's:
+
+```ts
+const doc = new Y.Doc({ gc: false });
+```
+
+Yjs then never frees deleted content, so the document, what persistence stores and what a
+joining peer receives grow with every edit, undo and redo.
+
 ## Strings and text
 
 Strings are plain values by default, so two peers changing an id, a status or a timestamp at
