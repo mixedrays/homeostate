@@ -42,9 +42,8 @@ export interface TextShape extends ShapeBase {
 export type Shape = BoxShape | ArrowShape | TextShape;
 
 /**
- * The synced state: every shape keyed by its id. A record rather than an array, so tabs adding
- * or deleting shapes at once each touch their own key, and two tabs editing one shape merge
- * field by field: one moves it while the other recolours it, and both changes stay.
+ * The synced state: every shape keyed by its id, so concurrent adds and deletes touch their own
+ * keys, and two tabs editing one shape merge field by field.
  */
 export interface Board {
   shapes: Record<string, Shape>;
@@ -154,12 +153,8 @@ export const isShapeText: TextPolicy = (path) =>
   path.length === 3 && path[0] === "shapes" && path[2] === "text";
 
 /**
- * Gives `doc` the starting shapes as one update authored by a fixed client id, before it syncs.
- *
- * Every tab applies the very same update, so a tab joining a room that already has it adds
- * nothing. If each tab wrote its own `shapes` map instead, the room would hold two maps on one
- * key; Yjs keeps whichever client id sorts last and drops the other with every edit made to it,
- * so a new tab would reset the board about half the time.
+ * Seeds `doc` with one fixed-client update, so every tab holds the same `shapes` map; separate
+ * maps would compete for the key and reset the board about one join in two.
  */
 export function seedBoard(doc: Y.Doc): void {
   const seed = new Y.Doc();

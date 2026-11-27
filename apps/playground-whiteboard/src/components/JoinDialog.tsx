@@ -28,9 +28,8 @@ interface JoinDialogProps {
 }
 
 /**
- * The way onto the board: a name to show next to your cursor, or the tab's generated
- * anonymous one. Until a tab joins it is not in the room's presence, so nobody sees it.
- * After joining, the same dialog renames.
+ * The way onto the board: a name for your cursor, or the generated anonymous one. A tab is
+ * invisible in presence until it joins; afterwards the dialog renames.
  */
 export function JoinDialog({
   open,

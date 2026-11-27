@@ -2,9 +2,8 @@ import type { WebsocketProvider } from "y-websocket";
 import type { Point } from "./shapes";
 
 /**
- * Who is on the board, where their pointer is and what they have selected. None of this is
- * board state, so it travels over Yjs awareness rather than through the store: it belongs to
- * one tab, and it disappears when the tab closes or goes offline.
+ * Who is on the board, where their pointer is and what they have selected. Not board state: it
+ * travels over Yjs awareness, belongs to one tab, and goes when the tab closes or goes offline.
  */
 
 export type Awareness = WebsocketProvider["awareness"];
@@ -106,7 +105,7 @@ export function storeJoinedName(name: string): void {
   try {
     sessionStorage.setItem(NAME_KEY, name.trim());
   } catch {
-    // Storage can be off or full; the tab just asks again after a reload.
+    // Storage can be off or full; the tab asks again after a reload.
   }
 }
 
