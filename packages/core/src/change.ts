@@ -10,13 +10,10 @@ type EditChange<K extends string | number> =
   | { type: "edit"; key: K; kind: "list"; changes: ListChange[] }
   | { type: "edit"; key: K; kind: "text"; changes: TextChange[] };
 
-/** An edit step of a record's or a list's script. Internal: not exported from `index.ts`. */
+/** An edit step of a record's or a list's script. */
 export type EditStep = EditChange<string> | EditChange<number>;
 
-/**
- * A value's path from the root of the value a script edits: record keys and array indices.
- * Internal: not exported from `index.ts`.
- */
+/** A value's path from the root of the value a script edits: record keys and array indices. */
 export type Path = readonly (string | number)[];
 
 /**

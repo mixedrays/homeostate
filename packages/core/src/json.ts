@@ -2,7 +2,6 @@
 export const isAbsent = (value: unknown): boolean =>
   value === undefined || typeof value === "function";
 
-/** Whether `value` is an object other than an array. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -38,11 +37,6 @@ export const jsonEntry = (
 ): unknown =>
   hasOwn(record, key) && !isAbsent(record[key]) ? record[key] : undefined;
 
-/**
- * `jsonEqual` with `json`, and `deepEqual` without. Without `json`, entries holding `undefined`
- * or a function count as present and compare by identity, and `NaN` is the only value equal to a
- * value that is not `===` to it. The rest of the walk, keys included, is shared.
- */
 const equal = (a: unknown, b: unknown, json: boolean): boolean => {
   if (a === b) return true;
   if (Array.isArray(a) && Array.isArray(b)) {

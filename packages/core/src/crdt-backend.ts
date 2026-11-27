@@ -72,7 +72,7 @@ export const createCrdtBackend = ({
   revision,
   text,
 }: CrdtBackendParts): CrdtBackend => {
-  const diff = { text, json: true };
+  const diffOptions = { text, json: true };
 
   return {
     read,
@@ -84,7 +84,7 @@ export const createCrdtBackend = ({
           created ? {} : (previous ?? read()),
           next,
           ops,
-          diff,
+          diffOptions,
         ),
       ),
 

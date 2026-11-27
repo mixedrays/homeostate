@@ -42,10 +42,9 @@ const handled = <T>(promise: Promise<T>): Promise<T> => {
  * Every failure goes to `onError` once, and the queue moves on. Later updates may depend on an
  * update that a failed write lost, so the next append that succeeds compacts once to store the
  * whole document again. While that update is missing, `flush()` and `destroy()` also compact
- * first. `compact()` and
- * `clear()` reject with their own storage error; `flush()` and `destroy()` reject while an
- * update the document reported may still be missing from storage, until a snapshot or
- * `clear()` succeeds.
+ * first. `compact()` and `clear()` reject with their own storage error; `flush()` and `destroy()`
+ * reject while an update the document reported may still be missing from storage, until a
+ * snapshot or `clear()` succeeds.
  *
  * @example
  * ```typescript

@@ -34,7 +34,10 @@ export interface ApplyOps {
   ): void;
   /** Remove the property `key` of the record `container`. */
   remove(container: object, key: string, path: Path): void;
-  /** `Array.prototype.splice` on the list `container`: drop `deleteCount` items at `index`, then add `inserted`. */
+  /**
+   * `Array.prototype.splice` on the list `container`: drop `deleteCount` items at `index`, then
+   * add `inserted`.
+   */
   splice(
     list: object,
     index: number,
@@ -57,10 +60,9 @@ export interface ApplyOps {
 }
 
 /**
- * Applies the edit step `change` to the child of `container` at the step's key. `next` is the
- * next value of `container`. The child is edited in place when it is the kind of container the step's script edits;
- * any other child, such as a string held as a plain value or a plain value other code stored, is
- * replaced whole by its next value.
+ * Applies `change` to its child of `container`, whose next value is `next`. A child that is not
+ * the kind of container the step's script edits, such as a string held as a plain value, is
+ * replaced whole.
  */
 const walkEdit = (
   container: object,
