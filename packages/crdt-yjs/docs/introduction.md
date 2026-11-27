@@ -181,5 +181,7 @@ The wait has two costs:
 ## Persistence
 
 Pass `createYjsPersistable(doc)` to `createPersistence`. It stores Yjs updates, so every
-shared type in the document is kept, not only the synced map. See the
+shared type in the document is kept, not only the synced map. It also stores an
+[update waiting for an earlier one](#updates-out-of-order), so a document restored during the
+wait still waits for it, and its peers do not lose the value the waiting update replaced. See the
 [persistence guide](/docs/persistence).
