@@ -5,9 +5,7 @@ type Path = Parameters<TextPolicy>[0];
 
 /**
  * Converts a plain JSON value at `path` into its shared counterpart: arrays become Y.Arrays,
- * objects Y.Maps, strings the policy marks as text Y.Texts, and everything else, other strings
- * included, is returned as is. Only `text` reads `path`, so without a policy `path` may be any
- * path; see `childPath`.
+ * objects Y.Maps, text Y.Texts, and anything else stays. Without `text`, `path` may be any path.
  */
 export const toSharedType = (
   value: unknown,
@@ -59,11 +57,8 @@ const objectToYMap = (
 };
 
 /**
- * Returns the JSON value of `value`, a shared type or a value held in one, as `toJSON` would in
- * one pass, leaving out map entries named `__proto__`: `toJSON` builds objects by assignment,
- * so such an entry would become the prototype of the object holding it. A value a peer stored
- * whole is returned as Yjs decoded it, which may have built such a prototype too; the sync
- * engine copies those objects into plain ones before they reach the store.
+ * `toJSON` of `value` without map entries named `__proto__`, which `toJSON` would assign as
+ * prototypes. A value stored whole is returned as Yjs decoded it; the engine makes it plain.
  */
 const toPlainValue = (value: unknown): unknown => {
   if (value instanceof Y.Map) return toPlainMap(value);
