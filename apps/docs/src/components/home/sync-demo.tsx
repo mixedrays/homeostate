@@ -106,11 +106,9 @@ function useReducedMotion() {
 }
 
 /**
- * The hero's demo: two task lists on different stores, kept in sync through homeostate in the
- * middle. A scripted loop ticks a task on each side, drops the connection while both sides add
- * a task, then reconnects and merges. The prerendered HTML is the loop's first frame; visitors
- * who ask for reduced motion get its end state instead. The loop pauses while the demo is off
- * screen, the tab is hidden, or the visitor pauses it.
+ * The hero's demo: two task lists on different stores, synced through homeostate, in a scripted
+ * loop of edits, an offline gap and a merge. Reduced motion gets the end state; the loop pauses
+ * off screen, in a hidden tab, or on request.
  */
 export function SyncDemo() {
   const [scene, setScene] = useState(START);

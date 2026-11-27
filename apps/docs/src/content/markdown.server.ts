@@ -384,7 +384,10 @@ export async function renderPage(
   return result;
 }
 
-/** Markdown that isn't a page, such as the landing page's install block; links resolve from content/. */
+/**
+ * Markdown that isn't a page, such as the landing page's install block; links resolve from
+ * content/.
+ */
 export async function renderFragment(
   source: string,
   manifest: Manifest,

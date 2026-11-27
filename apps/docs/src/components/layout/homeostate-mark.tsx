@@ -13,13 +13,9 @@ const diamond = (
 );
 
 /**
- * The homeostate mark, inline so its parts can move: two brackets, one per synced store,
- * joined into an H by the shared state diamond. Its motion lives in app.css.
- *
- * Without `state`, hovering or focusing the closest link plays the Connect motion once: the
- * brackets meet, the crossbar joins them, the diamond grows and a ripple spreads. With
- * `state`, it is a connection icon: "disconnected" shows only the brackets, and a change
- * plays the same sequence forward or back.
+ * The homeostate mark, inline so its parts can move in app.css. Without `state`, hovering the
+ * closest link plays the Connect motion once. With `state`, it is a connection icon:
+ * "disconnected" shows only the brackets, and a change plays the motion forward or back.
  */
 export function HomeostateMark({
   className,

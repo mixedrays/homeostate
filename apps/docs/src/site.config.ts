@@ -44,9 +44,8 @@ export const groups: { id: GroupId; title: string; role?: string }[] = [
 ];
 
 /**
- * Sidebar label and order per package slug; the group comes from the slug's prefix. `hint` is
- * the landing page card's one-line trade-off, for CRDT backends only; back it with the
- * package's docs.
+ * Sidebar label and order per package slug, grouped by the slug's prefix. `hint` is a CRDT
+ * backend's one-line trade-off on its landing card; back it with the package's docs.
  */
 export const packageNav: Record<
   string,

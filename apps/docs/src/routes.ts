@@ -6,10 +6,9 @@ import {
 } from "@react-router/dev/routes";
 import { getManifest } from "./content/manifest.server.ts";
 
-// Every route is static and generated from the content manifest. React Router has no partial
-// segments, so `docs/:pkg/:page` would also match `introduction.md`; with static paths the .md
-// twins get their own routes, and `prerender: true` renders all of them without a path list.
-// Adding or removing a page restarts the dev server (scripts/docs-dev.ts) to regenerate this.
+// Static routes from the manifest: `docs/:pkg/:page` would also match `introduction.md`, as React
+// Router has no partial segments. Adding or removing a page restarts the dev server
+// (scripts/docs-dev.ts) to regenerate this.
 const manifest = getManifest();
 
 export default [

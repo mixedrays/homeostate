@@ -72,7 +72,8 @@ function infoStrip(
 }
 
 // "Sync engine API · @homeostate/core · Homeostate". A package's introduction has the package
-// name as its H1, so its title leads with what the package is: "Yjs CRDT backend · @homeostate/crdt-yjs".
+// name as its H1, so its title leads with what the package is: "Yjs CRDT backend ·
+// @homeostate/crdt-yjs".
 function pageTitle(page: PageSummary, pkg: PackageSummary | undefined) {
   if (!pkg) return `${page.title} · ${site.name}`;
   if (page.title !== pkg.name)
