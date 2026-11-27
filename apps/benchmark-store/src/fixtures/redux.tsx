@@ -11,9 +11,8 @@ import { createCounters } from "../counters.js";
 import type { Fixture } from "../types.js";
 
 /**
- * The idiomatic Redux list: one selector per component, `React.memo` on the row, and the row
- * handed the todo object itself. `useSelector` compares by reference, and so does `memo` for
- * a single object prop, so a row re-renders exactly when its own todo is a new object.
+ * The idiomatic Redux list: one selector per component and `React.memo` on the row, handed its
+ * todo, so a row re-renders when its todo is a new object.
  */
 export const redux: Fixture = {
   name: "redux",

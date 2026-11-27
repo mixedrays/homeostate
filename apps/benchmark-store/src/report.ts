@@ -43,9 +43,8 @@ const renderScenario = (results: RenderResult[]): string =>
   );
 
 /**
- * One table per scenario, adapters in registry order and sizes ascending, which is the shape
- * the comparison is read in: the same adapter across sizes tells you whether its cost is
- * per change or per row.
+ * One table per scenario, adapters in registry order and sizes ascending, so one adapter across
+ * sizes shows whether its cost is per change or per row.
  */
 export const renderRenderReport = (report: RenderReport): string => {
   const scenarios = [

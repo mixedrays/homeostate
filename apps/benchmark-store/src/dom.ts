@@ -11,9 +11,7 @@ export const enableActEnvironment = (): void => {
 
 /**
  * Gives Node the DOM globals `react-dom` expects. Call it before importing anything that
- * touches the DOM: React decides once, at module scope, whether it is running in a browser.
- * Under Vitest the `@vitest-environment jsdom` docblock does the same job, so the test suite
- * does not call this.
+ * touches the DOM, as React checks for a browser at module scope. Tests use the jsdom docblock.
  */
 export const installDom = (): void => {
   const { window } = new JSDOM("<!doctype html><html><body></body></html>", {

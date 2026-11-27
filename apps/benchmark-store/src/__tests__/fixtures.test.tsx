@@ -18,12 +18,9 @@ import { fixtures, mobx, mobxStateTree, redux } from "../fixtures/index.js";
 import type { Fixture } from "../types.js";
 
 /**
- * The gate on the fixtures themselves as much as on the adapters: a fixture that memoizes at
- * the wrong level scores whatever the benchmark asks of it, so every number here is one this
- * investigation measured independently and the fixture has to reproduce it.
- *
- * The counts are exact integers on every machine. Row renders are what a user feels; the
- * timings the report carries alongside them are advisory and are not asserted.
+ * Gates the fixtures as much as the adapters: a fixture memoized at the wrong level scores
+ * anything, so each count here was measured independently. Counts are exact; timings are not
+ * asserted.
  */
 
 const SIZE = 200;
@@ -39,17 +36,9 @@ interface Expectation {
 }
 
 /**
- * `redux` and `zustand` hand React the objects core gave them, so they re-render what core
- * changed and nothing else.
- *
- * `mobx-state-tree` matches them on every change in place: `applySnapshot` reconciles a node
- * that carries an identifier rather than rebuilding it. `move` is where that stops — an array
- * is reconciled by position, so shifting every element rewrites every node.
- *
- * `mobx` matches them too, and for the same reason MST does: `setState` applies core's edit
- * script to the observable tree in place (`packages/store-mobx/src/adapter.ts`) instead of
- * assigning whole plain arrays into observable fields. A node the edit script does not name
- * keeps its identity, and in MobX identity is the unit of reactivity.
+ * `redux` and `zustand` re-render what core changed. `mobx` applies core's edit script in place
+ * and `mobx-state-tree` reconciles nodes by identifier, so they match, except MST on `move`,
+ * whose arrays reconcile by position.
  */
 const expectations: Expectation[] = [
   {

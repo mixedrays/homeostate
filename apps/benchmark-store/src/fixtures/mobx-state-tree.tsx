@@ -29,9 +29,8 @@ const TodoStore = types
   }));
 
 /**
- * The idiomatic MobX-State-Tree list: `observer` on every component, including the row, and the
- * row handed the node itself. `applySnapshot` reconciles a node that carries an identifier in
- * place, so the rows a change did not touch keep both their identity and their observables.
+ * The idiomatic MobX-State-Tree list: `observer` on every component, the row handed its node.
+ * `applySnapshot` reconciles nodes with an identifier in place, so untouched rows keep them.
  */
 export const mobxStateTree: Fixture = {
   name: "mobx-state-tree",
