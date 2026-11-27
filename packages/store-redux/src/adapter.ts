@@ -65,11 +65,6 @@ class ReduxAdapter<S extends object> implements StoreAdapter<S> {
   private store: ReduxLikeStore<S>;
   private setStateAction: (state: S) => { type: string };
 
-  /**
-   * Create a Redux adapter
-   * @param store - The Redux store instance
-   * @param setStateAction - Action creator that replaces the entire state (for sync updates)
-   */
   constructor(
     store: ReduxLikeStore<S>,
     setStateAction: (state: S) => { type: string },
