@@ -174,10 +174,10 @@ const homeostateImpl = <T extends object>(
  *
  * Put Zustand's `persist` inside: `homeostate(persist(creator, options), { backend })`. The
  * store then connects once `persist` has hydrated it, and a `connect()` made before that waits
- * for it, so the room wins over the persisted state as on any `connect()`. A `persist.rehydrate()` on a
- * connected store disconnects it until the store is hydrated again, or the rehydrate has failed,
- * then reconnects it, unless the app disconnected it meanwhile. With `persist` outside, creating
- * the store throws.
+ * for it, so the room wins over the persisted state as on any `connect()`. A
+ * `persist.rehydrate()` on a connected store disconnects it until the store is hydrated again,
+ * or the rehydrate has failed, then reconnects it, unless the app disconnected it meanwhile.
+ * With `persist` outside, creating the store throws.
  *
  * Use the curried `create<T>()(...)` form: Zustand cannot infer the state type through a
  * middleware, so `create(homeostate(...))` types the state as `object`.

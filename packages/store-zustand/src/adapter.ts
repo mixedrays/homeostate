@@ -34,7 +34,6 @@ class ZustandAdapter<S extends object> implements StoreAdapter<S> {
  *
  * const zustandStore = create(() => ({ count: 0 }));
  * const adapter = createZustandAdapter(zustandStore);
- * // Any `CrdtBackend` works here; Yjs is one example.
  * const backend = createYjsBackend(new Y.Doc(), "shared");
  * const engine = createSyncEngine({ backend, adapter });
  * engine.connect();
