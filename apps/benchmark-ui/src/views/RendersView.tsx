@@ -55,9 +55,8 @@ interface RendersViewProps {
 }
 
 /**
- * The adapter comparison. Row renders is the metric and it is an exact integer, so the grid is
- * colored by how far a cell is from the ideal of one row rather than by a magnitude ramp: a
- * cell that re-renders the whole list should not look like a slightly slower one.
+ * The adapter comparison, colored by distance from the ideal of one row render rather than by a
+ * magnitude ramp, so a cell re-rendering the whole list does not look slightly slower.
  */
 export function RendersView({
   run,
