@@ -21,13 +21,9 @@ const compareOpIds = (a: string, b: string): number => {
 };
 
 /**
- * The maps at `doc[name]` that lose to the value it shows, the one by the greatest operation
- * first. Peers that each create the synced map, each in a document without it, leave one map
- * per peer at the key, and Automerge shows only the winner. Inside `A.change`, given the draft,
- * each is a proxy to edit; otherwise it is a copy.
- *
- * Reads the document's backend, although `A.getBackend` is marked hidden, as `getConflicts`
- * does, because `getConflicts` does not tell a map from a value that reads as an object.
+ * The maps peers each created at `doc[name]` that lose to the one shown, greatest operation
+ * first; proxies inside `A.change`, copies otherwise. Uses the hidden `A.getBackend`, since
+ * `getConflicts` does not tell a map from a value that reads as an object.
  */
 export const losingMaps = (doc: Container, name: string): Container[] => {
   const values = A.getBackend(doc).getAll("_root", name);
@@ -44,15 +40,9 @@ export const losingMaps = (doc: Container, name: string): Container[] => {
 };
 
 /**
- * Inside `A.change`, moves every key of `losers`, the proxies `losingMaps` returns, that
- * `winner` lacks into it, from the first loser that holds it, and then empties the losers, so a
- * key removed from the winner later cannot come back from one of them. `text` decides which
- * moved strings are stored as text.
- *
- * A moved value is a copy, so a peer's change inside it that the move has not seen, made in
- * the losing map, is no longer read. A key that such a peer adds to its map is moved by the
- * next write. A `Counter` holding a number moves as a new `Counter`; one nested in a moved map
- * or list, or holding a `bigint`, moves as a number.
+ * Inside `A.change`, moves each key `winner` lacks from the first of `losers` holding it, then
+ * empties the losers so a key removed later cannot return. A moved value is a copy, so a peer's
+ * unseen edit inside it is lost; only a top-level `Counter` holding a number stays a `Counter`.
  */
 export const moveLosingKeys = (
   winner: Container,

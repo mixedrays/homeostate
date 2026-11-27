@@ -51,21 +51,9 @@ const equal = (a: unknown, b: unknown): boolean => {
 };
 
 /**
- * Returns a function that copies a value read from an Automerge document into plain JSON,
- * reading `ImmutableString`s as strings, and `bigint`s and `Counter`s as numbers. What it returns
- * belongs to the caller, who may change it without changing what later calls return.
- *
- * Given `losers`, maps that lose to `value`, a map, in a conflict, from the one by the greatest
- * operation down, it returns `value` with every key of theirs it lacks, from the first loser
- * that holds it.
- *
- * It keeps two copies. Its own is cached per document object, so a call copies only what
- * changed in the document, and it never leaves this function. A call returns the other: the
- * objects an earlier call returned, checked against its own copy and returned again while they
- * still match, so an unchanged subtree keeps its identity between calls and one a caller changed
- * is copied afresh. The check visits every object, and allocates nothing while they match.
- * A loser is a fresh object on every read, so its keys are checked against what the last merge
- * held instead, and keep their identity while they hold the same JSON.
+ * Returns a copier from Automerge values to plain JSON the caller may mutate, with the keys a
+ * map lacks taken from `losers`, greatest operation first. Its own copy is cached per document
+ * object; a returned object is returned again while it still matches that copy.
  */
 export const createSnapshot = (): ((
   value: unknown,
