@@ -19,10 +19,9 @@ export const EDITOR_ROOM = "homeostate-editor";
 export const SYNC_MAP_NAME = "shared-ydoc";
 
 /**
- * Todo titles are Y.Texts, so two tabs renaming one todo keep both edits. Every other string,
- * such as an id, the filter or the search term, is a plain value, and concurrent writes keep
- * one of them. Every backend on the todo room must pass it; changing it requires a
- * TODO_SEED_VERSION bump.
+ * Todo titles are text, so two tabs renaming one todo keep both edits; other strings are plain
+ * values. Every backend on the todo room must pass it; changing it requires a TODO_SEED_VERSION
+ * bump.
  */
 export const isTodoTitle: TextPolicy = (path) =>
   path.length === 3 && path[0] === "todos" && path[2] === "title";
@@ -41,13 +40,9 @@ export const createInitialTodoState = (): TodoState => ({
 });
 
 /**
- * Identical CRDT history in every tab, including search and filter strings. Independently
- * inserting the same JSON would create competing root values and let a joining tab reset
- * the room. Client 0 authors only this seed; each live document keeps its own client ID.
- *
- * Kept instead of connecting the engine once its provider syncs, which would leave a tab without
- * todos until then or until a timeout expires. The provider's sync would not be enough either: it
- * covers the wire, and the network link can deliver to this document later.
+ * Identical CRDT history in every tab, authored by client 0, so a joining tab cannot reset the
+ * room with competing root values. Waiting for the provider instead would leave a tab without
+ * todos until then, and the network link can deliver later still.
  */
 function seedTodos(doc: Y.Doc): void {
   const seed = new Y.Doc();
@@ -63,10 +58,9 @@ function seedTodos(doc: Y.Doc): void {
 }
 
 /**
- * Keeps the room in this browser's localStorage, so it survives every tab closing and the sync
- * server restarting: the next tab to open restores it and hands it back to the server.
- * Engines may connect before it loads, because both rooms are seeded identically first:
- * the synced keys already exist, so `connect()` seeds nothing that could compete.
+ * Keeps the room in localStorage, so it survives every tab closing and the server restarting.
+ * Engines may connect before it loads: rooms are seeded identically first, so `connect()` seeds
+ * nothing that could compete.
  */
 function persistRoom(ydoc: Y.Doc, room: string): Persistence | undefined {
   // Not `typeof localStorage`: Node 25 defines one that warns when read.
@@ -81,10 +75,9 @@ function persistRoom(ydoc: Y.Doc, room: string): Persistence | undefined {
 }
 
 /**
- * Creates the room's document, restored from localStorage where available, and its WebSocket
- * provider. The provider syncs a document of its own, which a network link keeps in step with
- * the room's, so the devtools can slow down or cut the connection. Destroying the document
- * also stops persisting it and the link.
+ * Creates the room's document, restored from localStorage, and its WebSocket provider, which
+ * syncs its own document through a network link the devtools can slow or cut. Destroying the
+ * document stops persistence and the link.
  */
 export function connectSharedDoc(serverUrl: string, room = TODO_ROOM) {
   const ydoc = new Y.Doc();
