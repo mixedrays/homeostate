@@ -11,10 +11,6 @@ class ValtioAdapter<S extends object> implements StoreAdapter<S> {
    */
   readonly batchWrites = true;
 
-  /**
-   * Create a Valtio adapter
-   * @param state - The Valtio proxy object
-   */
   constructor(state: S) {
     this.state = state;
   }
