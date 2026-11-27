@@ -47,6 +47,12 @@ createYjsBackend(doc, "shared", {
 });
 ```
 
+The backend writes an item that moves in a list, by drag and drop, `sort()` or `reverse()`, as a
+delete and an insert of a copy. Peers that reorder a list at once duplicate items, and an edit to
+a moved item is lost; see
+[Lists under concurrency](https://homeostate.pages.dev/docs/concepts#lists-under-concurrency) for
+how to order items safely.
+
 The backend also exposes `map`, the synced `Y.Map`, and `origin`, which tags its writes. To
 undo the store's own edits, track that origin with `Y.UndoManager`, created after `connect()`.
 An undo reaches the store as a remote change:

@@ -136,6 +136,12 @@ Apply steps in order: each index refers to the array after all preceding steps. 
 deleted together are one step with their `count`, so clearing a list is one splice. Items are
 matched by value, not by an `id` field.
 
+A moved item is not matched to itself: a move, `sort()` or `reverse()` becomes a delete of the
+item and an insert of a copy. Moving `a` to the end of `[a, b, c, d]` gives
+`[{ type: "delete", key: 0, count: 1 }, { type: "insert", key: 3, value: a }]`. On a CRDT,
+peers that reorder a list at once duplicate items, and an edit to a moved item is lost; see
+[Lists under concurrency](/docs/concepts#lists-under-concurrency).
+
 ### String offsets
 
 Offsets and counts use UTF-16 code units, as JavaScript indexes strings. Adjacent characters
