@@ -159,10 +159,8 @@ export interface MetricDelta {
   /** `(after - before) / |before|`; `NaN` when `before` is zero and `after` is not. */
   change: number;
   /**
-   * Beyond the threshold and, for timings, beyond both margins of error; byte metrics must
-   * also move by more than a small absolute floor, since encodings and heap snapshots jitter.
-   * Render counts have neither a threshold nor a floor: they are exact integers, so any change
-   * at all is significant.
+   * Beyond the threshold, and for timings both margins of error; byte metrics must also pass a
+   * floor, as encodings and heap snapshots jitter. Any change of an exact render count counts.
    */
   significant: boolean;
   format: (value: number) => string;

@@ -112,9 +112,8 @@ export interface BenchmarkMeta {
   node: string;
   commit: string | null;
   /**
-   * Committer date of `commit`, ISO 8601: when the measured code was written, which can be long
-   * before `date` when an older commit is benchmarked. Absent in a report written before the
-   * field existed.
+   * Committer date of `commit`, ISO 8601, which predates `date` when an older commit is
+   * benchmarked. Absent in reports from before the field existed.
    */
   commitDate?: string | null;
   dirty: boolean | null;

@@ -1,10 +1,8 @@
 import type { Todo, TodoState } from "./types.js";
 
 /**
- * Structural equality that ignores the order of object keys. Backends disagree on it:
- * `passthrough`, `memory` and `yjs` return a todo with its authored key order
- * (`id, title, completed`) while `loro` and `automerge` alphabetize it
- * (`completed, id, title`), so `JSON.stringify` reports a difference where there is none.
+ * Structural equality that ignores key order, which differs by backend: `loro` and `automerge`
+ * alphabetize keys, the others keep the authored order.
  */
 export const deepEqual = (x: unknown, y: unknown): boolean => {
   if (x === y) return true;
@@ -37,16 +35,9 @@ export interface RenderCount {
 }
 
 /**
- * Counts what one operation costs the receiving peer's UI, as the strict upper bound on how
- * many memoized row components any correct consumer can re-render. Rows are matched by `id`,
- * the way React reconciles a keyed list: `applyChangesToArray` splices, which moves existing
- * references, so matching by index reports a change for every row after an insert or a delete
- * even though the components themselves keep their data.
- *
- * A row the operation added is not counted — it has to mount whatever core does. A row that
- * disappeared is not counted either. What is counted is a surviving row handed to the store
- * as a new object, which is exactly what structural sharing in `keepIdentity` is there to
- * prevent, and `wasted` is the part of that which carries no new data at all.
+ * Surviving rows the receiving store got as new objects, matched by `id` as React matches a keyed
+ * list: the upper bound on memoized rows any consumer re-renders. Added and removed rows are not
+ * counted; `wasted` rows carry no new data.
  */
 export const countRenders = (
   before: TodoState,

@@ -199,12 +199,9 @@ interface Footprint {
 }
 
 /**
- * Deterministic pass over `options.operations` iterations. Wire bytes and document growth
- * are read around the measured write only, so a scenario's untimed restore does not count.
- * Heap growth is the retained heap of one writing replica divided by the operations it ran,
- * restores included; that loop keeps going past `options.operations`, up to
- * `HEAP_PASS_MAX_OPERATIONS` or `HEAP_PASS_MAX_MS`, because a collected heap only resolves
- * growth to a few kilobytes.
+ * Wire bytes and document growth around the measured write only, over `options.operations`.
+ * Heap growth per operation runs on, up to `HEAP_PASS_MAX_OPERATIONS` or `HEAP_PASS_MAX_MS`,
+ * since a collected heap only resolves growth to a few kilobytes.
  */
 const measureFootprint = <R extends Replica>(
   options: BenchmarkOptions,
@@ -258,9 +255,8 @@ const settle = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
- * Deterministic pass over a single operation: the counts are integers that depend only on the
- * shape of the change, so one operation settles them and repeating it would only average the
- * same number. It runs outside every timed path because it allocates a map of the rows.
+ * Render counts over a single operation, since they depend only on the change's shape. Kept out
+ * of every timed path, as it allocates a map of the rows.
  */
 const measureRenders = async <R extends Replica>(
   candidate: BackendCandidate<R>,
