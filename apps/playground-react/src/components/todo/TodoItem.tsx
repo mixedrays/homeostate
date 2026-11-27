@@ -13,15 +13,9 @@ export interface TodoItemProps {
 }
 
 /**
- * The row itself, unmemoized. Exported for `observer()`, which applies its own `memo` and
- * throws on a component that already carries one — see the MobX demo's `TodoList`.
- *
- * The check and the title are separate targets: the check toggles `completed`, the title
- * is a field you type straight into. It is always a field — borderless until you touch it —
- * rather than text that swaps for an input on click, because swapping two differently sized
- * boxes is what made the row change height and the list jump. There is one box, so there is
- * nothing to jump. Every keystroke goes to the store, which is also what puts each keystroke
- * on the wire for the other tabs.
+ * The row, unmemoized, for `observer()`, which throws on a memoized component. The title is
+ * always a field, borderless until touched, since swapping text for an input changed the row's
+ * height. Every keystroke goes to the store.
  */
 export function TodoItemRow({
   todo,
@@ -84,9 +78,7 @@ export function TodoItemRow({
 }
 
 /**
- * The row the list renders by default. Memoized, so editing or toggling one todo re-renders one
- * row instead of the whole list — which only holds while the demo above hands down todo objects
- * and callbacks whose identity survives an unrelated change. Every demo but MobX does that
- * already: its store is immutable, so an untouched todo is the same object it was.
+ * The default row, memoized, so one todo's change re-renders one row while the demo keeps todo
+ * and callback identities, as immutable stores do.
  */
 export const TodoItem = memo(TodoItemRow);

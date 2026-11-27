@@ -54,10 +54,9 @@ export function SharedDocument() {
   const peers = usePeers(awareness);
   const textarea = useRef<HTMLTextAreaElement>(null);
 
-  // The browser reports a moved caret a task after it moves, and an edit from another tab can
-  // land in between; the caret would then be put back where it was before the move. So just
-  // before each remote edit, while the textarea still shows the text its offsets refer to, the
-  // caret is pinned to the characters around it.
+  // The browser reports a moved caret a task late, so a remote edit in between would put it
+  // back. Before each remote edit, while the offsets still match, the caret is pinned to the
+  // characters around it.
   useEffect(() => {
     const pin = (transaction: Transaction) => {
       const el = textarea.current;

@@ -32,19 +32,15 @@ interface CollaborativeTextareaProps {
 }
 
 /**
- * Classes the textarea and its overlay share. The overlay draws the other cursors by laying
- * out the same text the same way, so anything that moves a line break (font, padding, border,
- * wrapping) has to be identical on both.
+ * Classes the textarea and its overlay share: the overlay lays out the same text to draw the
+ * cursors, so anything that moves a line break must match.
  */
 const surface =
   "col-start-1 row-start-1 min-h-80 w-full rounded-lg border px-4 py-5 font-sans text-base leading-7 whitespace-pre-wrap [overflow-wrap:break-word] [tab-size:4]";
 
 /**
- * A plain textarea with the other writers' carets and selections drawn over it.
- *
- * Both sit in one grid cell. The overlay holds the text in transparent ink, so it takes the
- * height the text needs and the textarea stretches to match, never scrolling on its own; the
- * two then stay aligned without measuring anything.
+ * A textarea with the other writers' carets and selections drawn over it, in one grid cell: the
+ * overlay's transparent text sets the height, so the two align without measuring.
  */
 export function CollaborativeTextarea({
   value,

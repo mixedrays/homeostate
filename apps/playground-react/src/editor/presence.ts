@@ -2,9 +2,8 @@ import * as Y from "yjs";
 import type { WebsocketProvider } from "y-websocket";
 
 /**
- * Who is in the document and where their cursor is. None of this is document state, so it
- * travels over Yjs awareness rather than through the store: it belongs to one tab, and it
- * disappears when the tab closes or goes offline.
+ * Who is in the document and where their cursor is. Not document state: it travels over Yjs
+ * awareness, belongs to one tab, and goes when the tab closes or goes offline.
  */
 
 export type Awareness = WebsocketProvider["awareness"];

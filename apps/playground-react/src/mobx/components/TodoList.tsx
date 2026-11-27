@@ -4,9 +4,8 @@ import { TodoListView } from "../../components/todo/TodoListView";
 import { useStore } from "../store/storeContext";
 
 /**
- * MobX mutates a todo in place, so the row can never learn about a toggle from its props — the
- * object it was handed is the same one. `observer` is what closes that gap: the row subscribes
- * to the fields it reads and re-renders itself, and nothing else in the list does.
+ * MobX mutates a todo in place, so props never change; with `observer`, the row subscribes to
+ * the fields it reads and re-renders alone.
  */
 const ObservedTodoItem = observer(TodoItemRow);
 
