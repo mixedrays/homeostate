@@ -17,16 +17,9 @@ export const isDocumentText: TextPolicy = (path) =>
   path.length === 1 && path[0] === "text";
 
 /**
- * Gives `doc` the starting text as one update authored by a fixed client id, before it syncs.
- *
- * Every tab applies the very same update, so every tab holds the very same Y.Text, and a tab
- * joining a room that already has it adds nothing. If each tab seeded its own text instead,
- * the room would end up with two Y.Texts set on one key; Yjs keeps whichever client id sorts
- * last and drops the other along with every edit made to it, so about half the time a new
- * tab would reset the document.
- *
- * Changing INITIAL_TEXT while a sync server still holds the room gives the same ids different
- * content, and tabs on either version stop agreeing; restart the server after editing it.
+ * Seeds `doc` with one fixed-client update, so every tab holds the same Y.Text; separate seeds
+ * would compete for the key and reset the document about one join in two. Restart the sync
+ * server after changing INITIAL_TEXT.
  */
 export function seedDocument(doc: Y.Doc): void {
   const seed = new Y.Doc();

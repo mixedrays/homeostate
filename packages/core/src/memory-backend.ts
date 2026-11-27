@@ -23,7 +23,7 @@ export const createMemoryBackend = (
   initial: JsonObjectInput = {},
 ): MemoryBackend => {
   let state = clone(initial);
-  let changes = 0;
+  let revision = 0;
   const listeners = new Set<() => void>();
 
   return {
@@ -31,10 +31,10 @@ export const createMemoryBackend = (
 
     write: (next) => {
       state = clone(next);
-      changes++;
+      revision++;
     },
 
-    revision: () => changes,
+    revision: () => revision,
 
     subscribe: (onRemoteChange): Unsubscribe => {
       listeners.add(onRemoteChange);
@@ -45,7 +45,7 @@ export const createMemoryBackend = (
 
     receive: (next) => {
       state = clone(next);
-      changes++;
+      revision++;
       listeners.forEach((listener) => listener());
     },
   };

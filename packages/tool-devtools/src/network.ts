@@ -4,7 +4,10 @@ import type { PersistableDoc, Unsubscribe } from "@homeostate/core";
 export interface NetworkConditions {
   /** Milliseconds each update takes, either way. Defaults to 0. */
   latency: number;
-  /** Up to this many more milliseconds per update, at random; updates still arrive in order. Defaults to 0. */
+  /**
+   * Up to this many more milliseconds per update, at random; updates still arrive in order.
+   * Defaults to 0.
+   */
   jitter: number;
   /** Cuts the link: nothing passes either way until it is back. Defaults to `false`. */
   offline: boolean;

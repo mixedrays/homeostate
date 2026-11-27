@@ -13,14 +13,9 @@ import {
 } from "vitest";
 
 /**
- * The gate on every demo's render behaviour: toggling one todo must re-render that todo's row
- * and no other, and the row must actually show the change.
- *
- * Both halves matter and they pull in opposite directions. Memoizing the row is what stops the
- * list re-rendering as a block, but a memoized row only updates when its props change — so a
- * store that mutates a todo in place rather than replacing it goes silently stale unless the
- * row subscribes to the todo itself. That is why the MobX demo hands `TodoListView` an
- * `observer` row while the immutable stores use the memoized default.
+ * Gates every demo's renders: toggling one todo re-renders that row only, and the row shows the
+ * change. A memoized row goes stale on a store that mutates todos in place, hence the MobX demos'
+ * `observer` rows.
  */
 
 /** Every row render, in order, identified by the todo it rendered. */
@@ -220,7 +215,7 @@ afterEach(async () => {
 
 /** The toggle button and the title field of one rendered row. */
 const rowParts = (row: Element) => {
-  // Both controls are buttons now, so they are told apart by what they say they do.
+  // Both controls are buttons, told apart by their labels.
   const toggle = row.querySelector<HTMLElement>('button[aria-label^="Mark"]')!;
   return {
     toggle,
@@ -345,7 +340,7 @@ describe.each(Object.entries(demos))("the %s demo", (_name, demo) => {
 
     for (const value of ["t", "ty", "typ", "type", "typed"]) {
       await type(rowParts(row()).title, value);
-      // Every keystroke is in the store already — there is nothing to commit.
+      // Every keystroke is in the store already; there is nothing to commit.
       expect(titles()[2]).toBe(value);
     }
 

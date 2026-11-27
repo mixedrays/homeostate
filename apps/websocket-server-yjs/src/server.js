@@ -17,7 +17,6 @@ wss.on("error", (error) => {
   console.error("WebSocket server error:", error);
 });
 
-// Graceful shutdown
 process.on("SIGINT", () => {
   console.log("\nShutting down server...");
   wss.close(() => {

@@ -4,9 +4,8 @@ import { TodoListView } from "../../components/todo/TodoListView";
 import { todoStore } from "../store/TodoStore";
 
 /**
- * MST mutates a todo node in place, so the row can never learn about a toggle from its props —
- * the node it was handed is the same one. `observer` closes that gap: the row subscribes to
- * the fields it reads and re-renders itself, and nothing else in the list does.
+ * MST mutates a todo node in place, so props never change; with `observer`, the row subscribes
+ * to the fields it reads and re-renders alone.
  */
 const ObservedTodoItem = observer(TodoItemRow);
 

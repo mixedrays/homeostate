@@ -5,7 +5,10 @@ type Collect = () => void;
 
 let collect: Collect | null | undefined;
 
-/** A garbage collector handle: `globalThis.gc` when Node runs with `--expose-gc`, otherwise obtained through V8 flags. */
+/**
+ * A garbage collector handle: `globalThis.gc` when Node runs with `--expose-gc`, otherwise
+ * obtained through V8 flags.
+ */
 export const garbageCollector = (): Collect | null => {
   if (collect !== undefined) return collect;
   const exposed = (globalThis as { gc?: Collect }).gc;

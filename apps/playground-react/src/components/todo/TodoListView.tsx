@@ -14,9 +14,8 @@ interface TodoListViewProps {
   onEdit: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   /**
-   * The row component, memoized by default. A store that mutates its todos in place instead
-   * of replacing them hands its own reactive row here, so the row subscribes to the todo it
-   * was given rather than waiting for a new object to arrive as a prop.
+   * The row component, memoized by default. A store that mutates todos in place passes a
+   * reactive row, which subscribes to its todo.
    */
   itemComponent?: ComponentType<TodoItemProps>;
 }

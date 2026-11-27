@@ -43,10 +43,9 @@ const load = async <Report, Loaded>(
 };
 
 /**
- * Reports saved under `apps/benchmark-crdt/results` and `apps/benchmark-store/results`,
- * bundled at build time and hot-reloaded in dev. A file in one folder is never read as the
- * other kind of report: the two are told apart by where they are saved, and a file that does
- * not match its folder is listed as an error rather than silently dropped.
+ * Reports saved under `apps/benchmark-crdt/results` and `apps/benchmark-store/results`, bundled
+ * at build time and hot-reloaded in dev. The folder decides the kind; a file that does not match
+ * its folder is listed as an error.
  */
 export const discoverRuns = async (): Promise<{
   runs: Run[];

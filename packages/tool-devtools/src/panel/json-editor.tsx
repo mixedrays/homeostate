@@ -33,8 +33,8 @@ interface JsonEditorProps {
 }
 
 /**
- * A highlighted JSON textarea over a live value. Until you type it follows the value; once you have,
- * a change underneath is flagged and blocks Apply until you load the latest value.
+ * A highlighted JSON textarea over a live value. Until you type it follows the value; once you
+ * have, a change underneath is flagged and blocks Apply until you load the latest value.
  */
 export function JsonEditor({
   value,

@@ -107,9 +107,8 @@ describe("runBenchmark", () => {
         renders: 1,
         wasted: 0,
       });
-      // The moved row is rebuilt with identical data: the one wasted render in the set.
-      // `passthrough` is the exception, and not because core does better there — it hands the
-      // peer the very same objects, so the moved row survives by identity without any patching.
+      // The moved row is rebuilt with identical data, the one wasted render, except on
+      // `passthrough`, which hands the peer the same objects.
       if (candidate.name !== "passthrough")
         expect(counts.get(`${candidate.name}/move`)).toEqual({
           renders: 1,

@@ -128,11 +128,8 @@ function grab(id: string, shape: Shape, handle: Handle): Drag | null {
 }
 
 /**
- * The drawing surface: a fixed-size board that scrolls inside the window. Points are in the
- * board's own pixels, so they mean the same spot in every tab whatever its window size.
- *
- * Every step of a drag goes straight to the store, so others watch shapes move and grow
- * rather than jump into place on release.
+ * The drawing surface: a fixed-size board in its own pixels, so points match across tabs. Every
+ * step of a drag goes to the store, so others watch shapes move rather than jump on release.
  */
 export function Board({
   shapes,

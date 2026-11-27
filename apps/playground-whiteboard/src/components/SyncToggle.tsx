@@ -8,9 +8,8 @@ interface SyncToggleProps {
 }
 
 /**
- * A plain button whose label names the action it takes. It deliberately has no `aria-pressed`:
- * the label already changes with the state, and a toggle's label must stay constant, or a
- * screen reader announces the state twice with opposite meanings.
+ * A plain button whose label names its action. No `aria-pressed`: a toggle's label must stay
+ * constant, or a screen reader announces the state twice with opposite meanings.
  */
 export function SyncToggle({ online, onToggle }: SyncToggleProps) {
   const Icon = online ? PlugZap : Plug;

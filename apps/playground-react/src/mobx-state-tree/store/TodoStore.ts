@@ -32,10 +32,8 @@ const TodoStore = types
   })
   .views((self) => ({
     /**
-     * The nodes, not `getSnapshot(self).todos`. MST rebuilds every child snapshot object on
-     * any change, so snapshots gave the memoized row a new prop each time and re-rendered the
-     * whole list; a node keeps its identity for as long as it is in the tree. The row reads
-     * the node through `observer` — see this demo's `TodoList`.
+     * The nodes, not `getSnapshot(self).todos`: MST rebuilds every child snapshot on any change,
+     * while a node keeps its identity in the tree. Rows read it through `observer`.
      */
     get visibleTodos(): Todo[] {
       return filterTodos(self.todos, self.searchTerm, self.filterStatus);

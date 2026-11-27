@@ -18,21 +18,9 @@ import { createStore, type BenchStore } from "../store.js";
 import type { Scenario, TodoState } from "../types.js";
 
 /**
- * The gate on core's structural sharing, driven end to end over a real CRDT rather than over
- * a literal: two peers on Yjs, a thousand todos, one operation, and a count of how many rows
- * the receiving store gets back as new objects.
- *
- * `packages/core/src/__tests__/keep-identity.test.ts` asserts the same contract on two-element
- * arrays, which passes for any implementation that gets the trivial case right. The value of
- * `keepIdentity` is entirely in the large case: replace it with `structuredClone(next)` and
- * that unit test still passes while every number below goes from 1 to 1000, which is the
- * difference between a collaborative list that repaints one row per keystroke and one that
- * repaints all of them.
- *
- * The counts are a property of core, not of the backend: `memory`, `loro` and `automerge`
- * report the same numbers. So does `passthrough`, except for `move`, where it costs nothing
- * at all — it hands the peer the very same objects, so the moved row survives by identity
- * without ever being patched.
+ * Gates core's structural sharing over Yjs: how many of a thousand rows the receiving store gets
+ * back as new objects after one operation. With `keepIdentity` as `structuredClone(next)`, core's
+ * small unit test still passes but these counts reach 1000. Every backend reports the same.
  */
 
 const SIZE = 1000;
@@ -121,9 +109,8 @@ const expectations: Expectation[] = [
   // list re-renders nothing. Matched by index this would report ~N/2 changed rows.
   { scenario: add, renders: 0, wasted: 0, todosReplaced: true },
   { scenario: remove, renders: 0, wasted: 0, todosReplaced: true },
-  // The one wasted render in the set, and it is inherent: `getArrayChanges` pairs a delete
-  // with an insert positionally (`packages/core/src/diff.ts:83-89`), so the moved row is
-  // rebuilt with identical data. One row out of a thousand is not worth chasing.
+  // `getArrayChanges` pairs a delete with an insert by position, so the moved row is rebuilt
+  // with identical data: the one wasted render.
   { scenario: move, renders: 1, wasted: 1, todosReplaced: true },
 ];
 
@@ -151,9 +138,8 @@ describe(`identity of ${SIZE} todos across a Yjs roundtrip`, () => {
     let notifications = 0;
     const unsubscribe = pair.b.store.adapter.subscribe(() => notifications++);
 
-    // A Y.Map.set always produces an update, even when the value is equal, so peer `b` does
-    // hear about this one; `mergeStates` (`packages/core/src/sync-engine.ts:68`) is what stops
-    // it from reaching the store.
+    // A Y.Map.set always produces an update, even for an equal value, so peer `b` hears it;
+    // the engine's `mergeStates` keeps it from the store.
     pair.doc.transact(() =>
       pair.doc.getMap<unknown>("shared").set("searchTerm", new Y.Text("")),
     );

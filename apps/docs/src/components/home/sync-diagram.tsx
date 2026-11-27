@@ -21,9 +21,8 @@ const someOf = (names: string[], shown = 3) =>
   );
 
 /**
- * How a store, Homeostate and a CRDT document connect: vertical on small screens, horizontal from
- * `lg`. A CSS loop in app.css sends a local change out through the links, then a remote one back.
- * `data-paused` holds the loop. The Homeostate card links to `corePath`.
+ * How a store, Homeostate and a CRDT document connect, horizontal from `lg`. A CSS loop in
+ * app.css sends a change out and one back; `data-paused` holds it.
  */
 export function SyncDiagram({
   stores,

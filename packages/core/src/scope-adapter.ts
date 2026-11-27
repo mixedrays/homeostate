@@ -43,11 +43,8 @@ export function scopeAdapter<S extends object, T extends JsonObjectInput>(
   adapter: StoreAdapter<S>,
   scope: AdapterScope<S, T>,
 ): StoreAdapter<T> {
-  /**
-   * The root state last read and its slice, so that one root state gives one slice object even
-   * when `get` builds a new one. Otherwise the engine would not see that a store ignored a
-   * change, and would write the store's old state over the backend.
-   */
+  // One slice object per root state, even when `get` builds a new one; otherwise the engine
+  // misses a store ignoring a change and writes its old state over the backend.
   let root: S | undefined;
   let slice: T;
 

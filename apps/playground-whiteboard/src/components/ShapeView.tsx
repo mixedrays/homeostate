@@ -28,10 +28,8 @@ interface ShapeViewProps extends ShapeEntry {
 }
 
 /**
- * One shape on the board. Every shape is an absolutely placed element in the board's own
- * pixels, drawn in z order, so boxes, arrows and text stack the same way in every tab.
- * Pointer handling lives on the board: it finds the shape by `data-shape-id` and the grabbed
- * handle by `data-handle`.
+ * One shape, absolutely placed in board pixels and drawn in z order, so shapes stack alike in
+ * every tab. The board handles pointers via `data-shape-id` and `data-handle`.
  */
 export const ShapeView = memo(function ShapeView({
   id,
@@ -232,9 +230,8 @@ interface TextEditorProps {
 }
 
 /**
- * Edits a text in place. The element owns its content while it is open, which keeps the caret
- * and the browser's undo; each keystroke still goes to the store, so others watch the text
- * being typed. Escape, Ctrl+Enter or clicking elsewhere finishes.
+ * Edits a text in place, owning its content to keep the caret and undo; each keystroke still
+ * goes to the store. Escape, Ctrl+Enter or clicking elsewhere finishes.
  */
 function TextEditor({ initialText, style, onChange, onDone }: TextEditorProps) {
   const ref = useRef<HTMLDivElement>(null);

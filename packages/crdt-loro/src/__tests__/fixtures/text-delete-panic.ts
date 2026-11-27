@@ -1,11 +1,7 @@
 /**
- * A shallow snapshot of a peer's document, 1435 bytes with SHA-256
- * `7388cec7dbbed4c625639314d07a203964c02b0f3e9e80c3bbf35ae82cdd2be9`, exported with
- * `doc.export({ mode: "shallow-snapshot", frontiers: doc.frontiers() })` on loro-crdt 1.16.1
- * from a tool-simulator run. Its synced map `shared` holds the text `chaos`, `"🙂y"`, whose two
- * characters come from separate changes. On loro-crdt before 1.16.4, deleting all of it in a
- * subscribed document panics at commit ("Op/hint length mismatch"), and every later call on the
- * document throws.
+ * A shallow snapshot from a tool-simulator run on loro-crdt 1.16.1, 1435 bytes, SHA-256
+ * `7388cec7dbbed4c625639314d07a203964c02b0f3e9e80c3bbf35ae82cdd2be9`. Text `shared.chaos` is
+ * `"🙂y"` from two changes; before 1.16.4, deleting it all panics at commit when subscribed.
  */
 export const textDeletePanicBase64 = `
 bG9ybwAAAAAAAAAAAAAAAOsLt6cAA7IAAABMT1JPAAQiTRhgQIJ3AAAAsV4BkQEBAR0C0QcAAQAR

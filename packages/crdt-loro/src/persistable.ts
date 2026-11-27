@@ -10,10 +10,9 @@ export const createLoroPersistable = (doc: LoroDoc): PersistableDoc => {
   let importing: Uint8Array | undefined;
 
   /**
-   * The version from which `version` holds only what this document committed while `apply`
-   * imported `update`, or `undefined` when it committed nothing. Loro runs container listeners
-   * before document ones, so a listener's response to the import, such as a sync engine's
-   * write, can already be in the batch that reports the import.
+   * The version after which `version` holds only what this document committed while importing
+   * `update`, or `undefined` for nothing. Loro runs container listeners first, so a response such
+   * as the engine's write can share the import's batch.
    */
   const committedSince = (
     saved: VersionVector,

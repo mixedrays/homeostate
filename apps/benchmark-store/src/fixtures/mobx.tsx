@@ -28,14 +28,9 @@ class TodoStore {
 }
 
 /**
- * The idiomatic MobX list: `observer` on every component, including the row, and the row
- * reading the observable todo it was handed. `observer` memoizes on props as `React.memo`
- * does and re-runs on the observables the component actually read, so a row re-renders when
- * its own todo changes — or when it is handed a different todo object.
- *
- * Putting `observer` on the list alone would be the tempting shortcut here and would make
- * this fixture report one row render for the whole list, which is the one way this benchmark
- * could quietly lie about MobX.
+ * The idiomatic MobX list: `observer` on every component, the row reading the todo it was
+ * handed, so it re-renders when that todo changes or is replaced. `observer` on the list alone
+ * would report one row render for the whole list.
  */
 export const mobx: Fixture = {
   name: "mobx",

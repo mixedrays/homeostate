@@ -21,9 +21,8 @@ const sameKind = (a: unknown, b: unknown): boolean =>
   (Array.isArray(a) && Array.isArray(b)) || (isRecord(a) && isRecord(b));
 
 /**
- * Plain writes, run inside the adapter's own `runInAction`. MobX makes whatever lands
- * observable, so the values the edit script carries can go in as they are — and a field
- * assigned on an existing node keeps that node, which is the whole point of reconciling.
+ * Plain writes, run inside the adapter's `runInAction`. MobX makes what lands observable, so
+ * values go in as they are, and a field assigned on an existing node keeps that node.
  */
 const mobxOps: ApplyOps = {
   kind: (value) =>
@@ -76,10 +75,8 @@ export type MobxAdapterOptions<
     };
 
 /**
- * The store's own enumerable observable fields, less computeds and actions. MobX's `keys()`
- * lists every own enumerable property, including a field `makeObservable` was not told about
- * and an arrow-function field `makeAutoObservable` made an action, and throws for a store that
- * is not observable at all.
+ * The store's observable data fields. MobX's `keys()`, which throws for a store that is not
+ * observable, also lists unannotated fields and arrow-function actions.
  */
 const dataKeys = (store: object): string[] =>
   observableKeys(store).filter(
@@ -107,10 +104,8 @@ const findDescriptor = (
 };
 
 /**
- * Why a key listed in `keys` cannot sync, or `undefined` when it can. A computed is an
- * observable prop too, but assigning it throws. A key the store lacks is valid only on an
- * `observable({...})` object, whose proxy observes a property added later; a class instance
- * would get it as a plain, unobserved field.
+ * Why a key listed in `keys` cannot sync, or `undefined` when it can. A missing key is valid
+ * only on an `observable({...})` proxy; a class instance would get a plain, unobserved field.
  */
 const keyProblem = (store: object, key: string): string | undefined => {
   if (isComputedProp(store, key))
@@ -141,10 +136,8 @@ class MobxAdapter<S extends object> implements StoreAdapter<S> {
   private syncableKeys: readonly string[];
 
   /**
-   * The last state `getState()` returned. The engine derives what it passes to `setState()`
-   * from that very object and shares every subtree it did not change, so comparing against
-   * it by reference identifies the untouched keys in one `Object.is` — which `toJS`, whose
-   * every call is a fresh deep copy, can never do on its own.
+   * The last state `getState()` returned. The engine's `setState()` argument shares its unchanged
+   * subtrees, so `Object.is` finds untouched keys, which fresh `toJS` copies never could.
    */
   private snapshot: S | undefined;
 

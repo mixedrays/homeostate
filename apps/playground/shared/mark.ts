@@ -16,12 +16,9 @@ const MARK_SVG =
   "</svg>";
 
 /**
- * Renders the mark into `host`, and plays the Connect motion when `trigger` is hovered or
- * focused: the brackets meet, the crossbar joins them, the diamond grows where they meet and
- * a ripple spreads. The trigger defaults to the closest link or button around `host`, or
- * `host` itself. The motion runs to the end even if the pointer leaves early.
- *
- * Returns a function that removes the mark and its listeners.
+ * Renders the mark into `host`, playing the Connect motion to its end when `trigger` (the closest
+ * link or button, or `host`) is hovered or focused. Returns a function that removes the mark and
+ * its listeners.
  */
 export function mountHomeostateMark(
   host: Element,

@@ -19,7 +19,7 @@ const has = (shapes: Board["shapes"], id: string) =>
 
 /**
  * The board is a plain immutable record of shapes. The store knows nothing about CRDTs:
- * homeostate diffs each new record against the last one and writes only the fields that changed.
+ * homeostate diffs each new record against the last and writes only the changed fields.
  */
 export const useBoardStore = create<BoardStore>((set) => ({
   // Replaced on connect by the shapes the backend holds.

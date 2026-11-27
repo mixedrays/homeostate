@@ -6,10 +6,9 @@ import { createZustandAdapter } from "@homeostate/store-zustand";
 import { createNetwork, createRandom, type Network } from "../index";
 import { backends } from "./helpers";
 
-// Task 155: the diff writes a move, sort or reverse as a delete plus an insert, and the CRDT lists
-// have no move, so concurrent reorders duplicate items and drop a concurrent edit to the moved
-// item. These tests document that known behaviour, which apps/docs/content/concepts.md ("Lists
-// under concurrency") describes. Flip them when a fix lands.
+// The diff writes a move as a delete plus an insert, so concurrent reorders duplicate items and
+// drop a concurrent edit to the moved one. Known behaviour, described in
+// apps/docs/content/concepts.md ("Lists under concurrency"); flip these when a fix lands.
 
 let network: Network | undefined;
 

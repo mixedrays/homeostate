@@ -13,14 +13,9 @@ const diamond = (
 );
 
 /**
- * The homeostate mark: two brackets, one per synced store, joined into an H by the shared
- * state diamond. Ink on cobalt in light mode, paper on sky in dark mode. Its motion lives in
- * styles.css.
- *
- * Without `state`, hovering or focusing the closest link or button plays the Connect motion
- * once: the brackets meet, the crossbar joins them, the diamond grows and a ripple spreads.
- * With `state`, it is a connection icon: "disconnected" shows only the brackets, and a change
- * plays the same sequence forward or back.
+ * The homeostate mark; its motion lives in styles.css. Without `state`, hovering or focusing
+ * the closest link or button plays the Connect motion once. With `state`, it is a connection
+ * icon: "disconnected" shows only the brackets, and a change plays the motion forward or back.
  */
 export function HomeostateMark({
   className,

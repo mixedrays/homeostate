@@ -25,14 +25,9 @@ export interface AutomergeRepoHandle<T> {
 }
 
 /**
- * Reads a `DocHandle` as an `AutomergeDocSource`. It listens to `"heads-changed"`: `"change"`
- * skips a merge that moves the heads without changing a value, and the heads are the backend's
- * `revision`. The event does not say where a change came from, so a change is local when `change`
- * produced the document the event reports.
- *
- * One emitter listener calls every subscriber. A subscriber's error is thrown from a timer, as an
- * uncaught error: thrown in the emitter, it would skip the handle's later listeners, its
- * `"change"` event and automerge-repo's sync to peers until the next change.
+ * Reads a `DocHandle` as an `AutomergeDocSource`, on `"heads-changed"`, since `"change"` skips a
+ * merge that only moves the heads, the backend's `revision`. A subscriber's error is thrown from a
+ * timer: thrown in the emitter, it would skip the handle's later listeners and its sync to peers.
  */
 export const fromRepoHandle = <T>(
   docHandle: AutomergeRepoHandle<T>,

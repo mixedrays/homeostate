@@ -3,9 +3,8 @@ import type { TodoState } from "@homeostate/benchmark-crdt";
 import type { ReactElement } from "react";
 
 /**
- * One counter per component of the fixture tree. `row` is the sum over every row in the list,
- * so it is the number this benchmark exists to report: how many memoized row components the
- * adapter makes React re-render for one change from a peer.
+ * One counter per component of the fixture tree; `row`, summed over every row, is the reported
+ * metric: memoized rows re-rendered for one remote change.
  */
 export interface Counters {
   app: number;
@@ -25,9 +24,8 @@ export interface FixtureInstance {
 }
 
 /**
- * One state manager, its adapter, and the identical tree rendered the way that library is
- * meant to be used. Each fixture owns the memoization decision — the point of comparison is
- * what an idiomatic app gets, not what a hand-tuned one could reach.
+ * One state manager, its adapter, and the same tree rendered idiomatically for that library,
+ * memoization included: what a typical app gets, not a hand-tuned one.
  */
 export interface Fixture {
   name: string;
@@ -40,7 +38,7 @@ export interface RenderResult {
   adapter: string;
   scenario: string;
   size: number;
-  /** Row components React re-rendered for the remote change. The metric and the gate; ideal 1. */
+  /** Row components React re-rendered for the remote change; ideal 1. */
   rowRenders: number;
   /** Whether the list container itself re-rendered, 0 or 1. */
   listRenders: number;
@@ -51,7 +49,7 @@ export interface RenderResult {
   applyMs: number;
   /** React's render and commit for that change; advisory. */
   commitMs: number;
-  /** First render of the whole list, the `adopt` analogue of the write-path benchmark; advisory. */
+  /** First render of the whole list, like `adopt` in the write-path benchmark; advisory. */
   mountMs: number;
 }
 

@@ -51,11 +51,6 @@ class MobxStateTreeAdapter<S extends object> implements StoreAdapter<S> {
   private node: SnapshotNode<S>;
   private onInvalidSnapshot: MobxStateTreeAdapterOptions["onInvalidSnapshot"];
 
-  /**
-   * Create a MobX-State-Tree adapter
-   * @param node - The tree node to sync; usually the root instance
-   * @param options - What to do with an invalid remote state
-   */
   constructor(node: SnapshotNode<S>, options: MobxStateTreeAdapterOptions) {
     this.node = node;
     this.onInvalidSnapshot = options.onInvalidSnapshot;

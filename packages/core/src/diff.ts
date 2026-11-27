@@ -296,10 +296,8 @@ const getRecordChanges = (
 ): RecordChange[] => {
   if (a === b) return [];
   const changes: RecordChange[] = [];
-  // With `options.json`, an entry holding `undefined` or a function is absent.
   const absent = (value: unknown): boolean =>
     options.json === true && isAbsent(value);
-  // With `options.json`, `NaN` and infinite numbers are `null`.
   const same = (x: unknown, y: unknown): boolean =>
     options.json ? toJsonPrimitive(x) === toJsonPrimitive(y) : isSame(x, y);
 

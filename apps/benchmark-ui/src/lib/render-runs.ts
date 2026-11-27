@@ -6,9 +6,8 @@ import type {
 import type { RunSource } from "./runs";
 
 /**
- * A run of the render benchmark. It is a different measurement from the backend matrix — one
- * adapter per row instead of one backend, components counted instead of bytes — so it is kept
- * as its own kind of run rather than squeezed into `BenchmarkReport`.
+ * A run of the render benchmark, kept apart from `BenchmarkReport`: one adapter per row instead
+ * of one backend, components counted instead of bytes.
  */
 export interface RenderRun {
   kind: "render";

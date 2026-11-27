@@ -33,7 +33,8 @@ export type SyncMobxStoreOptions<
  * store's fields, or checks the ones `keys` names, when it is called, but reads and writes no
  * state until the app calls `engine.connect()`, for example once its provider has synced or
  * `persistence.whenLoaded` has resolved, so that the store does not seed its initial state over
- * the room's. A field added afterwards to an `observable({...})` store is not synced unless `keys` names it.
+ * the room's. A field added afterwards to an `observable({...})` store is not synced unless
+ * `keys` names it.
  *
  * `keys` and `omit` choose the synced fields as in {@link createMobxAdapter}, and without them the
  * helper syncs every observable data field; `keys` may list only observable data fields. A key

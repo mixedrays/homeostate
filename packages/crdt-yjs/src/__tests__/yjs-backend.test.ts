@@ -336,7 +336,7 @@ describe("a removed map", () => {
   });
 
   describe("with an update waiting for an earlier one", () => {
-    /** Two updates from a third replica to another shared type, the second depending on the first. */
+    /** Two updates from a third replica to another shared type, the second needing the first. */
     const twoUpdates = (doc: Y.Doc): [Uint8Array, Uint8Array] => {
       const other = replica();
       other.clientID = 3;
@@ -549,11 +549,9 @@ describe("an update that waits for an earlier one", () => {
   };
 
   /**
-   * A writer on client 1 and a reader on `readerId` that both hold `initial`, with the
-   * reader's store synced by `engine`, connected. Each `write` returns the writer's update, which the
-   * test delivers to the reader with `deliver`, in any order. `peer` adds a third replica on
-   * client 3 holding `initial`, whose `write` returns its update too. Every backend takes
-   * `options`, and the engine `schedule`.
+   * A writer on client 1 and a reader on `readerId`, both holding `initial`, the reader's store
+   * connected. `write` returns an update for `deliver`, in any order; `peer` adds client 3.
+   * Backends take `options`, the engine `schedule`.
    */
   const gap = (
     initial: State,

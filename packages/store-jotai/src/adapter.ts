@@ -25,11 +25,6 @@ class JotaiAdapter<S extends object> implements StoreAdapter<S> {
   private atom: SyncedAtom<S>;
   private store: JotaiStore;
 
-  /**
-   * Create a Jotai adapter
-   * @param atom - Writable atom holding the synced state
-   * @param store - Jotai store the atom lives in; defaults to the global default store
-   */
   constructor(atom: SyncedAtom<S>, store: JotaiStore = getDefaultStore()) {
     this.atom = atom;
     this.store = store;

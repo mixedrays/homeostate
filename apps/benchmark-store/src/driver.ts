@@ -10,12 +10,8 @@ import { createPair } from "./peers.js";
 import type { Fixture, RenderResult } from "./types.js";
 
 /**
- * Mounts one fixture over a real list of `size` todos, applies one scenario step on the other
- * peer, and reports what React did about it.
- *
- * The counts are the point and they are exact: the same integers on every machine and in
- * every run. The three timings are advisory — React's commit depends on the fixture's DOM and
- * on jsdom, so they are worth reading next to each other and not worth gating a build on.
+ * Mounts one fixture over `size` todos, applies one scenario step on the other peer, and reports
+ * what React did. The counts are exact; the timings depend on jsdom and are only advisory.
  */
 export const measure = async (
   fixture: Fixture,

@@ -3,12 +3,8 @@ import type { ApplyOps, TextPolicy } from "@homeostate/core";
 import { insertListItem, setMapEntry } from "./mapping.js";
 
 /**
- * How `applyChanges` writes into Loro containers. Every value it writes becomes its container
- * counterpart per the text policy: strings the policy marks as text are LoroTexts, edited
- * character by character, and any other string is a plain value. A string held as the other
- * kind becomes the configured one when it next changes.
- *
- * @param text Which strings, by path from the synced map, are LoroTexts. Defaults to none.
+ * How `applyChanges` writes into Loro containers, converting values as `setMapEntry` does. A
+ * string held as the other kind, text or plain, takes the configured one when it next changes.
  */
 export const createLoroOps = (text?: TextPolicy): ApplyOps => ({
   kind: (value) =>

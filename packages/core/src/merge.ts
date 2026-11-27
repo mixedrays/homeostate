@@ -81,7 +81,6 @@ const diffOptions = (text: TextPolicy | undefined, path: Path): DiffOptions =>
     ? DIFF
     : { json: true, text: (at) => text([...path, ...at]) };
 
-/** Whether `value` is a string that `text` marks as text at `path`. */
 const isText = (
   value: unknown,
   text: TextPolicy | undefined,
@@ -259,27 +258,9 @@ const uniquePairs = (
 };
 
 /**
- * Re-pairs, in `alignment`, the items of `base` and `side` that `getChanges` left unmatched,
- * by unique values before position.
- *
- * `getChanges` matches only items equal as JSON, and pairs the rest by position within each run
- * of deletes and inserts between two matched items. A record changed on this side, beside an
- * insert or a delete, is then paired with its neighbour. So within each such run, a base record
- * and a side record are paired first when they share a primitive entry, such as `id: "r1"`,
- * that no other record of either array holds. An entry several records hold, such as
- * `done: false`, pairs none, so a record still pairs with itself when this side also changed
- * another of its entries. A record whose unique entries point to different records is left
- * unpaired. Of pairs that cross, as a moved record's would, the most that keep their order are
- * kept. The items between two such pairs are paired by position, as `getChanges` pairs
- * them, and those left over are deleted or inserted.
- *
- * A run of one item on each side is left as it is: `getChanges` paired the two, and a pair
- * by a unique value, which never leaves the run, could only pair them again.
- *
- * The entries of each array are indexed once, on the first run that needs them, in time linear
- * in the array's primitive entries; `indexBase` returns the base's index, which both sides
- * share. Each run then costs time linear in its records' primitive entries, plus O(k log k) for
- * its k pairs.
+ * Re-pairs, in `alignment`, the items `getChanges` left unmatched in each run: by a primitive
+ * entry one record of each array holds, then by position; see `mergeConcurrent`. Each array is
+ * indexed once, on the first run that needs it; both sides share `indexBase`.
  */
 const matchByUniqueValues = (
   alignment: Alignment,
@@ -303,6 +284,7 @@ const matchByUniqueValues = (
     while (end < length && fates[end] !== "kept") end++;
     const from = start === 0 ? 0 : at[start - 1] + 1;
     const to = end === length ? side.length : at[end];
+    // One item on each side: `getChanges` paired them, and a unique value could only do the same.
     if (to === from || (end - start === 1 && to - from === 1)) {
       start = end;
       continue;
@@ -353,11 +335,9 @@ const alignItems = (
 };
 
 /**
- * Merges `ours` and `theirs`, the alignments of two scripts that edit a sequence of `length`
- * items, to `local` and to `remote`. Each position takes the items both sides inserted there,
- * the remote ones first, then each item as `both` merges it. An item a side deleted is dropped
- * or kept as `mergeConcurrent` sets out. `both` takes the item's index in the sequence, in
- * `local`, in `remote`, and in the merged sequence.
+ * Merges `ours` and `theirs`, the alignments of `local` and `remote` to a sequence of `length`
+ * items: each position takes both sides' inserts there, remote first, then the item as `both`
+ * merges it. Deletes follow `mergeConcurrent`.
  */
 const mergeSequence = <T>(
   length: number,
@@ -408,10 +388,9 @@ const found = <T>(
 };
 
 /**
- * Merges records key by key, where `base` and `local` differ. Whether `remote` equals `base` or
- * `local` follows from how each key's values compare, which each key's merge reports. Only the
- * remote values of keys `local` left unchanged are compared here, and only when the other keys
- * leave the question open.
+ * Merges records key by key, where `base` and `local` differ. Each key's merge reports how its
+ * values compare, so only keys `local` left unchanged need comparing here, and only when the
+ * other keys leave open whether `remote` equals `base` or `local`.
  */
 const mergeRecords = (
   base: Record<string, unknown>,
@@ -473,10 +452,9 @@ const mergeRecords = (
 };
 
 /**
- * Merges arrays item by item, each item read as JSON would store it, where `base` and `local`
- * differ. The merge needs each side's script from `base` anyway, and they tell how the arrays
- * compare: `remote` equals `base` when its script is empty, and `local` when the two scripts are
- * equal.
+ * Merges arrays item by item, as JSON would store them, where `base` and `local` differ. The
+ * scripts from `base` also tell how they compare: `remote` equals `base` when its script is
+ * empty, and `local` when the two scripts are equal.
  */
 const mergeArrays = (
   base: unknown[],
@@ -537,10 +515,9 @@ const mergeText = (base: string, local: string, remote: string): string =>
   ).join("");
 
 /**
- * `mergeConcurrent` for the value at `path`, with the strings `text` marks as text, telling
- * `report` how its three values compare. Where all three are records, or all three arrays, it
- * tells whether `remote` equals `base` or `local` from merging their contents, rather than
- * comparing the whole values first and then each of their contents again.
+ * `mergeConcurrent` for the value at `path`, telling `report` how its three values compare. For
+ * three records or three arrays, merging their contents tells that, so they are not compared
+ * whole first.
  */
 const merge = (
   base: unknown,

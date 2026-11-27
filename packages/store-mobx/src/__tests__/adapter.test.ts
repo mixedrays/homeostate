@@ -30,7 +30,7 @@ class TodoStore {
     { id: "2", title: "b", done: false },
   ];
   filter = "all";
-  /** Deliberately left out of `syncedKeys`, so the adapter must not carry it. */
+  /** Left out of `syncedKeys`, so the adapter must not carry it. */
   draft = "";
 
   constructor() {
@@ -344,8 +344,8 @@ describe("MobxAdapter", () => {
 
     backend.receive({ ...held(backend), filter: "active" });
 
-    // MobX runs reactions at the end of the enclosing action, which is the one `setState`
-    // opens — so the store notification still lands inside the engine's remote guard.
+    // MobX runs reactions at the end of the action `setState` opens, so the store notification
+    // lands inside the engine's remote guard.
     expect(writes).toHaveLength(0);
     expect(store.filter).toBe("active");
   });

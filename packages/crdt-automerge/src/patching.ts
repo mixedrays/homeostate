@@ -22,10 +22,8 @@ const isLargeInteger = (value: unknown): value is number =>
 type Deferred = [at: A.Prop[], value: number][];
 
 /**
- * Returns `value` at `path` as it is assigned in `A.change`: strings the policy marks as text
- * stay plain strings, which Automerge stores as text, and every other string becomes an
- * `ImmutableString`. A large integer becomes `null`, and goes to `deferred` with `at`, its path
- * from where the result is written.
+ * Returns `value` at `path` as assigned in `A.change`: text stays a string, any other string
+ * becomes an `ImmutableString`, and a large integer becomes `null`, pushed to `deferred` at `at`.
  */
 const convert = (
   value: unknown,
@@ -71,11 +69,8 @@ const putDeferred = (target: object, deferred: Deferred): void => {
 };
 
 /**
- * Inside `A.change`, assigns `value`, at `path`, to `key` of `container`, a map or list proxy.
- * Strings the policy marks as text are stored as text, and every other string as an
- * `ImmutableString`.
- * Large integers are stored as `Float64`s, which read back as the numbers written: Automerge
- * would read them as `bigint`s, or clamp those outside the 64-bit range.
+ * Inside `A.change`, assigns `value` to `key` of the proxy `container`, converted as `convert`
+ * does. Large integers go in as `Float64`s; Automerge would read them back as `bigint`s or clamp.
  */
 export const assign = (
   container: object,
@@ -111,15 +106,9 @@ const incrementTo = (counter: A.Counter, next: unknown): boolean => {
 };
 
 /**
- * How `applyChanges` writes into `doc[root]` inside `A.change`. Every value it writes is
- * stored as `assign` stores it. Text reads as a string and is edited character by character
- * through its object ID, found from its path; an `ImmutableString`, held by a peer
- * with another policy or an older version, is a plain value and is replaced whole. Paths given to
- * the policy start below `root`; without one, no string is text.
- *
- * A `Counter` other code stored is a plain value too, read as its number. A write over one
- * increments it by the difference when `incrementTo` can, so concurrent increments of it merge,
- * and otherwise replaces it.
+ * How `applyChanges` writes into `doc[root]` inside `A.change`, storing values as `assign` does.
+ * `ImmutableString`s and `Counter`s are plain values; a write over a `Counter` increments it when
+ * `incrementTo` can, so concurrent increments merge.
  */
 export const createAutomergeOps = (
   doc: Container,
@@ -181,14 +170,9 @@ export const createAutomergeOps = (
 const CLEAR_CACHE = Symbol.for("_am_clearCache");
 
 /**
- * The text at `path` below `doc[root]`: the proxy of its parent, reached by walking the proxies,
- * which take any key, and its object ID, which the parent's entry holds.
- *
- * Automerge's own functions miss some keys, which is why the ID comes from the document's
- * backend, although `A.getBackend` is marked hidden. `A.splice` joins its path with "/" for the
- * Wasm side to split again, so a key that is empty or holds "/", the synced key name among
- * them, addresses another object or none. `A.getObjectId(parent, key)` returns the parent's own
- * ID for a falsy key, `""` or index `0`.
+ * The text at `path` below `doc[root]`: its parent proxy and its object ID, read through the
+ * hidden `A.getBackend`. `A.splice` joins paths with "/", missing keys that are empty or hold
+ * "/", and `A.getObjectId(parent, key)` returns the parent's ID for `""` or index `0`.
  */
 const findText = (
   backend: ReturnType<typeof A.getBackend>,

@@ -7,10 +7,9 @@ import { createCounters } from "../counters.js";
 import type { Fixture } from "../types.js";
 
 /**
- * The idiomatic Zustand list: a selector per component through `useStore`, which compares what
- * it returns by reference, and `React.memo` on the row. Structurally the same bargain as Redux
- * — the store hands out whatever object the engine gave it — so the two should agree, and a
- * disagreement between them is a finding about the adapter rather than about the library.
+ * The idiomatic Zustand list: a selector per component through `useStore` and `React.memo` on
+ * the row. Like Redux, it hands out the engine's objects, so a disagreement with Redux points
+ * at the adapter.
  */
 export const zustand: Fixture = {
   name: "zustand",

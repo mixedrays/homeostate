@@ -2,22 +2,15 @@ import type { EditStep, ListChange, RecordChange } from "./change.js";
 import { getChanges } from "./diff.js";
 import { isRecord, PROTO_KEY } from "./json.js";
 
-/** Whether `value`, an object, is plain: its prototype is `Object.prototype` or `null`. */
 const isPlain = (value: object): boolean => {
   const prototype: unknown = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 };
 
 /**
- * Returns `value` as the store may hold it: every object that is not plain is replaced by a plain
- * object of its own entries, and own `__proto__` keys are left out, at any depth. Arrays and
- * binary values (`ArrayBuffer` views) stay what they are. Only the containers on a path to such
- * an object or key are copied.
- *
- * A library that builds objects by assignment, as Yjs and Loro do in `toJSON`, turns a peer's
- * `__proto__` entry into the prototype of the object holding it, so its entries would read as
- * inherited properties of the store's state. A store that copies an object by assignment, as
- * `Object.assign` does, would do the same with an own `__proto__` key.
+ * Replaces non-plain objects with plain copies and drops own `__proto__` keys, at any depth.
+ * Code that builds objects by assignment (Yjs and Loro `toJSON`, `Object.assign`) turns a peer's
+ * `__proto__` entry into a prototype, whose entries would read as inherited state.
  */
 const toPlain = (value: unknown): unknown => {
   if (value === null || typeof value !== "object" || ArrayBuffer.isView(value))
@@ -109,8 +102,9 @@ const applyChangesToObject = (
 /**
  * Returns `next`, without `__proto__` keys, reusing every subtree of `previous` that `next` leaves
  * unchanged. The result is built from `previous` by applying the edit script that `getChanges`
- * finds between the two, so only the containers along a changed path are new, and an item that shifts in a list, such as
- * after an insert at the top, keeps its identity. Neither input is mutated.
+ * finds between the two, so only the containers along a changed path are new, and an item that
+ * shifts in a list, such as after an insert at the top, keeps its identity. Neither input is
+ * mutated.
  *
  * When nothing changed, `previous` itself is returned; when the two are of different kinds,
  * `next` is. A string that changed is taken from `next` whole. Every value taken from `next` is
@@ -145,6 +139,5 @@ export const keepIdentity = <T>(previous: T, next: T): T => {
       ? previous
       : (applyChangesToObject(a, changes) as T);
   }
-  // Values of different kinds have no edit script, so `next` replaces `previous` whole.
   return toPlain(next) as T;
 };

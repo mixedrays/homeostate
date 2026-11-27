@@ -96,10 +96,9 @@ type Parent = { _item: Y.Item | null };
 const counts = new WeakMap<Y.Doc, Transactions>();
 
 /**
- * Counts `doc`'s transactions, and those that changed each synced map. Their changes reach
- * observers only once they end, and a transaction an observer starts ends before the observers
- * still running return, so until a transaction's observers are called, what it changed is
- * unknown. A map is counted from the moment its first backend is created, subscribed or not.
+ * Counts `doc`'s transactions, and those that changed each synced map, from its first backend.
+ * Nested transactions end before outer observers return, so what a transaction changed is known
+ * only once its observers are called.
  */
 const countTransactions = (doc: Y.Doc): Transactions => {
   const known = counts.get(doc);
@@ -189,7 +188,6 @@ export function createYjsBackend(
   nameOrOptions?: string | YjsBackendOptions,
   docOptions?: YjsBackendOptions,
 ): YjsBackend {
-  // The name tells the forms apart.
   const named = typeof nameOrOptions === "string";
   const map = named
     ? (source as Y.Doc).getMap<unknown>(nameOrOptions)

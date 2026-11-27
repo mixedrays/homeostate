@@ -1,8 +1,7 @@
 /**
- * Points a `localhost` URL at the host this page was loaded from, so another device that opens
- * the playgrounds over the network (`pnpm playground --host`) reaches the dev and sync servers
- * on the machine running them rather than its own. Other URLs, relative paths and callers
- * outside a browser get the URL back unchanged.
+ * Points a `localhost` URL at this page's host, so a device opening the playgrounds over the
+ * network (`pnpm playground --host`) reaches the servers on the machine running them. Anything
+ * else, or outside a browser, comes back unchanged.
  */
 export function onPageHost(url: string): string {
   if (typeof location === "undefined" || !URL.canParse(url)) return url;

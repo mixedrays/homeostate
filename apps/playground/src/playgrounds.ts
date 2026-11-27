@@ -21,9 +21,8 @@ export interface Playground {
 const env = import.meta.env;
 
 /**
- * Where a playground lives: an explicit URL from the environment, its dev server when this
- * page runs in development, or a path next to this page in production. `localhost` follows
- * this page's host, for devices on the network.
+ * Where a playground lives: a URL from the environment, its dev server in development, or a
+ * path next to this page in production. `localhost` follows this page's host.
  */
 function locate(override: string | undefined, port: number, path: string) {
   return onPageHost(override ?? (env.DEV ? `http://localhost:${port}` : path));

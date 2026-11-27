@@ -1,9 +1,8 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * A string preference in localStorage, shared by every component that reads it and by other
- * tabs. The server snapshot is the fallback, so prerendered HTML and hydration agree, and the
- * stored value takes over right after.
+ * A string preference in localStorage, shared by every component and tab. The server snapshot
+ * is the fallback, so prerendered HTML and hydration agree, then the stored value takes over.
  */
 export function createLocalStore<T extends string>(
   key: string,

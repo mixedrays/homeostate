@@ -4,8 +4,8 @@ import type { SyncedAtom } from "./adapter.js";
 /**
  * A record of writable atoms to sync as one state, one top-level key per atom. Each atom must
  * accept a full replacement of its own value, as primitive, `atomWithReset` and `atomWithStorage`
- * atoms do.
- * Used as a constraint, `R extends SyncedAtoms<R>`, so each atom's value type comes from the atom.
+ * atoms do. Used as a constraint, `R extends SyncedAtoms<R>`, so each atom's value type comes
+ * from the atom.
  */
 export type SyncedAtoms<R> = {
   [K in keyof R]: WritableAtom<
@@ -29,11 +29,9 @@ export const isAtom = (target: object): target is SyncedAtom<object> =>
   typeof (target as { read?: unknown }).read === "function";
 
 /**
- * Combines a record of atoms into one writable root atom, which the sync engine can treat like
- * any synced atom. Its value holds every atom's value under the atom's key. Writing it sets, in
- * one `store.set`, so that the root's subscribers hear one notification, every atom whose value
- * changes; an atom whose key is absent or `undefined` is reset to its initial value, and one
- * without an initial value keeps its own.
+ * Combines a record of atoms into one writable root atom holding each value under its key.
+ * Writing it sets every changed atom in one `store.set`, so the root's subscribers hear one
+ * notification.
  */
 export function combineAtoms<R extends SyncedAtoms<R>>(
   atoms: R,

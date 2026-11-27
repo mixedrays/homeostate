@@ -3,11 +3,9 @@ import type { JsonObject, JsonObjectInput } from "@homeostate/core";
 import { toPlainMap } from "./mapping.js";
 
 /**
- * Whether `doc` holds structs that wait for an update it has not received, as when a provider
- * delivers a peer's update before an earlier one it depends on. Yjs applies such an update's
- * deletes at once and keeps its structs pending, so a value the update replaces is gone until
- * the earlier update arrives. `pendingStructs` is in Yjs's typings but undocumented. It ignores
- * `pendingDs`, the deletes that wait for their targets, since those hide nothing.
+ * Whether `doc` holds structs waiting for an earlier update. Yjs applies such an update's deletes
+ * at once, so a value it replaces is gone until then. `pendingStructs` is undocumented;
+ * `pendingDs` is ignored, since waiting deletes hide nothing.
  */
 export const hasGap = (doc: Y.Doc): boolean =>
   doc.store.pendingStructs !== null;
@@ -36,23 +34,9 @@ export const copyJson = (value: JsonObjectInput): JsonObject =>
   ) as JsonObject;
 
 /**
- * What a backend shows instead of `map` while the map's document has a gap.
- *
- * - It keeps `known`: the content the backend last read or wrote, with the map's count of
- *   changes at that time. The backend updates it on each read of the map and each write,
- *   whether the hold is tracked or not.
- * - `held()` returns `known` while a gap is open and either the hold is tracked, as while the
- *   backend is subscribed, or `known` is what the map held when the gap opened. Otherwise it
- *   returns `undefined`, and the backend reads the map. So an engine that connects during a gap
- *   reads what the map held before it, not the map with the hole the gap made, unless the map
- *   changed after the backend's last read or write and before the gap.
- * - The hold reads the map itself only when tracking starts, and only if `known` is missing or
- *   behind the map's count, and is not what the map held when an open gap opened. That costs at
- *   most one full read when tracking starts, and none per remote transaction.
- *
- * It takes no copy of the map when a gap opens. With the engine's `schedule`, which delays the
- * engine's read, `known` therefore lacks the remote changes that arrived since the last read or
- * write. The store gets them when the gap closes.
+ * What a backend shows instead of `map` during a gap: what it last read or wrote. Takes no copy
+ * when a gap opens, so with the engine's `schedule`, remote changes since the last read reach the
+ * store only when the gap closes.
  */
 export const createHold = (
   map: Y.Map<unknown>,

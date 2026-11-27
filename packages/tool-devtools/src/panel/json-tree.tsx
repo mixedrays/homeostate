@@ -31,10 +31,8 @@ import { KeyStatusBadge, JsonValue, NonJsonBadge } from "./value";
 const CHILD_LIMIT = 100;
 
 /**
- * keyrove's reading of the tree: the rows are its items, with one tab stop between them.
- * Up and Down, Home and End and the page keys move between the rows on screen; a closed
- * container's rows are not rendered, so there is nothing to skip. Left and Right are left
- * to the rows, which open and close containers.
+ * keyrove's reading of the tree: the rows on screen are its items, one tab stop between them.
+ * Left and Right are left to the rows, which open and close containers.
  */
 const NAVIGATION: GroupOptions = {
   items: '[role="treeitem"]',
@@ -146,13 +144,9 @@ const shows = (tree: TreeState, path: JsonPath, underHit: boolean): boolean => {
 };
 
 /**
- * The state as an expandable tree. With `onSet`, clicking a value edits it in place
- * (booleans toggle), a container can be edited as JSON, and keys and items can be deleted.
- *
- * It is one tab stop, navigated with keyrove as the APG tree view: Up and Down move between
- * rows, Right opens a container or enters it, Left closes it or goes to its parent, and
- * typing a key's name jumps to it. With `onSet`, Enter edits the row's value, toggles a
- * boolean or edits a container as JSON, and Delete or Backspace deletes it.
+ * The state as an expandable tree, one tab stop navigated as the APG tree view. With `onSet`,
+ * clicking or Enter edits a value in place (booleans toggle) or a container as JSON, and Delete
+ * or Backspace deletes it.
  */
 export function JsonTree({
   value,

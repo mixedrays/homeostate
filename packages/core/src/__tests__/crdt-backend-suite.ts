@@ -108,9 +108,8 @@ const roundTrips: [object, object][] = [
 ];
 
 /**
- * Numbers every backend reads back as written, as JavaScript doubles: integers beyond the safe
- * range, `Number.MAX_SAFE_INTEGER` itself, and values beyond the 64-bit integer range. `-0`
- * reads back as `0` on some backends, as JSON stores it.
+ * Numbers every backend reads back as written: integers from `Number.MAX_SAFE_INTEGER` up and
+ * beyond the 64-bit range. `-0` reads back as `0` on some backends, as JSON stores it.
  */
 const numbers = {
   maxSafe: 2 ** 53 - 1,

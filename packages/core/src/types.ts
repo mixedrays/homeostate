@@ -23,8 +23,7 @@ export type JsonObjectInput = {
 };
 
 /**
- * Adapter interface that bridges a specific state manager with the sync engine.
- * Implement this interface to add support for any state manager (Zustand, Redux, MobX, etc.)
+ * Connects a state manager, such as Zustand, Redux or MobX, to the sync engine.
  *
  * State must be plain JSON: objects, arrays, strings, numbers, booleans, and null.
  * A top-level function, such as an action, stays local; other values such as Date, Map, or Set
@@ -168,8 +167,8 @@ export type SyncEngineConfig<S extends object = JsonObject> = {
    *
    * A key the store holds as a function, such as an action, is never synced, whatever `filter`
    * returns: the engine does not write it, and does not read the backend's value into it, so the
-   * backend keeps its value. Once the store makes a synced key a function, its next write deletes the key from the
-   * backend; once the store makes it a JSON value again, the key is synced again.
+   * backend keeps its value. Once the store makes a synced key a function, its next write deletes
+   * the key from the backend; once the store makes it a JSON value again, the key is synced again.
    */
   filter?: (key: keyof S & string) => boolean;
   /**

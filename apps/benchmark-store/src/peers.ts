@@ -20,10 +20,8 @@ export interface Pair {
 }
 
 /**
- * Two Yjs replicas on a synchronous in-process wire. The writer holds `size` todos; `reader`
- * is the fixture's adapter, whose store starts empty and adopts them through `connect()`, so
- * the rows the components mount have been through a real encode and decode rather than being
- * the writer's own objects.
+ * Two Yjs replicas on a synchronous wire. The writer holds `size` todos; the fixture's adapter,
+ * `reader`, adopts them through `connect()`, so mounted rows went through encode and decode.
  */
 export const createPair = (
   size: number,
