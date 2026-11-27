@@ -255,7 +255,10 @@ function Condition({
   );
 }
 
-/** A delay set with a stepped slider, or typed in milliseconds, past the slider's end too, with a button back to 0. */
+/**
+ * A delay set with a stepped slider, or typed in milliseconds, past the slider's end too, with
+ * a button back to 0.
+ */
 function DelayCondition({
   label,
   hint,

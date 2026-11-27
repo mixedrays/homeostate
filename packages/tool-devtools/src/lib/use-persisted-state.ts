@@ -36,7 +36,7 @@ export function usePersistedState<T extends string | number | boolean>(
         JSON.stringify({ ...readAll(), [key]: value }),
       );
     } catch {
-      // Storage is off or full; the value just is not remembered.
+      // Storage is off or full; the value is not remembered.
     }
   }, [key, value]);
 
