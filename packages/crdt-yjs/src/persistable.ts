@@ -53,7 +53,7 @@ export const createYjsPersistable = (doc: Y.Doc): PersistableDoc => {
         const now = pendingOf(doc);
         const parts = now.filter(
           (part, i): part is Uint8Array =>
-            part !== null && !sameBytes(part, seen[i] ?? null),
+            part !== null && !sameBytes(part, seen[i]),
         );
         seen = now;
         return parts.map((part) => Y.convertUpdateFormatV2ToV1(part));
@@ -81,7 +81,7 @@ export const createYjsPersistable = (doc: Y.Doc): PersistableDoc => {
           pending.length > 0 &&
           transactions.some((transaction) => transaction.origin !== origin)
         )
-          onUpdate(pending.length > 1 ? Y.mergeUpdates(pending) : pending[0]!);
+          onUpdate(pending.length > 1 ? Y.mergeUpdates(pending) : pending[0]);
       };
 
       doc.on("update", handleUpdate);
