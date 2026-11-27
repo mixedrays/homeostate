@@ -86,7 +86,7 @@ describe("createIndexedDbAdapter", () => {
   });
 
   it("loads a Yjs document partially when a stored update cannot be applied", async () => {
-    // A database of its own: the previous test may still be writing its snapshot to the default one.
+    // Its own database: the previous test may still be writing its snapshot to the default one.
     const adapter = create("partial");
     const source = new Y.Doc();
     source.getMap("shared").set("title", "kept");

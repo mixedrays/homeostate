@@ -22,9 +22,8 @@ const createMemoryStorage = (): Storage => {
 };
 
 /**
- * `storage` as another tab sees it: its next read lets `interrupt` start, as if another tab
- * wrote right then, and returns what was stored before, so the reader goes on with a stale log.
- * `interrupted()` is the promise `interrupt` returned.
+ * `storage` whose next read starts `interrupt`, as if another tab wrote then, and returns what
+ * was stored before, a stale log. `interrupted()` is the promise `interrupt` returned.
  */
 const staleOnce = (storage: Storage, interrupt: () => Promise<unknown>) => {
   let interrupted: Promise<unknown> | undefined;

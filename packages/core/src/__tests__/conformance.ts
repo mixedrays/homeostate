@@ -1,7 +1,6 @@
 /**
- * The contract suites and the fixtures they share, imported as `@homeostate/core/conformance`
- * by this repository's own tests. It is a development-only entry: `publishConfig.exports` leaves
- * it out, and `files` leaves out every `__tests__` folder, so it is never published.
+ * The contract suites and their fixtures, imported as `@homeostate/core/conformance` by this
+ * repository's tests. Never published: `publishConfig.exports` and `files` leave it out.
  */
 export * from "./helpers.js";
 export * from "./crdt-backend-suite.js";

@@ -722,12 +722,9 @@ describe("Counters other Automerge code stores", () => {
   });
 });
 
-// Automerge 3.4.1 and 3.5.0 patch a document's view wrongly when one merge brings both a delete
-// of a list item and a concurrent change that updates that item and inserts after it: the insert
-// lands one index too low in the view, while the document itself, as `A.save` keeps it, is right.
-// The backend reads the view, so its reads and the writes that diff against them are wrong too.
-// The first two tests describe the right behavior and fail until a fixed Automerge is installed.
-// Upstream issue: TODO(upstream issue URL).
+// Automerge 3.4.1 and 3.5.0 put the insert one index low in the view, not in `A.save`, when one
+// merge brings a list item's delete and a concurrent update of it with an insert after it. The
+// first two tests fail until a fixed Automerge is installed. TODO(upstream issue URL).
 describe("a delete and a concurrent update with an insert after it, merged at once", () => {
   /**
    * Two peers change `[1, 2]` at once: one sets index 1 to 5 and inserts 6 after it, the other
@@ -802,10 +799,9 @@ describe("a delete and a concurrent update with an insert after it, merged at on
     engine.disconnect();
   });
 
-  // A canary for the upstream fix, in plain Automerge, without homeostate. The view is wrong on
-  // the installed Automerge, so the assertion fails and `it.fails` passes. Once this test starts
-  // failing, a fixed Automerge is installed: raise the `@automerge/automerge` peer floor to it,
-  // make the tests above a plain `it`, update the docs note, and drop this test.
+  // Canary in plain Automerge. Once it fails, a fixed Automerge is installed: raise the
+  // `@automerge/automerge` peer floor to it, make the tests above plain `it`, update the docs
+  // note, and drop this test.
   it.fails(
     "canary: Automerge's own view of the merged document is right",
     () => {

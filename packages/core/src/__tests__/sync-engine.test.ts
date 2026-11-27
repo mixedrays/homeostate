@@ -979,9 +979,8 @@ describe("createSyncEngine", () => {
         });
 
         /**
-         * Memory backends whose writes reach every other one asynchronously and merge there as a
-         * CRDT map would: each value the write changed is set at its path, and an array grows to
-         * the sorted union of both, so concurrent appends of distinct numbers converge.
+         * Memory backends whose writes reach the others asynchronously and merge as a CRDT map
+         * would: changed values set at their path, arrays grown to the sorted union of both.
          */
         const mergingBackends = (count: number) => {
           const backends = Array.from({ length: count }, () =>
@@ -2269,11 +2268,9 @@ describe("createSyncEngine", () => {
 
     describe("a local change merged into the pending apply", () => {
       /**
-       * Connects a store holding `initial`, lets the backend receive `remote` of it, and makes
-       * `local` of the store's state before the flush. Checks that the write passed what the
-       * backend held as `previous`, that the backend and the store agree, and that the flush
-       * changes nothing, then returns the store's state. `text`, where given, is the backend's
-       * text policy.
+       * Applies `remote` to the backend and `local` to the store before the flush, checks the
+       * write's `previous`, that backend and store agree and that the flush changes nothing, and
+       * returns the store's state. `text` is the backend's text policy.
        */
       const concurrent = <S extends object>(
         initial: S,

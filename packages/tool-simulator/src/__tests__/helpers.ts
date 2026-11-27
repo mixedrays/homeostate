@@ -131,11 +131,9 @@ const encodeOps = (ops: StandInOp[]): Uint8Array =>
   new TextEncoder().encode(JSON.stringify(ops));
 
 /**
- * A stand-in CRDT whose updates are each peer's numbered writes. Like Yjs before task 127's
- * fix, an update that arrives before an earlier one from the same peer removes the keys it
- * replaces at once and waits for the earlier one to set them, so the document drops those keys
- * until the held-back update arrives. Concurrent writes apply in the order they arrive, so it
- * suits tests that write from one peer at a time.
+ * A stand-in CRDT of numbered writes. An update arriving before an earlier one from its peer
+ * drops the keys it replaces until that one arrives, as Yjs's pending structs do. Concurrent
+ * writes apply in arrival order, so write from one peer at a time.
  */
 export const createStandIn = (
   index: number,

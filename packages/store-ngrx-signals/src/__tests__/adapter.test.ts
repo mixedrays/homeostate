@@ -107,7 +107,7 @@ describe("NgRx Signals adapter", () => {
     const { store, injector, write, engine } = setup();
     write.mockClear();
     injector.destroy();
-    // Cleanup is explicitly handled here to avoid destroying the injector twice.
+    // Destroyed already; the queued cleanups would destroy it twice.
     cleanups.splice(0);
     patchState(store, { shared: { count: 5 } });
     expect(write).not.toHaveBeenCalled();
